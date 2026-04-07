@@ -11,4 +11,8 @@
 #define SETTINGS_FILENAME_VANILLA "settings07"
 #define SETTINGS_FILENAME "settings_archive"
 static const char GAME_RELEASE_VERSION[8] = "0.7.6";
+
+#define MOD_NAME "LastDay"
+#define MOD_SUBTITLE "Rework"
+#define MOD_VERSION "0.1.0"
 #endif

@@ -177,14 +177,6 @@ function GenerateMacOSSettings(settings, conf, arch, compiler)
 	local server_exe = BuildServer(settings)
 	AddDependency(server_exe, serverlaunch)
 
-	-- Client
-	settings.link.frameworks:Add("OpenGL")
-	settings.link.frameworks:Add("AGL")
-	-- FIXME: the SDL config is applied in BuildClient too but is needed here before so the launcher will compile
-	config.sdl:Apply(settings)
-	settings.link.extrafiles:Merge(Compile(settings, "src/macoslaunch/client.m"))
-	BuildClient(settings)
-
 	-- Content
 	BuildContent(settings, arch, conf)
 end
@@ -223,11 +215,6 @@ function GenerateLinuxSettings(settings, conf, arch, compiler)
 	-- Server
 	BuildServer(settings)
 
-	-- Client
-	settings.link.libs:Add("X11")
-	settings.link.libs:Add("GL")
-	BuildClient(settings)
-
 	-- Content
 	BuildContent(settings, arch, conf)
 end
@@ -263,7 +250,6 @@ function GenerateWindowsSettings(settings, conf, target_arch, compiler)
 	settings.cc.defines:Add("_UNICODE") -- C-runtime
 
 	local icons = SharedIcons(compiler)
-	local manifests = SharedManifests(compiler)
 
 	-- Required libs
 	settings.link.libs:Add("gdi32")
@@ -288,14 +274,6 @@ function GenerateWindowsSettings(settings, conf, target_arch, compiler)
 	local server_settings = settings:Copy()
 	server_settings.link.extrafiles:Add(icons.server)
 	BuildServer(server_settings)
-
-	-- Client
-	settings.link.extrafiles:Add(icons.client)
-	settings.link.extrafiles:Add(manifests.client)
-	settings.link.libs:Add("opengl32")
-	settings.link.libs:Add("winmm")
-	settings.link.libs:Add("imm32")
-	BuildClient(settings)
 
 	-- Content
 	BuildContent(settings, target_arch, conf)
@@ -329,35 +307,13 @@ function SharedServerFiles()
 	return shared_server_files
 end
 
-function SharedClientFiles()
-	-- Shared client files, generate only once
-
-	if not shared_client_files then
-		local client_content_source = ContentCompile("client_content_source", "generated/client_data.cpp")
-		local client_content_header = ContentCompile("client_content_header", "generated/client_data.h")
-		AddDependency(client_content_source, client_content_header)
-		shared_client_files = {client_content_source}
-	end
-
-	return shared_client_files
-end
-
 shared_icons = {}
 function SharedIcons(compiler)
 	if not shared_icons[compiler] then
 		local server_icon = ResCompile("other/icons/teeworlds_srv_" .. compiler .. ".rc", compiler)
-		local client_icon = ResCompile("other/icons/teeworlds_" .. compiler .. ".rc", compiler)
-		shared_icons[compiler] = {server=server_icon, client=client_icon}
+		shared_icons[compiler] = {server=server_icon}
 	end
 	return shared_icons[compiler]
-end
-
-function SharedManifests(compiler)
-	if not shared_manifests then
-		local client_manifest = ResCompile("other/manifest/teeworlds.rc", compiler)
-		shared_manifests = {client=client_manifest}
-	end
-	return shared_manifests
 end
 
 function BuildEngineCommon(settings)
@@ -372,21 +328,6 @@ end
 
 function BuildGameCommon(settings)
 	settings.link.extrafiles:Merge(Compile(settings, Collect("src/game/*.cpp"), SharedCommonFiles()))
-end
-
-
-function BuildClient(settings, family, platform)
-	config.sdl:Apply(settings)
-	config.freetype:Apply(settings)
-	config.opus:Apply(settings)
-	config.opusfile:Apply(settings)
-	
-	local client = Compile(settings, Collect("src/engine/client/*.cpp"))
-	
-	local game_client = Compile(settings, CollectRecursive("src/game/client/*.cpp"), SharedClientFiles())
-	local game_editor = Compile(settings, Collect("src/game/editor/*.cpp"))
-	
-	Link(settings, "ArchiveClient", libs["zlib"], libs["png"], libs["json"], libs["glad"], client, game_client, game_editor)
 end
 
 function BuildServer(settings, family, platform)
@@ -447,10 +388,6 @@ function GenerateSettings(conf, arch, builddir, compiler, headless)
 		settings.cc.defines:Add("CONF_RELEASE")
 	end
 
-	if headless == "on" then
-		settings.cc.defines:Add("CONF_HEADLESS_CLIENT")
-	end
-	
 	-- Generate object files in {builddir}/objs/
 	settings.cc.Output = function (settings_, input)
 		-- strip 
@@ -540,7 +477,7 @@ else
 	headless = nil
 end
 
-targets = {client="ArchiveClient", server="ArchiveServer",
+targets = {server="ArchiveServer",
            versionserver="versionsrv", masterserver="mastersrv",
            tools="pseudo_tools", content="content"}
 
@@ -563,5 +500,5 @@ for cur_name, cur_target in pairs(targets) do
 	PseudoTarget(cur_name, subtargets[cur_target])
 end
 
-PseudoTarget("game", "client", "server", "content")
+PseudoTarget("game", "server", "content")
 DefaultTarget("game")

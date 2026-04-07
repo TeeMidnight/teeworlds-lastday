@@ -15,7 +15,7 @@
 		Controls the main game logic. Keeping track of team and player score,
 		winning conditions and specific game logic.
 */
-class IGameController
+class CGameController
 {
 	class CGameContext *m_pGameServer;
 	class CConfig *m_pConfig;
@@ -25,54 +25,7 @@ class IGameController
 	void DoActivityCheck();
 	bool GetPlayersReadyState(int WithoutID = -1);
 	void SetPlayersReadyState(bool ReadyState);
-	void CheckReadyStates(int WithoutID = -1);
 
-	// balancing
-	enum
-	{
-		TBALANCE_CHECK = -2,
-		TBALANCE_OK,
-	};
-	int m_aTeamSize[NUM_TEAMS];
-	int m_UnbalancedTick;
-
-	virtual bool CanBeMovedOnBalance(int ClientID) const;
-	void CheckTeamBalance();
-	void DoTeamBalance();
-
-protected:
-	// game
-	enum EGameState
-	{
-		// internal game states
-		IGS_WARMUP_GAME, // warmup started by game because there're not enough players (infinite)
-		IGS_WARMUP_USER, // warmup started by user action via rcon or new match (infinite or timer)
-
-		IGS_START_COUNTDOWN, // start countown to unpause the game or start match/round (tick timer)
-
-		IGS_GAME_PAUSED, // game paused (infinite or tick timer)
-		IGS_GAME_RUNNING, // game running (infinite)
-
-		IGS_END_MATCH, // match is over (tick timer)
-		IGS_END_ROUND, // round is over (tick timer)
-	};
-	EGameState m_GameState;
-	int m_GameStateTimer;
-
-	virtual bool DoWincheckMatch(); // returns true when the match is over
-	virtual void DoWincheckRound() {}
-	virtual bool HasEnoughPlayers() const { return (IsTeamplay() && m_aTeamSize[TEAM_RED] > 0 && m_aTeamSize[TEAM_BLUE] > 0) || (!IsTeamplay() && m_aTeamSize[TEAM_RED] > 1); }
-	void ResetGame();
-	void SetGameState(EGameState GameState, int Timer = 0);
-	void StartMatch();
-	void StartRound();
-
-	// map
-	char m_aMapWish[128];
-
-	void CycleMap();
-
-protected:
 	// spawn
 	struct CSpawnEval
 	{
@@ -89,8 +42,7 @@ protected:
 		int m_FriendlyTeam;
 		float m_Score;
 	};
-	vec2 m_aaSpawnPoints[3][64];
-	int m_aNumSpawnPoints[3];
+	array<vec2> m_alSpawnPoints[3];
 
 	float EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos) const;
 	void EvaluateSpawnType(CSpawnEval *pEval, int Type) const;
@@ -105,31 +57,13 @@ protected:
 
 	// game
 	int m_GameStartTick;
-	int m_MatchCount;
-	int m_RoundCount;
-	int m_SuddenDeath;
-	int m_aTeamscore[NUM_TEAMS];
-
-	void EndMatch() { SetGameState(IGS_END_MATCH, TIMER_END); }
-	void EndRound() { SetGameState(IGS_END_ROUND, TIMER_END / 2); }
-
-	// info
-	int m_GameFlags;
-	const char *m_pGameType;
-	struct CGameInfo
-	{
-		int m_MatchCurrent;
-		int m_MatchNum;
-		int m_ScoreLimit;
-		int m_TimeLimit;
-	} m_GameInfo;
-	int m_MaxPlayerSlots;
+	int m_RealPlayerNum;
 
 	void SendGameInfo(int ClientID);
 
 public:
-	IGameController(class CGameContext *pGameServer);
-	virtual ~IGameController() {}
+	CGameController(class CGameContext *pGameServer);
+	~CGameController() {}
 
 	// event
 	/*
@@ -142,7 +76,7 @@ public:
 			weapon - What weapon that killed it. Can be -1 for undefined
 				weapon when switching team or player suicides.
 	*/
-	virtual int OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon);
+	int OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon);
 	/*
 		Function: on_CCharacter_spawn
 			Called when a CCharacter spawns into the game world.
@@ -150,9 +84,7 @@ public:
 		Arguments:
 			chr - The CCharacter that was spawned.
 	*/
-	virtual void OnCharacterSpawn(class CCharacter *pChr);
-
-	virtual void OnFlagReturn(class CFlag *pFlag);
+	void OnCharacterSpawn(class CCharacter *pChr);
 
 	/*
 		Function: on_entity
@@ -166,119 +98,44 @@ public:
 		Returns:
 			bool?
 	*/
-	virtual bool OnEntity(int Index, vec2 Pos);
-	virtual bool OnExtraTile(int Index, vec2 Pos);
+	bool OnEntity(int Index, vec2 Pos);
+	bool OnExtraTile(int Index, vec2 Pos);
 
-	/*
-		Function: OnRoundStart
-			Called when a new match or round starts.
-	*/
-	virtual void OnRoundStart();
-
-	virtual void OnPlayerConnect(class CPlayer *pPlayer);
-	virtual void OnPlayerDisconnect(class CPlayer *pPlayer);
-	virtual void OnPlayerInfoChange(class CPlayer *pPlayer);
-	virtual void OnPlayerReadyChange(class CPlayer *pPlayer);
-
-	void OnReset();
-
-	// game
-	enum
-	{
-		TIMER_INFINITE = -1,
-		TIMER_END = 10,
-	};
-
-	void DoPause(int Seconds) { SetGameState(IGS_GAME_PAUSED, Seconds); }
-	void DoWarmup(int Seconds)
-	{
-		SetGameState(IGS_WARMUP_USER, Seconds);
-	}
-	void AbortWarmup()
-	{
-		if((m_GameState == IGS_WARMUP_GAME || m_GameState == IGS_WARMUP_USER) && m_GameStateTimer != TIMER_INFINITE)
-		{
-			SetGameState(IGS_GAME_RUNNING);
-		}
-	}
-	void SwapTeamscore();
+	void OnPlayerConnect(class CPlayer *pPlayer);
+	void OnPlayerDisconnect(class CPlayer *pPlayer);
+	void OnPlayerInfoChange(class CPlayer *pPlayer);
+	void OnPlayerReadyChange(class CPlayer *pPlayer);
 
 	// general
-	virtual void Snap(int SnappingClient);
-	virtual void Tick();
+	void Snap(int SnappingClient);
+	void Tick();
 
 	// info
-	void CheckGameInfo();
-	virtual bool IsFriendlyFire(int ClientID1, int ClientID2, int Damage) const;
-	virtual bool IsFriendlyTeamFire(int Team1, int Team2, int Damage) const;
-	virtual int GetPlayerCheckTeam(class CPlayer *pPlayer) const;
-	bool IsGamePaused() const { return m_GameState == IGS_GAME_PAUSED || m_GameState == IGS_START_COUNTDOWN; }
-	bool IsGameRunning() const { return m_GameState == IGS_GAME_RUNNING; }
-	bool IsPlayerReadyMode() const;
-	bool IsTeamChangeAllowed() const;
-	bool IsTeamplay() const { return m_GameFlags & GAMEFLAG_TEAMS; }
-	bool IsSurvival() const { return m_GameFlags & GAMEFLAG_SURVIVAL; }
+	bool IsFriendlyFire(int ClientID1, int ClientID2, int Damage) const;
+	bool IsFriendlyTeamFire(int Team1, int Team2, int Damage) const;
+	int GetPlayerCheckTeam(class CPlayer *pPlayer) const;
 
-	int GetMaxPlayerSlots() const { return m_MaxPlayerSlots; }
-
-	const char *GetGameType() const { return m_pGameType; }
-
-	// map
-	void ChangeMap(const char *pToMap);
-
-	virtual bool CanSpawn(int Team, vec2 *pPos) const;
+	bool CanSpawn(int Team, vec2 *pPos) const;
 	bool GetStartRespawnState() const;
 
 	// team
 	bool CanJoinTeam(int Team, int NotThisID) const;
 	bool CanChangeTeam(CPlayer *pPplayer, int JoinTeam) const;
 
-	virtual void DoTeamChange(class CPlayer *pPlayer, int Team, bool DoChatMsg = true);
-	void ForceTeamBalance()
-	{
-		if(!(m_GameFlags & GAMEFLAG_SURVIVAL))
-			DoTeamBalance();
-	}
+	void DoTeamChange(class CPlayer *pPlayer, int Team, bool DoChatMsg = true);
 
-	int GetRealPlayerNum() const { return m_aTeamSize[TEAM_RED] + m_aTeamSize[TEAM_BLUE]; }
+	int GetRealPlayerNum() const { return m_RealPlayerNum; }
 	int GetStartTeam();
 
-	virtual void HandleCharacterTiles(class CCharacter *pChr, vec2 LastPos, vec2 NewPos) {};
+	void HandleCharacterTiles(class CCharacter *pChr, vec2 LastPos, vec2 NewPos) {};
 	// static void Com_Example(IConsole::IResult *pResult, void *pContext);
-	virtual void RegisterChatCommands(CCommandManager *pManager);
+	void RegisterChatCommands(CCommandManager *pManager);
 
-	virtual bool CanCharacterPickup(class CCharacter *pChr) const { return true; }
-	virtual bool CanCharacterWeaponFullAuto(class CCharacter *pChr, int Weapon);
+	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }
+	bool CanCharacterWeaponFullAuto(class CCharacter *pChr, int Weapon);
 
 	// return: Reload timer
-	virtual int OnCharacterFireWeapon(class CCharacter *pChr, vec2 Direction, int Weapon);
-	virtual bool IsPureTuning() const { return false; }
-	virtual bool TimeScore() const { return false; }
-	virtual bool NoEntitiesInMap() const { return false; }
+	int OnCharacterFireWeapon(class CCharacter *pChr, vec2 Direction, int Weapon);
 };
-
-typedef IGameController *(*FCreateGameController)(class CGameContext *pGameServer);
-struct CGamemodeInfo
-{
-	const char *m_pGameType;
-	FCreateGameController m_pfnConstructor;
-};
-
-int NumGamemodes();
-CGamemodeInfo *GetGamemodeInfo(int Index);
-void RegisterGamemode(const char *pGameType, FCreateGameController pfnConstructor);
-
-class CGamemodeAutoRegister
-{
-public:
-	CGamemodeAutoRegister(const char *pGameType, FCreateGameController pfnConstructor) { RegisterGamemode(pGameType, pfnConstructor); }
-};
-
-#define REGISTER_GAMEMODE(GameType, GamemodeClass) \
-	static IGameController *GamemodeClass##Constructor(class CGameContext *pGameServer) { return new GamemodeClass(pGameServer); } \
-	static CGamemodeAutoRegister gs_##GamemodeClass##Register(GameType, GamemodeClass##Constructor)
-
-#define REGISTER_GAMEMODE_ALIAS(AliasSuffix, GameType, GamemodeClass) \
-	static CGamemodeAutoRegister gs_##GamemodeClass##Register##AliasSuffix(GameType, GamemodeClass##Constructor)
 
 #endif

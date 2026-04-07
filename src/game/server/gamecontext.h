@@ -50,29 +50,16 @@ class CGameContext : public IGameServer
 	static void ConTuneParam(IConsole::IResult *pResult, void *pUserData);
 	static void ConTuneReset(IConsole::IResult *pResult, void *pUserData);
 	static void ConTunes(IConsole::IResult *pResult, void *pUserData);
-	static void ConPause(IConsole::IResult *pResult, void *pUserData);
-	static void ConChangeMap(IConsole::IResult *pResult, void *pUserData);
-	static void ConRestart(IConsole::IResult *pResult, void *pUserData);
 	static void ConSay(IConsole::IResult *pResult, void *pUserData);
 	static void ConBroadcast(IConsole::IResult *pResult, void *pUserData);
 	static void ConSetTeam(IConsole::IResult *pResult, void *pUserData);
 	static void ConSetTeamAll(IConsole::IResult *pResult, void *pUserData);
-	static void ConSwapTeams(IConsole::IResult *pResult, void *pUserData);
-	static void ConShuffleTeams(IConsole::IResult *pResult, void *pUserData);
-	static void ConLockTeams(IConsole::IResult *pResult, void *pUserData);
-	static void ConForceTeamBalance(IConsole::IResult *pResult, void *pUserData);
 	static void ConAddVote(IConsole::IResult *pResult, void *pUserData);
 	static void ConRemoveVote(IConsole::IResult *pResult, void *pUserData);
 	static void ConClearVotes(IConsole::IResult *pResult, void *pUserData);
 	static void ConVote(IConsole::IResult *pResult, void *pUserData);
-	static void ConAddMap(IConsole::IResult *pResult, void *pUserData);
-	static void ConRemoveMapGroup(IConsole::IResult *pResult, void *pUserData);
-	static void ConListMaps(IConsole::IResult *pResult, void *pUserData);
-	static void ConListMapGroups(IConsole::IResult *pResult, void *pUserData);
-	static void ConUseMapGroup(IConsole::IResult *pResult, void *pUserData);
 	static void ConchainSpecialMotdupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainSettingUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
-	static void ConchainGameinfoUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 	static void NewCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
 	static void RemoveCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
@@ -98,7 +85,7 @@ public:
 	CEventHandler m_Events;
 	class CPlayer *m_apPlayers[MAX_CLIENTS];
 
-	class IGameController *m_pController;
+	class CGameController *m_pController;
 	CGameWorld m_World;
 	CCommandManager m_CommandManager;
 
@@ -138,39 +125,6 @@ public:
 	class CHeap *m_pVoteOptionHeap;
 	CVoteOptionServer *m_pVoteOptionFirst;
 	CVoteOptionServer *m_pVoteOptionLast;
-	// map rotation group
-	struct CMapRotationGroup
-	{
-		const char *m_pGroupName;
-		struct CEntry
-		{
-			CMapRotationGroup *m_pGroup;
-			const char *m_pMapName;
-			CEntry *m_pNext;
-
-			void DoNext(CEntry **ppNext)
-			{
-				*ppNext = m_pGroup->m_pFirst;
-				if(m_pNext)
-					*ppNext = m_pNext;
-			}
-		};
-		CEntry *m_pFirst;
-	};
-
-	struct CMapRotationIndex
-	{
-		unsigned m_Hash;
-		CMapRotationGroup *m_pGroup;
-
-		bool operator<(const CMapRotationIndex &Other) const { return m_Hash < Other.m_Hash; }
-		bool operator<=(const CMapRotationIndex &Other) const { return m_Hash < Other.m_Hash; }
-		bool operator==(const CMapRotationIndex &Other) const { return m_Hash == Other.m_Hash; }
-	};
-	// key: hash of group name
-	sorted_array<CMapRotationIndex> m_lMapRotations;
-	CMapRotationGroup::CEntry *m_pCurMapRotationEntry;
-	class CHeap *m_pMapRotationHeap;
 
 	// helper functions
 	void CreateDamage(vec2 Pos, int Id, vec2 Source, int HealthAmount, int ArmorAmount, bool Self);
@@ -204,9 +158,6 @@ public:
 	void SendVoteStatus(int ClientID, int Total, int Yes, int No);
 	void SendVoteClearOptions(int ClientID);
 	void SendVoteOptions(int ClientID);
-
-	//
-	void CheckPureTuning();
 
 	//
 	void SwapTeams();

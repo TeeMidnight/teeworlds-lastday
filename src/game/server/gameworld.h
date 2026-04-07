@@ -29,7 +29,6 @@ public:
 	};
 
 private:
-	void Reset();
 	void RemoveEntities();
 
 	CEntity *m_pNextTraverseEntity;
@@ -44,8 +43,6 @@ public:
 	class CConfig *Config() { return m_pConfig; }
 	class IServer *Server() { return m_pServer; }
 
-	bool m_ResetRequested;
-	bool m_Paused;
 	CWorldCore m_Core;
 
 	CGameWorld();

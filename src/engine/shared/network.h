@@ -525,6 +525,7 @@ public:
 	class CNetBan *NetBan() const { return m_pNetBan; }
 };
 
+/*
 // client side
 class CNetClient : public CNetBase
 {
@@ -561,5 +562,6 @@ public:
 	bool GotProblems() const;
 	const char *ErrorString() const;
 };
+*/
 
 #endif

@@ -17,7 +17,7 @@ else()
   message(FATAL_ERROR "Couldn't parse version from src/game/version.h")
 endif()
 
-project(teeworlds-archive LANGUAGES C CXX VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
+project(teeworlds-lastday LANGUAGES C CXX VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 set(ORIGINAL_CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH})
 set(ORIGINAL_CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES})
@@ -61,8 +61,6 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
-option(CLIENT "Compile client" ON)
-option(HEADLESS_CLIENT "Build the client without graphics" OFF)
 option(DOWNLOAD_DEPENDENCIES "Download dependencies (only available on Windows)" ${AUTO_DEPENDENCIES_DEFAULT})
 option(DOWNLOAD_GTEST "Download and compile GTest if not found" ${AUTO_DEPENDENCIES_DEFAULT})
 option(PREFER_BUNDLED_LIBS "Prefer bundled libraries over system libraries" ${AUTO_DEPENDENCIES_DEFAULT})
@@ -89,7 +87,6 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 )
 
 set(SERVER_EXECUTABLE ArchiveServer CACHE STRING "Name of the built server executable")
-set(CLIENT_EXECUTABLE ArchiveClient CACHE STRING "Name of the build client executable")
 
 ########################################################################
 # Compiler flags
@@ -235,14 +232,10 @@ find_package(ZLIB)
 
 find_package(OpenSSL)
 find_package(CURL)
-find_package(Freetype)
 find_package(Git)
 find_package(GTest)
 find_package(Pnglite)
-find_package(SDL3)
 find_package(Threads)
-find_package(Opus)
-find_package(Opusfile)
 
 
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
@@ -285,7 +278,6 @@ endfunction()
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
   show_dependency_status("Dmg tools" DMGTOOLS)
 endif()
-show_dependency_status("Freetype" FREETYPE)
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
   show_dependency_status("Hdiutil" HDIUTIL)
 endif()
@@ -293,9 +285,6 @@ show_dependency_status("OpenSSL Crypto" OPENSSL)
 show_dependency_status("Curl" CURL)
 show_dependency_status("Pnglite" PNGLITE)
 show_dependency_status("Python3" Python3)
-show_dependency_status("SDL3" SDL3)
-show_dependency_status("Opus" OPUS)
-show_dependency_status("Opusfile" OPUSFILE)
 show_dependency_status("Zlib" ZLIB)
 
 if(NOT(Python3_FOUND))
@@ -310,12 +299,6 @@ if(NOT(CURL_FOUND))
   message(SEND_ERROR "You must install libcurl to compile Teeworlds")
 endif()
 
-if(CLIENT AND NOT(FREETYPE_FOUND))
-  message(SEND_ERROR "You must install Freetype to compile the Teeworlds client")
-endif()
-if(CLIENT AND NOT(SDL3_FOUND))
-  message(SEND_ERROR "You must install SDL3 to compile the Teeworlds client")
-endif()
 if(NOT(GTEST_FOUND))
   if(DOWNLOAD_GTEST)
     if(GIT_FOUND)
@@ -330,27 +313,11 @@ if(NOT(GTEST_FOUND))
 endif()
 
 if(TARGET_OS STREQUAL "windows")
-  set(PLATFORM_CLIENT)
-  set(PLATFORM_CLIENT_LIBS opengl32 winmm imm32)
   set(PLATFORM_LIBS ws2_32) # Windows sockets
 elseif(TARGET_OS STREQUAL "mac")
   find_library(CARBON Carbon)
-  find_library(COCOA Cocoa)
-  find_library(OPENGL OpenGL)
-  set(PLATFORM_CLIENT
-    src/macoslaunch/client.m
-  )
-  set(PLATFORM_CLIENT_LIBS ${COCOA} ${OPENGL})
   set(PLATFORM_LIBS ${CARBON})
 else()
-  set(PLATFORM_CLIENT)
-  find_package(OpenGL)
-  if(CMAKE_VERSION VERSION_LESS 3.10)
-    set(PLATFORM_CLIENT_LIBS ${OPENGL_gl_LIBRARY})
-  else()
-    set(PLATFORM_CLIENT_LIBS ${OPENGL_opengl_LIBRARY})
-  endif()
-  set(PLATFORM_CLIENT_INCLUDE_DIRS ${OPENGL_INCLUDE_DIR})
   if(TARGET_OS STREQUAL "linux")
     set(PLATFORM_LIBS rt) # clock_gettime for glibc < 2.17
   else()
@@ -421,152 +388,14 @@ endif()
 set_src(DEP_JSON_SRC GLOB src/engine/external/json-parser json.c json.h)
 add_library(json EXCLUDE_FROM_ALL OBJECT ${DEP_JSON_SRC})
 
-set_src(DEP_GLAD_SRC GLOB src/engine/external/glad/ gl.c gl.h khrplatform.h)
-add_library(glad EXCLUDE_FROM_ALL OBJECT ${DEP_GLAD_SRC})
-
-list(APPEND TARGETS_DEP json glad)
+list(APPEND TARGETS_DEP json)
 set(DEP_JSON $<TARGET_OBJECTS:json>)
-set(DEP_GLAD)
-if(CLIENT)
-  set(DEP_GLAD $<TARGET_OBJECTS:glad>)
-endif()
 
 ########################################################################
 # DATA
 ########################################################################
 
 set(EXPECTED_DATA
-  audio/foley_body_impact-01.opus
-  audio/foley_body_impact-02.opus
-  audio/foley_body_impact-03.opus
-  audio/foley_body_splat-01.opus
-  audio/foley_body_splat-02.opus
-  audio/foley_body_splat-03.opus
-  audio/foley_body_splat-04.opus
-  audio/foley_dbljump-01.opus
-  audio/foley_dbljump-02.opus
-  audio/foley_dbljump-03.opus
-  audio/foley_foot_left-01.opus
-  audio/foley_foot_left-02.opus
-  audio/foley_foot_left-03.opus
-  audio/foley_foot_left-04.opus
-  audio/foley_foot_right-01.opus
-  audio/foley_foot_right-02.opus
-  audio/foley_foot_right-03.opus
-  audio/foley_foot_right-04.opus
-  audio/foley_land-01.opus
-  audio/foley_land-02.opus
-  audio/foley_land-03.opus
-  audio/foley_land-04.opus
-  audio/hook_attach-01.opus
-  audio/hook_attach-02.opus
-  audio/hook_attach-03.opus
-  audio/hook_loop-01.opus
-  audio/hook_loop-02.opus
-  audio/hook_noattach-01.opus
-  audio/hook_noattach-02.opus
-  audio/hook_noattach-03.opus
-  audio/music_menu.opus
-  audio/sfx_ctf_cap_pl.opus
-  audio/sfx_ctf_drop.opus
-  audio/sfx_ctf_grab_en.opus
-  audio/sfx_ctf_grab_pl.opus
-  audio/sfx_ctf_rtn.opus
-  audio/sfx_hit_strong-01.opus
-  audio/sfx_hit_strong-02.opus
-  audio/sfx_hit_weak-01.opus
-  audio/sfx_hit_weak-02.opus
-  audio/sfx_hit_weak-03.opus
-  audio/sfx_msg-client.opus
-  audio/sfx_msg-highlight.opus
-  audio/sfx_msg-server.opus
-  audio/sfx_pickup_arm-01.opus
-  audio/sfx_pickup_arm-02.opus
-  audio/sfx_pickup_arm-03.opus
-  audio/sfx_pickup_arm-04.opus
-  audio/sfx_pickup_gun.opus
-  audio/sfx_pickup_hrt-01.opus
-  audio/sfx_pickup_hrt-02.opus
-  audio/sfx_pickup_launcher.opus
-  audio/sfx_pickup_ninja.opus
-  audio/sfx_pickup_sg.opus
-  audio/sfx_skid-01.opus
-  audio/sfx_skid-02.opus
-  audio/sfx_skid-03.opus
-  audio/sfx_skid-04.opus
-  audio/sfx_spawn_wpn-01.opus
-  audio/sfx_spawn_wpn-02.opus
-  audio/sfx_spawn_wpn-03.opus
-  audio/vo_teefault_cry-01.opus
-  audio/vo_teefault_cry-02.opus
-  audio/vo_teefault_ninja-01.opus
-  audio/vo_teefault_ninja-02.opus
-  audio/vo_teefault_ninja-03.opus
-  audio/vo_teefault_ninja-04.opus
-  audio/vo_teefault_pain_long-01.opus
-  audio/vo_teefault_pain_long-02.opus
-  audio/vo_teefault_pain_short-01.opus
-  audio/vo_teefault_pain_short-02.opus
-  audio/vo_teefault_pain_short-03.opus
-  audio/vo_teefault_pain_short-04.opus
-  audio/vo_teefault_pain_short-05.opus
-  audio/vo_teefault_pain_short-06.opus
-  audio/vo_teefault_pain_short-07.opus
-  audio/vo_teefault_pain_short-08.opus
-  audio/vo_teefault_pain_short-09.opus
-  audio/vo_teefault_pain_short-10.opus
-  audio/vo_teefault_pain_short-11.opus
-  audio/vo_teefault_pain_short-12.opus
-  audio/vo_teefault_sledge-01.opus
-  audio/vo_teefault_sledge-02.opus
-  audio/vo_teefault_sledge-03.opus
-  audio/vo_teefault_spawn-01.opus
-  audio/vo_teefault_spawn-02.opus
-  audio/vo_teefault_spawn-03.opus
-  audio/vo_teefault_spawn-04.opus
-  audio/vo_teefault_spawn-05.opus
-  audio/vo_teefault_spawn-06.opus
-  audio/vo_teefault_spawn-07.opus
-  audio/wp_flump_explo-01.opus
-  audio/wp_flump_explo-02.opus
-  audio/wp_flump_explo-03.opus
-  audio/wp_flump_launch-01.opus
-  audio/wp_flump_launch-02.opus
-  audio/wp_flump_launch-03.opus
-  audio/wp_gun_fire-01.opus
-  audio/wp_gun_fire-02.opus
-  audio/wp_gun_fire-03.opus
-  audio/wp_hammer_hit-01.opus
-  audio/wp_hammer_hit-02.opus
-  audio/wp_hammer_hit-03.opus
-  audio/wp_hammer_swing-01.opus
-  audio/wp_hammer_swing-02.opus
-  audio/wp_hammer_swing-03.opus
-  audio/wp_laser_bnce-01.opus
-  audio/wp_laser_bnce-02.opus
-  audio/wp_laser_bnce-03.opus
-  audio/wp_laser_fire-01.opus
-  audio/wp_laser_fire-02.opus
-  audio/wp_laser_fire-03.opus
-  audio/wp_ninja_attack-01.opus
-  audio/wp_ninja_attack-02.opus
-  audio/wp_ninja_attack-03.opus
-  audio/wp_ninja_attack-04.opus
-  audio/wp_ninja_hit-01.opus
-  audio/wp_ninja_hit-02.opus
-  audio/wp_ninja_hit-03.opus
-  audio/wp_ninja_hit-04.opus
-  audio/wp_noammo-01.opus
-  audio/wp_noammo-02.opus
-  audio/wp_noammo-03.opus
-  audio/wp_noammo-04.opus
-  audio/wp_noammo-05.opus
-  audio/wp_shotty_fire-01.opus
-  audio/wp_shotty_fire-02.opus
-  audio/wp_shotty_fire-03.opus
-  audio/wp_switch-01.opus
-  audio/wp_switch-02.opus
-  audio/wp_switch-03.opus
   countryflags/AD.png
   countryflags/AE.png
   countryflags/AF.png
@@ -818,66 +647,6 @@ set(EXPECTED_DATA
   countryflags/ZW.png
   countryflags/default.png
   countryflags/index.json
-  deadtee.png
-  editor/automap/desert_main.json
-  editor/automap/grass_doodads.json
-  editor/automap/grass_main.json
-  editor/automap/jungle_deathtiles.json
-  editor/automap/jungle_main.json
-  editor/automap/winter_main.json
-  editor/background.png
-  editor/checker.png
-  editor/cursor.png
-  editor/entities.png
-  editor/entities/reinfected.png
-  emoticons.png
-  fonts/DejaVuSans.ttf
-  fonts/LitcaneSans.ttc
-  fonts/index.json
-  fonts/remixicon.ttf
-  game.png
-  languages/belarusian.json
-  languages/bosnian.json
-  languages/brazilian_portuguese.json
-  languages/breton.json
-  languages/bulgarian.json
-  languages/catalan.json
-  languages/chuvash.json
-  languages/czech.json
-  languages/danish.json
-  languages/dutch.json
-  languages/esperanto.json
-  languages/estonian.json
-  languages/finnish.json
-  languages/french.json
-  languages/gaelic_scottish.json
-  languages/galician.json
-  languages/german.json
-  languages/greek.json
-  languages/hungarian.json
-  languages/index.json
-  languages/irish.json
-  languages/italian.json
-  languages/japanese.json
-  languages/korean.json
-  languages/kyrgyz.json
-  languages/license.txt
-  languages/lithuanian.json
-  languages/norwegian.json
-  languages/polish.json
-  languages/portuguese.json
-  languages/readme.txt
-  languages/romanian.json
-  languages/russian.json
-  languages/serbian.json
-  languages/simplified_chinese.json
-  languages/slovak.json
-  languages/slovenian.json
-  languages/spanish.json
-  languages/swedish.json
-  languages/traditional_chinese.json
-  languages/turkish.json
-  languages/ukrainian.json
   mapres/bg_cloud1.png
   mapres/bg_cloud2.png
   mapres/bg_cloud3.png
@@ -910,214 +679,7 @@ set(EXPECTED_DATA
   mapres/winter_mountains.png
   mapres/winter_mountains2.png
   mapres/winter_mountains3.png
-  maps/ctf1.map
-  maps/ctf2.map
-  maps/ctf3.map
-  maps/ctf4.map
-  maps/ctf5.map
-  maps/ctf6.map
-  maps/ctf7.map
-  maps/ctf8.map
-  maps/dm1.map
-  maps/dm2.map
-  maps/dm3.map
-  maps/dm6.map
-  maps/dm7.map
-  maps/dm8.map
-  maps/dm9.map
-  maps/license.txt
-  maps/lms1.map
-  maps/readme.txt
-  particles.png
-  race_flag.png
-  skins/beaver.json
-  skins/bluekitty.json
-  skins/bluestripe.json
-  skins/body/bat.png
-  skins/body/bear.png
-  skins/body/beaver.png
-  skins/body/dog.png
-  skins/body/force.png
-  skins/body/fox.png
-  skins/body/hippo.png
-  skins/body/kitty.png
-  skins/body/koala.png
-  skins/body/monkey.png
-  skins/body/mouse.png
-  skins/body/piglet.png
-  skins/body/raccoon.png
-  skins/body/spiky.png
-  skins/body/standard.png
-  skins/body/x_ninja.png
-  skins/bot.png
-  skins/brownbear.json
-  skins/bumbler.json
-  skins/cammo.json
-  skins/cammostripes.json
-  skins/cavebat.json
-  skins/decoration/hair.png
-  skins/decoration/twinbopp.png
-  skins/decoration/twinmello.png
-  skins/decoration/twinpen.png
-  skins/decoration/unibop.png
-  skins/decoration/unimelo.png
-  skins/decoration/unipento.png
-  skins/default.json
-  skins/eyes/colorable.png
-  skins/eyes/negative.png
-  skins/eyes/standard.png
-  skins/eyes/standardreal.png
-  skins/eyes/x_ninja.png
-  skins/feet/standard.png
-  skins/force.json
-  skins/fox.json
-  skins/greycoon.json
-  skins/greyfox.json
-  skins/hands/standard.png
-  skins/hippo.json
-  skins/koala.json
-  skins/limedog.json
-  skins/limekitty.json
-  skins/marking/bear.png
-  skins/marking/belly1.png
-  skins/marking/belly2.png
-  skins/marking/blush.png
-  skins/marking/bug.png
-  skins/marking/cammo1.png
-  skins/marking/cammo2.png
-  skins/marking/cammostripes.png
-  skins/marking/coonfluff.png
-  skins/marking/donny.png
-  skins/marking/downdony.png
-  skins/marking/duodonny.png
-  skins/marking/fox.png
-  skins/marking/hipbel.png
-  skins/marking/lowcross.png
-  skins/marking/lowpaint.png
-  skins/marking/marksman.png
-  skins/marking/mice.png
-  skins/marking/mixture1.png
-  skins/marking/mixture2.png
-  skins/marking/monkey.png
-  skins/marking/panda1.png
-  skins/marking/panda2.png
-  skins/marking/purelove.png
-  skins/marking/saddo.png
-  skins/marking/setisu.png
-  skins/marking/sidemarks.png
-  skins/marking/singu.png
-  skins/marking/stripe.png
-  skins/marking/striped.png
-  skins/marking/stripes.png
-  skins/marking/stripes2.png
-  skins/marking/thunder.png
-  skins/marking/tiger1.png
-  skins/marking/tiger2.png
-  skins/marking/toptri.png
-  skins/marking/triangular.png
-  skins/marking/tricircular.png
-  skins/marking/tripledon.png
-  skins/marking/tritri.png
-  skins/marking/twinbelly.png
-  skins/marking/twincross.png
-  skins/marking/twintri.png
-  skins/marking/uppy.png
-  skins/marking/warpaint.png
-  skins/marking/warstripes.png
-  skins/marking/whisker.png
-  skins/marking/wildpaint.png
-  skins/marking/wildpatch.png
-  skins/marking/yinyang.png
-  skins/monkey.json
-  skins/paintgre.json
-  skins/pandabear.json
-  skins/panther.json
-  skins/pento.json
-  skins/piggy.json
-  skins/pinky.json
-  skins/raccoon.json
-  skins/redbopp.json
-  skins/redstripe.json
-  skins/saddo.json
-  skins/setisu.json
-  skins/snowti.json
-  skins/spiky.json
-  skins/swardy.json
-  skins/tiger.json
-  skins/tooxy.json
-  skins/toptri.json
-  skins/twinbop.json
-  skins/twintri.json
-  skins/warmouse.json
-  skins/warpaint.json
-  skins/x_ninja.json
-  skins/xmas_hat.png
-  ui/blob.png
-  ui/console.png
-  ui/console_bar.png
-  ui/debug_font.png
-  ui/demo_buttons.png
-  ui/file_icons.png
-  ui/gametypes/ctf.png
-  ui/gametypes/dm.png
-  ui/gametypes/lms.png
-  ui/gametypes/lts.png
-  ui/gametypes/mod.png
-  ui/gametypes/race.png
-  ui/gametypes/reinfected.png
-  ui/gametypes/tdm.png
-  ui/gui_buttons.png
-  ui/gui_cursor.png
-  ui/gui_icons.png
-  ui/gui_logo.png
-  ui/icons/arrows.png
-  ui/icons/browse.png
-  ui/icons/browser.png
-  ui/icons/chat_whisper.png
-  ui/icons/friend.png
-  ui/icons/level.png
-  ui/icons/menu.png
-  ui/icons/network.png
-  ui/icons/sidebar.png
-  ui/icons/timer_clock.png
-  ui/icons/tools.png
-  ui/menuimages/demos.png
-  ui/menuimages/editor.png
-  ui/menuimages/local_server.png
-  ui/menuimages/play_game.png
-  ui/menuimages/settings.png
-  ui/no_skinpart.png
-  ui/sound_icons.png
-  ui/themes/auto.png
-  ui/themes/heavens.png
-  ui/themes/heavens_day.map
-  ui/themes/heavens_night.map
-  ui/themes/jungle.png
-  ui/themes/jungle_day.map
-  ui/themes/jungle_night.map
-  ui/themes/none.png
-  ui/themes/winter.png
-  ui/themes/winter_day.map
-  ui/themes/winter_night.map
 )
-
-if(NOT EXISTS ${PROJECT_SOURCE_DIR}/datasrc/languages/index.json)
-  message(WARNING "Missing datasrc/languages submodule. Please download a source release or update your git submodules with `git submodule update --init`")
-  foreach(item ${EXPECTED_DATA})
-    if(item MATCHES "^languages/")
-      list(REMOVE_ITEM EXPECTED_DATA ${item})
-    endif()
-  endforeach()
-endif()
-
-if(NOT EXISTS ${PROJECT_SOURCE_DIR}/datasrc/maps/dm1.map)
-  message(WARNING "Missing datasrc/maps submodule. Please download a source release or update your git submodules with `git submodule update --init`")
-  foreach(item ${EXPECTED_DATA})
-    if(item MATCHES "^maps/")
-      list(REMOVE_ITEM EXPECTED_DATA ${item})
-    endif()
-  endforeach()
-endif()
 
 set_glob(DATA GLOB_RECURSE "json;map;png;rules;ttc;ttf;txt;opus" datasrc ${EXPECTED_DATA})
 
@@ -1188,8 +750,6 @@ chash("src/generated/nethash.cpp"
   "src/game/gamecore.cpp"
   "${PROJECT_BINARY_DIR}/src/generated/protocol.h"
 )
-generate_source("src/generated/client_data.cpp" "client_content_source")
-generate_source("src/generated/client_data.h" "client_content_header")
 generate_source("src/generated/protocol.cpp" "network_source")
 generate_source("src/generated/protocol.h" "network_header")
 generate_source("src/generated/server_data.cpp" "server_content_source")
@@ -1227,26 +787,17 @@ set_src(BASE GLOB_RECURSE src/base
   vmath.h
 )
 set_src(ENGINE_INTERFACE GLOB src/engine
-  client.h
   config.h
   console.h
-  contacts.h
   demo.h
-  editor.h
   engine.h
-  graphics.h
-  input.h
   kernel.h
-  keys.h
   map.h
   mapchecker.h
   masterserver.h
   message.h
   server.h
-  serverbrowser.h
-  sound.h
   storage.h
-  textrender.h
   uuid.h
 )
 set_src(ENGINE_SHARED GLOB src/engine/shared
@@ -1289,7 +840,6 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   netban.h
   network.cpp
   network.h
-  network_client.cpp
   network_conn.cpp
   network_console.cpp
   network_console_conn.cpp
@@ -1345,185 +895,6 @@ add_library(engine-shared EXCLUDE_FROM_ALL OBJECT ${ENGINE_INTERFACE} ${ENGINE_S
 add_library(game-shared EXCLUDE_FROM_ALL OBJECT ${GAME_SHARED} ${GAME_GENERATED_SHARED})
 list(APPEND TARGETS_OWN engine-shared game-shared)
 
-
-########################################################################
-# CLIENT
-########################################################################
-
-if(CLIENT)
-  # Sources
-  set_src(ENGINE_CLIENT GLOB src/engine/client
-    backend_sdl.cpp
-    backend_sdl.h
-    client.cpp
-    client.h
-    contacts.cpp
-    contacts.h
-    graphics_threaded.cpp
-    graphics_threaded.h
-    graphics_threaded_null.h
-    input.cpp
-    input.h
-    keynames.h
-    serverbrowser.cpp
-    serverbrowser.h
-    serverbrowser_entry.h
-    serverbrowser_fav.cpp
-    serverbrowser_fav.h
-    serverbrowser_filter.cpp
-    serverbrowser_filter.h
-    sound.cpp
-    sound.h
-    textrender.cpp
-    textrender.h
-  )
-  set_src(GAME_CLIENT GLOB_RECURSE src/game/client
-    animstate.cpp
-    animstate.h
-    component.h
-    components/binds.cpp
-    components/binds.h
-    components/broadcast.cpp
-    components/broadcast.h
-    components/camera.cpp
-    components/camera.h
-    components/chat.cpp
-    components/chat.h
-    components/console.cpp
-    components/console.h
-    components/controls.cpp
-    components/controls.h
-    components/countryflags.cpp
-    components/countryflags.h
-    components/damageind.cpp
-    components/damageind.h
-    components/debughud.cpp
-    components/debughud.h
-    components/effects.cpp
-    components/effects.h
-    components/emoticon.cpp
-    components/emoticon.h
-    components/flow.cpp
-    components/flow.h
-    components/hud.cpp
-    components/hud.h
-    components/infomessages.cpp
-    components/infomessages.h
-    components/items.cpp
-    components/items.h
-    components/mapimages.cpp
-    components/mapimages.h
-    components/maplayers.cpp
-    components/maplayers.h
-    components/mapsounds.cpp
-    components/mapsounds.h
-    components/menus.cpp
-    components/menus.h
-    components/menus_browser.cpp
-    components/menus_callback.cpp
-    components/menus_demo.cpp
-    components/menus_ingame.cpp
-    components/menus_settings.cpp
-    components/menus_start.cpp
-    components/motd.cpp
-    components/motd.h
-    components/nameplates.cpp
-    components/nameplates.h
-    components/notifications.cpp
-    components/notifications.h
-    components/particles.cpp
-    components/particles.h
-    components/players.cpp
-    components/players.h
-    components/scoreboard.cpp
-    components/scoreboard.h
-    components/skins.cpp
-    components/skins.h
-    components/sounds.cpp
-    components/sounds.h
-    components/spectator.cpp
-    components/spectator.h
-    components/stats.cpp
-    components/stats.h
-    components/voting.cpp
-    components/voting.h
-    gameclient.cpp
-    gameclient.h
-    lineinput.cpp
-    lineinput.h
-    localization.cpp
-    localization.h
-    render.cpp
-    render.h
-    render_map.cpp
-    ui.cpp
-    ui.h
-    ui_listbox.cpp
-    ui_listbox.h
-    ui_rect.cpp
-    ui_rect.h
-    ui_scrollregion.cpp
-    ui_scrollregion.h
-  )
-  set_src(GAME_EDITOR GLOB src/game/editor
-    auto_map.cpp
-    auto_map.h
-    editor.cpp
-    editor.h
-    io.cpp
-    layer_game.cpp
-    layer_quads.cpp
-    layer_tiles.cpp
-    popups.cpp
-  )
-  set(GAME_GENERATED_CLIENT
-    src/generated/client_data.cpp
-    src/generated/client_data.h
-  )
-  set(CLIENT_SRC ${PLATFORM_CLIENT} ${ENGINE_CLIENT} ${GAME_CLIENT} ${GAME_EDITOR} ${GAME_GENERATED_CLIENT})
-
-  set(DEPS_CLIENT ${DEPS} ${PNGLITE_DEP} ${DEP_GLAD})
-
-  # Libraries
-  set(LIBS_CLIENT
-    ${LIBS}
-    Freetype::Freetype
-    ${PNGLITE_LIBRARIES}
-    SDL3::SDL3
-    Opus::opus
-    Opusfile::opusfile
-    ${PLATFORM_CLIENT_LIBS}
-  )
-
-  if(TARGET_OS STREQUAL "windows")
-    set(CLIENT_ICON "other/icons/teeworlds.rc")
-    if(NOT MINGW)
-      set(CLIENT_MANIFEST "other/manifest/teeworlds.manifest")
-    else()
-      set(CLIENT_MANIFEST "other/manifest/teeworlds.rc")
-    endif()
-  else()
-    set(CLIENT_ICON)
-  endif()
-
-  # Target
-  set(TARGET_CLIENT ${CLIENT_EXECUTABLE})
-  add_executable(${TARGET_CLIENT}
-    ${CLIENT_SRC}
-    ${CLIENT_ICON}
-    ${CLIENT_MANIFEST}
-    ${DEPS_CLIENT}
-    $<TARGET_OBJECTS:engine-shared>
-    $<TARGET_OBJECTS:game-shared>
-  )
-  target_link_libraries(${TARGET_CLIENT} ${LIBS_CLIENT})
-
-  target_include_directories(${TARGET_CLIENT} PRIVATE ${PNGLITE_INCLUDE_DIRS})
-  list(APPEND TARGETS_OWN ${TARGET_CLIENT})
-  list(APPEND TARGETS_LINK ${TARGET_CLIENT})
-endif()
-
-
 ########################################################################
 # SERVER
 ########################################################################
@@ -1539,8 +910,6 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   alloc.h
   entities/character.cpp
   entities/character.h
-  entities/flag.cpp
-  entities/flag.h
   entities/laser.cpp
   entities/laser.h
   entities/pickup.cpp
@@ -1555,34 +924,6 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamecontext.h
   gamecontroller.cpp
   gamecontroller.h
-  gamemodes/infection/reinfected.cpp
-  gamemodes/infection/reinfected.h
-  gamemodes/infection/riwall.cpp
-  gamemodes/infection/riwall.h
-  gamemodes/instagib/core.cpp
-  gamemodes/instagib/core.h
-  gamemodes/instagib/ctf.cpp
-  gamemodes/instagib/ctf.h
-  gamemodes/instagib/dm.cpp
-  gamemodes/instagib/dm.h
-  gamemodes/instagib/lms.cpp
-  gamemodes/instagib/lms.h
-  gamemodes/instagib/lts.cpp
-  gamemodes/instagib/lts.h
-  gamemodes/instagib/tdm.cpp
-  gamemodes/instagib/tdm.h
-  gamemodes/mod.cpp
-  gamemodes/mod.h
-  gamemodes/vanilla/ctf.cpp
-  gamemodes/vanilla/ctf.h
-  gamemodes/vanilla/dm.cpp
-  gamemodes/vanilla/dm.h
-  gamemodes/vanilla/lms.cpp
-  gamemodes/vanilla/lms.h
-  gamemodes/vanilla/lts.cpp
-  gamemodes/vanilla/lts.h
-  gamemodes/vanilla/tdm.cpp
-  gamemodes/vanilla/tdm.h
   gameworld.cpp
   gameworld.h
   player.cpp
@@ -1847,7 +1188,6 @@ endforeach()
 set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME ${PROJECT_NAME})
 
 set(CPACK_TARGETS
-  ${TARGET_CLIENT}
   ${TARGET_SERVER}
 )
 set(CPACK_DIRS ${PROJECT_BINARY_DIR}/data)
@@ -1868,13 +1208,7 @@ if(NOT DEV)
   install(DIRECTORY ${CPACK_DIRS} ${EXTRA_ARGS})
   install(FILES ${CPACK_FILES} ${EXTRA_ARGS})
   if((DMGTOOLS_FOUND OR HDIUTIL) AND MACOS_DO_INSTALL)
-    configure_file(other/bundle/client/Info.plist.in ${PROJECT_BINARY_DIR}/bundle/client/Info.plist)
     configure_file(other/bundle/server/Info.plist.in ${PROJECT_BINARY_DIR}/bundle/server/Info.plist)
-    set_target_properties(${TARGET_CLIENT} PROPERTIES
-      MACOSX_BUNDLE TRUE
-      MACOSX_BUNDLE_INFO_PLIST "${PROJECT_BINARY_DIR}/bundle/client/Info.plist"
-      MACOSX_BUNDLE_ICON_FILE "${PROJECT_SOURCE_DIR}/other/icons/${TARGET_CLIENT}.icns"
-    )
     set_target_properties(${TARGET_SERVER} PROPERTIES
       MACOSX_BUNDLE TRUE
       MACOSX_BUNDLE_INFO_PLIST "${PROJECT_BINARY_DIR}/bundle/server/Info.plist"
@@ -1989,9 +1323,6 @@ foreach(target ${TARGETS_OWN})
     target_include_directories(${target} PRIVATE ${ZLIB_INCLUDE_DIRS})
   endif()
   target_include_directories(${target} PRIVATE ${OPENSSL_INCLUDE_DIR})
-  if(HEADLESS_CLIENT)
-    target_compile_definitions(${target} PRIVATE CONF_HEADLESS_CLIENT)
-  endif()
 endforeach()
 
 foreach(target ${TARGETS_DEP})
