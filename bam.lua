@@ -3,10 +3,6 @@ CheckVersion("0.5")
 Import("configure.lua")
 Import("bamfind/crypto.lua")
 Import("bamfind/curl.lua")
-Import("bamfind/sdl.lua")
-Import("bamfind/freetype.lua")
-Import("bamfind/opus.lua")
-Import("bamfind/opusfile.lua")
 
 --- Setup Config -------
 config = NewConfig()
@@ -17,10 +13,6 @@ config:Add(OptTestCompileC("buildwithoutsseflag", "#include <immintrin.h>\nint m
 config:Add(OptLibrary("zlib", "zlib.h", false))
 config:Add(Crypto.OptFind("libcrypto", true))
 config:Add(Curl.OptFind("libcurl", true))
-config:Add(SDL.OptFind("sdl", true))
-config:Add(FreeType.OptFind("freetype", true))
-config:Add(Opus.OptFind("opus", true))
-config:Add(Opusfile.OptFind("opusfile", true))
 config:Finalize("config.lua")
 
 generated_src_dir = "build/src"
@@ -107,12 +99,6 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 		zlib = Compile(settings, Collect("src/engine/external/zlib/*.c"))
 	end
 
-	if config.opus.value == true then
-		if config.opus.include_path then
-			settings.cc.includes:Add(config.opus.include_path)
-		end
-	end
-
 	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
 	local json = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
 	local glad = Compile(settings, Collect("src/engine/external/glad/gl.c"))
@@ -168,9 +154,6 @@ function GenerateMacOSSettings(settings, conf, arch, compiler)
 
 	-- Master server, version server and tools
 	BuildEngineCommon(settings)
-	BuildMasterserver(settings)
-	BuildVersionserver(settings)
-	BuildTools(settings)
 
 	-- Server
 	settings.link.frameworks:Add("Cocoa")
@@ -208,9 +191,6 @@ function GenerateLinuxSettings(settings, conf, arch, compiler)
 
 	-- Master server, version server and tools
 	BuildEngineCommon(settings)
-	BuildTools(settings)
-	BuildMasterserver(settings)
-	BuildVersionserver(settings)
 
 	-- Server
 	BuildServer(settings)
@@ -266,9 +246,6 @@ function GenerateWindowsSettings(settings, conf, target_arch, compiler)
 
 	-- Master server, version server and tools
 	BuildEngineCommon(settings)
-	BuildMasterserver(settings)
-	BuildVersionserver(settings)
-	BuildTools(settings)
 
 	-- Server
 	local server_settings = settings:Copy()
@@ -336,23 +313,6 @@ function BuildServer(settings, family, platform)
 	local game_server = Compile(settings, CollectRecursive("src/game/server/*.cpp"), SharedServerFiles())
 	
 	return Link(settings, "ArchiveServer", libs["zlib"], libs["json"], server, game_server)
-end
-
-function BuildTools(settings)
-	local tools = {}
-	for i,v in ipairs(Collect("src/tools/*.cpp", "src/tools/*.c")) do
-		local toolname = PathFilename(PathBase(v))
-		tools[i] = Link(settings, toolname, Compile(settings, v), libs["zlib"], libs["png"], libs["json"])
-	end
-	PseudoTarget(settings.link.Output(settings, "pseudo_tools") .. settings.link.extension, tools)
-end
-
-function BuildMasterserver(settings)
-	return Link(settings, "mastersrv", Compile(settings, Collect("src/mastersrv/*.cpp")), libs["zlib"], libs["json"])
-end
-
-function BuildVersionserver(settings)
-	return Link(settings, "versionsrv", Compile(settings, Collect("src/versionsrv/*.cpp")), libs["zlib"], libs["json"])
 end
 
 function BuildContent(settings, arch, conf)
@@ -477,9 +437,7 @@ else
 	headless = nil
 end
 
-targets = {server="ArchiveServer",
-           versionserver="versionsrv", masterserver="mastersrv",
-           tools="pseudo_tools", content="content"}
+targets = {server="ArchiveServer", content="content"}
 
 subtargets = {}
 for t, cur_target in pairs(targets) do

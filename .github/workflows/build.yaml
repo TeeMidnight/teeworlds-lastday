@@ -145,15 +145,6 @@ jobs:
         name: teeworlds-archive-${{ matrix.os }}
         path: release/artifacts
 
-    - name: Download artifact for Release
-      uses: softprops/action-gh-release@v2
-      if: github.ref_type != 'tag' && github.event_name != 'pull_request' && github.ref_name == 'mods'
-      with:
-        tag_name: nightly
-        name: Nightly Build
-        files: release/artifacts/*
-        prerelease: true
-
   build-bam:
     runs-on: ${{ matrix.os }}
     strategy:

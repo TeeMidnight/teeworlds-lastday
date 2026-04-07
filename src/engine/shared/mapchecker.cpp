@@ -7,7 +7,6 @@
 #include <engine/storage.h>
 
 #include <versionsrv/mapversions.h>
-#include <versionsrv/versionsrv.h>
 
 #include "mapchecker.h"
 
