@@ -3,6 +3,7 @@
 #include <engine/shared/config.h>
 
 #include <game/mapitems.h>
+#include <game/version.h>
 #include <generated/server_data.h>
 
 #include "entities/character.h"
@@ -320,15 +321,16 @@ bool CGameController::CanSpawn(int Team, vec2 *pOutPos) const
 float CGameController::EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos) const
 {
 	float Score = 0.0f;
-	CCharacter *pC = static_cast<CCharacter *>(GameServer()->m_World.FindFirst(CGameWorld::ENTTYPE_CHARACTER));
-	for(; pC; pC = (CCharacter *) pC->TypeNext())
+	
+	for(CGameWorld::TypeRange r = GameServer()->m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
+		CCharacter *pChr = static_cast<CCharacter *>(r.front());
 		// team mates are not as dangerous as enemies
 		float Scoremod = 1.0f;
-		if(pEval->m_FriendlyTeam != -1 && pC->GetPlayer()->GetTeam() == pEval->m_FriendlyTeam)
+		if(pEval->m_FriendlyTeam != -1 && pChr->GetPlayer()->GetTeam() == pEval->m_FriendlyTeam)
 			Scoremod = 0.5f;
 
-		float d = distance(Pos, pC->GetPos());
+		float d = distance(Pos, pChr->GetPos());
 		Score += Scoremod * (d == 0 ? 1000000000.0f : 1.0f / d);
 	}
 
@@ -341,8 +343,9 @@ void CGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type) const
 	for(int i = 0; i < m_alSpawnPoints[Type].size(); i++)
 	{
 		// check if the position is occupado
-		CCharacter *aEnts[MAX_CLIENTS];
-		int Num = GameServer()->m_World.FindEntities(m_alSpawnPoints[Type][i], 64, (CEntity **) aEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+		array<CEntity*> lpEnts;
+		lpEnts.hint_size(8);
+		int Num = GameServer()->m_World.FindEntities(m_alSpawnPoints[Type][i], 64, lpEnts, CGameWorld::ENTTYPE_CHARACTER);
 		vec2 Positions[5] = {vec2(0.0f, 0.0f), vec2(-32.0f, 0.0f), vec2(0.0f, -32.0f), vec2(32.0f, 0.0f), vec2(0.0f, 32.0f)}; // start, left, up, right, down
 		int Result = -1;
 		for(int Index = 0; Index < 5 && Result == -1; ++Index)
@@ -350,7 +353,7 @@ void CGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type) const
 			Result = Index;
 			for(int c = 0; c < Num; ++c)
 				if(GameServer()->Collision()->CheckPoint(m_alSpawnPoints[Type][i] + Positions[Index]) ||
-					distance(aEnts[c]->GetPos(), m_alSpawnPoints[Type][i] + Positions[Index]) <= aEnts[c]->GetProximityRadius())
+					distance(lpEnts[c]->GetPos(), m_alSpawnPoints[Type][i] + Positions[Index]) <= lpEnts[c]->GetProximityRadius())
 				{
 					Result = -1;
 					break;
@@ -438,14 +441,28 @@ int CGameController::GetStartTeam()
 	return TEAM_SPECTATORS;
 }
 
+void CGameController::Com_About(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext*>(pContext);
+	CGameController *pSelf = static_cast<CGameController*>(pCmdContext->m_pContext);
+	int ClientID = pCmdContext->m_ClientID;
+	pSelf->SendSystemChat(ClientID, MOD_NAME " v" MOD_VERSION " by Bamcane");
+}
+
 void CGameController::RegisterChatCommands(CCommandManager *pManager)
 {
-	// pManager->AddCommand("test", "Test the command system", "r", Com_Example, this);
+	pManager->AddCommand("about", "About the mod", "", Com_About, this);
+	pManager->AddCommand("info", "About the mod", "", Com_About, this);
 }
 
 bool CGameController::CanCharacterWeaponFullAuto(CCharacter *pChr, int Weapon)
 {
 	return Weapon == WEAPON_GRENADE || Weapon == WEAPON_SHOTGUN || Weapon == WEAPON_LASER;
+}
+
+void CGameController::SendSystemChat(int TargetID, const char *pMsg)
+{
+	GameServer()->SendChat(-1, CHAT_ALL, TargetID, pMsg);
 }
 
 int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int Weapon)
@@ -464,14 +481,13 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 		{
 			GameServer()->CreateSound(ChrPos, SOUND_HAMMER_FIRE);
 
-			CCharacter *apEnts[MAX_CLIENTS];
+			array<CEntity*> lpEnts;
+			lpEnts.hint_size(8);
 			int Hits = 0;
-			int Num = GameServer()->m_World.FindEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f, (CEntity **) apEnts,
-				MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
-
+			const int Num = GameServer()->m_World.FindFlagEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 			for(int i = 0; i < Num; ++i)
 			{
-				CCharacter *pTarget = apEnts[i];
+				CCharacter *pTarget = static_cast<CCharacter*>(lpEnts[i]);
 
 				if((pTarget == pChr) || GameServer()->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos(), NULL, NULL))
 					continue;
@@ -488,8 +504,8 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 				else
 					Dir = vec2(0.f, -1.f);
 
-				pTarget->TakeDamage(vec2(0.f, -1.f) + normalize(Dir + vec2(0.f, -1.1f)) * 10.0f, Dir * -1, g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage,
-					ClientID, Weapon);
+				pTarget->TakeHit(vec2(0.f, -1.f) + normalize(Dir + vec2(0.f, -1.1f)) * 10.0f, Dir * -1, g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage,
+					pChr, Weapon);
 				Hits++;
 			}
 

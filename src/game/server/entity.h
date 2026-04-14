@@ -28,6 +28,7 @@ private:
 
 	int m_ID;
 	int m_ObjType;
+	int m_ObjFlag;
 
 	/*
 		Variable: m_ProximityRadius
@@ -52,7 +53,7 @@ protected:
 
 public:
 	/* Constructor */
-	CEntity(CGameWorld *pGameWorld, int Objtype, vec2 Pos, int ProximityRadius = 0);
+	CEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0);
 
 	/* Destructor */
 	virtual ~CEntity();
@@ -63,9 +64,10 @@ public:
 	class CGameContext *GameServer() { return m_pGameWorld->GameServer(); }
 	class IServer *Server() { return m_pGameWorld->Server(); }
 
+	int ObjType() const { return m_ObjType; }
+	int ObjFlag() const { return m_ObjFlag; }
+
 	/* Getters */
-	CEntity *TypeNext() { return m_pNextTypeEntity; }
-	CEntity *TypePrev() { return m_pPrevTypeEntity; }
 	const vec2 &GetPos() const { return m_Pos; }
 	float GetProximityRadius() const { return m_ProximityRadius; }
 	bool IsMarkedForDestroy() const { return m_MarkedForDestroy; }
@@ -138,8 +140,33 @@ public:
 	*/
 	int NetworkClipped(int SnappingClient);
 	int NetworkClipped(int SnappingClient, vec2 CheckPos);
+	int NetworkClippedLine(int SnappingClient, vec2 From, vec2 To);
 
 	bool GameLayerClipped(vec2 CheckPos);
 };
 
+class CHitableEntity : public CEntity
+{
+public:
+	/* Constructor */
+	CHitableEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0) : 
+		CEntity(pGameWorld, Objtype, ObjFlag | CGameWorld::ENTFLAG_HITABLE, Pos, ProximityRadius)
+	{
+	}
+	virtual bool TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon) = 0;
+};
+
+class CChildEntity : public CEntity
+{
+protected:
+	int m_Owner;
+public:
+	/* Constructor */
+	CChildEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0) : 
+		CEntity(pGameWorld, Objtype, ObjFlag | CGameWorld::ENTFLAG_CHILD, Pos, ProximityRadius)
+	{
+	}
+
+	int GetOwner() const { return m_Owner; }
+};
 #endif

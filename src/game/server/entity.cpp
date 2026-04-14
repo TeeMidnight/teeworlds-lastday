@@ -5,7 +5,7 @@
 #include "gamecontext.h"
 #include "player.h"
 
-CEntity::CEntity(CGameWorld *pGameWorld, int ObjType, vec2 Pos, int ProximityRadius)
+CEntity::CEntity(CGameWorld *pGameWorld, int ObjType, int ObjFlag, vec2 Pos, int ProximityRadius)
 {
 	m_pGameWorld = pGameWorld;
 
@@ -14,6 +14,7 @@ CEntity::CEntity(CGameWorld *pGameWorld, int ObjType, vec2 Pos, int ProximityRad
 
 	m_ID = Server()->SnapNewID();
 	m_ObjType = ObjType;
+	m_ObjFlag = ObjFlag;
 
 	m_ProximityRadius = ProximityRadius;
 
@@ -36,6 +37,23 @@ int CEntity::NetworkClipped(int SnappingClient, vec2 CheckPos)
 {
 	if(SnappingClient == -1)
 		return 0;
+
+	float dx = GameServer()->m_apPlayers[SnappingClient]->m_ViewPos.x - CheckPos.x;
+	float dy = GameServer()->m_apPlayers[SnappingClient]->m_ViewPos.y - CheckPos.y;
+
+	if(absolute(dx) > 1000.0f || absolute(dy) > 800.0f)
+		return 1;
+
+	if(distance(GameServer()->m_apPlayers[SnappingClient]->m_ViewPos, CheckPos) > 1100.0f)
+		return 1;
+	return 0;
+}
+
+int CEntity::NetworkClippedLine(int SnappingClient, vec2 From, vec2 To)
+{
+	if(SnappingClient == -1)
+		return 0;
+	vec2 CheckPos = closest_point_on_line(From, To, GameServer()->m_apPlayers[SnappingClient]->m_ViewPos);
 
 	float dx = GameServer()->m_apPlayers[SnappingClient]->m_ViewPos.x - CheckPos.x;
 	float dy = GameServer()->m_apPlayers[SnappingClient]->m_ViewPos.y - CheckPos.y;

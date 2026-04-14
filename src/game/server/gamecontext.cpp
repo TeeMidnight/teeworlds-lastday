@@ -120,7 +120,7 @@ void CGameContext::CreateHammerHit(vec2 Pos)
 	}
 }
 
-void CGameContext::CreateExplosion(vec2 Pos, int Owner, int Weapon, int MaxDamage)
+void CGameContext::CreateExplosion(vec2 Pos, CEntity *pOwner, int Weapon, int MaxDamage)
 {
 	// create the event
 	CNetEvent_Explosion *pEvent = (CNetEvent_Explosion *) m_Events.Create(NETEVENTTYPE_EXPLOSION, sizeof(CNetEvent_Explosion));
@@ -131,21 +131,22 @@ void CGameContext::CreateExplosion(vec2 Pos, int Owner, int Weapon, int MaxDamag
 	}
 
 	// deal damage
-	CCharacter *apEnts[MAX_CLIENTS];
+	array<CEntity*> lpEnts;
+	lpEnts.hint_size(8);
 	float Radius = g_pData->m_Explosion.m_Radius;
 	float InnerRadius = 48.0f;
 	float MaxForce = g_pData->m_Explosion.m_MaxForce;
-	int Num = m_World.FindEntities(Pos, Radius, (CEntity **) apEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+	const int Num = m_World.FindFlagEntities(Pos, Radius, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 	for(int i = 0; i < Num; i++)
 	{
-		vec2 Diff = apEnts[i]->GetPos() - Pos;
+		vec2 Diff = lpEnts[i]->GetPos() - Pos;
 		vec2 Force(0, MaxForce);
 		float l = length(Diff);
 		if(l)
 			Force = normalize(Diff) * MaxForce;
 		float Factor = 1 - clamp((l - InnerRadius) / (Radius - InnerRadius), 0.0f, 1.0f);
 		if((int) (Factor * MaxDamage))
-			apEnts[i]->TakeDamage(Force * Factor, Diff * -1, (int) (Factor * MaxDamage), Owner, Weapon);
+			static_cast<CHitableEntity*>(lpEnts[i])->TakeHit(Force * Factor, Diff * -1, (int) (Factor * MaxDamage), pOwner, Weapon);
 	}
 }
 
@@ -719,9 +720,9 @@ void CGameContext::OnClientTeamChange(int ClientID)
 		AbortVoteOnTeamChange(ClientID);
 
 	// mark client's projectile has team projectile
-	CProjectile *p = (CProjectile *) m_World.FindFirst(CGameWorld::ENTTYPE_PROJECTILE);
-	for(; p; p = (CProjectile *) p->TypeNext())
+	for(CGameWorld::TypeRange r = m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
+		CProjectile *p = static_cast<CProjectile *>(r.front());
 		if(p->GetOwner() == ClientID)
 			p->LoseOwner();
 	}
@@ -754,9 +755,9 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 	}
 
 	// mark client's projectile has team projectile
-	CProjectile *p = (CProjectile *) m_World.FindFirst(CGameWorld::ENTTYPE_PROJECTILE);
-	for(; p; p = (CProjectile *) p->TypeNext())
+	for(CGameWorld::TypeRange r = m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
+		CProjectile *p = static_cast<CProjectile *>(r.front());
 		if(p->GetOwner() == ClientID)
 			p->LoseOwner();
 	}
@@ -826,7 +827,24 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			// don't allow spectators to disturb players during a running game in tournament mode
 			if(pMsg->m_Mode != CHAT_NONE)
-				SendChat(ClientID, pMsg->m_Mode, pMsg->m_Target, pMsg->m_pMessage);
+			{
+				if(pMsg->m_pMessage[0] == '/')
+				{
+					const char *pCommandStr = pMsg->m_pMessage;
+					char aCommand[16];
+					str_format(aCommand, sizeof(aCommand), "%.*s", str_span(pCommandStr + 1, " "), pCommandStr + 1);
+					const CCommandManager::CCommand *pCommand = m_CommandManager.GetCommand(aCommand);
+					if(!pCommand)
+					{
+						return;
+					}
+
+					// execute command
+					CommandManager()->OnCommand(pCommand->m_aName, str_skip_whitespaces_const(str_skip_to_whitespace_const(pCommandStr)), ClientID);
+				}
+				else
+					SendChat(ClientID, pMsg->m_Mode, pMsg->m_Target, pMsg->m_pMessage);
+			}
 		}
 		else if(MsgID == NETMSGTYPE_CL_CALLVOTE)
 		{
@@ -1497,8 +1515,6 @@ void CGameContext::OnInit()
 	Console()->Chain("sv_vote_kick", ConchainSettingUpdate, this);
 	Console()->Chain("sv_vote_kick_min", ConchainSettingUpdate, this);
 	Console()->Chain("sv_vote_spectate", ConchainSettingUpdate, this);
-	Console()->Chain("sv_teambalance_time", ConchainSettingUpdate, this);
-	Console()->Chain("sv_player_slots", ConchainSettingUpdate, this);
 	Console()->Chain("sv_max_clients", ConchainSettingUpdate, this);
 	Console()->Chain("sv_allow_spec_voting", ConchainSettingUpdate, this);
 }

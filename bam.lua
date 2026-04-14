@@ -101,10 +101,9 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 
 	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
 	local json = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
-	local glad = Compile(settings, Collect("src/engine/external/glad/gl.c"))
 
 	-- globally available libs
-	libs = {zlib=zlib, png=png, json=json, glad=glad}
+	libs = {zlib=zlib, png=png, json=json}
 end
 
 function GenerateMacOSSettings(settings, conf, arch, compiler)
@@ -296,6 +295,7 @@ end
 function BuildEngineCommon(settings)
 	config.libcrypto:Apply(settings)
 	config.libcurl:Apply(settings)
+	settings.link.extrafiles:Merge(Compile(settings, Collect("src/engine/map/*.cpp")))
 	settings.link.extrafiles:Merge(Compile(settings, Collect("src/engine/shared/*.cpp")))
 
 	local c11_settings = settings:Copy();
@@ -312,7 +312,7 @@ function BuildServer(settings, family, platform)
 	
 	local game_server = Compile(settings, CollectRecursive("src/game/server/*.cpp"), SharedServerFiles())
 	
-	return Link(settings, "ArchiveServer", libs["zlib"], libs["json"], server, game_server)
+	return Link(settings, "ArchiveServer", libs["zlib"], libs["json"], libs["png"], server, game_server)
 end
 
 function BuildContent(settings, arch, conf)

@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest]
         include:
         - os: ubuntu-latest
           cmake-args: -G Ninja
@@ -29,14 +29,6 @@ jobs:
             CFLAGS: -Werror
             CXXFLAGS: -Werror
             LDFLAGS: -Werror
-        - os: macOS-latest
-          cmake-args: -G Ninja
-          package-file: "*-macos.dmg"
-          archtitecture: "arm64"
-          shell: "bash"
-          env:
-            CFLAGS: -Werror
-            CXXFLAGS: -Werror
     defaults:
       run:
         shell: ${{ matrix.shell }} {0}
@@ -82,14 +74,6 @@ jobs:
         cmake . -DCMAKE_BUILD_TYPE=Release -DSDL_TEST=OFF -DSDL_STATIC=OFF 
         sudo make install
         sudo ldconfig
-
-    - name: Prepare MacOS
-      if: contains(matrix.os, 'macOS')
-      run: |
-        brew update || true
-        brew install pkg-config sdl3 python3 ninja opus opusfile openssl curl || true
-        brew upgrade freetype
-        sudo rm -rf /Library/Developer/CommandLineTools
 
     - name: Build in debug mode
       env: ${{ matrix.env }}
@@ -150,7 +134,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest]
         include:
         - os: ubuntu-latest
           archtitecture: "x86_64"
@@ -158,9 +142,6 @@ jobs:
         - os: windows-latest
           archtitecture: "x86_64"
           shell: "msys2"
-        - os: macOS-latest
-          archtitecture: "arm64"
-          shell: "bash"
     defaults:
       run:
         shell: ${{ matrix.shell }} {0}
@@ -220,14 +201,6 @@ jobs:
       run: |
         cd bam
         ./make_win64_msvc.bat
-
-    - name: Prepare MacOS
-      if: contains(matrix.os, 'macOS')
-      run: |
-        brew update
-        brew install sdl3 opus opusfile openssl curl || true
-        cd bam
-        ./make_unix.sh
 
     - name: Build in debug mode
       run: ./bam/bam conf=debug all

@@ -221,6 +221,62 @@ protected:
 };
 
 /*
+	Class: conditional_range
+*/
+template<class T, class CONDITION>
+class conditional_range
+{
+public:
+
+	conditional_range()
+	{
+		begin = 0x0;
+		end = 0x0;
+	}
+
+	conditional_range(T *b, T *e, CONDITION cond)
+	{
+		begin = b;
+		end = e;
+		condition = cond;
+
+		while(!empty() && !condition(*begin))
+		{
+			pop_front();
+		}
+	}
+
+	conditional_range(plain_range<T> range, CONDITION cond) :
+		conditional_range(&range.front(), &range.back(), cond)
+	{
+	}
+
+	bool empty() const { return begin >= end; }
+
+	void pop_front()
+	{
+		dbg_assert(!empty(), "empty");
+		begin++;
+		while(!empty() && !condition(*begin))
+		{
+			begin++;
+		}
+	}
+
+	T &front()
+	{
+		dbg_assert(!empty(), "empty");
+		return *begin;
+	}
+
+protected:
+	T *begin;
+	T *end;
+	CONDITION condition;
+};
+
+
+/*
 	Class: plain_range_sorted
 
 	Concepts:

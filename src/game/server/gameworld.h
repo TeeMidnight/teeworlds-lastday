@@ -25,14 +25,17 @@ public:
 		ENTTYPE_FLAG,
 
 		ENTTYPE_RIWALL,
-		NUM_ENTTYPES
+		NUM_ENTTYPES,
+	
+		ENTFLAG_HITABLE = 1,
+		ENTFLAG_CHILD = 2,
 	};
 
 private:
 	void RemoveEntities();
 
-	CEntity *m_pNextTraverseEntity;
-	CEntity *m_apFirstEntityTypes[NUM_ENTTYPES];
+	array<CEntity*> m_alpEntityLists[NUM_ENTTYPES];
+	array<CEntity*> m_lpFlagEntityList;
 
 	class CGameContext *m_pGameServer;
 	class CConfig *m_pConfig;
@@ -50,8 +53,20 @@ public:
 
 	void SetGameServer(CGameContext *pGameServer);
 
-	CEntity *FindFirst(int Type);
+	typedef array<CEntity*>::range TypeRange;
+	TypeRange DoTypeRange(int Type);
 
+	class CFlagCheck
+	{
+	public:
+		int m_ConditionFlag;
+		CFlagCheck() {};
+		CFlagCheck(int Flag) { m_ConditionFlag = Flag; }
+		bool operator()(CEntity *&pEntity) const;
+	};
+
+	typedef conditional_range<CEntity*, CFlagCheck> FlagRange;
+	FlagRange DoFlagRange(int Flag);
 	/*
 		Function: find_entities
 			Finds entities close to a position and returns them in a list.
@@ -67,7 +82,8 @@ public:
 		Returns:
 			Number of entities found and added to the ents array.
 	*/
-	int FindEntities(vec2 Pos, float Radius, CEntity **ppEnts, int Max, int Type);
+	int FindEntities(vec2 Pos, float Radius, array<CEntity*> &lpEnts, int Type);
+	int FindFlagEntities(vec2 Pos, float Radius, array<CEntity*> &lpEnts, int Flag);
 
 	/*
 		Function: closest_CEntity
@@ -83,6 +99,7 @@ public:
 			Returns a pointer to the closest CEntity or NULL if no CEntity is close enough.
 	*/
 	CEntity *ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis);
+	CEntity *ClosestFlagEntity(vec2 Pos, float Radius, int Flag, CEntity *pNotThis);
 
 	/*
 		Function: interserct_CEntity
@@ -100,6 +117,7 @@ public:
 			Returns a pointer to the closest hit or NULL of there is no intersection.
 	*/
 	CEntity *IntersectEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Type, CEntity *pNotThis = 0);
+	CEntity *IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Flag, CEntity *pNotThis = 0);
 
 	/*
 		Function: insert_entity

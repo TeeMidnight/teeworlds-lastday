@@ -6,7 +6,7 @@
 #include "character.h"
 #include "laser.h"
 
-CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner, int Damage) : CEntity(pGameWorld, CGameWorld::ENTTYPE_LASER, Pos)
+CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner, int Damage) : CChildEntity(pGameWorld, CGameWorld::ENTTYPE_LASER, Pos)
 {
 	m_Damage = Damage;
 	m_Owner = Owner;
@@ -22,14 +22,14 @@ bool CLaser::HitCharacter(vec2 From, vec2 To)
 {
 	vec2 At;
 	CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
-	CCharacter *pHit = (CCharacter *) GameWorld()->IntersectEntity(m_Pos, To, 0.f, At, CGameWorld::ENTTYPE_CHARACTER, pOwnerChar);
+	CHitableEntity *pHit = (CHitableEntity *) GameWorld()->IntersectFlagEntity(m_Pos, To, 0.f, At, CGameWorld::ENTFLAG_HITABLE, pOwnerChar);
 	if(!pHit)
 		return false;
 
 	m_From = From;
 	m_Pos = At;
 	m_Energy = -1;
-	pHit->TakeDamage(vec2(0.f, 0.f), normalize(To - From), m_Damage, m_Owner, WEAPON_LASER);
+	pHit->TakeHit(vec2(0.f, 0.f), normalize(To - From), m_Damage, this, WEAPON_LASER);
 	return true;
 }
 
@@ -98,7 +98,7 @@ void CLaser::TickPaused()
 
 void CLaser::Snap(int SnappingClient)
 {
-	if(NetworkClipped(SnappingClient) && NetworkClipped(SnappingClient, m_From))
+	if(NetworkClippedLine(SnappingClient, m_From, m_Pos))
 		return;
 
 	CNetObj_Laser *pObj = static_cast<CNetObj_Laser *>(Server()->SnapNewItem(NETOBJTYPE_LASER, GetID(), sizeof(CNetObj_Laser)));

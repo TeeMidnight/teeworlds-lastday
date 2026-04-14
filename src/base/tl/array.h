@@ -26,6 +26,8 @@ class array : private ALLOCATOR
 
 public:
 	typedef plain_range<T> range;
+	typedef T *iterator;
+	typedef const T *const_iterator;
 
 	/*
 		Function: array constructor
@@ -306,6 +308,15 @@ public:
 	}
 
 	/*
+		Function: used_memory
+			Returns how much memory this dynamic array is actually using
+	*/
+	int used_memory() const
+	{
+		return sizeof(array) + sizeof(T) * num_elements;
+	}
+
+	/*
 		Function: memusage
 			Returns how much memory this dynamic array is using
 	*/
@@ -333,6 +344,15 @@ public:
 			Returns a range that contains the whole array.
 	*/
 	range all() const { return range(list, list + num_elements); }
+
+	iterator begin() { return list; }
+	iterator end() { return list + num_elements; }
+
+	const_iterator begin() const { return list; }
+	const_iterator end() const { return list + num_elements; }
+
+	const_iterator cbegin() const { return list; }
+	const_iterator cend() const { return list + num_elements; }
 
 protected:
 	void incsize()

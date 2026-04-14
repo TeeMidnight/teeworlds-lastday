@@ -5,7 +5,7 @@
 
 #include <game/server/entity.h>
 
-class CLaser : public CEntity
+class CLaser : public CChildEntity
 {
 public:
 	CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner, int Damage);
@@ -25,7 +25,6 @@ private:
 	float m_Energy;
 	int m_Bounces;
 	int m_EvalTick;
-	int m_Owner;
 	int m_Damage;
 };
 

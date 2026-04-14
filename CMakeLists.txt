@@ -58,7 +58,7 @@ endif()
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 option(DOWNLOAD_DEPENDENCIES "Download dependencies (only available on Windows)" ${AUTO_DEPENDENCIES_DEFAULT})
@@ -800,6 +800,11 @@ set_src(ENGINE_INTERFACE GLOB src/engine
   storage.h
   uuid.h
 )
+set_src(ENGINE_MAP GLOB src/engine/map
+  mapcreator.cpp
+  mapcreator.h
+  mapitems.h
+)
 set_src(ENGINE_SHARED GLOB src/engine/shared
   compression.cpp
   compression.h
@@ -891,7 +896,7 @@ else()
 endif()
 
 # Targets
-add_library(engine-shared EXCLUDE_FROM_ALL OBJECT ${ENGINE_INTERFACE} ${ENGINE_SHARED} ${ENGINE_GENERATED_SHARED} ${BASE})
+add_library(engine-shared EXCLUDE_FROM_ALL OBJECT ${ENGINE_INTERFACE} ${ENGINE_MAP} ${ENGINE_SHARED} ${ENGINE_GENERATED_SHARED} ${BASE})
 add_library(game-shared EXCLUDE_FROM_ALL OBJECT ${GAME_SHARED} ${GAME_GENERATED_SHARED})
 list(APPEND TARGETS_OWN engine-shared game-shared)
 
@@ -947,6 +952,7 @@ set(LIBS_SERVER ${LIBS})
 set(TARGET_SERVER ${SERVER_EXECUTABLE})
 add_executable(${TARGET_SERVER}
   ${DEPS}
+  ${PNGLITE_DEP}
   ${SERVER_SRC}
   ${SERVER_ICON}
   $<TARGET_OBJECTS:engine-shared>

@@ -129,11 +129,13 @@ public:
 
 	void HandleCharacterTiles(class CCharacter *pChr, vec2 LastPos, vec2 NewPos) {};
 	// static void Com_Example(IConsole::IResult *pResult, void *pContext);
+	static void Com_About(IConsole::IResult *pResult, void *pContext);
 	void RegisterChatCommands(CCommandManager *pManager);
 
 	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }
 	bool CanCharacterWeaponFullAuto(class CCharacter *pChr, int Weapon);
 
+	void SendSystemChat(int TargetID, const char *pMsg);
 	// return: Reload timer
 	int OnCharacterFireWeapon(class CCharacter *pChr, vec2 Direction, int Weapon);
 };

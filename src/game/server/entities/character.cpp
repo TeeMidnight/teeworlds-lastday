@@ -42,7 +42,7 @@ CInputCount CountInput(int Prev, int Cur)
 MACRO_ALLOC_POOL_ID_IMPL(CCharacter, MAX_CLIENTS)
 
 // Character, "physical" player's part
-CCharacter::CCharacter(CGameWorld *pWorld) : CEntity(pWorld, CGameWorld::ENTTYPE_CHARACTER, vec2(0, 0), ms_PhysSize)
+CCharacter::CCharacter(CGameWorld *pWorld) : CHitableEntity(pWorld, CGameWorld::ENTTYPE_CHARACTER, 0, vec2(0, 0), ms_PhysSize)
 {
 	m_Health = 0;
 	m_Armor = 0;
@@ -159,19 +159,20 @@ void CCharacter::HandleNinja()
 		// check if we hit anything along the way
 		const float Radius = GetProximityRadius() * 2.0f;
 		const vec2 Center = OldPos + (m_Pos - OldPos) * 0.5f;
-		CCharacter *aEnts[MAX_CLIENTS];
-		const int Num = GameWorld()->FindEntities(Center, Radius, (CEntity **) aEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+		array<CEntity*> lpEnts;
+		lpEnts.hint_size(8);
+		const int Num = GameWorld()->FindFlagEntities(Center, Radius, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 
 		for(int i = 0; i < Num; ++i)
 		{
-			if(aEnts[i] == this)
+			if(lpEnts[i] == this)
 				continue;
 
 			// make sure we haven't hit this object before
 			bool AlreadyHit = false;
-			for(int j = 0; j < m_NumObjectsHit; j++)
+			for(int j = 0; j < m_lpHitObjects.size(); j++)
 			{
-				if(m_apHitObjects[j] == aEnts[i])
+				if(m_lpHitObjects[j] == lpEnts[i])
 				{
 					AlreadyHit = true;
 					break;
@@ -181,16 +182,15 @@ void CCharacter::HandleNinja()
 				continue;
 
 			// check so we are sufficiently close
-			if(distance(aEnts[i]->m_Pos, m_Pos) > Radius)
+			if(distance(lpEnts[i]->GetPos(), m_Pos) > Radius)
 				continue;
 
 			// Hit a player, give him damage and stuffs...
-			GameServer()->CreateSound(aEnts[i]->m_Pos, SOUND_NINJA_HIT);
-			if(m_NumObjectsHit < VANILLA_MAX_PLAYERS)
-				m_apHitObjects[m_NumObjectsHit++] = aEnts[i];
+			GameServer()->CreateSound(lpEnts[i]->GetPos(), SOUND_NINJA_HIT);
+			m_lpHitObjects.add(lpEnts[i]);
 
 			// set his velocity to fast upward (for now)
-			aEnts[i]->TakeDamage(vec2(0, -10.0f), m_Ninja.m_ActivationDir * -1, g_pData->m_Weapons.m_Ninja.m_pBase->m_Damage, m_pPlayer->GetCID(), WEAPON_NINJA);
+			static_cast<CHitableEntity*>(lpEnts[i])->TakeHit(vec2(0, -10.0f), m_Ninja.m_ActivationDir * -1, g_pData->m_Weapons.m_Ninja.m_pBase->m_Damage, this, WEAPON_NINJA);
 		}
 	}
 }
@@ -371,7 +371,8 @@ int CCharacter::GetCID()
 
 void CCharacter::DoNinjaFire(vec2 Direction, int MoveTime)
 {
-	m_NumObjectsHit = 0;
+	m_lpHitObjects.clear();
+	m_lpHitObjects.hint_size(4);
 	m_Ninja.m_ActivationDir = Direction;
 	m_Ninja.m_CurrentMoveTime = MoveTime;
 	m_Ninja.m_OldVelAmount = length(m_Core.m_Vel);
@@ -747,11 +748,28 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 	return true;
 }
 
+bool CCharacter::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
+{
+	int From = -1;
+	if(pFrom)
+	{
+		if(pFrom->ObjType() == CGameWorld::ENTTYPE_CHARACTER)
+			From = static_cast<CCharacter*>(pFrom)->GetCID();
+		if(pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD)
+			From = static_cast<CChildEntity*>(pFrom)->GetOwner();
+	}
+	return TakeDamage(Force, Source, Dmg, From, Weapon);
+}
+
 void CCharacter::Snap(int SnappingClient)
 {
 	if(NetworkClipped(SnappingClient))
-		return;
-
+	{
+		if(m_Core.m_HookState == HOOK_IDLE)
+			return;
+		if(NetworkClippedLine(SnappingClient, m_Pos, m_Core.m_HookPos))
+			return;
+	}
 	CNetObj_Character *pCharacter = static_cast<CNetObj_Character *>(Server()->SnapNewItem(NETOBJTYPE_CHARACTER, m_pPlayer->GetCID(), sizeof(CNetObj_Character)));
 	if(!pCharacter)
 		return;

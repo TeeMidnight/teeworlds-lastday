@@ -5,6 +5,7 @@
 
 #include "vmath.h"
 
+typedef vector4_base<unsigned char> ColorRGBA;
 /*
 	Title: Color handling
 */

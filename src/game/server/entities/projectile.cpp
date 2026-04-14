@@ -7,7 +7,7 @@
 #include "projectile.h"
 
 CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, vec2 Dir, int Span,
-	int Damage, bool Explosive, float Force, int SoundImpact, int Weapon) : CEntity(pGameWorld, CGameWorld::ENTTYPE_PROJECTILE, vec2(round_to_int(Pos.x), round_to_int(Pos.y)))
+	int Damage, bool Explosive, float Force, int SoundImpact, int Weapon) : CChildEntity(pGameWorld, CGameWorld::ENTTYPE_PROJECTILE, 0, vec2(round_to_int(Pos.x), round_to_int(Pos.y)))
 {
 	m_Type = Type;
 	m_Direction.x = round_to_int(Dir.x * 100.0f) / 100.0f;
@@ -71,21 +71,21 @@ void CProjectile::Tick()
 	vec2 PrevPos = GetPos(Pt);
 	vec2 CurPos = GetPos(Ct);
 	int Collide = GameServer()->Collision()->IntersectLine(PrevPos, CurPos, &CurPos, 0);
-	CCharacter *OwnerChar = GameServer()->GetPlayerChar(m_Owner);
-	CCharacter *TargetChr = (CCharacter *) GameWorld()->IntersectEntity(PrevPos, CurPos, 6.0f, CurPos, CGameWorld::ENTTYPE_CHARACTER, OwnerChar);
+	CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
+	CHitableEntity *pTargetEnt = (CHitableEntity *) GameWorld()->IntersectFlagEntity(PrevPos, CurPos, 6.0f, CurPos, CGameWorld::ENTFLAG_HITABLE, pOwnerChar);
 
 	m_LifeSpan--;
 
-	if(TargetChr || Collide || m_LifeSpan < 0 || GameLayerClipped(CurPos))
+	if(pTargetEnt || Collide || m_LifeSpan < 0 || GameLayerClipped(CurPos))
 	{
 		if(m_LifeSpan >= 0 || m_Weapon == WEAPON_GRENADE)
 			GameServer()->CreateSound(CurPos, m_SoundImpact);
 
 		if(m_Explosive)
-			GameServer()->CreateExplosion(CurPos, m_Owner, m_Weapon, m_Damage);
+			GameServer()->CreateExplosion(CurPos, this, m_Weapon, m_Damage);
 
-		else if(TargetChr)
-			TargetChr->TakeDamage(m_Direction * maximum(0.001f, m_Force), m_Direction * -1, m_Damage, m_Owner, m_Weapon);
+		else if(pTargetEnt)
+			pTargetEnt->TakeHit(m_Direction * maximum(0.001f, m_Force), m_Direction * -1, m_Damage, this, m_Weapon);
 
 		GameWorld()->DestroyEntity(this);
 	}

@@ -8,7 +8,7 @@
 #include "character.h"
 #include "pickup.h"
 
-CPickup::CPickup(CGameWorld *pGameWorld, int Type, vec2 Pos) : CEntity(pGameWorld, CGameWorld::ENTTYPE_PICKUP, Pos, PickupPhysSize)
+CPickup::CPickup(CGameWorld *pGameWorld, int Type, vec2 Pos) : CEntity(pGameWorld, CGameWorld::ENTTYPE_PICKUP, 0, Pos, PickupPhysSize)
 {
 	m_Type = Type;
 
@@ -103,9 +103,9 @@ void CPickup::Tick()
 				pChr->GiveNinja();
 
 				// loop through all players, setting their emotes
-				CCharacter *pC = static_cast<CCharacter *>(GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER));
-				for(; pC; pC = (CCharacter *) pC->TypeNext())
+				for(CGameWorld::TypeRange r = GameServer()->m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 				{
+					CCharacter *pC = static_cast<CCharacter *>(r.front());
 					if(pC != pChr)
 						pC->SetEmote(EMOTE_SURPRISE, Server()->Tick() + Server()->TickSpeed());
 				}

@@ -8,7 +8,7 @@
 #include <game/gamecore.h>
 #include <game/server/entity.h>
 
-class CCharacter : public CEntity
+class CCharacter : public CHitableEntity
 {
 	MACRO_ALLOC_POOL_ID()
 
@@ -48,9 +48,9 @@ public:
 
 	void Die(int Killer, int Weapon);
 	bool TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon);
+	virtual bool TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon);
 
 	bool Spawn(class CPlayer *pPlayer, vec2 Pos);
-	bool Remove();
 
 	bool IncreaseHealth(int Amount);
 	bool IncreaseArmor(int Amount);
@@ -80,8 +80,7 @@ private:
 	bool m_Alive;
 
 	// weapon info
-	CEntity *m_apHitObjects[VANILLA_MAX_PLAYERS];
-	int m_NumObjectsHit;
+	array<CEntity*> m_lpHitObjects;
 
 	struct WeaponStat
 	{
