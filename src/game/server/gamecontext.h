@@ -243,6 +243,7 @@ public:
 	virtual const char *NetVersionHashReal() const;
 
 	virtual bool TimeScore() const;
+	virtual void OnUpdatePlayerServerInfo(CJsonWriter *pJsonWriter, int ClientID);
 
 	virtual int GetMaxPlayerSlots();
 };
