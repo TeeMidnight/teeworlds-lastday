@@ -299,6 +299,8 @@ CRegister::CRegister()
 
 CRegister::~CRegister()
 {
+	OnShutdown();
+
 	for(int i = 0; i < NUM_PROTOCOLS; i++)
 	{
 		lock_destroy(m_aProtocols[i].m_Lock);
