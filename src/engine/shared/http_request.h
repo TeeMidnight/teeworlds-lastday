@@ -44,6 +44,7 @@ public:
 	void PostJson(const char *pJson);
 	void AddHeader(const char *pHeader);
 	void StartRun(class IEngine *pEngine);
+	void StartRunBlocking();
 
 	void MarkAsChecked() { m_IsChecked = true; }
 

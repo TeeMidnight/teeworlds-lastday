@@ -68,6 +68,8 @@ public:
 
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual bool DemoRecorder_IsRecording() = 0;
+
+	virtual void ExpireServerInfo() = 0;
 };
 
 class IGameServer : public IInterface
@@ -106,6 +108,7 @@ public:
 	virtual int GetMaxPlayerSlots() = 0;
 
 	virtual bool TimeScore() const = 0;
+	virtual void OnUpdatePlayerServerInfo(class CJsonWriter *pJsonWriter, int ClientID) = 0;
 };
 
 extern IGameServer *CreateGameServer();

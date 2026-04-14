@@ -71,6 +71,11 @@ void CHttpRequest::StartRun(IEngine *pEngine)
 	pEngine->AddJob(&m_Job, CHttpRequest::Run, this);
 }
 
+void CHttpRequest::StartRunBlocking()
+{
+	Run(this);
+}
+
 size_t CHttpRequest::WriteCallback(char *pData, size_t Size, size_t Number, void *pUser)
 {
 	CHttpRequest *pRequest = static_cast<CHttpRequest *>(pUser);
