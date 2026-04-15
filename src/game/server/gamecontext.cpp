@@ -132,7 +132,7 @@ void CGameContext::CreateExplosion(vec2 Pos, CEntity *pOwner, int Weapon, int Ma
 	}
 
 	// deal damage
-	array<CEntity*> lpEnts;
+	array<CEntity *> lpEnts;
 	lpEnts.hint_size(8);
 	float Radius = g_pData->m_Explosion.m_Radius;
 	float InnerRadius = 48.0f;
@@ -147,7 +147,7 @@ void CGameContext::CreateExplosion(vec2 Pos, CEntity *pOwner, int Weapon, int Ma
 			Force = normalize(Diff) * MaxForce;
 		float Factor = 1 - clamp((l - InnerRadius) / (Radius - InnerRadius), 0.0f, 1.0f);
 		if((int) (Factor * MaxDamage))
-			static_cast<CHitableEntity*>(lpEnts[i])->TakeHit(Force * Factor, Diff * -1, (int) (Factor * MaxDamage), pOwner, Weapon);
+			static_cast<CHitableEntity *>(lpEnts[i])->TakeHit(Force * Factor, Diff * -1, (int) (Factor * MaxDamage), pOwner, Weapon);
 	}
 }
 

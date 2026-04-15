@@ -51,7 +51,7 @@ CGameWorld::FlagRange CGameWorld::DoFlagRange(int Flag)
 	return FlagRange(m_lpFlagEntityList.all(), CFlagCheck(Flag));
 }
 
-int CGameWorld::FindEntities(vec2 Pos, float Radius, array<CEntity*> &lpEnts, int Type)
+int CGameWorld::FindEntities(vec2 Pos, float Radius, array<CEntity *> &lpEnts, int Type)
 {
 	if(Type < 0 || Type >= NUM_ENTTYPES)
 		return 0;
@@ -69,7 +69,7 @@ int CGameWorld::FindEntities(vec2 Pos, float Radius, array<CEntity*> &lpEnts, in
 	return Num;
 }
 
-int CGameWorld::FindFlagEntities(vec2 Pos, float Radius, array<CEntity*> &lpEnts, int Flag)
+int CGameWorld::FindFlagEntities(vec2 Pos, float Radius, array<CEntity *> &lpEnts, int Flag)
 {
 	CFlagCheck Check(Flag);
 	int Num = 0;
@@ -85,7 +85,6 @@ int CGameWorld::FindFlagEntities(vec2 Pos, float Radius, array<CEntity*> &lpEnts
 
 	return Num;
 }
-
 
 void CGameWorld::InsertEntity(CEntity *pEnt)
 {
@@ -111,7 +110,7 @@ void CGameWorld::RemoveEntity(CEntity *pEnt)
 	if(m_lpFlagEntityList.size() > 32 && m_lpFlagEntityList.used_memory() < m_lpFlagEntityList.memusage() / 3) // lower than 1/3
 	{
 		m_lpFlagEntityList.optimize();
-	} 
+	}
 }
 
 //

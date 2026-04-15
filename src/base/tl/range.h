@@ -227,7 +227,6 @@ template<class T, class CONDITION>
 class conditional_range
 {
 public:
-
 	conditional_range()
 	{
 		begin = 0x0;
@@ -274,7 +273,6 @@ protected:
 	T *end;
 	CONDITION condition;
 };
-
 
 /*
 	Class: plain_range_sorted

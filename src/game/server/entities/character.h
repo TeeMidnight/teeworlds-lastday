@@ -80,7 +80,7 @@ private:
 	bool m_Alive;
 
 	// weapon info
-	array<CEntity*> m_lpHitObjects;
+	array<CEntity *> m_lpHitObjects;
 
 	struct WeaponStat
 	{

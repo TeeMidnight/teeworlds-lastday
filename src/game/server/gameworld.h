@@ -26,7 +26,7 @@ public:
 
 		ENTTYPE_RIWALL,
 		NUM_ENTTYPES,
-	
+
 		ENTFLAG_HITABLE = 1,
 		ENTFLAG_CHILD = 2,
 	};
@@ -34,8 +34,8 @@ public:
 private:
 	void RemoveEntities();
 
-	array<CEntity*> m_alpEntityLists[NUM_ENTTYPES];
-	array<CEntity*> m_lpFlagEntityList;
+	array<CEntity *> m_alpEntityLists[NUM_ENTTYPES];
+	array<CEntity *> m_lpFlagEntityList;
 
 	class CGameContext *m_pGameServer;
 	class CConfig *m_pConfig;
@@ -53,7 +53,7 @@ public:
 
 	void SetGameServer(CGameContext *pGameServer);
 
-	typedef array<CEntity*>::range TypeRange;
+	typedef array<CEntity *>::range TypeRange;
 	TypeRange DoTypeRange(int Type);
 
 	class CFlagCheck
@@ -65,7 +65,7 @@ public:
 		bool operator()(CEntity *&pEntity) const;
 	};
 
-	typedef conditional_range<CEntity*, CFlagCheck> FlagRange;
+	typedef conditional_range<CEntity *, CFlagCheck> FlagRange;
 	FlagRange DoFlagRange(int Flag);
 	/*
 		Function: find_entities
@@ -82,8 +82,8 @@ public:
 		Returns:
 			Number of entities found and added to the ents array.
 	*/
-	int FindEntities(vec2 Pos, float Radius, array<CEntity*> &lpEnts, int Type);
-	int FindFlagEntities(vec2 Pos, float Radius, array<CEntity*> &lpEnts, int Flag);
+	int FindEntities(vec2 Pos, float Radius, array<CEntity *> &lpEnts, int Type);
+	int FindFlagEntities(vec2 Pos, float Radius, array<CEntity *> &lpEnts, int Flag);
 
 	/*
 		Function: closest_CEntity

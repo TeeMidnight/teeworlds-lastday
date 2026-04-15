@@ -149,7 +149,7 @@ class CHitableEntity : public CEntity
 {
 public:
 	/* Constructor */
-	CHitableEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0) : 
+	CHitableEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0) :
 		CEntity(pGameWorld, Objtype, ObjFlag | CGameWorld::ENTFLAG_HITABLE, Pos, ProximityRadius)
 	{
 	}
@@ -160,9 +160,10 @@ class CChildEntity : public CEntity
 {
 protected:
 	int m_Owner;
+
 public:
 	/* Constructor */
-	CChildEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0) : 
+	CChildEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0) :
 		CEntity(pGameWorld, Objtype, ObjFlag | CGameWorld::ENTFLAG_CHILD, Pos, ProximityRadius)
 	{
 	}

@@ -321,7 +321,7 @@ bool CGameController::CanSpawn(int Team, vec2 *pOutPos) const
 float CGameController::EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos) const
 {
 	float Score = 0.0f;
-	
+
 	for(CGameWorld::TypeRange r = GameServer()->m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
 		CCharacter *pChr = static_cast<CCharacter *>(r.front());
@@ -343,7 +343,7 @@ void CGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type) const
 	for(int i = 0; i < m_alSpawnPoints[Type].size(); i++)
 	{
 		// check if the position is occupado
-		array<CEntity*> lpEnts;
+		array<CEntity *> lpEnts;
 		lpEnts.hint_size(8);
 		int Num = GameServer()->m_World.FindEntities(m_alSpawnPoints[Type][i], 64, lpEnts, CGameWorld::ENTTYPE_CHARACTER);
 		vec2 Positions[5] = {vec2(0.0f, 0.0f), vec2(-32.0f, 0.0f), vec2(0.0f, -32.0f), vec2(32.0f, 0.0f), vec2(0.0f, 32.0f)}; // start, left, up, right, down
@@ -443,8 +443,8 @@ int CGameController::GetStartTeam()
 
 void CGameController::Com_About(IConsole::IResult *pResult, void *pContext)
 {
-	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext*>(pContext);
-	CGameController *pSelf = static_cast<CGameController*>(pCmdContext->m_pContext);
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
 	int ClientID = pCmdContext->m_ClientID;
 	pSelf->SendSystemChat(ClientID, MOD_NAME " v" MOD_VERSION " by Bamcane");
 }
@@ -481,13 +481,13 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 		{
 			GameServer()->CreateSound(ChrPos, SOUND_HAMMER_FIRE);
 
-			array<CEntity*> lpEnts;
+			array<CEntity *> lpEnts;
 			lpEnts.hint_size(8);
 			int Hits = 0;
 			const int Num = GameServer()->m_World.FindFlagEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 			for(int i = 0; i < Num; ++i)
 			{
-				CCharacter *pTarget = static_cast<CCharacter*>(lpEnts[i]);
+				CCharacter *pTarget = static_cast<CCharacter *>(lpEnts[i]);
 
 				if((pTarget == pChr) || GameServer()->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos(), NULL, NULL))
 					continue;

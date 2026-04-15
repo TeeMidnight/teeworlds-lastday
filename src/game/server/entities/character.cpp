@@ -159,7 +159,7 @@ void CCharacter::HandleNinja()
 		// check if we hit anything along the way
 		const float Radius = GetProximityRadius() * 2.0f;
 		const vec2 Center = OldPos + (m_Pos - OldPos) * 0.5f;
-		array<CEntity*> lpEnts;
+		array<CEntity *> lpEnts;
 		lpEnts.hint_size(8);
 		const int Num = GameWorld()->FindFlagEntities(Center, Radius, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 
@@ -190,7 +190,7 @@ void CCharacter::HandleNinja()
 			m_lpHitObjects.add(lpEnts[i]);
 
 			// set his velocity to fast upward (for now)
-			static_cast<CHitableEntity*>(lpEnts[i])->TakeHit(vec2(0, -10.0f), m_Ninja.m_ActivationDir * -1, g_pData->m_Weapons.m_Ninja.m_pBase->m_Damage, this, WEAPON_NINJA);
+			static_cast<CHitableEntity *>(lpEnts[i])->TakeHit(vec2(0, -10.0f), m_Ninja.m_ActivationDir * -1, g_pData->m_Weapons.m_Ninja.m_pBase->m_Damage, this, WEAPON_NINJA);
 		}
 	}
 }
@@ -754,9 +754,9 @@ bool CCharacter::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int W
 	if(pFrom)
 	{
 		if(pFrom->ObjType() == CGameWorld::ENTTYPE_CHARACTER)
-			From = static_cast<CCharacter*>(pFrom)->GetCID();
+			From = static_cast<CCharacter *>(pFrom)->GetCID();
 		if(pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD)
-			From = static_cast<CChildEntity*>(pFrom)->GetOwner();
+			From = static_cast<CChildEntity *>(pFrom)->GetOwner();
 	}
 	return TakeDamage(Force, Source, Dmg, From, Weapon);
 }

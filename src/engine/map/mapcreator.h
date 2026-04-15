@@ -18,6 +18,7 @@ class CMapCreator
 	void *m_ImageLock;
 	void *m_EnvelopeLock;
 	void *m_GroupLock;
+
 public:
 	class IStorage *Storage() { return m_pStorage; };
 	class IConsole *Console() { return m_pConsole; };
