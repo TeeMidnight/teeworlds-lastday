@@ -173,18 +173,6 @@ public:
 	int m_CurrentMapSize;
 	int m_MapChunksPerRequest;
 
-	// maplist
-	struct CMapListEntry
-	{
-		char m_aName[IConsole::TEMPMAP_NAME_LENGTH];
-
-		CMapListEntry() {}
-		CMapListEntry(const char *pName) { str_copy(m_aName, pName, sizeof(m_aName)); }
-		bool operator<(const CMapListEntry &Other) const { return str_comp_filenames(m_aName, Other.m_aName) < 0; }
-	};
-
-	sorted_array<CMapListEntry> m_lMaps;
-
 	int m_RconPasswordSet;
 	int m_GeneratedRconPassword;
 
@@ -236,9 +224,6 @@ public:
 	void SendRconCmdAdd(const IConsole::CCommandInfo *pCommandInfo, int ClientID);
 	void SendRconCmdRem(const IConsole::CCommandInfo *pCommandInfo, int ClientID);
 	void UpdateClientRconCommands();
-	void SendMapListEntryAdd(const CMapListEntry *pMapListEntry, int ClientID);
-	void SendMapListEntryRem(const CMapListEntry *pMapListEntry, int ClientID);
-	void UpdateClientMapListEntries();
 
 	void ProcessClientPacket(CNetChunk *pPacket);
 
@@ -259,9 +244,6 @@ public:
 	void InitInterfaces(IKernel *pKernel);
 	int Run();
 	void Free();
-
-	static int MapListEntryCallback(const char *pFilename, int IsDir, int DirType, void *pUser);
-	void InitMapList();
 
 	static void ConKick(IConsole::IResult *pResult, void *pUser);
 	static void ConStatus(IConsole::IResult *pResult, void *pUser);

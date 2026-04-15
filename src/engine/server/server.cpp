@@ -769,35 +769,6 @@ void CServer::UpdateClientRconCommands()
 	}
 }
 
-void CServer::SendMapListEntryAdd(const CMapListEntry *pMapListEntry, int ClientID)
-{
-	CMsgPacker Msg(NETMSG_MAPLIST_ENTRY_ADD, true);
-	Msg.AddString(pMapListEntry->m_aName, IConsole::TEMPMAP_NAME_LENGTH);
-	SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
-}
-
-void CServer::SendMapListEntryRem(const CMapListEntry *pMapListEntry, int ClientID)
-{
-	CMsgPacker Msg(NETMSG_MAPLIST_ENTRY_REM, true);
-	Msg.AddString(pMapListEntry->m_aName, IConsole::TEMPMAP_NAME_LENGTH);
-	SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
-}
-
-void CServer::UpdateClientMapListEntries()
-{
-	for(int ClientID = Tick() % MAX_RCONCMD_RATIO; ClientID < MAX_CLIENTS; ClientID += MAX_RCONCMD_RATIO)
-	{
-		if(m_aClients[ClientID].m_State != CClient::STATE_EMPTY && m_aClients[ClientID].m_Authed && m_aClients[ClientID].m_MapListEntryToSend >= 0)
-		{
-			for(int i = 0; i < MAX_MAPLISTENTRY_SEND && m_aClients[ClientID].m_MapListEntryToSend < m_lMaps.size(); ++i)
-			{
-				SendMapListEntryAdd(&m_lMaps[m_aClients[ClientID].m_MapListEntryToSend], ClientID);
-				m_aClients[ClientID].m_MapListEntryToSend++;
-			}
-		}
-	}
-}
-
 void CServer::ProcessClientPacket(CNetChunk *pPacket)
 {
 	CMsgUnpacker Unpacker(pPacket->m_pData, pPacket->m_DataSize);
@@ -1439,8 +1410,6 @@ int CServer::Run()
 	//
 	m_PrintCBIndex = Console()->RegisterPrintCallback(Config()->m_ConsoleOutputLevel, SendRconLineAuthed, this);
 
-	InitMapList();
-
 	// load map
 	if(!LoadMap(Config()->m_SvMap))
 	{
@@ -1582,7 +1551,6 @@ int CServer::Run()
 					DoSnapshot();
 
 				UpdateClientRconCommands();
-				UpdateClientMapListEntries();
 
 				// master server stuff
 				m_Register.RegisterUpdate(m_NetServer.NetType());
@@ -1628,72 +1596,6 @@ void CServer::Free()
 		mem_free(m_pCurrentMapData);
 		m_pCurrentMapData = 0;
 	}
-}
-
-struct CSubdirCallbackUserdata
-{
-	CServer *m_pServer;
-	char m_aName[IConsole::TEMPMAP_NAME_LENGTH];
-	bool m_StandardOnly;
-};
-
-int CServer::MapListEntryCallback(const char *pFilename, int IsDir, int DirType, void *pUser)
-{
-	CSubdirCallbackUserdata *pUserdata = (CSubdirCallbackUserdata *) pUser;
-	CServer *pThis = pUserdata->m_pServer;
-
-	if(pFilename[0] == '.') // hidden files
-		return 0;
-
-	char aFilename[IO_MAX_PATH_LENGTH];
-	if(pUserdata->m_aName[0])
-		str_format(aFilename, sizeof(aFilename), "%s/%s", pUserdata->m_aName, pFilename);
-	else
-		str_format(aFilename, sizeof(aFilename), "%s", pFilename);
-
-	if(IsDir)
-	{
-		CSubdirCallbackUserdata Userdata;
-		Userdata.m_StandardOnly = pUserdata->m_StandardOnly;
-		Userdata.m_pServer = pThis;
-		str_copy(Userdata.m_aName, aFilename, sizeof(Userdata.m_aName));
-		char aFindPath[IO_MAX_PATH_LENGTH];
-		str_format(aFindPath, sizeof(aFindPath), "maps/%s/", aFilename);
-		pThis->m_pStorage->ListDirectory(IStorage::TYPE_ALL, aFindPath, MapListEntryCallback, &Userdata);
-		return 0;
-	}
-
-	const char *pSuffix = str_endswith(aFilename, ".map");
-	if(!pSuffix) // not ending with .map
-		return 0;
-	aFilename[pSuffix - aFilename] = 0; // remove suffix
-
-	if(str_length(aFilename) >= IConsole::TEMPMAP_NAME_LENGTH)
-		return 0;
-	if(pUserdata->m_StandardOnly && !pThis->m_pMapChecker->IsStandardMap(aFilename))
-		return 0;
-
-	pThis->m_lMaps.add(CMapListEntry(aFilename));
-
-	return 0;
-}
-
-void CServer::InitMapList()
-{
-	m_lMaps.clear();
-
-	CSubdirCallbackUserdata Userdata;
-	if(str_comp(Config()->m_SvMaplist, "standard") == 0)
-		Userdata.m_StandardOnly = true;
-	else if(str_comp(Config()->m_SvMaplist, "all") == 0)
-		Userdata.m_StandardOnly = false;
-	else /* "none" or any other value */
-		return;
-
-	Userdata.m_pServer = this;
-	str_copy(Userdata.m_aName, "", sizeof(Userdata.m_aName));
-	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "maps/", MapListEntryCallback, &Userdata);
-	dbg_msg("server", "%d maps added to maplist", m_lMaps.size());
 }
 
 void CServer::ConKick(IConsole::IResult *pResult, void *pUser)
