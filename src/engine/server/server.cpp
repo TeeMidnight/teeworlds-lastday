@@ -1168,7 +1168,9 @@ void CServer::UpdateRegisterServerInfo()
 
 	sha256_str(m_CurrentMapSha256, aMapSha256, sizeof(aMapSha256));
 
-	array<char> lServerInfo;
+	static array<char> lServerInfo;
+	lServerInfo.clear_size();
+
 	memory_stream Stream(&lServerInfo);
 	CJsonWriter JsonWriter(&Stream);
 
