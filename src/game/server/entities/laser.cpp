@@ -6,7 +6,7 @@
 #include "character.h"
 #include "laser.h"
 
-CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner, int Damage) : CChildEntity(pGameWorld, CGameWorld::ENTTYPE_LASER, Pos)
+CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner, int Damage) : CChildEntity(pGameWorld, CGameWorld::ENTTYPE_LASER, 0, Pos)
 {
 	m_Damage = Damage;
 	m_Owner = Owner;
