@@ -10,10 +10,10 @@ class CMapCreator
 	class IStorage *m_pStorage;
 	class IConsole *m_pConsole;
 
-	array<CCreatorGroupInfo *> m_apGroups;
+	array<CCreatorGroupInfo *> m_lpGroups;
 
-	array<CCreatorImage *> m_apImages;
-	array<CCreatorEnvelope *> m_apEnvelopes;
+	array<CCreatorImage *> m_lpImages;
+	array<CCreatorEnvelope *> m_lpEnvelopes;
 
 	void *m_ImageLock;
 	void *m_EnvelopeLock;

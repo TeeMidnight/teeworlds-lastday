@@ -54,7 +54,7 @@ struct CCreatorEnvelope
 
 	int m_EnvID;
 
-	array<CCreatorEnvPoint *> m_apEnvPoints;
+	array<CCreatorEnvPoint *> m_lpEnvPoints;
 
 	void *m_PointLock;
 
@@ -121,7 +121,7 @@ struct CCreatorLayerQuads : public ILayerInfo
 {
 	ColorRGBA m_Color;
 
-	array<CCreatorQuad *> m_apQuads;
+	array<CCreatorQuad *> m_lpQuads;
 
 	void *m_QuadLock;
 
@@ -151,7 +151,7 @@ struct CCreatorGroupInfo
 
 	void *m_LayerLock;
 
-	array<ILayerInfo *> m_apLayers;
+	array<ILayerInfo *> m_lpLayers;
 
 	CCreatorLayerTilemap *AddTileLayer(const char *pName);
 	CCreatorLayerQuads *AddQuadsLayer(const char *pName);

@@ -96,9 +96,9 @@ CMapCreator::CMapCreator(IStorage *pStorage, IConsole *pConsole) :
 	m_pStorage(pStorage),
 	m_pConsole(pConsole)
 {
-	m_apGroups.clear();
-	m_apImages.clear();
-	m_apEnvelopes.clear();
+	m_lpGroups.clear();
+	m_lpImages.clear();
+	m_lpEnvelopes.clear();
 
 	m_ImageLock = lock_create();
 	m_EnvelopeLock = lock_create();
@@ -106,7 +106,7 @@ CMapCreator::CMapCreator(IStorage *pStorage, IConsole *pConsole) :
 
 CMapCreator::~CMapCreator()
 {
-	for(auto &pImage : m_apImages)
+	for(auto &pImage : m_lpImages)
 	{
 		if(pImage->m_pImageData)
 		{
@@ -114,21 +114,21 @@ CMapCreator::~CMapCreator()
 		}
 		delete pImage;
 	}
-	m_apImages.clear();
-	for(auto &pEnv : m_apEnvelopes)
+	m_lpImages.clear();
+	for(auto &pEnv : m_lpEnvelopes)
 	{
 		lock_destroy(pEnv->m_PointLock);
-		for(auto &pEnvPoint : pEnv->m_apEnvPoints)
+		for(auto &pEnvPoint : pEnv->m_lpEnvPoints)
 		{
 			delete pEnvPoint;
 		}
 		delete pEnv;
 	}
-	m_apEnvelopes.clear();
+	m_lpEnvelopes.clear();
 
-	for(auto &pGroup : m_apGroups)
+	for(auto &pGroup : m_lpGroups)
 	{
-		for(auto &pLayer : pGroup->m_apLayers)
+		for(auto &pLayer : pGroup->m_lpLayers)
 		{
 			switch(pLayer->m_Type)
 			{
@@ -140,7 +140,7 @@ CMapCreator::~CMapCreator()
 				case ELayerType::QUADS:
 				{
 					lock_destroy(((CCreatorLayerQuads *) pLayer)->m_QuadLock);
-					for(auto &pQuad : ((CCreatorLayerQuads *) pLayer)->m_apQuads)
+					for(auto &pQuad : ((CCreatorLayerQuads *) pLayer)->m_lpQuads)
 						delete pQuad;
 				}
 				break;
@@ -150,10 +150,10 @@ CMapCreator::~CMapCreator()
 			delete pLayer;
 		}
 		lock_destroy(pGroup->m_LayerLock);
-		pGroup->m_apLayers.clear();
+		pGroup->m_lpLayers.clear();
 		delete pGroup;
 	}
-	m_apGroups.clear();
+	m_lpGroups.clear();
 
 	lock_destroy(m_ImageLock);
 	lock_destroy(m_EnvelopeLock);
@@ -161,7 +161,7 @@ CMapCreator::~CMapCreator()
 
 CCreatorImage *CMapCreator::AddEmbeddedImage(const char *pImageName, bool Flag)
 {
-	for(auto &pImage : m_apImages)
+	for(auto &pImage : m_lpImages)
 	{
 		if(str_comp(pImage->m_aName, pImageName) == 0)
 		{
@@ -189,7 +189,7 @@ CCreatorImage *CMapCreator::AddEmbeddedImage(const char *pImageName, bool Flag)
 	}
 
 	lock_wait(m_ImageLock);
-	CCreatorImage *pImage = m_apImages[m_apImages.add(new CCreatorImage())];
+	CCreatorImage *pImage = m_lpImages[m_lpImages.add(new CCreatorImage())];
 	lock_unlock(m_ImageLock);
 
 	str_copy(pImage->m_aName, pImageName, sizeof(pImage->m_aName));
@@ -229,8 +229,8 @@ CCreatorImage *CMapCreator::AddExternalImage(const char *pImageName, int Width, 
 {
 	lock_wait(m_ImageLock);
 
-	m_apImages.add(new CCreatorImage());
-	CCreatorImage *pImage = m_apImages[m_apImages.size() - 1];
+	m_lpImages.add(new CCreatorImage());
+	CCreatorImage *pImage = m_lpImages[m_lpImages.size() - 1];
 
 	lock_unlock(m_ImageLock);
 
@@ -253,9 +253,9 @@ CCreatorEnvelope *CMapCreator::AddEnvelope(const char *pEnvName, EEnvType Type, 
 	CCreatorEnvelope *pEnv;
 	switch(Type)
 	{
-		case EEnvType::Pos: pEnv = m_apEnvelopes[m_apEnvelopes.add(new CCreatorPosEnvelope())]; break;
-		case EEnvType::Color: pEnv = m_apEnvelopes[m_apEnvelopes.add(new CCreatorColorEnvelope())]; break;
-		case EEnvType::Sound: pEnv = m_apEnvelopes[m_apEnvelopes.add(new CCreatorSoundEnvelope())]; break;
+		case EEnvType::Pos: pEnv = m_lpEnvelopes[m_lpEnvelopes.add(new CCreatorPosEnvelope())]; break;
+		case EEnvType::Color: pEnv = m_lpEnvelopes[m_lpEnvelopes.add(new CCreatorColorEnvelope())]; break;
+		case EEnvType::Sound: pEnv = m_lpEnvelopes[m_lpEnvelopes.add(new CCreatorSoundEnvelope())]; break;
 		default: lock_unlock(m_EnvelopeLock); return nullptr;
 	}
 	lock_unlock(m_EnvelopeLock);
@@ -263,7 +263,7 @@ CCreatorEnvelope *CMapCreator::AddEnvelope(const char *pEnvName, EEnvType Type, 
 	str_copy(pEnv->m_aName, pEnvName, sizeof(pEnv->m_aName));
 	pEnv->m_Synchronized = Synchronized;
 	pEnv->m_EnvID = -1;
-	pEnv->m_apEnvPoints.clear();
+	pEnv->m_lpEnvPoints.clear();
 
 	return pEnv;
 }
@@ -271,7 +271,7 @@ CCreatorEnvelope *CMapCreator::AddEnvelope(const char *pEnvName, EEnvType Type, 
 CCreatorGroupInfo *CMapCreator::AddGroup(const char *pName)
 {
 	lock_wait(m_GroupLock);
-	CCreatorGroupInfo *pGroup = m_apGroups[m_apGroups.add(new CCreatorGroupInfo())];
+	CCreatorGroupInfo *pGroup = m_lpGroups[m_lpGroups.add(new CCreatorGroupInfo())];
 	pGroup->m_LayerLock = lock_create();
 	lock_unlock(m_GroupLock);
 
@@ -308,11 +308,11 @@ void CMapCreator::AddMiniMap()
 		pNewLayer->m_Flags |= LAYERFLAG_DETAIL;
 		pNewLayer->AddQuad(StartPos, vec2(BlockSize, BlockSize), ColorRGBA{0, 0xff, 0xff, 100});
 	}
-	for(auto &pGroup : m_apGroups)
+	for(auto &pGroup : m_lpGroups)
 	{
 		if(pGroup == pMiniGroup)
 			continue;
-		for(auto &pLayer : pGroup->m_apLayers)
+		for(auto &pLayer : pGroup->m_lpLayers)
 		{
 			if(pLayer->m_Type == ELayerType::TILES && pLayer->m_UseInMinimap)
 			{
@@ -348,7 +348,7 @@ void CMapCreator::AddMiniMap()
 CCreatorLayerTilemap *CCreatorGroupInfo::AddTileLayer(const char *pName)
 {
 	lock_wait(m_LayerLock);
-	CCreatorLayerTilemap *pLayer = (CCreatorLayerTilemap *) m_apLayers[m_apLayers.add(new CCreatorLayerTilemap())];
+	CCreatorLayerTilemap *pLayer = (CCreatorLayerTilemap *) m_lpLayers[m_lpLayers.add(new CCreatorLayerTilemap())];
 	lock_unlock(m_LayerLock);
 
 	str_copy(pLayer->m_aName, pName, sizeof(pLayer->m_aName));
@@ -364,7 +364,7 @@ CCreatorLayerTilemap *CCreatorGroupInfo::AddTileLayer(const char *pName)
 CCreatorLayerQuads *CCreatorGroupInfo::AddQuadsLayer(const char *pName)
 {
 	lock_wait(m_LayerLock);
-	CCreatorLayerQuads *pLayer = (CCreatorLayerQuads *) m_apLayers[m_apLayers.add(new CCreatorLayerQuads())];
+	CCreatorLayerQuads *pLayer = (CCreatorLayerQuads *) m_lpLayers[m_lpLayers.add(new CCreatorLayerQuads())];
 	pLayer->m_QuadLock = lock_create();
 	lock_unlock(m_LayerLock);
 
@@ -390,8 +390,8 @@ CTile *CCreatorLayerTilemap::AddTiles(int Width, int Height)
 CCreatorQuad *CCreatorLayerQuads::AddQuad(vec2 Pos, vec2 Size, ColorRGBA Color)
 {
 	lock_wait(m_QuadLock);
-	m_apQuads.add(new CCreatorQuad());
-	CCreatorQuad *pQuad = m_apQuads[m_apQuads.size() - 1];
+	m_lpQuads.add(new CCreatorQuad());
+	CCreatorQuad *pQuad = m_lpQuads[m_lpQuads.size() - 1];
 	lock_unlock(m_QuadLock);
 
 	int X0 = f2fx(Pos.x - Size.x / 2.0f);
@@ -426,8 +426,8 @@ CCreatorQuad *CCreatorLayerQuads::AddQuad(vec2 Pos, vec2 Size, ColorRGBA Color)
 CCreatorEnvPoint *CCreatorEnvelope::AddEnvPoint(int Time, int CurveType)
 {
 	lock_wait(m_PointLock);
-	m_apEnvPoints.add(new CCreatorEnvPoint());
-	CCreatorEnvPoint *pEnvPoint = m_apEnvPoints[m_apEnvPoints.size() - 1];
+	m_lpEnvPoints.add(new CCreatorEnvPoint());
+	CCreatorEnvPoint *pEnvPoint = m_lpEnvPoints[m_lpEnvPoints.size() - 1];
 	lock_unlock(m_PointLock);
 
 	pEnvPoint->m_Time = Time;
@@ -487,7 +487,7 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 	NumImages = 0;
 	NumEnvelopes = 0;
 
-	for(auto &pImage : m_apImages)
+	for(auto &pImage : m_lpImages)
 	{
 		CMapItemImage Item;
 		Item.m_Version = CMapItemImage::CURRENT_VERSION;
@@ -513,13 +513,13 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 
 	// save envelopes
 	int PointCount = 0;
-	for(auto &pEnv : m_apEnvelopes)
+	for(auto &pEnv : m_lpEnvelopes)
 	{
 		CMapItemEnvelope Item;
 		Item.m_Version = CMapItemEnvelope::CURRENT_VERSION;
 		Item.m_Channels = pEnv->Channels();
 		Item.m_StartPoint = PointCount;
-		Item.m_NumPoints = pEnv->m_apEnvPoints.size();
+		Item.m_NumPoints = pEnv->m_lpEnvPoints.size();
 		Item.m_Synchronized = pEnv->m_Synchronized ? 1 : 0;
 		StrToInts(Item.m_aName, sizeof(Item.m_aName) / sizeof(int), pEnv->m_aName);
 
@@ -533,9 +533,9 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 	int TotalSize = sizeof(CEnvPoint) * PointCount;
 	unsigned char *pPoints = (unsigned char *) mem_alloc(TotalSize);
 	int Offset = 0;
-	for(auto &pEnv : m_apEnvelopes)
+	for(auto &pEnv : m_lpEnvelopes)
 	{
-		for(auto &pPoint : pEnv->m_apEnvPoints)
+		for(auto &pPoint : pEnv->m_lpEnvPoints)
 		{
 			CEnvPoint Point;
 			Point.m_aValues[0] = f2fx(pPoint->m_aValues[0]);
@@ -559,7 +559,7 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 	DataFile.AddItem(MAPITEMTYPE_ENVPOINTS, 0, TotalSize, pPoints);
 	mem_free(pPoints);
 
-	for(auto &pGroup : m_apGroups)
+	for(auto &pGroup : m_lpGroups)
 	{
 		// add group
 		{
@@ -570,7 +570,7 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 			Item.m_OffsetX = pGroup->m_OffsetX;
 			Item.m_OffsetY = pGroup->m_OffsetY;
 			Item.m_StartLayer = NumLayers;
-			Item.m_NumLayers = (int) pGroup->m_apLayers.size();
+			Item.m_NumLayers = (int) pGroup->m_lpLayers.size();
 			Item.m_UseClipping = pGroup->m_UseClipping ? 1 : 0;
 			Item.m_ClipX = pGroup->m_ClipX;
 			Item.m_ClipY = pGroup->m_ClipY;
@@ -581,7 +581,7 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 			DataFile.AddItem(MAPITEMTYPE_GROUP, NumGroups++, sizeof(CMapItemGroup), &Item);
 		}
 
-		for(auto &pLayer : pGroup->m_apLayers)
+		for(auto &pLayer : pGroup->m_lpLayers)
 		{
 			if(pLayer->m_Type == ELayerType::TILES)
 			{
@@ -627,13 +627,13 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 				Item.m_Layer.m_Type = LAYERTYPE_QUADS;
 
 				Item.m_Image = pQuads->m_pImage ? pQuads->m_pImage->m_ImageID : -1;
-				Item.m_NumQuads = pQuads->m_apQuads.size();
+				Item.m_NumQuads = pQuads->m_lpQuads.size();
 
-				array<CQuad> aQuads;
-				aQuads.hint_size(pQuads->m_apQuads.size());
-				for(auto &pOriginQuad : pQuads->m_apQuads)
+				array<CQuad> lQuads;
+				lQuads.hint_size(pQuads->m_lpQuads.size());
+				for(auto &pOriginQuad : pQuads->m_lpQuads)
 				{
-					CQuad *pQuad = &aQuads.emplace();
+					CQuad *pQuad = &lQuads.emplace();
 
 					for(int i = 0; i < 4; i++)
 					{
@@ -660,7 +660,7 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 				}
 
 				StrToInts(Item.m_aName, sizeof(Item.m_aName) / sizeof(int), pQuads->m_aName);
-				Item.m_Data = DataFile.AddDataSwapped(aQuads.size() * sizeof(CQuad), aQuads.base_ptr());
+				Item.m_Data = DataFile.AddDataSwapped(lQuads.size() * sizeof(CQuad), lQuads.base_ptr());
 
 				DataFile.AddItem(MAPITEMTYPE_LAYER, NumLayers++, sizeof(CMapItemLayerQuads), &Item);
 			}
