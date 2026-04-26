@@ -515,8 +515,8 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 	int PointCount = 0;
 	for(auto &pEnv : m_apEnvelopes)
 	{
-		CMapItemEnvelope_v2 Item;
-		Item.m_Version = CMapItemEnvelope_v2::CURRENT_VERSION;
+		CMapItemEnvelope Item;
+		Item.m_Version = CMapItemEnvelope::CURRENT_VERSION;
 		Item.m_Channels = pEnv->Channels();
 		Item.m_StartPoint = PointCount;
 		Item.m_NumPoints = pEnv->m_apEnvPoints.size();
@@ -525,27 +525,34 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 
 		pEnv->m_EnvID = NumEnvelopes;
 
-		DataFile.AddItem(MAPITEMTYPE_ENVELOPE, NumEnvelopes++, sizeof(CMapItemEnvelope_v2), &Item);
+		DataFile.AddItem(MAPITEMTYPE_ENVELOPE, NumEnvelopes++, sizeof(CMapItemEnvelope), &Item);
 		PointCount += Item.m_NumPoints;
 	}
 
 	// save points
-	int TotalSize = sizeof(CEnvPoint_v1) * PointCount;
+	int TotalSize = sizeof(CEnvPoint) * PointCount;
 	unsigned char *pPoints = (unsigned char *) mem_alloc(TotalSize);
 	int Offset = 0;
 	for(auto &pEnv : m_apEnvelopes)
 	{
 		for(auto &pPoint : pEnv->m_apEnvPoints)
 		{
-			CEnvPoint_v1 Point;
+			CEnvPoint Point;
 			Point.m_aValues[0] = f2fx(pPoint->m_aValues[0]);
 			Point.m_aValues[1] = f2fx(pPoint->m_aValues[1]);
 			Point.m_aValues[2] = f2fx(pPoint->m_aValues[2]);
 			Point.m_aValues[3] = f2fx(pPoint->m_aValues[3]);
+			for(int c = 0; c < 4; c++)
+			{
+				Point.m_aInTangentdx[c] = 0;
+				Point.m_aInTangentdy[c] = 0;
+				Point.m_aOutTangentdx[c] = 0;
+				Point.m_aOutTangentdy[c] = 0;
+			}
 			Point.m_Curvetype = pPoint->m_Curvetype;
 			Point.m_Time = pPoint->m_Time;
-			mem_copy(pPoints + Offset, &Point, sizeof(CEnvPoint_v1));
-			Offset += sizeof(CEnvPoint_v1);
+			mem_copy(pPoints + Offset, &Point, sizeof(CEnvPoint));
+			Offset += sizeof(CEnvPoint);
 		}
 	}
 
@@ -623,10 +630,10 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 				Item.m_NumQuads = pQuads->m_apQuads.size();
 
 				array<CQuad> aQuads;
+				aQuads.hint_size(pQuads->m_apQuads.size());
 				for(auto &pOriginQuad : pQuads->m_apQuads)
 				{
-					aQuads.add(CQuad());
-					CQuad *pQuad = &aQuads[aQuads.size() - 1];
+					CQuad *pQuad = &aQuads.emplace();
 
 					for(int i = 0; i < 4; i++)
 					{
