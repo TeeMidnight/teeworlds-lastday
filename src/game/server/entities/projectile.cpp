@@ -79,10 +79,10 @@ void CProjectile::Tick()
 	if(pTargetEnt || Collide || m_LifeSpan < 0 || GameLayerClipped(CurPos))
 	{
 		if(m_LifeSpan >= 0 || m_Weapon == WEAPON_GRENADE)
-			GameServer()->CreateSound(CurPos, m_SoundImpact);
+			GameWorld()->CreateSound(CurPos, m_SoundImpact);
 
 		if(m_Explosive)
-			GameServer()->CreateExplosion(CurPos, this, m_Weapon, m_Damage);
+			GameWorld()->CreateExplosion(CurPos, this, m_Weapon, m_Damage);
 
 		else if(pTargetEnt)
 			pTargetEnt->TakeHit(m_Direction * maximum(0.001f, m_Force), m_Direction * -1, m_Damage, this, m_Weapon);

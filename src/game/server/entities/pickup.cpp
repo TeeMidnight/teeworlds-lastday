@@ -36,7 +36,7 @@ void CPickup::Tick()
 			m_SpawnTick = -1;
 
 			if(m_Type == PICKUP_GRENADE || m_Type == PICKUP_SHOTGUN || m_Type == PICKUP_LASER)
-				GameServer()->CreateSound(m_Pos, SOUND_WEAPON_SPAWN);
+				GameWorld()->CreateSound(m_Pos, SOUND_WEAPON_SPAWN);
 		}
 		else
 			return;
@@ -56,7 +56,7 @@ void CPickup::Tick()
 				if(pChr->IncreaseHealth(1))
 				{
 					Picked = true;
-					GameServer()->CreateSound(m_Pos, SOUND_PICKUP_HEALTH);
+					GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_HEALTH);
 				}
 				break;
 
@@ -64,7 +64,7 @@ void CPickup::Tick()
 				if(pChr->IncreaseArmor(1))
 				{
 					Picked = true;
-					GameServer()->CreateSound(m_Pos, SOUND_PICKUP_ARMOR);
+					GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_ARMOR);
 				}
 				break;
 
@@ -72,7 +72,7 @@ void CPickup::Tick()
 				if(pChr->GiveWeapon(WEAPON_GRENADE, g_pData->m_Weapons.m_aId[WEAPON_GRENADE].m_Maxammo))
 				{
 					Picked = true;
-					GameServer()->CreateSound(m_Pos, SOUND_PICKUP_GRENADE);
+					GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_GRENADE);
 					if(pChr->GetPlayer())
 						GameServer()->SendWeaponPickup(pChr->GetCID(), WEAPON_GRENADE);
 				}
@@ -81,7 +81,7 @@ void CPickup::Tick()
 				if(pChr->GiveWeapon(WEAPON_SHOTGUN, g_pData->m_Weapons.m_aId[WEAPON_SHOTGUN].m_Maxammo))
 				{
 					Picked = true;
-					GameServer()->CreateSound(m_Pos, SOUND_PICKUP_SHOTGUN);
+					GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_SHOTGUN);
 					if(pChr->GetPlayer())
 						GameServer()->SendWeaponPickup(pChr->GetCID(), WEAPON_SHOTGUN);
 				}
@@ -90,7 +90,7 @@ void CPickup::Tick()
 				if(pChr->GiveWeapon(WEAPON_LASER, g_pData->m_Weapons.m_aId[WEAPON_LASER].m_Maxammo))
 				{
 					Picked = true;
-					GameServer()->CreateSound(m_Pos, SOUND_PICKUP_SHOTGUN);
+					GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_SHOTGUN);
 					if(pChr->GetPlayer())
 						GameServer()->SendWeaponPickup(pChr->GetCID(), WEAPON_LASER);
 				}

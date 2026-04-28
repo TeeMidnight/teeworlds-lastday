@@ -12,7 +12,6 @@
 #include <game/layers.h>
 #include <game/voting.h>
 
-#include "eventhandler.h"
 #include "gameworld.h"
 
 /*
@@ -82,7 +81,6 @@ public:
 
 	void Clear();
 
-	CEventHandler m_Events;
 	class CPlayer *m_apPlayers[MAX_CLIENTS];
 
 	class CGameController *m_pController;
@@ -125,14 +123,6 @@ public:
 	class CHeap *m_pVoteOptionHeap;
 	CVoteOptionServer *m_pVoteOptionFirst;
 	CVoteOptionServer *m_pVoteOptionLast;
-
-	// helper functions
-	void CreateDamage(vec2 Pos, int Id, vec2 Source, int HealthAmount, int ArmorAmount, bool Self);
-	void CreateExplosion(vec2 Pos, class CEntity *pOwner, int Weapon, int MaxDamage);
-	void CreateHammerHit(vec2 Pos);
-	void CreatePlayerSpawn(vec2 Pos);
-	void CreateDeath(vec2 Pos, int Who);
-	void CreateSound(vec2 Pos, int Sound, int64 Mask = -1);
 
 	// ----- send functions -----
 	void SendChat(int ChatterClientID, int Mode, int To, const char *pText);

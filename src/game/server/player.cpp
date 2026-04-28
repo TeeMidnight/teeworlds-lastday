@@ -133,6 +133,12 @@ void CPlayer::Snap(int SnappingClient)
 	pPlayerInfo->m_Latency = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
 	pPlayerInfo->m_Score = m_Score;
 
+	CNetObj_PlayerInfoExtra *pPlayerInfoExtra = static_cast<CNetObj_PlayerInfoExtra *>(Server()->SnapNewItem(NETOBJTYPE_PLAYERINFOEXTRA, m_ClientID, sizeof(CNetObj_PlayerInfoExtra)));
+	if(!pPlayerInfoExtra)
+		return;
+	pPlayerInfoExtra->m_RealClientID = m_ClientID;
+	pPlayerInfoExtra->m_PlayerFlagsExtra = 0;
+	
 	if(m_ClientID == SnappingClient && (m_Team == TEAM_SPECTATORS || m_DeadSpecMode))
 	{
 		CNetObj_SpectatorInfo *pSpectatorInfo = static_cast<CNetObj_SpectatorInfo *>(Server()->SnapNewItem(NETOBJTYPE_SPECTATORINFO, m_ClientID, sizeof(CNetObj_SpectatorInfo)));
@@ -399,5 +405,5 @@ void CPlayer::TryRespawn()
 	m_Spawning = false;
 	m_pCharacter = new(m_ClientID) CCharacter(&GameServer()->m_World);
 	m_pCharacter->Spawn(this, SpawnPos);
-	GameServer()->CreatePlayerSpawn(SpawnPos);
+	GameServer()->m_World.CreatePlayerSpawn(SpawnPos);
 }

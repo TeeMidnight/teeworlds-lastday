@@ -479,7 +479,7 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 	{
 		case WEAPON_HAMMER:
 		{
-			GameServer()->CreateSound(ChrPos, SOUND_HAMMER_FIRE);
+			GameServer()->m_World.CreateSound(ChrPos, SOUND_HAMMER_FIRE);
 
 			array<CEntity *> lpEnts;
 			lpEnts.hint_size(8);
@@ -494,9 +494,9 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 
 				// set his velocity to fast upward (for now)
 				if(length(pTarget->GetPos() - ProjStartPos) > 0.0f)
-					GameServer()->CreateHammerHit(pTarget->GetPos() - normalize(pTarget->GetPos() - ProjStartPos) * pChr->GetProximityRadius() * 0.5f);
+					GameServer()->m_World.CreateHammerHit(pTarget->GetPos() - normalize(pTarget->GetPos() - ProjStartPos) * pChr->GetProximityRadius() * 0.5f);
 				else
-					GameServer()->CreateHammerHit(ProjStartPos);
+					GameServer()->m_World.CreateHammerHit(ProjStartPos);
 
 				vec2 Dir;
 				if(length(pTarget->GetPos() - ChrPos) > 0.0f)
@@ -524,7 +524,7 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 				(int) (Server()->TickSpeed() * GameServer()->Tuning()->m_GunLifetime),
 				g_pData->m_Weapons.m_Gun.m_pBase->m_Damage, false, 0, -1, WEAPON_GUN);
 
-			GameServer()->CreateSound(ChrPos, SOUND_GUN_FIRE);
+			GameServer()->m_World.CreateSound(ChrPos, SOUND_GUN_FIRE);
 		}
 		break;
 
@@ -547,7 +547,7 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 					g_pData->m_Weapons.m_Shotgun.m_pBase->m_Damage, false, 0, -1, WEAPON_SHOTGUN);
 			}
 
-			GameServer()->CreateSound(ChrPos, SOUND_SHOTGUN_FIRE);
+			GameServer()->m_World.CreateSound(ChrPos, SOUND_SHOTGUN_FIRE);
 		}
 		break;
 
@@ -560,21 +560,21 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 				(int) (Server()->TickSpeed() * GameServer()->Tuning()->m_GrenadeLifetime),
 				g_pData->m_Weapons.m_Grenade.m_pBase->m_Damage, true, 0, SOUND_GRENADE_EXPLODE, WEAPON_GRENADE);
 
-			GameServer()->CreateSound(ChrPos, SOUND_GRENADE_FIRE);
+			GameServer()->m_World.CreateSound(ChrPos, SOUND_GRENADE_FIRE);
 		}
 		break;
 
 		case WEAPON_LASER:
 		{
 			new CLaser(&GameServer()->m_World, ChrPos, Direction, GameServer()->Tuning()->m_LaserReach, ClientID, g_pData->m_Weapons.m_aId[WEAPON_LASER].m_Damage);
-			GameServer()->CreateSound(ChrPos, SOUND_LASER_FIRE);
+			GameServer()->m_World.CreateSound(ChrPos, SOUND_LASER_FIRE);
 		}
 		break;
 
 		case WEAPON_NINJA:
 		{
 			pChr->DoNinjaFire(Direction, g_pData->m_Weapons.m_Ninja.m_Movetime * Server()->TickSpeed() / 1000);
-			GameServer()->CreateSound(ChrPos, SOUND_NINJA_FIRE);
+			GameServer()->m_World.CreateSound(ChrPos, SOUND_NINJA_FIRE);
 		}
 		break;
 	}

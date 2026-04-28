@@ -94,101 +94,6 @@ class CCharacter *CGameContext::GetPlayerChar(int ClientID)
 	return m_apPlayers[ClientID]->GetCharacter();
 }
 
-void CGameContext::CreateDamage(vec2 Pos, int Id, vec2 Source, int HealthAmount, int ArmorAmount, bool Self)
-{
-	float f = angle(Source);
-	CNetEvent_Damage *pEvent = (CNetEvent_Damage *) m_Events.Create(NETEVENTTYPE_DAMAGE, sizeof(CNetEvent_Damage));
-	if(pEvent)
-	{
-		pEvent->m_X = (int) Pos.x;
-		pEvent->m_Y = (int) Pos.y;
-		pEvent->m_ClientID = Id;
-		pEvent->m_Angle = (int) (f * 256.0f);
-		pEvent->m_HealthAmount = HealthAmount;
-		pEvent->m_ArmorAmount = ArmorAmount;
-		pEvent->m_Self = Self;
-	}
-}
-
-void CGameContext::CreateHammerHit(vec2 Pos)
-{
-	// create the event
-	CNetEvent_HammerHit *pEvent = (CNetEvent_HammerHit *) m_Events.Create(NETEVENTTYPE_HAMMERHIT, sizeof(CNetEvent_HammerHit));
-	if(pEvent)
-	{
-		pEvent->m_X = (int) Pos.x;
-		pEvent->m_Y = (int) Pos.y;
-	}
-}
-
-void CGameContext::CreateExplosion(vec2 Pos, CEntity *pOwner, int Weapon, int MaxDamage)
-{
-	// create the event
-	CNetEvent_Explosion *pEvent = (CNetEvent_Explosion *) m_Events.Create(NETEVENTTYPE_EXPLOSION, sizeof(CNetEvent_Explosion));
-	if(pEvent)
-	{
-		pEvent->m_X = (int) Pos.x;
-		pEvent->m_Y = (int) Pos.y;
-	}
-
-	// deal damage
-	array<CEntity *> lpEnts;
-	lpEnts.hint_size(8);
-	float Radius = g_pData->m_Explosion.m_Radius;
-	float InnerRadius = 48.0f;
-	float MaxForce = g_pData->m_Explosion.m_MaxForce;
-	const int Num = m_World.FindFlagEntities(Pos, Radius, lpEnts, CGameWorld::ENTFLAG_HITABLE);
-	for(int i = 0; i < Num; i++)
-	{
-		vec2 Diff = lpEnts[i]->GetPos() - Pos;
-		vec2 Force(0, MaxForce);
-		float l = length(Diff);
-		if(l)
-			Force = normalize(Diff) * MaxForce;
-		float Factor = 1 - clamp((l - InnerRadius) / (Radius - InnerRadius), 0.0f, 1.0f);
-		if((int) (Factor * MaxDamage))
-			static_cast<CHitableEntity *>(lpEnts[i])->TakeHit(Force * Factor, Diff * -1, (int) (Factor * MaxDamage), pOwner, Weapon);
-	}
-}
-
-void CGameContext::CreatePlayerSpawn(vec2 Pos)
-{
-	// create the event
-	CNetEvent_Spawn *ev = (CNetEvent_Spawn *) m_Events.Create(NETEVENTTYPE_SPAWN, sizeof(CNetEvent_Spawn));
-	if(ev)
-	{
-		ev->m_X = (int) Pos.x;
-		ev->m_Y = (int) Pos.y;
-	}
-}
-
-void CGameContext::CreateDeath(vec2 Pos, int ClientID)
-{
-	// create the event
-	CNetEvent_Death *pEvent = (CNetEvent_Death *) m_Events.Create(NETEVENTTYPE_DEATH, sizeof(CNetEvent_Death));
-	if(pEvent)
-	{
-		pEvent->m_X = (int) Pos.x;
-		pEvent->m_Y = (int) Pos.y;
-		pEvent->m_ClientID = ClientID;
-	}
-}
-
-void CGameContext::CreateSound(vec2 Pos, int Sound, int64 Mask)
-{
-	if(Sound < 0)
-		return;
-
-	// create a sound
-	CNetEvent_SoundWorld *pEvent = (CNetEvent_SoundWorld *) m_Events.Create(NETEVENTTYPE_SOUNDWORLD, sizeof(CNetEvent_SoundWorld), Mask);
-	if(pEvent)
-	{
-		pEvent->m_X = (int) Pos.x;
-		pEvent->m_Y = (int) Pos.y;
-		pEvent->m_SoundID = Sound;
-	}
-}
-
 // ----- send functions -----
 void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *pText)
 {
@@ -1478,7 +1383,6 @@ void CGameContext::OnInit()
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
 	m_World.SetGameServer(this);
-	m_Events.SetGameServer(this);
 	m_CommandManager.Init(m_pConsole, this, NewCommandHook, RemoveCommandHook);
 
 	// HACK: only set static size for items, which were available in the first 0.7 release
@@ -1548,7 +1452,6 @@ void CGameContext::OnSnap(int ClientID)
 
 	m_World.Snap(ClientID);
 	m_pController->Snap(ClientID);
-	m_Events.Snap(ClientID);
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
@@ -1560,7 +1463,6 @@ void CGameContext::OnPreSnap() {}
 void CGameContext::OnPostSnap()
 {
 	m_World.PostSnap();
-	m_Events.Clear();
 }
 
 bool CGameContext::IsClientBot(int ClientID) const

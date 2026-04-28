@@ -100,7 +100,7 @@ void CCharacter::SetWeapon(int W)
 	m_LastWeapon = m_ActiveWeapon;
 	m_QueuedWeapon = -1;
 	m_ActiveWeapon = W;
-	GameServer()->CreateSound(m_Pos, SOUND_WEAPON_SWITCH);
+	GameWorld()->CreateSound(m_Pos, SOUND_WEAPON_SWITCH);
 
 	if(m_ActiveWeapon < 0 || m_ActiveWeapon >= NUM_WEAPONS)
 		m_ActiveWeapon = 0;
@@ -186,7 +186,7 @@ void CCharacter::HandleNinja()
 				continue;
 
 			// Hit a player, give him damage and stuffs...
-			GameServer()->CreateSound(lpEnts[i]->GetPos(), SOUND_NINJA_HIT);
+			GameWorld()->CreateSound(lpEnts[i]->GetPos(), SOUND_NINJA_HIT);
 			m_lpHitObjects.add(lpEnts[i]);
 
 			// set his velocity to fast upward (for now)
@@ -272,7 +272,7 @@ void CCharacter::FireWeapon()
 		m_ReloadTimer = 125 * Server()->TickSpeed() / 1000;
 		if(m_LastNoAmmoSound + Server()->TickSpeed() <= Server()->Tick())
 		{
-			GameServer()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO);
+			GameWorld()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO);
 			m_LastNoAmmoSound = Server()->Tick();
 		}
 		return;
@@ -355,7 +355,7 @@ void CCharacter::GiveNinja()
 		m_LastWeapon = m_ActiveWeapon;
 	m_ActiveWeapon = WEAPON_NINJA;
 
-	GameServer()->CreateSound(m_Pos, SOUND_PICKUP_NINJA);
+	GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_NINJA);
 }
 
 void CCharacter::SetEmote(int Emote, int Tick)
@@ -647,14 +647,14 @@ void CCharacter::Die(int Killer, int Weapon)
 	}
 
 	// a nice sound
-	GameServer()->CreateSound(m_Pos, SOUND_PLAYER_DIE);
+	GameWorld()->CreateSound(m_Pos, SOUND_PLAYER_DIE);
 
 	// this is for auto respawn after 3 secs
 	m_pPlayer->m_DieTick = Server()->Tick();
 
 	GameWorld()->RemoveEntity(this);
 	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = 0;
-	GameServer()->CreateDeath(m_Pos, m_pPlayer->GetCID());
+	GameWorld()->CreateDeath(m_Pos, m_pPlayer->GetCID());
 }
 
 bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon)
@@ -706,7 +706,7 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 	}
 
 	// create healthmod indicator
-	GameServer()->CreateDamage(m_Pos, m_pPlayer->GetCID(), Source, OldHealth - m_Health, OldArmor - m_Armor, From == m_pPlayer->GetCID());
+	GameWorld()->CreateDamage(m_Pos, m_pPlayer->GetCID(), Source, OldHealth - m_Health, OldArmor - m_Armor, From == m_pPlayer->GetCID());
 
 	// do damage Hit sound
 	if(From >= 0 && From != m_pPlayer->GetCID() && GameServer()->m_apPlayers[From])
@@ -718,7 +718,7 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 				GameServer()->m_apPlayers[i]->GetSpectatorID() == From)
 				Mask |= CmaskOne(i);
 		}
-		GameServer()->CreateSound(GameServer()->m_apPlayers[From]->m_ViewPos, SOUND_HIT, Mask);
+		GameWorld()->CreateSound(GameServer()->m_apPlayers[From]->m_ViewPos, SOUND_HIT, Mask);
 	}
 
 	// check for death
@@ -739,9 +739,9 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 	}
 
 	if(Dmg > 2)
-		GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_LONG);
+		GameWorld()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_LONG);
 	else
-		GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_SHORT);
+		GameWorld()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_SHORT);
 
 	SetEmote(EMOTE_PAIN, Server()->Tick() + 500 * Server()->TickSpeed() / 1000);
 

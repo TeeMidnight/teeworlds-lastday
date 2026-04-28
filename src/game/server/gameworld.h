@@ -4,6 +4,7 @@
 #define GAME_SERVER_GAMEWORLD_H
 
 #include <game/gamecore.h>
+#include "eventhandler.h"
 
 class CEntity;
 class CCharacter;
@@ -46,6 +47,7 @@ public:
 	class CConfig *Config() { return m_pConfig; }
 	class IServer *Server() { return m_pServer; }
 
+	CEventHandler m_Events;
 	CWorldCore m_Core;
 
 	CGameWorld();
@@ -166,6 +168,14 @@ public:
 
 	*/
 	void Tick();
+
+	// helper functions
+	void CreateDamage(vec2 Pos, int Id, vec2 Source, int HealthAmount, int ArmorAmount, bool Self);
+	void CreateExplosion(vec2 Pos, class CEntity *pOwner, int Weapon, int MaxDamage);
+	void CreateHammerHit(vec2 Pos);
+	void CreatePlayerSpawn(vec2 Pos);
+	void CreateDeath(vec2 Pos, int Who);
+	void CreateSound(vec2 Pos, int Sound, int64 Mask = -1);
 };
 
 #endif
