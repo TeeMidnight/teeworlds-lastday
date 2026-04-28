@@ -1198,7 +1198,7 @@ void CServer::UpdateRegisterServerInfo()
 	sha256_str(m_CurrentMapSha256, aMapSha256, sizeof(aMapSha256));
 
 	array<char> lServerInfo;
-	memory_stream Stream(&lServerInfo);
+	memory_stream<char> Stream(&lServerInfo);
 	CJsonWriter JsonWriter(&Stream);
 
 	JsonWriter.BeginObject();
@@ -1243,7 +1243,7 @@ void CServer::UpdateRegisterServerInfo()
 	JsonWriter.WriteStrValue("points");
 
 	JsonWriter.WriteAttribute("requires_login");
-	JsonWriter.WriteBoolValue(true);
+	JsonWriter.WriteBoolValue(false);
 
 	JsonWriter.WriteAttribute("clients");
 	JsonWriter.BeginArray();

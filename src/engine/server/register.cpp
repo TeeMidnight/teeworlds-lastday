@@ -4,8 +4,8 @@
 #include <engine/masterserver.h>
 #include <engine/message.h>
 #include <engine/shared/config.h>
-#include <engine/shared/jsonparser.h>
 #include <engine/shared/http_request.h>
+#include <engine/shared/jsonparser.h>
 #include <engine/shared/network.h>
 
 #include <mastersrv/mastersrv.h>
@@ -20,20 +20,19 @@ void CRegister::CheckChallengeStatus(int Protocol)
 	{
 		switch(m_aProtocols[Protocol].m_LastResponseStatus)
 		{
-		case STATUS_NEEDCHALLENGE:
-			if(m_aProtocols[Protocol].m_NewChallengeToken)
-			{
-				// Immediately resend if we got the token.
+			case STATUS_NEEDCHALLENGE:
+				if(m_aProtocols[Protocol].m_NewChallengeToken)
+				{
+					// Immediately resend if we got the token.
+					m_aProtocols[Protocol].m_NextRegister = time_get();
+				}
+				break;
+			case STATUS_NEEDINFO:
+				// Act immediately if the master requests more info.
 				m_aProtocols[Protocol].m_NextRegister = time_get();
-			}
-			break;
-		case STATUS_NEEDINFO:
-			// Act immediately if the master requests more info.
-			m_aProtocols[Protocol].m_NextRegister = time_get();
-			break;
+				break;
 		}
 	}
-	
 
 	lock_unlock(m_aProtocols[Protocol].m_Lock);
 }
@@ -58,7 +57,7 @@ void CRegister::UpdateRegister(int Protocol)
 
 int CRegister::SendRegister(void *pUser)
 {
-	CProtocol::CRegisterContext *pContext = static_cast<CProtocol::CRegisterContext*>(pUser);
+	CProtocol::CRegisterContext *pContext = static_cast<CProtocol::CRegisterContext *>(pUser);
 	int Protocol = pContext->m_Protocol;
 
 	int64 Now = time_get();
@@ -124,7 +123,7 @@ int CRegister::SendRegister(void *pUser)
 			pContext->m_pParent->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, ProtocolToSystem(Protocol), "registering...");
 		}
 		RequestIndex = pContext->m_pParent->m_aProtocols[Protocol].m_NumTotalRequests;
-		pContext->m_pParent->m_aProtocols[Protocol].m_NumTotalRequests++;	
+		pContext->m_pParent->m_aProtocols[Protocol].m_NumTotalRequests++;
 		lock_unlock(pContext->m_pParent->m_aProtocols[Protocol].m_Lock);
 	}
 
@@ -147,28 +146,28 @@ int CRegister::SendRegister(void *pUser)
 		pContext->m_pParent->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, ProtocolToSystem(Protocol), "non-JSON response from master");
 		return -2;
 	}
-	const json_value &Json = *pJson;
-	const json_value &StatusString = Json["status"];
-	if(StatusString.type != json_string)
+	const json_value &rStatusString = (*pJson)["status"];
+	if(rStatusString.type != json_string)
 	{
 		pContext->m_pParent->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, ProtocolToSystem(Protocol), "invalid JSON response from master");
 		return -3;
 	}
 	int Status;
-	if(StatusFromString(&Status, StatusString))
+	if(StatusFromString(&Status, rStatusString))
 	{
-		pContext->m_pParent->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, ProtocolToSystem(Protocol), "invalid status from master: %s", (const char *) StatusString);
+		str_format(aBuf, sizeof(aBuf), "invalid status from master: %s", (const char *) rStatusString);
+		pContext->m_pParent->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, ProtocolToSystem(Protocol), aBuf);
 		return -4;
 	}
 	if(Status == STATUS_ERROR)
 	{
-		const json_value &Message = Json["message"];
-		if(Message.type != json_string)
+		const json_value &rMessage = (*pJson)["message"];
+		if(rMessage.type != json_string)
 		{
 			pContext->m_pParent->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, ProtocolToSystem(Protocol), "invalid JSON error response from master");
 			return -5;
 		}
-		str_format(aBuf, sizeof(aBuf), "error response from master: %d: %s", Register.ResponseCode(), (const char *) Message);
+		str_format(aBuf, sizeof(aBuf), "error response from master: %d: %s", Register.ResponseCode(), (const char *) rMessage);
 		pContext->m_pParent->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, ProtocolToSystem(Protocol), aBuf);
 		return -6;
 	}
@@ -185,7 +184,7 @@ int CRegister::SendRegister(void *pUser)
 			if(Status != STATUS_OK)
 			{
 				if(pContext->m_pParent->Config()->m_Debug)
-					dbg_msg(ProtocolToSystem(Protocol), "status: %s", (const char *)StatusString);
+					dbg_msg(ProtocolToSystem(Protocol), "status: %s", (const char *) rStatusString);
 			}
 			else
 			{
@@ -229,7 +228,7 @@ int CRegister::SendRegister(void *pUser)
 
 void CRegister::SendDeleteIfRegistered(void *pUser)
 {
-	CProtocol::CRegisterContext *pContext = static_cast<CProtocol::CRegisterContext*>(pUser);
+	CProtocol::CRegisterContext *pContext = static_cast<CProtocol::CRegisterContext *>(pUser);
 	int Protocol = pContext->m_Protocol;
 	{
 		const bool ShouldSendDelete = pContext->m_pParent->m_aProtocols[Protocol].m_LastResponseStatus == STATUS_OK;
@@ -261,6 +260,9 @@ void CRegister::SendDeleteIfRegistered(void *pUser)
 
 void CRegister::OnToken(int Protocol, const char *pToken)
 {
+	m_aProtocols[Protocol].m_NewChallengeToken = true;
+	m_aProtocols[Protocol].m_HaveChallengeToken = true;
+	str_copy(m_aProtocols[Protocol].m_aChallengeToken, pToken, sizeof(m_aProtocols[Protocol].m_aChallengeToken));
 }
 
 CRegister::CRegister()
@@ -376,8 +378,8 @@ const char *CRegister::ProtocolToSystem(int Protocol)
 {
 	switch(Protocol)
 	{
-	case PROTOCOL_IPV6: return "register/ipv6";
-	case PROTOCOL_IPV4: return "register/ipv4";
+		case PROTOCOL_IPV6: return "register/ipv6";
+		case PROTOCOL_IPV4: return "register/ipv4";
 	}
 	return "invalid protocol";
 }
@@ -432,7 +434,7 @@ bool CRegister::OnPacket(const CNetChunk *pPacket)
 	if((pPacket->m_Flags & NETSENDFLAG_CONNLESS) == 0)
 		return false;
 
-	if(pPacket->m_DataSize >= (int)sizeof(m_aVerifyPacketPrefix) &&
+	if(pPacket->m_DataSize >= (int) sizeof(m_aVerifyPacketPrefix) &&
 		mem_comp(pPacket->m_pData, m_aVerifyPacketPrefix, sizeof(m_aVerifyPacketPrefix)) == 0)
 	{
 		CUnpacker Unpacker;
