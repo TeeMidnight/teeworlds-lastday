@@ -354,6 +354,15 @@ public:
 	const_iterator cbegin() const { return list; }
 	const_iterator cend() const { return list + num_elements; }
 
+	typedef void (*foreach_function)(T &data, void *user);
+	void for_each(foreach_function func, void *user)
+	{
+		for(int i = 0; i < size(); i++)
+		{
+			func(list[i], user);
+		}
+	}
+
 protected:
 	void incsize()
 	{

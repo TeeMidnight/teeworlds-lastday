@@ -255,7 +255,7 @@ void CRegister::SendDeleteIfRegistered(void *pUser)
 
 	pContext->m_pParent->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, ProtocolToSystem(Protocol), "deleting...");
 
-	Request.StartRun(pContext->m_pParent->Engine());
+	Request.StartRunBlocking();
 }
 
 void CRegister::OnToken(int Protocol, const char *pToken)
