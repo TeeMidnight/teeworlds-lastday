@@ -1586,7 +1586,7 @@ int CServer::Run()
 
 				// master server stuff
 				m_Register.RegisterUpdate(m_NetServer.NetType());
-			
+
 				if(m_ServerInfoNeedsUpdate)
 				{
 					m_ServerInfoNeedsUpdate = false;
