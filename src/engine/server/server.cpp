@@ -1151,19 +1151,6 @@ void CServer::ExpireServerInfo()
 
 void CServer::UpdateRegisterServerInfo()
 {
-	// count the players
-	int PlayerCount = 0, ClientCount = 0;
-	for(int i = 0; i < MAX_CLIENTS; i++)
-	{
-		if(m_aClients[i].m_State != CClient::STATE_INGAME)
-		{
-			if(GameServer()->IsClientPlayer(i))
-				PlayerCount++;
-
-			ClientCount++;
-		}
-	}
-
 	char aMapSha256[SHA256_MAXSTRSIZE];
 
 	sha256_str(m_CurrentMapSha256, aMapSha256, sizeof(aMapSha256));

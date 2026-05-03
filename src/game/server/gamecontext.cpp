@@ -10,6 +10,7 @@
 
 #include <game/collision.h>
 #include <game/gamecore.h>
+#include <game/localization.h>
 #include <game/version.h>
 #include <generated/server_data.h>
 
