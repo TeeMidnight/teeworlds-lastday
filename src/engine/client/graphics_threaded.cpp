@@ -513,7 +513,7 @@ void CGraphics_Threaded::ScreenshotDirect(const char *pFilename)
 			// save png
 			png_t Png;
 			png_open_write(&Png, 0, File);
-			png_set_data(&Png, Image.m_Width, Image.m_Height, 8, PNG_TRUECOLOR, (unsigned char *) Image.m_pData);
+			png_set_data(&Png, Image.m_Width, Image.m_Height, 8, Image.m_Format == CImageInfo::FORMAT_RGB ? PNG_TRUECOLOR : PNG_TRUECOLOR_ALPHA, (unsigned char *) Image.m_pData);
 			io_close(File);
 			str_format(aBuf, sizeof(aBuf), "saved screenshot to '%s'", aWholePath);
 			if(m_pfnScreenshot)
@@ -772,7 +772,7 @@ int CGraphics_Threaded::IssueInit()
 	if(m_pConfig->m_GfxOpenGLES)
 		Flags |= IGraphicsBackend::INITFLAG_OPENGLES;
 
-	return m_pBackend->Init("Teeworlds", &m_pConfig->m_GfxScreen, &m_pConfig->m_GfxScreenWidth,
+	return m_pBackend->Init("Teeworlds: Archive", &m_pConfig->m_GfxScreen, &m_pConfig->m_GfxScreenWidth,
 		&m_pConfig->m_GfxScreenHeight, &m_ScreenWidth, &m_ScreenHeight, m_pConfig->m_GfxFsaaSamples,
 		Flags, &m_DesktopScreenWidth, &m_DesktopScreenHeight);
 }
