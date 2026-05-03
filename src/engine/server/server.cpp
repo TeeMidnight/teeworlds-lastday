@@ -1404,7 +1404,7 @@ int CServer::Run()
 	{
 		dbg_msg("server", "failed to load map. mapname='%s'", Config()->m_SvMap);
 		Free();
-		return -1;
+		return 0; // set to zero as now
 	}
 	m_MapChunksPerRequest = Config()->m_SvMapDownloadSpeed;
 
