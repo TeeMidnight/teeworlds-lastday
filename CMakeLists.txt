@@ -888,7 +888,7 @@ set(GAME_GENERATED_SHARED
   src/generated/protocol.h
 )
 
-set(DEPS ${DEP_JSON} ${ZLIB_DEP})
+set(DEPS ${DEP_JSON} ${ZLIB_DEP} ${PNGLITE_DEP})
 
 # Libraries
 set(LIBS ${CMAKE_THREAD_LIBS_INIT} OpenSSL::Crypto CURL::libcurl ${PLATFORM_LIBS})
@@ -955,7 +955,6 @@ set(LIBS_SERVER ${LIBS})
 set(TARGET_SERVER ${SERVER_EXECUTABLE})
 add_executable(${TARGET_SERVER}
   ${DEPS}
-  ${PNGLITE_DEP}
   ${SERVER_SRC}
   ${SERVER_ICON}
   $<TARGET_OBJECTS:engine-shared>
