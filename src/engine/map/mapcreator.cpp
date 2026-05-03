@@ -14,6 +14,7 @@
 #include "mapcreator.h"
 
 #include <engine/external/pnglite/pnglite.h>
+#include "mapitems.h"
 
 class CImageInfo
 {
@@ -353,6 +354,7 @@ CCreatorLayerTilemap *CCreatorGroupInfo::AddTileLayer(const char *pName)
 
 	str_copy(pLayer->m_aName, pName, sizeof(pLayer->m_aName));
 	pLayer->m_pTiles = nullptr;
+	pLayer->m_pSaveTiles = nullptr;
 	pLayer->m_pImage = nullptr;
 
 	pLayer->m_Color = ColorRGBA(255, 255, 255, 255);
@@ -385,6 +387,86 @@ CTile *CCreatorLayerTilemap::AddTiles(int Width, int Height)
 	m_Height = Height;
 
 	return m_pTiles;
+}
+
+void CCreatorLayerTilemap::PrepareForSave()
+{
+	for(int y = 0; y < m_Height; y++)
+		for(int x = 0; x < m_Width; x++)
+		{
+			m_pTiles[y * m_Width + x].m_Flags &= TILEFLAG_VFLIP | TILEFLAG_HFLIP | TILEFLAG_ROTATE;
+			if(m_pTiles[y * m_Width + x].m_Index == 0)
+				m_pTiles[y * m_Width + x].m_Flags = 0;
+		}
+
+	if(m_pImage && m_Color.a == 255)
+	{
+		for(int y = 0; y < m_Height; y++)
+			for(int x = 0; x < m_Width; x++)
+				m_pTiles[y * m_Width + x].m_Flags |= m_pImage->m_aTileFlags[m_pTiles[y * m_Width + x].m_Index];
+	}
+
+	const int MAX_SKIP = (1 << 8) - 1;
+	int NumSaveTiles = 0; // number of unique tiles that we have to save
+	CTile Tile; // current tile to be duplicated
+	Tile.m_Skip = MAX_SKIP; // tell the code that we can't skip the first tile
+
+	for(int i = 0; i < m_Width * m_Height; i++)
+	{
+		// we can only store MAX_SKIP empty tiles in one tile
+		if(Tile.m_Skip == MAX_SKIP)
+		{
+			Tile = m_pTiles[i];
+			Tile.m_Skip = 0;
+			NumSaveTiles++;
+		}
+		// tile is different from last one? - can't skip it
+		else if(m_pTiles[i].m_Index != Tile.m_Index || m_pTiles[i].m_Flags != Tile.m_Flags)
+		{
+			Tile = m_pTiles[i];
+			Tile.m_Skip = 0;
+			NumSaveTiles++;
+		}
+		// if the tile is the same as the previous one - no need to
+		// save it separately
+		else
+			Tile.m_Skip++;
+	}
+
+	if(m_pSaveTiles)
+		delete[] m_pSaveTiles;
+
+	m_pSaveTiles = new CTile[NumSaveTiles];
+	m_SaveTilesSize = sizeof(CTile) * NumSaveTiles;
+
+	int NumWrittenSaveTiles = 0;
+	Tile.m_Skip = MAX_SKIP;
+	for(int i = 0; i < m_Width * m_Height + 1; i++)
+	{
+		// again, if an tile is the same as the previous one
+		// and we have place to store it, skip it!
+		// if we are at the end of the layer, write one more tile
+		if(i != m_Width * m_Height && Tile.m_Skip != MAX_SKIP && m_pTiles[i].m_Index == Tile.m_Index && m_pTiles[i].m_Flags == Tile.m_Flags)
+		{
+			Tile.m_Skip++;
+		}
+		// tile is not skippable
+		else
+		{
+			// if this is not the first tile, we have to save the previous
+			// tile beforehand
+			if(i != 0)
+				m_pSaveTiles[NumWrittenSaveTiles++] = Tile;
+
+			// if this isn't the last tile, store it so we can check how
+			// many tiles to skip
+			if(i != m_Width * m_Height)
+			{
+				Tile = m_pTiles[i];
+				Tile.m_Skip = 0;
+			}
+		}
+	}
 }
 
 CCreatorQuad *CCreatorLayerQuads::AddQuad(vec2 Pos, vec2 Size, ColorRGBA Color)
@@ -440,6 +522,38 @@ CCreatorEnvPoint *CCreatorEnvelope::AddEnvPoint(int Time, int CurveType)
 	return pEnvPoint;
 }
 
+void CCreatorImage::AnalyzeTileFlags()
+{
+	mem_zero(m_aTileFlags, sizeof(m_aTileFlags));
+
+	int tw = m_Width / 16; // tilesizes
+	int th = m_Height / 16;
+	if(tw == th)
+	{
+		unsigned char *pPixelData = (unsigned char *) m_pImageData;
+
+		int TileID = 0;
+		for(int ty = 0; ty < 16; ty++)
+			for(int tx = 0; tx < 16; tx++, TileID++)
+			{
+				bool Opaque = true;
+				for(int x = 0; x < tw; x++)
+					for(int y = 0; y < th; y++)
+					{
+						int p = (ty * tw + y) * m_Width + tx * tw + x;
+						if(pPixelData[p * 4 + 3] < 250)
+						{
+							Opaque = false;
+							break;
+						}
+					}
+
+				if(Opaque)
+					m_aTileFlags[TileID] |= TILEFLAG_OPAQUE;
+			}
+	}
+}
+
 static const char *GetMapByMapType(EMapType MapType)
 {
 	switch(MapType)
@@ -489,6 +603,8 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 
 	for(auto &pImage : m_lpImages)
 	{
+		pImage->AnalyzeTileFlags();
+
 		CMapItemImage Item;
 		Item.m_Version = CMapItemImage::CURRENT_VERSION;
 		Item.m_MustBe1 = 1;
@@ -608,7 +724,7 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 				Item.m_Flags = pTilemap->m_Flags;
 				Item.m_Image = pTilemap->m_pImage ? pTilemap->m_pImage->m_ImageID : -1;
 
-				Item.m_Data = DataFile.AddData(Item.m_Width * Item.m_Height * sizeof(CTile), pTilemap->m_pTiles);
+				Item.m_Data = DataFile.AddData(pTilemap->m_SaveTilesSize, pTilemap->m_pSaveTiles);
 
 				StrToInts(Item.m_aName, sizeof(Item.m_aName) / sizeof(int), pTilemap->m_aName);
 

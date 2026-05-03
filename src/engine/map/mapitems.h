@@ -38,6 +38,9 @@ struct CCreatorImage
 	int m_ImageID;
 
 	unsigned char *m_pImageData;
+	unsigned char m_aTileFlags[256];
+
+	void AnalyzeTileFlags();
 };
 
 struct CCreatorEnvPoint
@@ -86,6 +89,8 @@ struct ILayerInfo
 struct CCreatorLayerTilemap : public ILayerInfo
 {
 	CTile *m_pTiles;
+	CTile *m_pSaveTiles;
+	int m_SaveTilesSize;
 
 	int m_Width;
 	int m_Height;
@@ -102,6 +107,7 @@ struct CCreatorLayerTilemap : public ILayerInfo
 	}
 
 	CTile *AddTiles(int Width, int Height);
+	void PrepareForSave();
 };
 
 struct CCreatorQuad
