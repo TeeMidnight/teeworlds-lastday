@@ -138,6 +138,7 @@ public:
 	void SendSystemChat(int TargetID, const char *pMsg);
 	// return: Reload timer
 	int OnCharacterFireWeapon(class CCharacter *pChr, vec2 Direction, int Weapon);
+	bool IsCharacterSnapable(int SnappingClient, int ClientID) const { return true; }
 };
 
 #endif

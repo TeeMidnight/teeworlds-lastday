@@ -778,6 +778,10 @@ void CCharacter::Snap(int SnappingClient)
 		if(NetworkClippedLine(SnappingClient, m_Pos, m_Core.m_HookPos))
 			return;
 	}
+
+	if(!GameServer()->m_pController->IsCharacterSnapable(SnappingClient, GetCID()))
+		return;
+
 	CNetObj_Character *pCharacter = static_cast<CNetObj_Character *>(Server()->SnapNewItem(NETOBJTYPE_CHARACTER, m_pPlayer->GetCID(), sizeof(CNetObj_Character)));
 	if(!pCharacter)
 		return;
