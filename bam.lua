@@ -1,7 +1,6 @@
 CheckVersion("0.5")
 
 Import("configure.lua")
-Import("bamfind/crypto.lua")
 Import("bamfind/curl.lua")
 
 --- Setup Config -------
@@ -11,7 +10,6 @@ config:Add(OptTestCompileC("stackprotector", "int main(){return 0;}", "-fstack-p
 config:Add(OptTestCompileC("minmacosxsdk", "int main(){return 0;}", "-mmacosx-version-min=10.15 -isysroot /Developer/SDKs/MacOSX10.15.sdk"))
 config:Add(OptTestCompileC("buildwithoutsseflag", "#include <immintrin.h>\nint main(){_mm_pause();return 0;}", ""))
 config:Add(OptLibrary("zlib", "zlib.h", false))
-config:Add(Crypto.OptFind("libcrypto", true))
 config:Add(Curl.OptFind("libcurl", true))
 config:Finalize("config.lua")
 
@@ -99,11 +97,12 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 		zlib = Compile(settings, Collect("src/engine/external/zlib/*.c"))
 	end
 
+	local md5 = Compile(settings, Collect("src/engine/external/md5/*.c"))
 	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
 	local json = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
 
 	-- globally available libs
-	libs = {zlib=zlib, png=png, json=json}
+	libs = {zlib=zlib, png=png, md5=md5, json=json}
 end
 
 function GenerateMacOSSettings(settings, conf, arch, compiler)
@@ -293,7 +292,6 @@ function SharedIcons(compiler)
 end
 
 function BuildEngineCommon(settings)
-	config.libcrypto:Apply(settings)
 	config.libcurl:Apply(settings)
 	settings.link.extrafiles:Merge(Compile(settings, Collect("src/engine/map/*.cpp")))
 	settings.link.extrafiles:Merge(Compile(settings, Collect("src/engine/shared/*.cpp")))
@@ -312,7 +310,7 @@ function BuildServer(settings, family, platform)
 	
 	local game_server = Compile(settings, CollectRecursive("src/game/server/*.cpp"), SharedServerFiles())
 	
-	return Link(settings, "ArchiveServer", libs["zlib"], libs["json"], libs["png"], server, game_server)
+	return Link(settings, "ArchiveServer", libs["zlib"], libs["json"], libs["png"], libs["md5"], server, game_server)
 end
 
 function BuildContent(settings, arch, conf)
