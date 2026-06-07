@@ -368,8 +368,8 @@ const char *CRegister::ProtocolToString(int Protocol)
 {
 	switch(Protocol)
 	{
-		case PROTOCOL_IPV4: return "tw0.7/ipv6";
-		case PROTOCOL_IPV6: return "tw0.7/ipv4";
+		case PROTOCOL_IPV4: return "tw0.7/ipv4";
+		case PROTOCOL_IPV6: return "tw0.7/ipv6";
 	}
 	return "invalid protocol";
 }
@@ -378,8 +378,8 @@ const char *CRegister::ProtocolToSystem(int Protocol)
 {
 	switch(Protocol)
 	{
-		case PROTOCOL_IPV6: return "register/ipv6";
 		case PROTOCOL_IPV4: return "register/ipv4";
+		case PROTOCOL_IPV6: return "register/ipv6";
 	}
 	return "invalid protocol";
 }
