@@ -138,7 +138,7 @@ void CPlayer::Snap(int SnappingClient)
 		return;
 	pPlayerInfoExtra->m_RealClientID = m_ClientID;
 	pPlayerInfoExtra->m_PlayerFlagsExtra = 0;
-	
+
 	if(m_ClientID == SnappingClient && (m_Team == TEAM_SPECTATORS || m_DeadSpecMode))
 	{
 		CNetObj_SpectatorInfo *pSpectatorInfo = static_cast<CNetObj_SpectatorInfo *>(Server()->SnapNewItem(NETOBJTYPE_SPECTATORINFO, m_ClientID, sizeof(CNetObj_SpectatorInfo)));

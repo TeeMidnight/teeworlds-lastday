@@ -13,8 +13,8 @@
 
 #include "mapcreator.h"
 
-#include <engine/external/pnglite/pnglite.h>
 #include "mapitems.h"
+#include <spng.h>
 
 class CImageInfo
 {
@@ -44,6 +44,60 @@ public:
 	void *m_pData;
 };
 
+static int LoadPNGRaw(CImageInfo *pImg, const unsigned char *pData, int Size, const char *pContext)
+{
+	spng_ctx *pPng = spng_ctx_new(SPNG_CTX_IGNORE_ADLER32);
+	int Error = spng_set_png_buffer(pPng, pData, Size);
+	if(Error)
+	{
+		dbg_msg("game/png", "failed to read data. context='%s', error='%s'", pContext, spng_strerror(Error));
+		return 0;
+	}
+
+	spng_ihdr Info;
+	Error = spng_get_ihdr(pPng, &Info);
+	if(Error || Info.bit_depth != 8 || Info.width > (2 << 12) || Info.height > (2 << 12))
+	{
+		dbg_msg("game/png", "invalid format. context='%s', error='%s'", pContext, spng_strerror(Error));
+		spng_ctx_free(pPng);
+		return 0;
+	}
+
+	if(Info.color_type == SPNG_COLOR_TYPE_TRUECOLOR)
+		pImg->m_Format = CImageInfo::FORMAT_RGB;
+	else if(Info.color_type == SPNG_COLOR_TYPE_TRUECOLOR_ALPHA)
+		pImg->m_Format = CImageInfo::FORMAT_RGBA;
+	else
+	{
+		dbg_msg("game/png", "invalid format. context='%s', error='%s'", pContext, spng_strerror(Error));
+		spng_ctx_free(pPng);
+		return 0;
+	}
+
+	size_t ImageSize;
+	spng_format Format = Info.color_type == SPNG_COLOR_TYPE_TRUECOLOR ? SPNG_FMT_RGB8 : SPNG_FMT_RGBA8;
+	Error = spng_decoded_image_size(pPng, Format, &ImageSize);
+	if(Error)
+	{
+		dbg_msg("game/png", "invalid size. context='%s', error='%s'", pContext, spng_strerror(Error));
+		spng_ctx_free(pPng);
+		return 0;
+	}
+	unsigned char *pBuffer = (unsigned char *) mem_alloc(ImageSize);
+	Error = spng_decode_image(pPng, pBuffer, ImageSize, Format, 0);
+	spng_ctx_free(pPng);
+	if(Error)
+	{
+		dbg_msg("game/png", "failed to decode image. context='%s', error='%s'", pContext, spng_strerror(Error));
+		return 0;
+	}
+
+	pImg->m_Width = Info.width;
+	pImg->m_Height = Info.height;
+	pImg->m_pData = pBuffer;
+	return 1;
+}
+
 static int LoadPNG(CImageInfo *pImg, class IStorage *pStorage, const char *pFilename)
 {
 	// open file for reading
@@ -54,43 +108,14 @@ static int LoadPNG(CImageInfo *pImg, class IStorage *pStorage, const char *pFile
 		dbg_msg("game/png", "failed to open file. filename='%s'", pFilename);
 		return 0;
 	}
+	unsigned char *pData;
+	unsigned DataSize;
+	io_read_all(File, (void **) &pData, &DataSize);
 
-	png_init(0, 0);
-	png_t Png;
-	int Error = png_open_read(&Png, 0, File);
-	if(Error != PNG_NO_ERROR)
-	{
-		dbg_msg("game/png", "failed to read file. filename='%s'", aCompleteFilename);
-		io_close(File);
-		return 0;
-	}
-
-	if(Png.depth != 8 || Png.width > (2 << 12) || Png.height > (2 << 12))
-	{
-		dbg_msg("game/png", "invalid format. filename='%s'", aCompleteFilename);
-		io_close(File);
-		return 0;
-	}
-
-	if(Png.color_type == PNG_TRUECOLOR)
-		pImg->m_Format = CImageInfo::FORMAT_RGB;
-	else if(Png.color_type == PNG_TRUECOLOR_ALPHA)
-		pImg->m_Format = CImageInfo::FORMAT_RGBA;
-	else
-	{
-		dbg_msg("game/png", "invalid format. filename='%s'", aCompleteFilename);
-		io_close(File);
-		return 0;
-	}
-
-	unsigned char *pBuffer = (unsigned char *) mem_alloc(Png.width * Png.height * Png.bpp);
-	png_get_data(&Png, pBuffer);
+	int Result = LoadPNGRaw(pImg, pData, DataSize, aCompleteFilename);
+	mem_free(pData);
 	io_close(File);
-
-	pImg->m_Width = Png.width;
-	pImg->m_Height = Png.height;
-	pImg->m_pData = pBuffer;
-	return 1;
+	return Result;
 }
 
 CMapCreator::CMapCreator(IStorage *pStorage, IConsole *pConsole) :
