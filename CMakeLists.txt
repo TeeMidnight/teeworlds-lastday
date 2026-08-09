@@ -234,7 +234,7 @@ find_package(OpenSSL)
 find_package(CURL)
 find_package(Git)
 find_package(GTest)
-find_package(Pnglite)
+find_package(SPNG)
 find_package(Threads)
 
 
@@ -283,7 +283,7 @@ if(TARGET_OS AND TARGET_OS STREQUAL "mac")
 endif()
 show_dependency_status("OpenSSL Crypto" OPENSSL)
 show_dependency_status("Curl" CURL)
-show_dependency_status("Pnglite" PNGLITE)
+show_dependency_status("spng" spng)
 show_dependency_status("Python3" Python3)
 show_dependency_status("Zlib" ZLIB)
 
@@ -293,6 +293,10 @@ endif()
 
 if(NOT(CURL_FOUND))
   message(SEND_ERROR "You must install libcurl to compile Teeworlds")
+endif()
+
+if(NOT(spng_FOUND))
+  message(SEND_ERROR "You must install libspng to compile Teeworlds client")
 endif()
 
 if(NOT(GTEST_FOUND))
@@ -896,7 +900,7 @@ set(GAME_GENERATED_SHARED
 set(DEPS ${DEP_JSON} ${DEP_MD5} ${ZLIB_DEP} ${PNGLITE_DEP})
 
 # Libraries
-set(LIBS ${CMAKE_THREAD_LIBS_INIT} OpenSSL::Crypto CURL::libcurl ${PLATFORM_LIBS})
+set(LIBS ${CMAKE_THREAD_LIBS_INIT} OpenSSL::Crypto CURL::libcurl spng::spng ${PLATFORM_LIBS})
 if(ZLIB_BUNDLED)
   list(APPEND LIBS ${ZLIB_LIBRARIES})
 else()

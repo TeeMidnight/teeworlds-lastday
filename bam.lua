@@ -11,6 +11,7 @@ config:Add(OptTestCompileC("minmacosxsdk", "int main(){return 0;}", "-mmacosx-ve
 config:Add(OptTestCompileC("buildwithoutsseflag", "#include <immintrin.h>\nint main(){_mm_pause();return 0;}", ""))
 config:Add(OptLibrary("zlib", "zlib.h", false))
 config:Add(Curl.OptFind("libcurl", true))
+config:Add(SPNG.OptFind("spng", true))
 config:Finalize("config.lua")
 
 generated_src_dir = "build/src"
@@ -98,11 +99,10 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 	end
 
 	local md5 = Compile(settings, Collect("src/engine/external/md5/*.c"))
-	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
 	local json = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
 
 	-- globally available libs
-	libs = {zlib=zlib, png=png, md5=md5, json=json}
+	libs = {zlib=zlib, md5=md5, json=json}
 end
 
 function GenerateMacOSSettings(settings, conf, arch, compiler)
@@ -306,11 +306,11 @@ function BuildGameCommon(settings)
 end
 
 function BuildServer(settings, family, platform)
+	config.spng:Apply(settings)
 	local server = Compile(settings, Collect("src/engine/server/*.cpp"))
-	
 	local game_server = Compile(settings, CollectRecursive("src/game/server/*.cpp"), SharedServerFiles())
 	
-	return Link(settings, "ArchiveServer", libs["zlib"], libs["json"], libs["png"], libs["md5"], server, game_server)
+	return Link(settings, "ArchiveServer", libs["zlib"], libs["json"], libs["md5"], server, game_server)
 end
 
 function BuildContent(settings, arch, conf)
@@ -360,7 +360,6 @@ function GenerateSettings(conf, arch, builddir, compiler, headless)
 	end
 	
 	settings.cc.includes:Add("src")
-	settings.cc.includes:Add("src/engine/external/pnglite")
 	settings.cc.includes:Add(generated_src_dir)
 	
 	if family == "windows" then
