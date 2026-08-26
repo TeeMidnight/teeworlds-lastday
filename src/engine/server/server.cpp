@@ -1214,7 +1214,7 @@ void CServer::UpdateRegisterServerInfo()
 	JsonWriter.WriteStrValue("points");
 
 	JsonWriter.WriteAttribute("requires_login");
-	JsonWriter.WriteBoolValue(true);
+	JsonWriter.WriteBoolValue(false);
 
 	JsonWriter.WriteAttribute("clients");
 	JsonWriter.BeginArray();
