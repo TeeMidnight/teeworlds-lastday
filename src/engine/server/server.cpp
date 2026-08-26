@@ -711,7 +711,7 @@ void CServer::SendMap(int ClientID)
 	CMapInfo *pInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
 	LoadMap(pInfo);
 	CMsgPacker Msg(NETMSG_MAP_CHANGE, true);
-	Msg.AddString(pInfo->GetMapName(), 0);
+	Msg.AddString(pInfo->m_aName, 0);
 	Msg.AddInt(pInfo->m_Crc);
 	Msg.AddInt(pInfo->m_Size);
 	Msg.AddInt(m_MapChunksPerRequest);
