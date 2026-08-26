@@ -58,6 +58,8 @@ public:
 	CGameWorld(CGameContext *pGameServer);
 	~CGameWorld();
 
+	char m_aEntrances[2][32];
+	array<vec2> m_alSpawnPoints[3];
 	void InitCollision(class IMap *pMap);
 
 	typedef array<CEntity *>::range TypeRange;

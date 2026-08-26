@@ -662,12 +662,30 @@ void CCharacter::Die(int Killer, int Weapon)
 
 	Remove();
 	GameWorld()->CreateDeath(m_Pos, m_pPlayer->GetCID());
+	if(Weapon >= WEAPON_SELF)
+	{
+		m_Health = 1;
+		m_Alive = true;
+		m_Pos = vec2(0, 0);
+		GameServer()->SwitchPlayerWorld(m_pPlayer, GameServer()->m_MainWorldID);
+		GameServer()->SendChat(-1, CHAT_WHISPER, m_pPlayer->GetCID(), Localize("YOU CANNOT ESCAPE.", "Character died"));
+	}
 }
 
 void CCharacter::Remove()
 {
 	GameWorld()->RemoveEntity(this);
 	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = 0;
+}
+
+void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos)
+{
+	SetGameWorld(pWorld);
+	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
+	m_Core.m_Pos = Pos;
+	m_Core.m_HookState = HOOK_IDLE;
+	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = &m_Core;
+	GameWorld()->InsertEntity(this);
 }
 
 bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon)

@@ -44,7 +44,6 @@ class CGameController
 		int m_FriendlyTeam;
 		float m_Score;
 	};
-	array<vec2> m_alSpawnPoints[3];
 
 	float EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos) const;
 	void EvaluateSpawnType(CSpawnEval *pEval, int Type) const;
@@ -129,10 +128,10 @@ public:
 	int GetRealPlayerNum() const { return m_RealPlayerNum; }
 	int GetStartTeam();
 
-	void HandleCharacterTiles(class CCharacter *pChr, vec2 LastPos, vec2 NewPos) {};
+	// return true when character was removed
+	bool HandleCharacterTiles(class CCharacter *pChr, vec2 LastPos, vec2 NewPos);
 	// static void Com_Example(IConsole::IResult *pResult, void *pContext);
 	static void Com_About(IConsole::IResult *pResult, void *pContext);
-	static void Com_SwitchWorld(IConsole::IResult *pResult, void *pContext);
 	void RegisterChatCommands(CCommandManager *pManager);
 
 	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }

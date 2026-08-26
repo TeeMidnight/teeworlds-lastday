@@ -13,6 +13,6 @@
 static const char GAME_RELEASE_VERSION[8] = "0.7.6";
 
 #define MOD_NAME "LastDay"
-#define MOD_SUBTITLE "Rework"
+#define MOD_SUBTITLE "Rework Escape"
 #define MOD_VERSION "0.1.0"
 #endif

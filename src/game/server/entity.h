@@ -58,6 +58,8 @@ public:
 	/* Destructor */
 	virtual ~CEntity();
 
+	void SetGameWorld(class CGameWorld *pGameWorld) { m_pGameWorld = pGameWorld; }
+
 	/* Objects */
 	class CGameWorld *GameWorld() { return m_pGameWorld; }
 	class CConfig *Config() { return m_pGameWorld->Config(); }

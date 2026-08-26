@@ -2,6 +2,7 @@ CheckVersion("0.5")
 
 Import("configure.lua")
 Import("bamfind/curl.lua")
+Import("bamfind/spng.lua")
 
 --- Setup Config -------
 config = NewConfig()

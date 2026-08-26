@@ -618,6 +618,14 @@ void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 
 	if(!m_apPlayers[ClientID])
 		m_apPlayers[ClientID] = new(ClientID) CPlayer(*m_pWorlds[Server()->GetClientMapID(ClientID)], ClientID, Dummy, AsSpec);
+	else if(GetPlayerChar(ClientID))
+	{
+		vec2 SpawnPos;
+		if(m_pController->CanSpawn(m_apPlayers[ClientID]->GameWorld(), m_apPlayers[ClientID]->GetTeam(), &SpawnPos))
+		{
+			m_apPlayers[ClientID]->GetCharacter()->MoveTo(m_apPlayers[ClientID]->GameWorld(), SpawnPos);
+		}
+	}
 	m_apPlayers[ClientID]->m_MapLoading = false;
 
 	if(Dummy)
@@ -930,7 +938,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 		{
 			CNetMsg_Cl_SetTeam *pMsg = (CNetMsg_Cl_SetTeam *) pRawMsg;
 
-			if(pPlayer->GetTeam() == pMsg->m_Team ||
+			if(pPlayer->GetTeam() == pMsg->m_Team || pMsg->m_Team == TEAM_SPECTATORS ||
 				(Config()->m_SvSpamprotection && pPlayer->m_LastSetTeamTick && pPlayer->m_LastSetTeamTick + Server()->TickSpeed() * 3 > Server()->Tick()) ||
 				(pMsg->m_Team != TEAM_SPECTATORS && m_LockTeams) || pPlayer->m_TeamChangeTick > Server()->Tick())
 				return;
@@ -974,7 +982,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				return;
 
 			pPlayer->m_LastKillTick = Server()->Tick();
-			pPlayer->KillCharacter(WEAPON_SELF);
+			pPlayer->KillCharacter(WEAPON_SELF, false);
 		}
 		else if(MsgID == NETMSGTYPE_CL_READYCHANGE)
 		{
@@ -1526,6 +1534,9 @@ int CGameContext::GetMaxPlayerSlots() { return Config()->m_SvMaxClients; }
 void CGameContext::RequestLoadWorld(unsigned MapID)
 {
 	dbg_assert(m_pWorlds[MapID] == nullptr, "the world does exists");
+	if(!m_pWorlds.size())
+		m_MainWorldID = MapID;
+
 	CGameWorld *pNewWorld = new CGameWorld(this);
 	pNewWorld->InitCollision(Kernel()->RequestInterface<IMap>());
 	m_pWorlds.set(MapID, pNewWorld);

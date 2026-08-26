@@ -45,7 +45,7 @@ public:
 	void OnPredictedInput(CNetObj_PlayerInput *NewInput);
 	void OnDisconnect();
 
-	void KillCharacter(int Weapon = WEAPON_GAME);
+	void KillCharacter(int Weapon = WEAPON_GAME, bool Clean = true);
 	CCharacter *GetCharacter();
 
 	//---------------------------------------------------------

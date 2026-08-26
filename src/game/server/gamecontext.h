@@ -81,6 +81,7 @@ public:
 	class CPlayer *m_apPlayers[MAX_CLIENTS];
 
 	class CGameController *m_pController;
+	unsigned m_MainWorldID;
 	hash_table<unsigned, CGameWorld *, 4> m_pWorlds;
 
 	CCommandManager m_CommandManager;

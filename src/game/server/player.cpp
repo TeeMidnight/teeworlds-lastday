@@ -275,13 +275,16 @@ CCharacter *CPlayer::GetCharacter()
 	return 0;
 }
 
-void CPlayer::KillCharacter(int Weapon)
+void CPlayer::KillCharacter(int Weapon, bool Clean)
 {
 	if(m_pCharacter)
 	{
 		m_pCharacter->Die(m_ClientID, Weapon);
-		delete m_pCharacter;
-		m_pCharacter = 0;
+		if(Clean)
+		{
+			delete m_pCharacter;
+			m_pCharacter = 0;
+		}
 	}
 }
 
@@ -417,8 +420,6 @@ void CPlayer::SwitchWorld(CGameWorld *pWorld)
 	if(m_pCharacter)
 	{
 		m_pCharacter->Remove();
-		delete m_pCharacter;
-		m_pCharacter = nullptr;
 	}
 	m_pWorld = pWorld;
 	m_IsReadyToEnter = false;

@@ -132,13 +132,13 @@ bool CGameController::OnEntity(CGameWorld *pWorld, int Index, vec2 Pos)
 	switch(Index)
 	{
 		case ENTITY_SPAWN:
-			m_alSpawnPoints[0].add(Pos);
+			pWorld->m_alSpawnPoints[0].add(Pos);
 			break;
 		case ENTITY_SPAWN_RED:
-			m_alSpawnPoints[1].add(Pos);
+			pWorld->m_alSpawnPoints[1].add(Pos);
 			break;
 		case ENTITY_SPAWN_BLUE:
-			m_alSpawnPoints[2].add(Pos);
+			pWorld->m_alSpawnPoints[2].add(Pos);
 			break;
 		case ENTITY_ARMOR_1:
 			Type = PICKUP_ARMOR;
@@ -168,6 +168,15 @@ bool CGameController::OnEntity(CGameWorld *pWorld, int Index, vec2 Pos)
 	return false;
 }
 
+enum
+{
+	TILE_FLOOR_ENTRANCE_1 = 35,
+	TILE_FLOOR_ENTRANCE_2 = 36,
+
+	COLFLAG_ENTRANCE_1_FLAG = 1 << 4,
+	COLFLAG_ENTRANCE_2_FLAG = 1 << 5,
+};
+
 bool CGameController::OnExtraTile(CGameWorld *pWorld, int Index, vec2 Pos)
 {
 	/*
@@ -185,6 +194,14 @@ bool CGameController::OnExtraTile(CGameWorld *pWorld, int Index, vec2 Pos)
 		return true;
 	*/
 
+	int Flag = -1;
+	switch(Index)
+	{
+		case TILE_FLOOR_ENTRANCE_1: Flag = COLFLAG_ENTRANCE_1_FLAG; break;
+		case TILE_FLOOR_ENTRANCE_2: Flag = COLFLAG_ENTRANCE_2_FLAG; break;
+	}
+	if(Flag != -1)
+		pWorld->Collision()->SetFlagFor(Pos, Flag);
 	return false;
 }
 
@@ -340,20 +357,20 @@ float CGameController::EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos) const
 void CGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type) const
 {
 	// get spawn point
-	for(int i = 0; i < m_alSpawnPoints[Type].size(); i++)
+	for(int i = 0; i < pEval->m_pWorld->m_alSpawnPoints[Type].size(); i++)
 	{
 		// check if the position is occupado
 		array<CEntity *> lpEnts;
 		lpEnts.hint_size(8);
-		int Num = pEval->m_pWorld->FindEntities(m_alSpawnPoints[Type][i], 64, lpEnts, CGameWorld::ENTTYPE_CHARACTER);
+		int Num = pEval->m_pWorld->FindEntities(pEval->m_pWorld->m_alSpawnPoints[Type][i], 64, lpEnts, CGameWorld::ENTTYPE_CHARACTER);
 		vec2 Positions[5] = {vec2(0.0f, 0.0f), vec2(-32.0f, 0.0f), vec2(0.0f, -32.0f), vec2(32.0f, 0.0f), vec2(0.0f, 32.0f)}; // start, left, up, right, down
 		int Result = -1;
 		for(int Index = 0; Index < 5 && Result == -1; ++Index)
 		{
 			Result = Index;
 			for(int c = 0; c < Num; ++c)
-				if(pEval->m_pWorld->Collision()->CheckPoint(m_alSpawnPoints[Type][i] + Positions[Index]) ||
-					distance(lpEnts[c]->GetPos(), m_alSpawnPoints[Type][i] + Positions[Index]) <= lpEnts[c]->GetProximityRadius())
+				if(pEval->m_pWorld->Collision()->CheckPoint(pEval->m_pWorld->m_alSpawnPoints[Type][i] + Positions[Index]) ||
+					distance(lpEnts[c]->GetPos(), pEval->m_pWorld->m_alSpawnPoints[Type][i] + Positions[Index]) <= lpEnts[c]->GetProximityRadius())
 				{
 					Result = -1;
 					break;
@@ -362,7 +379,7 @@ void CGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type) const
 		if(Result == -1)
 			continue; // try next spawn point
 
-		vec2 P = m_alSpawnPoints[Type][i] + Positions[Result];
+		vec2 P = pEval->m_pWorld->m_alSpawnPoints[Type][i] + Positions[Result];
 		float S = pEval->m_RandomSpawn ? (Result + random_float()) : EvaluateSpawnPos(pEval, P);
 		if(!pEval->m_Got || pEval->m_Score > S)
 		{
@@ -439,6 +456,26 @@ void CGameController::DoTeamChange(CPlayer *pPlayer, int Team, bool DoChatMsg)
 int CGameController::GetStartTeam()
 {
 	return TEAM_RED;
+}
+
+bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 NewPos)
+{
+	static const vec2 ColBox(CCharacterCore::PHYS_SIZE, CCharacterCore::PHYS_SIZE);
+	if(!pChr)
+		return false;
+
+	int Flag = pChr->GameWorld()->Collision()->TestBoxMoveAt(LastPos, NewPos, ColBox);
+	if(Flag & COLFLAG_ENTRANCE_1_FLAG)
+	{
+		pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pChr->GameWorld()->m_aEntrances[0]));
+		return true;
+	}
+	if(Flag & COLFLAG_ENTRANCE_2_FLAG)
+	{
+		pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pChr->GameWorld()->m_aEntrances[1]));
+		return true;
+	}
+	return false;
 }
 
 void CGameController::Com_About(IConsole::IResult *pResult, void *pContext)

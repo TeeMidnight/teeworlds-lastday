@@ -141,7 +141,7 @@ public:
 
 		unsigned m_MapID;
 
-		void Reset();
+		void Reset(bool ResetInput = true);
 	};
 
 	CClient m_aClients[MAX_CLIENTS];

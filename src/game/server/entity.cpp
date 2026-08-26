@@ -68,7 +68,10 @@ int CEntity::NetworkClippedLine(int SnappingClient, vec2 From, vec2 To)
 
 bool CEntity::GameLayerClipped(vec2 CheckPos)
 {
+	return false;
+	/*
 	int rx = round_to_int(CheckPos.x) / 32;
 	int ry = round_to_int(CheckPos.y) / 32;
 	return (rx < -200 || rx >= GameWorld()->Collision()->GetWidth() + 200) || (ry < -200 || ry >= GameWorld()->Collision()->GetHeight() + 200);
+	*/
 }

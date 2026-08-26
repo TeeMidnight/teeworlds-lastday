@@ -28,6 +28,8 @@
 #include <engine/shared/protocol_ex.h>
 #include <engine/shared/snapshot.h>
 
+#include <game/mapitems.h>
+
 #include <mastersrv/mastersrv.h>
 
 #include "register.h"
@@ -231,13 +233,16 @@ void CServerBan::ConBanExt(IConsole::IResult *pResult, void *pUser)
 		ConBan(pResult, pUser);
 }
 
-void CServer::CClient::Reset()
+void CServer::CClient::Reset(bool ResetInput)
 {
 	// reset input
-	for(int i = 0; i < 200; i++)
-		m_aInputs[i].m_GameTick = -1;
-	m_CurrentInput = 0;
-	mem_zero(&m_LatestInput, sizeof(m_LatestInput));
+	if(ResetInput)
+	{
+		for(int i = 0; i < 200; i++)
+			m_aInputs[i].m_GameTick = -1;
+		m_CurrentInput = 0;
+		mem_zero(&m_LatestInput, sizeof(m_LatestInput));
+	}
 
 	m_Snapshots.PurgeAll();
 	m_LastAckedSnapshot = -1;
@@ -1396,6 +1401,22 @@ int CServer::LoadMap(CMapInfo *pInfo)
 		pInfo->m_Size = (int) Size;
 	}
 
+	CMapItemInfo *pItem = (CMapItemInfo *) m_pMap->FindItem(MAPITEMTYPE_INFO, 0);
+	char aTemp[32];
+	if(pItem && pItem->m_Version == 1)
+	{
+		if(pItem->m_MapVersion > -1)
+		{
+			str_copy(aTemp, (char *) m_pMap->GetData(pItem->m_MapVersion), sizeof(aTemp));
+			PushMapList(aTemp);
+		}
+		if(pItem->m_Credits > -1)
+		{
+			str_copy(aTemp, (char *) m_pMap->GetData(pItem->m_Credits), sizeof(aTemp));
+			PushMapList(aTemp);
+		}
+	}
+
 	GameServer()->RequestLoadWorld(pInfo->m_MapID);
 
 	return 1;
@@ -1427,7 +1448,6 @@ int CServer::Run()
 
 	// load map
 	m_MainMapID = PushMapList("Connector");
-	PushMapList("Mt.Teelin");
 	m_MapChunksPerRequest = Config()->m_SvMapDownloadSpeed;
 
 	// start server
@@ -1840,6 +1860,7 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID)
 {
 	if(m_MapInfos[MapID])
 	{
+		m_aClients[ClientID].Reset(false);
 		m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 		m_aClients[ClientID].m_MapID = MapID;
 		SendMap(ClientID);

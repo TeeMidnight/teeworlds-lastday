@@ -62,6 +62,15 @@ void CGameWorld::InitCollision(IMap *pMap)
 			}
 		}
 	}
+
+	CMapItemInfo *pItem = (CMapItemInfo *) pMap->FindItem(MAPITEMTYPE_INFO, 0);
+	if(pItem && pItem->m_Version == 1)
+	{
+		if(pItem->m_MapVersion > -1)
+			str_copy(m_aEntrances[0], (char *) pMap->GetData(pItem->m_MapVersion), sizeof(m_aEntrances[0]));
+		if(pItem->m_Credits > -1)
+			str_copy(m_aEntrances[1], (char *) pMap->GetData(pItem->m_Credits), sizeof(m_aEntrances[1]));
+	}
 }
 
 CGameWorld::TypeRange CGameWorld::DoTypeRange(int Type)
