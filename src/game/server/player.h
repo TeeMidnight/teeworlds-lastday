@@ -25,7 +25,7 @@ class CPlayer
 	MACRO_ALLOC_POOL_ID()
 
 public:
-	CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpec = false);
+	CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec = false);
 	~CPlayer();
 
 	void Init(int CID);
@@ -69,6 +69,7 @@ public:
 	bool m_IsReadyToPlay;
 
 	bool m_RespawnDisabled;
+	bool m_MapLoading;
 
 	//
 	int m_Vote;
@@ -113,11 +114,14 @@ public:
 		int m_Max;
 	} m_Latency;
 
+	CGameWorld *GameWorld() const { return m_pWorld; }
+	void SwitchWorld(CGameWorld *pWorld);
+
 private:
 	CCharacter *m_pCharacter;
-	CGameContext *m_pGameServer;
+	CGameWorld *m_pWorld;
 
-	CGameContext *GameServer() const { return m_pGameServer; }
+	CGameContext *GameServer() const;
 	IServer *Server() const;
 
 	//

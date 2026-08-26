@@ -372,6 +372,12 @@ void CGameContext::SendVoteOptions(int ClientID)
 	}
 }
 
+void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID)
+{
+	if(Server()->SwitchClientMap(pPlayer->GetCID(), MapID))
+		pPlayer->SwitchWorld(*m_pWorlds[MapID]);
+}
+
 void CGameContext::SendTuningParams(int ClientID)
 {
 	CMsgPacker Msg(NETMSGTYPE_SV_TUNEPARAMS);
@@ -402,9 +408,11 @@ void CGameContext::AbortVoteOnTeamChange(int ClientID)
 
 void CGameContext::OnTick()
 {
-	// copy tuning
-	m_World.m_Core.m_Tuning = m_Tuning;
-	m_World.Tick();
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void {
+		pWorld->m_Core.m_Tuning = *static_cast<CGameContext *>(pUser)->Tuning();
+		pWorld->Tick();
+	},
+		this);
 
 	// if(world.paused) // make sure that the game object always updates
 	m_pController->Tick();
@@ -605,9 +613,12 @@ void CGameContext::OnClientEnter(int ClientID)
 
 void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 {
-	dbg_assert(!m_apPlayers[ClientID], "non-free player slot");
+	dbg_assert(!m_apPlayers[ClientID] || m_apPlayers[ClientID]->m_MapLoading, "non-free player slot");
+	dbg_assert(m_pWorlds.get(Server()->GetClientMapID(ClientID)) != nullptr, "the world does not exist");
 
-	m_apPlayers[ClientID] = new(ClientID) CPlayer(this, ClientID, Dummy, AsSpec);
+	if(!m_apPlayers[ClientID])
+		m_apPlayers[ClientID] = new(ClientID) CPlayer(*m_pWorlds[Server()->GetClientMapID(ClientID)], ClientID, Dummy, AsSpec);
+	m_apPlayers[ClientID]->m_MapLoading = false;
 
 	if(Dummy)
 		return;
@@ -628,6 +639,7 @@ void CGameContext::OnClientTeamChange(int ClientID)
 	if(m_apPlayers[ClientID]->GetTeam() == TEAM_SPECTATORS)
 		AbortVoteOnTeamChange(ClientID);
 
+	/* as spectator is not allowed, this won't happen
 	// mark client's projectile has team projectile
 	for(CGameWorld::TypeRange r = m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
@@ -635,6 +647,7 @@ void CGameContext::OnClientTeamChange(int ClientID)
 		if(p->GetOwner() == ClientID)
 			p->LoseOwner();
 	}
+	*/
 
 	Server()->ExpireServerInfo();
 }
@@ -666,7 +679,7 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 	}
 
 	// mark client's projectile has team projectile
-	for(CGameWorld::TypeRange r = m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
+	for(CGameWorld::TypeRange r = m_apPlayers[ClientID]->GameWorld()->DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
 		CProjectile *p = static_cast<CProjectile *>(r.front());
 		if(p->GetOwner() == ClientID)
@@ -1383,7 +1396,6 @@ void CGameContext::OnInit()
 	m_pConfig = Kernel()->RequestInterface<IConfigManager>()->Values();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
-	m_World.SetGameServer(this);
 	m_CommandManager.Init(m_pConsole, this, NewCommandHook, RemoveCommandHook);
 
 	// HACK: only set static size for items, which were available in the first 0.7 release
@@ -1392,35 +1404,10 @@ void CGameContext::OnInit()
 	for(int i = 0; i < OLD_NUM_NETOBJTYPES; i++)
 		Server()->SnapSetStaticsize(i, m_NetObjHandler.GetObjSize(i));
 
-	m_Layers.Init(Kernel());
-	m_Collision.Init(&m_Layers);
-
 	// select gametype
 	m_pController = new CGameController(this);
 
 	m_pController->RegisterChatCommands(CommandManager());
-
-	// create all entities from the game layer
-	CMapItemLayerTilemap *pTileMap = m_Layers.GameLayer();
-	CTile *pTiles = (CTile *) Kernel()->RequestInterface<IMap>()->GetData(pTileMap->m_Data);
-	for(int y = 0; y < pTileMap->m_Height; y++)
-	{
-		for(int x = 0; x < pTileMap->m_Width; x++)
-		{
-			int Index = pTiles[y * pTileMap->m_Width + x].m_Index;
-
-			if(Index > TILE_UNHOOKABLE && Index < ENTITY_OFFSET)
-			{
-				vec2 Pos(x * 32.0f + 16.0f, y * 32.0f + 16.0f);
-				m_pController->OnExtraTile(Index, Pos);
-			}
-			if(Index >= ENTITY_OFFSET)
-			{
-				vec2 Pos(x * 32.0f + 16.0f, y * 32.0f + 16.0f);
-				m_pController->OnEntity(Index - ENTITY_OFFSET, Pos);
-			}
-		}
-	}
 
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 
@@ -1451,19 +1438,22 @@ void CGameContext::OnSnap(int ClientID)
 		mem_copy(pTuneParams->m_aTuneParams, &m_Tuning, sizeof(pTuneParams->m_aTuneParams));
 	}
 
-	m_World.Snap(ClientID);
 	m_pController->Snap(ClientID);
+	if(m_apPlayers[ClientID] && !m_apPlayers[ClientID]->m_MapLoading)
+		m_apPlayers[ClientID]->GameWorld()->Snap(ClientID);
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(m_apPlayers[i])
+		if(m_apPlayers[i] && !m_apPlayers[i]->m_MapLoading)
+		{
 			m_apPlayers[i]->Snap(ClientID);
+		}
 	}
 }
 void CGameContext::OnPreSnap() {}
 void CGameContext::OnPostSnap()
 {
-	m_World.PostSnap();
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) { pWorld->PostSnap(); }, nullptr);
 }
 
 bool CGameContext::IsClientBot(int ClientID) const
@@ -1532,5 +1522,13 @@ void CGameContext::OnUpdatePlayerServerInfo(CJsonWriter *pJsonWriter, int Client
 }
 
 int CGameContext::GetMaxPlayerSlots() { return Config()->m_SvMaxClients; }
+
+void CGameContext::RequestLoadWorld(unsigned MapID)
+{
+	dbg_assert(m_pWorlds[MapID] == nullptr, "the world does exists");
+	CGameWorld *pNewWorld = new CGameWorld(this);
+	pNewWorld->InitCollision(Kernel()->RequestInterface<IMap>());
+	m_pWorlds.set(MapID, pNewWorld);
+}
 
 IGameServer *CreateGameServer() { return new CGameContext; }

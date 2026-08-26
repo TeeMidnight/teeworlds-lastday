@@ -29,13 +29,15 @@ class CGameController
 	// spawn
 	struct CSpawnEval
 	{
-		CSpawnEval()
+		CSpawnEval(CGameWorld *pWorld)
 		{
+			m_pWorld = pWorld;
 			m_Got = false;
 			m_FriendlyTeam = -1;
 			m_Pos = vec2(100, 100);
 		}
 
+		CGameWorld *m_pWorld;
 		vec2 m_Pos;
 		bool m_Got;
 		bool m_RandomSpawn;
@@ -98,8 +100,8 @@ public:
 		Returns:
 			bool?
 	*/
-	bool OnEntity(int Index, vec2 Pos);
-	bool OnExtraTile(int Index, vec2 Pos);
+	bool OnEntity(CGameWorld *pWorld, int Index, vec2 Pos);
+	bool OnExtraTile(CGameWorld *pWorld, int Index, vec2 Pos);
 
 	void OnPlayerConnect(class CPlayer *pPlayer);
 	void OnPlayerDisconnect(class CPlayer *pPlayer);
@@ -115,7 +117,7 @@ public:
 	bool IsFriendlyTeamFire(int Team1, int Team2, int Damage) const;
 	int GetPlayerCheckTeam(class CPlayer *pPlayer) const;
 
-	bool CanSpawn(int Team, vec2 *pPos) const;
+	bool CanSpawn(CGameWorld *pWorld, int Team, vec2 *pPos) const;
 	bool GetStartRespawnState() const;
 
 	// team
@@ -130,6 +132,7 @@ public:
 	void HandleCharacterTiles(class CCharacter *pChr, vec2 LastPos, vec2 NewPos) {};
 	// static void Com_Example(IConsole::IResult *pResult, void *pContext);
 	static void Com_About(IConsole::IResult *pResult, void *pContext);
+	static void Com_SwitchWorld(IConsole::IResult *pResult, void *pContext);
 	void RegisterChatCommands(CCommandManager *pManager);
 
 	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }

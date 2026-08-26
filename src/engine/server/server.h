@@ -3,7 +3,9 @@
 #ifndef ENGINE_SERVER_SERVER_H
 #define ENGINE_SERVER_SERVER_H
 
+#include <base/tl/hashtable.h>
 #include <base/tl/sorted_array.h>
+#include <base/tl/string.h>
 
 #include <engine/server.h>
 #include <engine/shared/memheap.h>
@@ -136,7 +138,8 @@ public:
 		bool m_NoRconNote;
 		bool m_Quitting;
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
-		int m_MapListEntryToSend;
+
+		unsigned m_MapID;
 
 		void Reset();
 	};
@@ -155,28 +158,39 @@ public:
 
 	int64 m_GameStartTime;
 	bool m_RunServer;
-	bool m_MapReload;
 	int m_RconClientID;
 	int m_RconAuthLevel;
 	int m_PrintCBIndex;
 	char m_aShutdownReason[128];
 
 	// map
-	enum
+	struct CMapInfo
 	{
-		MAP_CHUNK_SIZE = NET_MAX_PAYLOAD - NET_MAX_CHUNKHEADERSIZE - 4, // msg type
+		enum
+		{
+			MAP_CHUNK_SIZE = NET_MAX_PAYLOAD - NET_MAX_CHUNKHEADERSIZE - 4, // msg type
+		};
+
+		char m_aName[64];
+		SHA256_DIGEST m_Sha256;
+		unsigned m_Crc;
+		unsigned char *m_pData;
+		int m_Size;
+		int m_MapID;
+		bool m_Loaded;
+
+		const char *GetMapName();
+		~CMapInfo();
 	};
-	char m_aCurrentMap[64];
-	SHA256_DIGEST m_CurrentMapSha256;
-	unsigned m_CurrentMapCrc;
-	unsigned char *m_pCurrentMapData;
-	int m_CurrentMapSize;
+	hash_table<unsigned, CMapInfo, 8> m_MapInfos;
+	unsigned m_MainMapID;
+
 	int m_MapChunksPerRequest;
 
 	int m_RconPasswordSet;
 	int m_GeneratedRconPassword;
 
-	CDemoRecorder m_DemoRecorder;
+	// CDemoRecorder m_DemoRecorder;
 	CRegister m_Register;
 	bool m_ServerInfoNeedsUpdate;
 
@@ -208,6 +222,7 @@ public:
 	const char *ClientClan(int ClientID) const;
 	int ClientCountry(int ClientID) const;
 	bool ClientIngame(int ClientID) const;
+	virtual unsigned GetClientMapID(int ClientID) const;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);
 
@@ -236,9 +251,9 @@ public:
 
 	void PumpNetwork();
 
-	virtual void ChangeMap(const char *pMap);
-	const char *GetMapName();
-	int LoadMap(const char *pMapName);
+	unsigned PushMapList(const char *pMapName);
+	int LoadMap(unsigned MapID);
+	int LoadMap(CMapInfo *pInfo);
 
 	void InitRegister(class IEngine *pEngine, class CConfig *pConfig, class IConsole *pConsole, TOKEN SecurityToken);
 	void InitInterfaces(IKernel *pKernel);
@@ -250,7 +265,6 @@ public:
 	static void ConShutdown(IConsole::IResult *pResult, void *pUser);
 	static void ConRecord(IConsole::IResult *pResult, void *pUser);
 	static void ConStopRecord(IConsole::IResult *pResult, void *pUser);
-	static void ConMapReload(IConsole::IResult *pResult, void *pUser);
 	static void ConSaveConfig(IConsole::IResult *pResult, void *pUser);
 	static void ConLogout(IConsole::IResult *pResult, void *pUser);
 	static void ConchainSpecialInfoupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
@@ -259,7 +273,6 @@ public:
 	static void ConchainModCommandUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainConsoleOutputLevelUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainRconPasswordSet(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
-	static void ConchainMapUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 	void RegisterCommands();
 
@@ -267,6 +280,8 @@ public:
 	virtual void SnapFreeID(int ID);
 	virtual void *SnapNewItem(int Type, int ID, int Size);
 	void SnapSetStaticsize(int ItemType, int Size);
+
+	virtual bool SwitchClientMap(int ClientID, unsigned MapID);
 };
 
 #endif

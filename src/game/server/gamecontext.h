@@ -3,13 +3,13 @@
 #ifndef GAME_SERVER_GAMECONTEXT_H
 #define GAME_SERVER_GAMECONTEXT_H
 
+#include <base/tl/hashtable.h>
 #include <base/tl/sorted_array.h>
 
 #include <engine/console.h>
 #include <engine/server.h>
 
 #include <game/commands.h>
-#include <game/layers.h>
 #include <game/voting.h>
 
 #include "gameworld.h"
@@ -41,8 +41,6 @@ class CGameContext : public IGameServer
 	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 	class IStorage *m_pStorage;
-	CLayers m_Layers;
-	CCollision m_Collision;
 	CNetObjHandler m_NetObjHandler;
 	CTuningParams m_Tuning;
 
@@ -73,7 +71,6 @@ public:
 	class CConfig *Config() { return m_pConfig; }
 	class IConsole *Console() { return m_pConsole; }
 	class IStorage *Storage() { return m_pStorage; }
-	CCollision *Collision() { return &m_Collision; }
 	CTuningParams *Tuning() { return &m_Tuning; }
 
 	CGameContext();
@@ -84,7 +81,8 @@ public:
 	class CPlayer *m_apPlayers[MAX_CLIENTS];
 
 	class CGameController *m_pController;
-	CGameWorld m_World;
+	hash_table<unsigned, CGameWorld *, 4> m_pWorlds;
+
 	CCommandManager m_CommandManager;
 
 	CCommandManager *CommandManager() { return &m_CommandManager; }
@@ -150,7 +148,7 @@ public:
 	void SendVoteOptions(int ClientID);
 
 	//
-	void SwapTeams();
+	void SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID);
 
 	// engine events
 	virtual void OnInit();
@@ -187,6 +185,7 @@ public:
 	virtual void OnUpdatePlayerServerInfo(CJsonWriter *pJsonWriter, int ClientID);
 
 	virtual int GetMaxPlayerSlots();
+	virtual void RequestLoadWorld(unsigned MapID);
 };
 
 inline int64 CmaskAll() { return -1; }

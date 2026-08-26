@@ -47,6 +47,7 @@ public:
 	void FireWeapon();
 
 	void Die(int Killer, int Weapon);
+	void Remove();
 	bool TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon);
 	virtual bool TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon);
 

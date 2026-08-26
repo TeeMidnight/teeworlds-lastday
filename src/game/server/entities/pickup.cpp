@@ -103,7 +103,7 @@ void CPickup::Tick()
 				pChr->GiveNinja();
 
 				// loop through all players, setting their emotes
-				for(CGameWorld::TypeRange r = GameServer()->m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
+				for(CGameWorld::TypeRange r = GameWorld()->DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 				{
 					CCharacter *pC = static_cast<CCharacter *>(r.front());
 					if(pC != pChr)

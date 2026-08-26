@@ -125,7 +125,7 @@ void CGameController::OnCharacterSpawn(CCharacter *pChr)
 	pChr->GiveWeapon(WEAPON_GUN, 10);
 }
 
-bool CGameController::OnEntity(int Index, vec2 Pos)
+bool CGameController::OnEntity(CGameWorld *pWorld, int Index, vec2 Pos)
 {
 	int Type = -1;
 
@@ -161,14 +161,14 @@ bool CGameController::OnEntity(int Index, vec2 Pos)
 
 	if(Type != -1)
 	{
-		new CPickup(&GameServer()->m_World, Type, Pos);
+		new CPickup(pWorld, Type, Pos);
 		return true;
 	}
 
 	return false;
 }
 
-bool CGameController::OnExtraTile(int Index, vec2 Pos)
+bool CGameController::OnExtraTile(CGameWorld *pWorld, int Index, vec2 Pos)
 {
 	/*
 		Example: Do some thing like:
@@ -181,7 +181,7 @@ bool CGameController::OnExtraTile(int Index, vec2 Pos)
 		}
 		if(Flag == -1)
 			return false;
-		GameServer()->Collision()->SetFlagFor(Pos, Flag);
+		pChr->GameWorld()->Collision()->SetFlagFor(Pos, Flag);
 		return true;
 	*/
 
@@ -301,13 +301,13 @@ void CGameController::SendGameInfo(int ClientID)
 }
 
 // spawn
-bool CGameController::CanSpawn(int Team, vec2 *pOutPos) const
+bool CGameController::CanSpawn(CGameWorld *pWorld, int Team, vec2 *pOutPos) const
 {
 	// spectators can't spawn
 	if(Team == TEAM_SPECTATORS)
 		return false;
 
-	CSpawnEval Eval;
+	CSpawnEval Eval(pWorld);
 	Eval.m_RandomSpawn = true;
 
 	EvaluateSpawnType(&Eval, 0);
@@ -322,7 +322,7 @@ float CGameController::EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos) const
 {
 	float Score = 0.0f;
 
-	for(CGameWorld::TypeRange r = GameServer()->m_World.DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
+	for(CGameWorld::TypeRange r = pEval->m_pWorld->DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
 		CCharacter *pChr = static_cast<CCharacter *>(r.front());
 		// team mates are not as dangerous as enemies
@@ -345,14 +345,14 @@ void CGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type) const
 		// check if the position is occupado
 		array<CEntity *> lpEnts;
 		lpEnts.hint_size(8);
-		int Num = GameServer()->m_World.FindEntities(m_alSpawnPoints[Type][i], 64, lpEnts, CGameWorld::ENTTYPE_CHARACTER);
+		int Num = pEval->m_pWorld->FindEntities(m_alSpawnPoints[Type][i], 64, lpEnts, CGameWorld::ENTTYPE_CHARACTER);
 		vec2 Positions[5] = {vec2(0.0f, 0.0f), vec2(-32.0f, 0.0f), vec2(0.0f, -32.0f), vec2(32.0f, 0.0f), vec2(0.0f, 32.0f)}; // start, left, up, right, down
 		int Result = -1;
 		for(int Index = 0; Index < 5 && Result == -1; ++Index)
 		{
 			Result = Index;
 			for(int c = 0; c < Num; ++c)
-				if(GameServer()->Collision()->CheckPoint(m_alSpawnPoints[Type][i] + Positions[Index]) ||
+				if(pEval->m_pWorld->Collision()->CheckPoint(m_alSpawnPoints[Type][i] + Positions[Index]) ||
 					distance(lpEnts[c]->GetPos(), m_alSpawnPoints[Type][i] + Positions[Index]) <= lpEnts[c]->GetProximityRadius())
 				{
 					Result = -1;
@@ -438,7 +438,7 @@ void CGameController::DoTeamChange(CPlayer *pPlayer, int Team, bool DoChatMsg)
 
 int CGameController::GetStartTeam()
 {
-	return TEAM_SPECTATORS;
+	return TEAM_RED;
 }
 
 void CGameController::Com_About(IConsole::IResult *pResult, void *pContext)
@@ -479,24 +479,24 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 	{
 		case WEAPON_HAMMER:
 		{
-			GameServer()->m_World.CreateSound(ChrPos, SOUND_HAMMER_FIRE);
+			pChr->GameWorld()->CreateSound(ChrPos, SOUND_HAMMER_FIRE);
 
 			array<CEntity *> lpEnts;
 			lpEnts.hint_size(8);
 			int Hits = 0;
-			const int Num = GameServer()->m_World.FindFlagEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
+			const int Num = pChr->GameWorld()->FindFlagEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 			for(int i = 0; i < Num; ++i)
 			{
 				CCharacter *pTarget = static_cast<CCharacter *>(lpEnts[i]);
 
-				if((pTarget == pChr) || GameServer()->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos(), NULL, NULL))
+				if((pTarget == pChr) || pChr->GameWorld()->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos(), NULL, NULL))
 					continue;
 
 				// set his velocity to fast upward (for now)
 				if(length(pTarget->GetPos() - ProjStartPos) > 0.0f)
-					GameServer()->m_World.CreateHammerHit(pTarget->GetPos() - normalize(pTarget->GetPos() - ProjStartPos) * pChr->GetProximityRadius() * 0.5f);
+					pChr->GameWorld()->CreateHammerHit(pTarget->GetPos() - normalize(pTarget->GetPos() - ProjStartPos) * pChr->GetProximityRadius() * 0.5f);
 				else
-					GameServer()->m_World.CreateHammerHit(ProjStartPos);
+					pChr->GameWorld()->CreateHammerHit(ProjStartPos);
 
 				vec2 Dir;
 				if(length(pTarget->GetPos() - ChrPos) > 0.0f)
@@ -517,14 +517,14 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 
 		case WEAPON_GUN:
 		{
-			new CProjectile(&GameServer()->m_World, WEAPON_GUN,
+			new CProjectile(pChr->GameWorld(), WEAPON_GUN,
 				ClientID,
 				ProjStartPos,
 				Direction,
 				(int) (Server()->TickSpeed() * GameServer()->Tuning()->m_GunLifetime),
 				g_pData->m_Weapons.m_Gun.m_pBase->m_Damage, false, 0, -1, WEAPON_GUN);
 
-			GameServer()->m_World.CreateSound(ChrPos, SOUND_GUN_FIRE);
+			pChr->GameWorld()->CreateSound(ChrPos, SOUND_GUN_FIRE);
 		}
 		break;
 
@@ -539,7 +539,7 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 				a += Spreading[i + 2];
 				float v = 1 - (absolute(i) / (float) ShotSpread);
 				float Speed = mix((float) GameServer()->Tuning()->m_ShotgunSpeeddiff, 1.0f, v);
-				new CProjectile(&GameServer()->m_World, WEAPON_SHOTGUN,
+				new CProjectile(pChr->GameWorld(), WEAPON_SHOTGUN,
 					ClientID,
 					ProjStartPos,
 					vec2(cosf(a), sinf(a)) * Speed,
@@ -547,34 +547,34 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 					g_pData->m_Weapons.m_Shotgun.m_pBase->m_Damage, false, 0, -1, WEAPON_SHOTGUN);
 			}
 
-			GameServer()->m_World.CreateSound(ChrPos, SOUND_SHOTGUN_FIRE);
+			pChr->GameWorld()->CreateSound(ChrPos, SOUND_SHOTGUN_FIRE);
 		}
 		break;
 
 		case WEAPON_GRENADE:
 		{
-			new CProjectile(&GameServer()->m_World, WEAPON_GRENADE,
+			new CProjectile(pChr->GameWorld(), WEAPON_GRENADE,
 				ClientID,
 				ProjStartPos,
 				Direction,
 				(int) (Server()->TickSpeed() * GameServer()->Tuning()->m_GrenadeLifetime),
 				g_pData->m_Weapons.m_Grenade.m_pBase->m_Damage, true, 0, SOUND_GRENADE_EXPLODE, WEAPON_GRENADE);
 
-			GameServer()->m_World.CreateSound(ChrPos, SOUND_GRENADE_FIRE);
+			pChr->GameWorld()->CreateSound(ChrPos, SOUND_GRENADE_FIRE);
 		}
 		break;
 
 		case WEAPON_LASER:
 		{
-			new CLaser(&GameServer()->m_World, ChrPos, Direction, GameServer()->Tuning()->m_LaserReach, ClientID, g_pData->m_Weapons.m_aId[WEAPON_LASER].m_Damage);
-			GameServer()->m_World.CreateSound(ChrPos, SOUND_LASER_FIRE);
+			new CLaser(pChr->GameWorld(), ChrPos, Direction, GameServer()->Tuning()->m_LaserReach, ClientID, g_pData->m_Weapons.m_aId[WEAPON_LASER].m_Damage);
+			pChr->GameWorld()->CreateSound(ChrPos, SOUND_LASER_FIRE);
 		}
 		break;
 
 		case WEAPON_NINJA:
 		{
 			pChr->DoNinjaFire(Direction, g_pData->m_Weapons.m_Ninja.m_Movetime * Server()->TickSpeed() / 1000);
-			GameServer()->m_World.CreateSound(ChrPos, SOUND_NINJA_FIRE);
+			pChr->GameWorld()->CreateSound(ChrPos, SOUND_NINJA_FIRE);
 		}
 		break;
 	}

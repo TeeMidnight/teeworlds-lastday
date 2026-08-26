@@ -32,6 +32,7 @@ public:
 	virtual int GetClientInfo(int ClientID, CClientInfo *pInfo) const = 0;
 	virtual void GetClientAddr(int ClientID, char *pAddrStr, int Size) const = 0;
 	virtual int GetClientVersion(int ClientID) const = 0;
+	virtual unsigned GetClientMapID(int ClientID) const = 0;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID) = 0;
 
@@ -64,12 +65,13 @@ public:
 	virtual bool IsAuthed(int ClientID) const = 0;
 	virtual bool IsBanned(int ClientID) = 0;
 	virtual void Kick(int ClientID, const char *pReason) = 0;
-	virtual void ChangeMap(const char *pMap) = 0;
 
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual bool DemoRecorder_IsRecording() = 0;
 
 	virtual void ExpireServerInfo() = 0;
+
+	virtual bool SwitchClientMap(int ClientID, unsigned MapID) = 0;
 };
 
 class IGameServer : public IInterface
@@ -109,6 +111,8 @@ public:
 
 	virtual bool TimeScore() const = 0;
 	virtual void OnUpdatePlayerServerInfo(class CJsonWriter *pJsonWriter, int ClientID) = 0;
+
+	virtual void RequestLoadWorld(unsigned MapID) = 0;
 };
 
 extern IGameServer *CreateGameServer();

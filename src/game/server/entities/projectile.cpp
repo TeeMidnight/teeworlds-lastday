@@ -70,7 +70,7 @@ void CProjectile::Tick()
 	float Ct = (Server()->Tick() - m_StartTick) / (float) Server()->TickSpeed();
 	vec2 PrevPos = GetPos(Pt);
 	vec2 CurPos = GetPos(Ct);
-	int Collide = GameServer()->Collision()->IntersectLine(PrevPos, CurPos, &CurPos, 0);
+	int Collide = GameWorld()->Collision()->IntersectLine(PrevPos, CurPos, &CurPos, 0);
 	CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
 	CHitableEntity *pTargetEnt = (CHitableEntity *) GameWorld()->IntersectFlagEntity(PrevPos, CurPos, 6.0f, CurPos, CGameWorld::ENTFLAG_HITABLE, pOwnerChar);
 

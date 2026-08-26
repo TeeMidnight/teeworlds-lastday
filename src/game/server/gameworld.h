@@ -4,6 +4,7 @@
 #define GAME_SERVER_GAMEWORLD_H
 
 #include <game/gamecore.h>
+#include <game/layers.h>
 #include "eventhandler.h"
 
 class CEntity;
@@ -42,18 +43,22 @@ private:
 	class CConfig *m_pConfig;
 	class IServer *m_pServer;
 
+	CLayers m_Layers;
+	CCollision m_Collision;
+
 public:
 	class CGameContext *GameServer() { return m_pGameServer; }
 	class CConfig *Config() { return m_pConfig; }
 	class IServer *Server() { return m_pServer; }
+	class CCollision *Collision() { return &m_Collision; }
 
 	CEventHandler m_Events;
 	CWorldCore m_Core;
 
-	CGameWorld();
+	CGameWorld(CGameContext *pGameServer);
 	~CGameWorld();
 
-	void SetGameServer(CGameContext *pGameServer);
+	void InitCollision(class IMap *pMap);
 
 	typedef array<CEntity *>::range TypeRange;
 	TypeRange DoTypeRange(int Type);

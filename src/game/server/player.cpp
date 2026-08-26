@@ -8,11 +8,12 @@
 
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
-IServer *CPlayer::Server() const { return m_pGameServer->Server(); }
+CGameContext *CPlayer::GameServer() const { return m_pWorld->GameServer(); }
+IServer *CPlayer::Server() const { return m_pWorld->Server(); }
 
-CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpec)
+CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 {
-	m_pGameServer = pGameServer;
+	m_pWorld = pWorld;
 	m_RespawnTick = Server()->Tick();
 	m_DieTick = Server()->Tick();
 	m_ScoreStartTick = Server()->Tick();
@@ -30,6 +31,7 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpe
 	m_RespawnDisabled = GameServer()->m_pController->GetStartRespawnState();
 	m_DeadSpecMode = false;
 	m_Spawning = false;
+	m_MapLoading = false;
 	mem_zero(&m_Latency, sizeof(m_Latency));
 }
 
@@ -237,7 +239,7 @@ void CPlayer::OnDirectInput(CNetObj_PlayerInput *NewInput)
 			m_ActiveSpecSwitch = true;
 			if(m_SpecMode == SPEC_FREEVIEW)
 			{
-				CCharacter *pChar = (CCharacter *) GameServer()->m_World.ClosestEntity(m_ViewPos, 6.0f * 32, CGameWorld::ENTTYPE_CHARACTER, 0);
+				CCharacter *pChar = (CCharacter *) GameWorld()->ClosestEntity(m_ViewPos, 6.0f * 32, CGameWorld::ENTTYPE_CHARACTER, 0);
 				if(pChar)
 				{
 					m_SpecMode = SPEC_PLAYER;
@@ -401,11 +403,24 @@ void CPlayer::TryRespawn()
 {
 	vec2 SpawnPos;
 
-	if(!GameServer()->m_pController->CanSpawn(m_Team, &SpawnPos))
+	if(!GameServer()->m_pController->CanSpawn(GameWorld(), m_Team, &SpawnPos))
 		return;
 
 	m_Spawning = false;
-	m_pCharacter = new(m_ClientID) CCharacter(&GameServer()->m_World);
+	m_pCharacter = new(m_ClientID) CCharacter(GameWorld());
 	m_pCharacter->Spawn(this, SpawnPos);
-	GameServer()->m_World.CreatePlayerSpawn(SpawnPos);
+	GameWorld()->CreatePlayerSpawn(SpawnPos);
+}
+
+void CPlayer::SwitchWorld(CGameWorld *pWorld)
+{
+	if(m_pCharacter)
+	{
+		m_pCharacter->Remove();
+		delete m_pCharacter;
+		m_pCharacter = nullptr;
+	}
+	m_pWorld = pWorld;
+	m_IsReadyToEnter = false;
+	m_MapLoading = true;
 }

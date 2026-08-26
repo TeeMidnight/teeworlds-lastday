@@ -14,11 +14,12 @@
 //////////////////////////////////////////////////
 // game world
 //////////////////////////////////////////////////
-CGameWorld::CGameWorld()
+CGameWorld::CGameWorld(CGameContext *pGameServer)
 {
-	m_pGameServer = 0x0;
-	m_pConfig = 0x0;
-	m_pServer = 0x0;
+	m_pGameServer = pGameServer;
+	m_pConfig = m_pGameServer->Config();
+	m_pServer = m_pGameServer->Server();
+	m_Events.SetGameServer(pGameServer);
 
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 	{
@@ -35,12 +36,32 @@ CGameWorld::~CGameWorld()
 			delete m_alpEntityLists[i][0];
 }
 
-void CGameWorld::SetGameServer(CGameContext *pGameServer)
+void CGameWorld::InitCollision(IMap *pMap)
 {
-	m_pGameServer = pGameServer;
-	m_pConfig = m_pGameServer->Config();
-	m_pServer = m_pGameServer->Server();
-	m_Events.SetGameServer(pGameServer);
+	m_Layers.Init(0, pMap);
+	m_Collision.Init(&m_Layers);
+
+	// create all entities from the game layer
+	CMapItemLayerTilemap *pTileMap = m_Layers.GameLayer();
+	CTile *pTiles = (CTile *) pMap->GetData(pTileMap->m_Data);
+	for(int y = 0; y < pTileMap->m_Height; y++)
+	{
+		for(int x = 0; x < pTileMap->m_Width; x++)
+		{
+			int Index = pTiles[y * pTileMap->m_Width + x].m_Index;
+
+			if(Index > TILE_UNHOOKABLE && Index < ENTITY_OFFSET)
+			{
+				vec2 Pos(x * 32.0f + 16.0f, y * 32.0f + 16.0f);
+				GameServer()->m_pController->OnExtraTile(this, Index, Pos);
+			}
+			if(Index >= ENTITY_OFFSET)
+			{
+				vec2 Pos(x * 32.0f + 16.0f, y * 32.0f + 16.0f);
+				GameServer()->m_pController->OnEntity(this, Index - ENTITY_OFFSET, Pos);
+			}
+		}
+	}
 }
 
 CGameWorld::TypeRange CGameWorld::DoTypeRange(int Type)
