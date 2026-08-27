@@ -180,7 +180,7 @@ public:
 		bool m_Loaded;
 
 		const char *GetMapName();
-		~CMapInfo();
+		static void Clean(CMapInfo &This, void *pUser);
 	};
 	hash_table<unsigned, CMapInfo, 8> m_MapInfos;
 	unsigned m_MainMapID;

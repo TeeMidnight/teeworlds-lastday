@@ -65,6 +65,11 @@ CGameContext::~CGameContext()
 	if(!m_Resetting)
 	{
 		delete m_pVoteOptionHeap;
+		m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+		{
+			delete pWorld;
+		}, this);
+		m_pWorlds.clear();
 	}
 }
 
@@ -408,11 +413,11 @@ void CGameContext::AbortVoteOnTeamChange(int ClientID)
 
 void CGameContext::OnTick()
 {
-	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void {
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
 		pWorld->m_Core.m_Tuning = *static_cast<CGameContext *>(pUser)->Tuning();
 		pWorld->Tick();
-	},
-		this);
+	}, this);
 
 	// if(world.paused) // make sure that the game object always updates
 	m_pController->Tick();
@@ -1461,7 +1466,10 @@ void CGameContext::OnSnap(int ClientID)
 void CGameContext::OnPreSnap() {}
 void CGameContext::OnPostSnap()
 {
-	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) { pWorld->PostSnap(); }, nullptr);
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		pWorld->PostSnap();
+	}, nullptr);
 }
 
 bool CGameContext::IsClientBot(int ClientID) const

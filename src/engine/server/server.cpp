@@ -711,7 +711,7 @@ void CServer::SendMap(int ClientID)
 	CMapInfo *pInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
 	LoadMap(pInfo);
 	CMsgPacker Msg(NETMSG_MAP_CHANGE, true);
-	Msg.AddString(pInfo->m_aName, 0);
+	Msg.AddString(pInfo->GetMapName(), 0);
 	Msg.AddInt(pInfo->m_Crc);
 	Msg.AddInt(pInfo->m_Size);
 	Msg.AddInt(m_MapChunksPerRequest);
@@ -1332,10 +1332,10 @@ const char *CServer::CMapInfo::GetMapName()
 	return pMapShortName;
 }
 
-CServer::CMapInfo::~CMapInfo()
+void CServer::CMapInfo::Clean(CMapInfo &This, void *pUser)
 {
-	if(m_Loaded && m_pData)
-		mem_free(m_pData);
+	if(This.m_Loaded && This.m_pData)
+		mem_free(This.m_pData);
 }
 
 unsigned CServer::PushMapList(const char *pMapName)
@@ -1611,6 +1611,8 @@ void CServer::Free()
 	{
 		m_pMap->Unload();
 	}
+
+	m_MapInfos.for_each(CMapInfo::Clean, nullptr);
 }
 
 void CServer::ConKick(IConsole::IResult *pResult, void *pUser)

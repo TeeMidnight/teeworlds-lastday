@@ -7,6 +7,7 @@ AlignTrailingComments: false
 AllowShortBlocksOnASingleLine: Always
 AllowShortIfStatementsOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
+AllowShortLambdasOnASingleLine: All
 AllowShortFunctionsOnASingleLine: All
 AlwaysBreakTemplateDeclarations: true
 BasedOnStyle: LLVM
@@ -26,6 +27,7 @@ BraceWrapping:
   AfterUnion: true
   BeforeCatch: true
   BeforeElse: true
+  BeforeLambdaBody: true
   IndentBraces: false
   SplitEmptyNamespace: true
   SplitEmptyRecord: true
@@ -45,6 +47,7 @@ IncludeCategories:
 IncludeIsMainRegex: '$'
 IndentWidth: 8
 IndentCaseLabels: true
+LambdaBodyIndentation: OuterScope
 KeepEmptyLinesAtTheStartOfBlocks: false
 PointerAlignment: Right
 ReflowComments: true
