@@ -561,7 +561,7 @@ void CGameContext::OnClientEnter(int ClientID)
 	NewClientInfoMsg.m_pName = Server()->ClientName(ClientID);
 	NewClientInfoMsg.m_pClan = Server()->ClientClan(ClientID);
 	NewClientInfoMsg.m_Country = Server()->ClientCountry(ClientID);
-	NewClientInfoMsg.m_Silent = false;
+	NewClientInfoMsg.m_Silent = true;
 
 	if(Config()->m_SvSilentSpectatorMode && m_apPlayers[ClientID]->GetTeam() == TEAM_SPECTATORS)
 		NewClientInfoMsg.m_Silent = true;
