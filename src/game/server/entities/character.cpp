@@ -559,7 +559,8 @@ void CCharacter::TickDefered()
 		SetEmote(EMOTE_NORMAL, -1);
 	}
 
-	GameServer()->m_pController->HandleCharacterTiles(this, StartPos, m_Pos);
+	if(!m_pPlayer->m_MapLoading)
+		GameServer()->m_pController->HandleCharacterTiles(this, StartPos, m_Pos);
 
 	// update the m_SendCore if needed
 	{
