@@ -27,6 +27,7 @@ public:
 		ENTTYPE_FLAG,
 
 		ENTTYPE_RIWALL,
+		ENTTYPE_RESOURCE,
 		NUM_ENTTYPES,
 
 		ENTFLAG_HITABLE = 1,
@@ -55,6 +56,9 @@ public:
 	CEventHandler m_Events;
 	CWorldCore m_Core;
 
+	unsigned m_WorldID;
+	unsigned WorldID() const { return m_WorldID; }
+
 	CGameWorld(CGameContext *pGameServer);
 	~CGameWorld();
 
@@ -73,6 +77,7 @@ public:
 	};
 	array<CEntranceInfo> m_lEntrances;
 	void ParseEntrances(const char *pJsonData);
+	void SpawnResources(const char *pJsonData);
 
 	typedef array<CEntity *>::range TypeRange;
 	TypeRange DoTypeRange(int Type);

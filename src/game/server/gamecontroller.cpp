@@ -1,8 +1,8 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <base/math.h>
-#include <cmath>
 #include <engine/shared/config.h>
+#include <cmath>
 
 #include <game/mapitems.h>
 #include <game/version.h>
@@ -12,6 +12,7 @@
 #include "entities/laser.h"
 #include "entities/pickup.h"
 #include "entities/projectile.h"
+#include "entities/resource.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "player.h"
@@ -475,7 +476,8 @@ bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 
 	if(pWorld->m_lEntrances.size())
 	{
 		vec2 Pos = LastPos;
-		const auto FindEntrance = [&](int *pEntranceIndex) {
+		const auto FindEntrance = [&](int *pEntranceIndex)
+		{
 			// the tile of a position: use floor so that positions inside a
 			// tile (e.g. interpolated path samples) are attributed correctly
 			const int TileX = (int) floor(Pos.x / 32.0f);
@@ -594,6 +596,40 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 
 				pTarget->TakeHit(vec2(0.f, -1.f) + normalize(Dir + vec2(0.f, -1.1f)) * 10.0f, Dir * -1, g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage,
 					pChr, Weapon);
+				Hits++;
+			}
+
+			// harvest resources with the hammer (default 1 hardness per hit)
+			array<CEntity *> lpResEnts;
+			const int NumRes = pChr->GameWorld()->FindEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f + 20.0f, lpResEnts, CGameWorld::ENTTYPE_RESOURCE);
+			for(int i = 0; i < NumRes; ++i)
+			{
+				CResourceEntity *pRes = static_cast<CResourceEntity *>(lpResEnts[i]);
+				if(pRes->IsRespawning())
+					continue;
+				if(pChr->GameWorld()->Collision()->IntersectLine(ProjStartPos, pRes->GetPos(), NULL, NULL))
+					continue;
+
+				// remember the resource id before the hit: the entity is
+				// destroyed when it gets depleted
+				const bool Depleted = pRes->RemainingHardness() <= 1;
+				char aResId[32];
+				if(Depleted)
+					str_copy(aResId, pRes->ResId(), sizeof(aResId));
+
+				pRes->TakeHit(1);
+
+				if(Depleted)
+				{
+					CPlayer *pPlayer = pChr->GetPlayer();
+					if(pPlayer)
+						pPlayer->m_Status.m_Inventory.Add(aResId, 1);
+					pChr->GameWorld()->CreateSound(pRes->GetPos(), SOUND_PICKUP_ARMOR);
+				}
+				else
+				{
+					pChr->GameWorld()->CreateHammerHit(pRes->GetPos());
+				}
 				Hits++;
 			}
 

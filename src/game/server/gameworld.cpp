@@ -8,6 +8,7 @@
 #include <climits>
 
 #include "entities/character.h"
+#include "entities/resource.h"
 #include "entity.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
@@ -88,6 +89,42 @@ void CGameWorld::InitCollision(IMap *pMap)
 		const char *pJsonData = (const char *) pMap->GetData(pJsonItem->m_Data);
 		if(pJsonData)
 			ParseEntrances(pJsonData);
+	}
+
+	// generated worlds carry their resource placement as a second json
+	// item (id 1); spawn a resource entity for every entry
+	CMapItemJson *pResourceItem = (CMapItemJson *) pMap->FindItem(MAPITEMTYPE_JSON, 1);
+	if(pResourceItem && pResourceItem->m_Version == CMapItemJson::CURRENT_VERSION && pResourceItem->m_Data > -1)
+	{
+		const char *pJsonData = (const char *) pMap->GetData(pResourceItem->m_Data);
+		if(pJsonData)
+			SpawnResources(pJsonData);
+	}
+}
+
+void CGameWorld::SpawnResources(const char *pJsonData)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(pJsonData, "resources");
+	if(!pJson || pJson->type != json_array)
+		return;
+	for(unsigned i = 0; i < pJson->u.array.length; i++)
+	{
+		const json_value &rRes = (*pJson)[i];
+		if(rRes.type != json_object)
+			continue;
+		const json_value &rId = rRes["res_id"];
+		if(rId.type != json_string)
+			continue;
+
+		const int X = (int) (json_int_t) rRes["pos_x"];
+		const int Y = (int) (json_int_t) rRes["pos_y"];
+		const int Hardness = (int) (json_int_t) rRes["hardness"];
+		const int RespawnTime = (int) (json_int_t) rRes["respawntime"];
+		const char *pDisplay = rRes["display"];
+
+		new CResourceEntity(this, vec2(X * 32.0f + 16.0f, Y * 32.0f + 16.0f),
+			rId.u.string.ptr, pDisplay, Hardness, RespawnTime);
 	}
 }
 

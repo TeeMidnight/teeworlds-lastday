@@ -1,0 +1,101 @@
+{
+	"authors": [],
+	"client strings": [],
+	"server strings": [
+		{
+			"context": "Menu Inventory",
+			"or": "%d. %s: %d",
+			"tr": "%d. %s：%d"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "%d. None",
+			"tr": "%d. 无"
+		},
+		{
+			"context": "Menu Main",
+			"or": "(Click this to hide this tip)",
+			"tr": "(点击此处隐藏提示)"
+		},
+		{
+			"context": "Menu Main",
+			"or": "If you don't want to close menu when you use a option,",
+			"tr": "如果你不想在使用选项时关闭菜单，"
+		},
+		{
+			"context": "INVENTORY",
+			"or": "Inventory",
+			"tr": "背包"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Inventory",
+			"tr": "背包"
+		},
+		{
+			"context": "MAIN",
+			"or": "Main Menu",
+			"tr": "主菜单"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Name: %s",
+			"tr": "名字：%s"
+		},
+		{
+			"context": "Menu",
+			"or": "Previous Page",
+			"tr": "上一页"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Score: %d",
+			"tr": "分数：%d"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Server Vote",
+			"tr": "服务器投票"
+		},
+		{
+			"context": "VOTE",
+			"or": "Server Vote",
+			"tr": "服务器投票"
+		},
+		{
+			"context": "Vote Menu Server Vote",
+			"or": "There's no any server vote",
+			"tr": "这里没有任何服务器投票"
+		},
+		{
+			"context": "Character died",
+			"or": "YOU CANNOT ESCAPE.",
+			"tr": "你 无 法 逃 离"
+		},
+		{
+			"context": "Item Pickup",
+			"or": "You got: %s x%d",
+			"tr": "你获得了：%s x%d"
+		},
+		{
+			"context": "Item Name",
+			"or": "grass",
+			"tr": "草"
+		},
+		{
+			"context": "Item Name",
+			"or": "stone",
+			"tr": "石头"
+		},
+		{
+			"context": "Menu Main",
+			"or": "then you can input this in your console:",
+			"tr": "那么你可以在控制台输入："
+		},
+		{
+			"context": "Menu Main",
+			"or": "ui_close_window_after_changing_setting 0",
+			"tr": "ui_close_window_after_changing_setting 0"
+		}
+	]
+}

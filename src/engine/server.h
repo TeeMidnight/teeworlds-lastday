@@ -72,6 +72,10 @@ public:
 	virtual void ExpireServerInfo() = 0;
 
 	virtual bool SwitchClientMap(int ClientID, unsigned MapID) = 0;
+
+	// releases the cached map data of a map that no client needs anymore
+	// (the map can be re-loaded on demand if a client switches to it again)
+	virtual void UnloadMap(unsigned MapID) = 0;
 };
 
 class IGameServer : public IInterface

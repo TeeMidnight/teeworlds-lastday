@@ -45,6 +45,9 @@ void CGameContext::Construct(int Resetting)
 	if(Resetting == NO_RESET)
 	{
 		m_pVoteOptionHeap = new CHeap();
+		m_pGameMenu = new CGameMenu(this);
+
+		OnGameMenuInit();
 	}
 }
 
@@ -65,6 +68,7 @@ CGameContext::~CGameContext()
 	if(!m_Resetting)
 	{
 		delete m_pVoteOptionHeap;
+		delete m_pGameMenu;
 		m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 		{
 			delete pWorld;
@@ -80,6 +84,7 @@ void CGameContext::Clear()
 	CVoteOptionServer *pVoteOptionLast = m_pVoteOptionLast;
 	int NumVoteOptions = m_NumVoteOptions;
 	CTuningParams Tuning = m_Tuning;
+	CGameMenu *pGameMenu = m_pGameMenu;
 
 	m_Resetting = true;
 	this->~CGameContext();
@@ -91,6 +96,7 @@ void CGameContext::Clear()
 	m_pVoteOptionLast = pVoteOptionLast;
 	m_NumVoteOptions = NumVoteOptions;
 	m_Tuning = Tuning;
+	m_pGameMenu = pGameMenu;
 }
 
 class CCharacter *CGameContext::GetPlayerChar(int ClientID)
@@ -404,6 +410,15 @@ void CGameContext::SendReadyToEnter(CPlayer *pPlayer)
 	Server()->SendPackMsg(&m, MSGFLAG_VITAL | MSGFLAG_FLUSH, pPlayer->GetCID());
 }
 
+void CGameContext::SendSoundTarget(int ClientID, int SoundID)
+{
+	if(ClientID < 0 || ClientID > 0)
+		return;
+	if(!m_apPlayers[ClientID])
+		return;
+	m_apPlayers[ClientID]->GameWorld()->CreateSound(m_apPlayers[ClientID]->m_ViewPos, SoundID, CmaskOne(ClientID));
+}
+
 void CGameContext::AbortVoteOnDisconnect(int ClientID)
 {
 	if(m_VoteCloseTime && ClientID == m_VoteClientID && (str_startswith(m_aVoteCommand, "kick ") || str_startswith(m_aVoteCommand, "set_team ") || (str_startswith(m_aVoteCommand, "ban ") && Server()->IsBanned(ClientID))))
@@ -514,6 +529,11 @@ void CGameContext::OnTick()
 		}
 	}
 #endif
+
+	// periodically unload worlds that no player is in anymore, so the
+	// server frees memory while idle (every ~30 seconds)
+	if(Server()->Tick() % (Server()->TickSpeed() * 30) == 0)
+		UnloadIdleWorlds();
 }
 
 // Server hooks
@@ -555,6 +575,8 @@ void CGameContext::OnClientEnter(int ClientID)
 	SendChatCommands(ClientID);
 
 	m_pController->OnPlayerConnect(m_apPlayers[ClientID]);
+
+	GameMenu()->OnClientEntered(ClientID);
 
 	m_VoteUpdate = true;
 
@@ -795,6 +817,17 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			CNetMsg_Cl_CallVote *pMsg = (CNetMsg_Cl_CallVote *) pRawMsg;
 			int64 Now = Server()->Tick();
 
+			if(str_comp_nocase(pMsg->m_Type, "option") == 0)
+			{
+				CCallVoteStatus VoteStatus;
+				str_format(VoteStatus.m_aDesc, sizeof(VoteStatus.m_aDesc), "%s", pMsg->m_Value);
+				str_format(VoteStatus.m_aReason, sizeof(VoteStatus.m_aReason), "%s", pMsg->m_Reason);
+				VoteStatus.m_Force = pMsg->m_Force;
+
+				GameMenu()->OnMenuVote(ClientID, VoteStatus, true);
+				return;
+			}
+
 			if(pMsg->m_Force)
 			{
 				if(!Server()->IsAuthed(ClientID))
@@ -814,41 +847,8 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			char aDesc[VOTE_DESC_LENGTH] = {0};
 			char aCmd[VOTE_CMD_LENGTH] = {0};
 			const char *pReason = pMsg->m_Reason[0] ? pMsg->m_Reason : "No reason given";
-
-			if(str_comp_nocase(pMsg->m_Type, "option") == 0)
-			{
-				CVoteOptionServer *pOption = m_pVoteOptionFirst;
-				while(pOption)
-				{
-					if(str_comp_nocase(pMsg->m_Value, pOption->m_aDescription) == 0)
-					{
-						str_format(aDesc, sizeof(aDesc), "%s", pOption->m_aDescription);
-						str_format(aCmd, sizeof(aCmd), "%s", pOption->m_aCommand);
-						char aBuf[128];
-						str_format(aBuf, sizeof(aBuf),
-							"'%d:%s' voted %s '%s' reason='%s' cmd='%s' force=%d",
-							ClientID, Server()->ClientName(ClientID), pMsg->m_Type,
-							aDesc, pReason, aCmd, pMsg->m_Force);
-						Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
-						if(pMsg->m_Force)
-						{
-							Server()->SetRconCID(ClientID);
-							Console()->ExecuteLine(aCmd);
-							Server()->SetRconCID(IServer::RCON_CID_SERV);
-							SendForceVote(VOTE_START_OP, aDesc, pReason);
-							return;
-						}
-						m_VoteType = VOTE_START_OP;
-						break;
-					}
-
-					pOption = pOption->m_pNext;
-				}
-
-				if(!pOption)
-					return;
-			}
-			else if(str_comp_nocase(pMsg->m_Type, "kick") == 0)
+			
+			if(str_comp_nocase(pMsg->m_Type, "kick") == 0)
 			{
 				if(!Config()->m_SvVoteKick || m_pController->GetRealPlayerNum() < Config()->m_SvVoteKickMin)
 					return;
@@ -1374,6 +1374,16 @@ void CGameContext::ConchainSettingUpdate(IConsole::IResult *pResult, void *pUser
 	}
 }
 
+void CGameContext::ConchainLanguageUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+{
+	pfnCallback(pResult, pCallbackUserData);
+	if(pResult->NumArguments())
+	{
+		CGameContext *pSelf = (CGameContext *) pUserData;
+		g_Localization.Load(pSelf->Config()->m_SvLanguagefile, pSelf->Storage(), pSelf->Console(), true);
+	}
+}
+
 void CGameContext::OnConsoleInit()
 {
 	m_pServer = Kernel()->RequestInterface<IServer>();
@@ -1407,6 +1417,78 @@ void CGameContext::RemoveCommandHook(const CCommandManager::CCommand *pCommand, 
 	pSelf->SendRemoveChatCommand(pCommand, -1);
 }
 
+void CGameContext::OnGameMenuInit()
+{
+	GameMenu()->Register("VOTE", "Server Vote", CGameContext::MenuVote, this); // Localize("Server Vote", "VOTE")
+}
+
+bool CGameContext::MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUser)
+{
+	CGameContext *pSelf = (CGameContext *) pUser;
+	CPlayer *pPlayer = pSelf->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return false;
+	if(VoteStatus.m_aCmd[0])
+	{
+		if(str_comp(VoteStatus.m_aCmd, "DISPLAY") == 0)
+		{
+		}
+		else if(VoteStatus.m_aDesc[0])
+		{
+			int64 Now = pSelf->Server()->Tick();
+			if((pSelf->Config()->m_SvSpamprotection && ((pPlayer->m_LastVoteTryTick && pPlayer->m_LastVoteTryTick + pSelf->Server()->TickSpeed() * 3 > Now) ||
+									   (pPlayer->m_LastVoteCallTick && pPlayer->m_LastVoteCallTick + pSelf->Server()->TickSpeed() * VOTE_COOLDOWN > Now))) ||
+				pPlayer->GetTeam() == TEAM_SPECTATORS || pSelf->m_VoteCloseTime)
+				return false;
+
+			pPlayer->m_LastVoteTryTick = Now;
+
+			const char *pReason = VoteStatus.m_aReason[0] ? VoteStatus.m_aReason : "No reason given";
+			char aBuf[128];
+			str_format(aBuf, sizeof(aBuf),
+				"'%d:%s' voted %s '%s' reason='%s' cmd='%s' force=%d",
+				ClientID, pSelf->Server()->ClientName(ClientID), "option",
+				VoteStatus.m_aDesc, pReason, VoteStatus.m_aCmd, VoteStatus.m_Force ? 1 : 0);
+			pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
+
+			if(VoteStatus.m_Force)
+			{
+				pSelf->Server()->SetRconCID(ClientID);
+				pSelf->Console()->ExecuteLine(VoteStatus.m_aCmd);
+				pSelf->Server()->SetRconCID(IServer::RCON_CID_SERV);
+				pSelf->SendForceVote(VOTE_START_OP, VoteStatus.m_aDesc, pReason);
+				return false;
+			}
+
+			pSelf->m_VoteType = VOTE_START_OP;
+			pSelf->m_VoteCreator = ClientID;
+			pSelf->StartVote(VoteStatus.m_aDesc, VoteStatus.m_aCmd, pReason);
+			pPlayer->m_Vote = VOTE_CHOICE_YES;
+			pPlayer->m_VotePos = pSelf->m_VotePos = 1;
+			pPlayer->m_LastVoteCallTick = Now;
+			return false;
+		}
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	{
+		if(pSelf->m_pVoteOptionFirst)
+		{
+			for(CVoteOptionServer *pOption = pSelf->m_pVoteOptionFirst; pOption; pOption = pOption->m_pNext)
+			{
+				pMenu->AddOption(pOption->m_aDescription, pOption->m_aCommand);
+			}
+		}
+		else
+		{
+			pMenu->AddOption(Localize("There's no any server vote", "Vote Menu Server Vote"), "NONE");
+		}
+	}
+
+	return true;
+}
+
 void CGameContext::OnInit()
 {
 	// init everything
@@ -1415,6 +1497,8 @@ void CGameContext::OnInit()
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
 	m_CommandManager.Init(m_pConsole, this, NewCommandHook, RemoveCommandHook);
+
+	g_Localization.Load(Config()->m_SvLanguagefile, Storage(), Console(), true);
 
 	// HACK: only set static size for items, which were available in the first 0.7 release
 	// so new items don't break the snapshot delta
@@ -1434,6 +1518,7 @@ void CGameContext::OnInit()
 	Console()->Chain("sv_vote_spectate", ConchainSettingUpdate, this);
 	Console()->Chain("sv_max_clients", ConchainSettingUpdate, this);
 	Console()->Chain("sv_allow_spec_voting", ConchainSettingUpdate, this);
+	Console()->Chain("sv_languagefile", ConchainLanguageUpdate, this);
 }
 
 void CGameContext::OnShutdown()
@@ -1551,8 +1636,67 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 		m_MainWorldID = MapID;
 
 	CGameWorld *pNewWorld = new CGameWorld(this);
+	pNewWorld->m_WorldID = MapID;
 	pNewWorld->InitCollision(Kernel()->RequestInterface<IMap>());
 	m_pWorlds.set(MapID, pNewWorld);
+}
+
+bool CGameContext::UnloadWorld(unsigned MapID)
+{
+	CGameWorld **ppWorld = m_pWorlds[MapID];
+	if(!ppWorld || !*ppWorld)
+		return false;
+
+	CGameWorld *pWorld = *ppWorld;
+
+	// never unload the main world
+	if(MapID == m_MainWorldID)
+		return false;
+
+	// keep the world while a player is still inside it
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(m_apPlayers[i] && m_apPlayers[i]->GameWorld() == pWorld)
+			return false;
+	}
+
+	delete pWorld;
+	m_pWorlds.remove(MapID);
+
+	// release the cached map data on the engine side
+	Server()->UnloadMap(MapID);
+	return true;
+}
+
+void CGameContext::UnloadIdleWorlds()
+{
+	struct SUnloadCollector
+	{
+		CGameContext *m_pSelf;
+		array<unsigned> m_lToUnload;
+	};
+	SUnloadCollector Collector = {this, {}};
+
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		SUnloadCollector *pCollector = static_cast<SUnloadCollector *>(pUser);
+		CGameContext *pSelf = pCollector->m_pSelf;
+		if(!pWorld)
+			return;
+		if(pWorld->WorldID() == pSelf->m_MainWorldID)
+			return;
+
+		// check if any player is still in this world
+		for(int i = 0; i < MAX_CLIENTS; i++)
+		{
+			if(pSelf->m_apPlayers[i] && pSelf->m_apPlayers[i]->GameWorld() == pWorld)
+				return;
+		}
+		pCollector->m_lToUnload.add(pWorld->WorldID());
+	}, &Collector);
+
+	for(int i = 0; i < Collector.m_lToUnload.size(); i++)
+		UnloadWorld(Collector.m_lToUnload[i]);
 }
 
 IGameServer *CreateGameServer() { return new CGameContext; }

@@ -12,6 +12,7 @@
 #include <game/commands.h>
 #include <game/voting.h>
 
+#include "gamemenu.h"
 #include "gameworld.h"
 
 /*
@@ -57,6 +58,7 @@ class CGameContext : public IGameServer
 	static void ConVote(IConsole::IResult *pResult, void *pUserData);
 	static void ConchainSpecialMotdupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainSettingUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	static void ConchainLanguageUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 	static void NewCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
 	static void RemoveCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
@@ -83,6 +85,10 @@ public:
 	class CGameController *m_pController;
 	unsigned m_MainWorldID;
 	hash_table<unsigned, CGameWorld *, 4> m_pWorlds;
+
+	CGameMenu *m_pGameMenu;
+
+	CGameMenu *GameMenu() const { return m_pGameMenu; }
 
 	CCommandManager m_CommandManager;
 
@@ -133,6 +139,7 @@ public:
 	void SendSkinChange(int ClientID, int TargetID);
 	void SendTuningParams(int ClientID);
 	void SendReadyToEnter(CPlayer *pPlayer);
+	void SendSoundTarget(int ClientID, int SoundID);
 
 	void SendGameMsg(int GameMsgID, int ClientID);
 	void SendGameMsg(int GameMsgID, int ParaI1, int ClientID);
@@ -187,6 +194,16 @@ public:
 
 	virtual int GetMaxPlayerSlots();
 	virtual void RequestLoadWorld(unsigned MapID);
+
+	// unloads worlds that no player is currently in, to free up memory
+	// when the server is idle (called periodically from OnTick)
+	void UnloadIdleWorlds();
+	bool UnloadWorld(unsigned MapID);
+
+protected:
+	virtual void OnGameMenuInit();
+
+	static bool MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUser);
 };
 
 inline int64 CmaskAll() { return -1; }

@@ -1,5 +1,5 @@
-#include <base/tl/stream.h>
 #include <base/system.h>
+#include <base/tl/stream.h>
 
 #include <base/math.h>
 #include <base/vmath.h>
@@ -108,7 +108,7 @@ static void PasteTiles(CTile *pDst, int DstWidth, int DstHeight, const CTile *pS
 			const CTile &SrcTile = pSrc[y * SrcWidth + x];
 			if(!PasteAir && SrcTile.m_Index == 0)
 				continue;
-			if(SrcTile.m_Index == ENTITY_OFFSET + ENTITY_FLAGSTAND_RED || SrcTile.m_Index == ENTITY_OFFSET + ENTITY_FLAGSTAND_BLUE)
+			if(SrcTile.m_Index == ENTITY_OFFSET + ENTITY_FLAGSTAND_RED || SrcTile.m_Index == ENTITY_OFFSET + ENTITY_FLAGSTAND_BLUE || SrcTile.m_Index == ENTITY_OFFSET + ENTITY_SPAWN_RED)
 				continue;
 			pDst[DstY * DstWidth + DstX] = SrcTile;
 			pDst[DstY * DstWidth + DstX].m_Skip = 0;
@@ -148,18 +148,97 @@ static void ScanStructTiles(const CTile *pTiles, int Width, int Height, int *pRe
 }
 
 // deterministic probability roll in percent
+static unsigned DeterministicHash(int Seed, int Salt)
+{
+	unsigned h = (unsigned) Seed * 0x9E3779B1u;
+	h ^= (unsigned) Salt * 0x85EBCA6Bu;
+	h ^= h >> 16;
+	h *= 0x85EBCA6Bu;
+	h ^= h >> 13;
+	return h;
+}
+
 static bool RollChance(int Seed, int Salt, int Probability)
 {
 	if(Probability <= 0)
 		return false;
 	if(Probability >= 100)
 		return true;
-	unsigned h = (unsigned) Seed * 0x9E3779B1u;
-	h ^= (unsigned) Salt * 0x85EBCA6Bu;
-	h ^= h >> 16;
-	h *= 0x85EBCA6Bu;
-	h ^= h >> 13;
-	return (h % 100) < (unsigned) Probability;
+	return (DeterministicHash(Seed, Salt) % 100) < (unsigned) Probability;
+}
+
+// a resource configured in worlds.json (base or struct)
+struct CResourceConfig
+{
+	char m_aResId[32];
+	char m_aDisplay[32];
+	int m_Proba;
+	int m_HardnessMin;
+	int m_HardnessMax;
+	int m_RespawnTimeMin;
+	int m_RespawnTimeMax;
+};
+
+// a resource placed on a red team spawn point of the generated map
+struct CResourceEntry
+{
+	char m_aResId[32];
+	char m_aDisplay[32];
+	int m_X;
+	int m_Y;
+	int m_Hardness;
+	int m_RespawnTime;
+};
+
+// parses a resources json array into configs
+static void ParseResources(const char *pJsonData, array<CResourceConfig> &lOut)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(pJsonData, "resources");
+	if(!pJson || pJson->type != json_array)
+		return;
+	for(unsigned i = 0; i < pJson->u.array.length; i++)
+	{
+		const json_value &rRes = (*pJson)[i];
+		if(rRes.type != json_object)
+			continue;
+		const json_value &rId = rRes["res_id"];
+		if(rId.type != json_string)
+			continue;
+		CResourceConfig &Config = lOut.emplace();
+		str_copy(Config.m_aResId, rId.u.string.ptr, sizeof(Config.m_aResId));
+		str_copy(Config.m_aDisplay, rRes["display"], sizeof(Config.m_aDisplay));
+		Config.m_Proba = (int) (json_int_t) rRes["proba"];
+		Config.m_HardnessMin = (int) (json_int_t) rRes["hardness_min"];
+		Config.m_HardnessMax = (int) (json_int_t) rRes["hardness_max"];
+		Config.m_RespawnTimeMin = (int) (json_int_t) rRes["respawntime_min"];
+		Config.m_RespawnTimeMax = (int) (json_int_t) rRes["respawntime_max"];
+	}
+}
+
+// serializes the placed resources into the "world internal" json
+static void WriteResources(CJsonWriter *pWriter, const array<CResourceEntry> &lEntries)
+{
+	pWriter->BeginArray();
+	for(int i = 0; i < lEntries.size(); i++)
+	{
+		const CResourceEntry &Entry = lEntries[i];
+		pWriter->BeginObject();
+		pWriter->WriteAttribute("res_id");
+		pWriter->WriteStrValue(Entry.m_aResId);
+		pWriter->WriteAttribute("pos_x");
+		pWriter->WriteIntValue(Entry.m_X);
+		pWriter->WriteAttribute("pos_y");
+		pWriter->WriteIntValue(Entry.m_Y);
+		pWriter->WriteAttribute("hardness");
+		pWriter->WriteIntValue(Entry.m_Hardness);
+		pWriter->WriteAttribute("respawntime");
+		pWriter->WriteIntValue(Entry.m_RespawnTime);
+		pWriter->WriteAttribute("display");
+		pWriter->WriteStrValue(Entry.m_aDisplay);
+		pWriter->EndObject();
+	}
+	pWriter->EndArray();
 }
 
 // an entrance defined inside a struct map: the coordinates are offsets
@@ -366,11 +445,29 @@ CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 				CJsonWriter StructWriter(&StructStream);
 				WriteJsonValue(&StructWriter, rStructEntrances);
 			}
+
+			// the struct may carry its own resources
+			const json_value &rStructResources = rStruct["resources"];
+			if(rStructResources.type == json_array)
+			{
+				memory_stream<char> StructResStream(&Struct.m_ResourcesJson);
+				CJsonWriter StructResWriter(&StructResStream);
+				WriteJsonValue(&StructResWriter, rStructResources);
+			}
 		}
 
 		memory_stream<char> Stream(&pFloor->m_DefaultEntrances);
 		CJsonWriter Writer(&Stream);
 		WriteJsonValue(&Writer, rBase["entrances"]);
+
+		// the base may carry its own resources
+		const json_value &rBaseResources = rBase["resources"];
+		if(rBaseResources.type == json_array)
+		{
+			memory_stream<char> ResStream(&pFloor->m_ResourcesJson);
+			CJsonWriter ResWriter(&ResStream);
+			WriteJsonValue(&ResWriter, rBaseResources);
+		}
 
 		m_lInstructions.set(str_quickhash(pFloor->m_aBaseMap), pFloor);
 	}
@@ -483,6 +580,8 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 		int m_Y;
 	};
 	array<CAnchor> lAnchors;
+	// the red team spawn points where the configured resources are placed
+	array<CAnchor> lRedSpawns;
 
 	struct CBaseTemplate
 	{
@@ -546,7 +645,8 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 					pGameTiles = pTiles;
 
 					// the flag stand entities of the base game layer mark
-					// the positions where structures are pasted
+					// the positions where structures are pasted; the red
+					// team spawn points mark where resources are placed
 					for(int y = 0; y < GameHeight; y++)
 					{
 						for(int x = 0; x < GameWidth; x++)
@@ -558,6 +658,12 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 								Anchor.m_Type = Index - ENTITY_OFFSET;
 								Anchor.m_X = x;
 								Anchor.m_Y = y;
+							}
+							else if(Index == ENTITY_OFFSET + ENTITY_SPAWN_RED)
+							{
+								CAnchor &Spawn = lRedSpawns.emplace();
+								Spawn.m_X = x;
+								Spawn.m_Y = y;
 							}
 						}
 					}
@@ -844,13 +950,82 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 	}
 
 	// ---------------------------------------------------------------
+	// place the configured resources on the red team spawn points and
+	// serialize them into a second json item (id 1)
+	// ---------------------------------------------------------------
+	array<CResourceEntry> lResources;
+	{
+		// collect the resource configs: base + structs
+		array<CResourceConfig> lResourceConfigs;
+		if(pInstruction->m_ResourcesJson.size())
+		{
+			const int StoredLen = pInstruction->m_ResourcesJson.size();
+			char *pStored = new char[StoredLen + 1];
+			if(StoredLen > 0)
+				mem_copy(pStored, pInstruction->m_ResourcesJson.base_ptr(), StoredLen);
+			pStored[StoredLen] = 0;
+			ParseResources(pStored, lResourceConfigs);
+			delete[] pStored;
+		}
+		for(int s = 0; s < pInstruction->m_Structs.size(); s++)
+		{
+			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
+			if(!Struct.m_ResourcesJson.size())
+				continue;
+			const int StoredLen = Struct.m_ResourcesJson.size();
+			char *pStored = new char[StoredLen + 1];
+			if(StoredLen > 0)
+				mem_copy(pStored, Struct.m_ResourcesJson.base_ptr(), StoredLen);
+			pStored[StoredLen] = 0;
+			ParseResources(pStored, lResourceConfigs);
+			delete[] pStored;
+		}
+
+		// roll each resource on every red team spawn point
+		for(int r = 0; r < lRedSpawns.size(); r++)
+		{
+			for(int c = 0; c < lResourceConfigs.size(); c++)
+			{
+				const CResourceConfig &Config = lResourceConfigs[c];
+				if(!RollChance(Seed, 10000 + r * 100 + c, Config.m_Proba))
+					continue;
+				int Hardness = Config.m_HardnessMin;
+				const int Range = Config.m_HardnessMax - Config.m_HardnessMin + 1;
+				if(Range > 0)
+					Hardness += (int) (DeterministicHash(Seed, 20000 + r * 100 + c) % (unsigned) Range);
+
+				int RespawnTime = Config.m_RespawnTimeMin;
+				const int RespawnRange = Config.m_RespawnTimeMax - Config.m_RespawnTimeMin + 1;
+				if(RespawnRange > 0)
+					RespawnTime += (int) (DeterministicHash(Seed, 30000 + r * 100 + c) % (unsigned) RespawnRange);
+
+				CResourceEntry &Entry = lResources.emplace();
+				str_copy(Entry.m_aResId, Config.m_aResId, sizeof(Entry.m_aResId));
+				str_copy(Entry.m_aDisplay, Config.m_aDisplay, sizeof(Entry.m_aDisplay));
+				Entry.m_X = lRedSpawns[r].m_X;
+				Entry.m_Y = lRedSpawns[r].m_Y;
+				Entry.m_Hardness = Hardness;
+				Entry.m_RespawnTime = RespawnTime;
+			}
+		}
+	}
+	array<char> lResourceJson;
+	{
+		memory_stream<char> Stream(&lResourceJson);
+		CJsonWriter JsonWriter(&Stream);
+		WriteResources(&JsonWriter, lResources);
+		lResourceJson.add(0); // null terminate
+	}
+
+	// ---------------------------------------------------------------
 	// write the generated map: "<base>_<seed>.map"
 	// ---------------------------------------------------------------
 	Storage()->CreateFolder("generatedmaps", IStorage::TYPE_SAVE);
 
 	char aOutName[64];
 	str_format(aOutName, sizeof(aOutName), "%s_%d", pBaseMap, Seed);
-	Creator.AddJsonData(lEntranceJson.base_ptr(), lEntranceJson.size());
+	Creator.AddJsonData(lEntranceJson.base_ptr(), lEntranceJson.size(), 0);
+	Creator.AddJsonData(lResourceJson.base_ptr(), lResourceJson.size(), 1);
 
 	if(!Creator.SaveMap(EMapType::MAPTYPE_NORMAL, aOutName))
 	{

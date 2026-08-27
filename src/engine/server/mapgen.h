@@ -23,11 +23,13 @@ class CMapGen
 			char m_aBaseMap[64];
 			int m_GenerateProba;
 			array<char> m_EntrancesJson; // serialized entrances json of this struct (optional)
+			array<char> m_ResourcesJson; // serialized resources json of this struct (optional)
 		};
 
 		char m_aBaseMap[64];
 		array<CStruct> m_Structs;
 		array<char> m_DefaultEntrances;
+		array<char> m_ResourcesJson; // serialized resources json of this base (optional)
 	};
 
 	// keyed by str_quickhash of the base map name

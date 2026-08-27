@@ -373,11 +373,23 @@ void CMapCreator::AddMiniMap()
 	}
 }
 
-void CMapCreator::AddJsonData(const char *pJsonData, int Size)
+void CMapCreator::AddJsonData(const char *pJsonData, int Size, int ID)
 {
-	m_JsonData.clear();
+	// replace an existing entry with the same id, otherwise append one
+	for(auto &Entry : m_lpJsonData)
+	{
+		if(Entry.m_ID == ID)
+		{
+			Entry.m_Data.clear();
+			for(int i = 0; i < Size; i++)
+				Entry.m_Data.add(pJsonData[i]);
+			return;
+		}
+	}
+	CJsonEntry &Entry = m_lpJsonData.emplace();
+	Entry.m_ID = ID;
 	for(int i = 0; i < Size; i++)
-		m_JsonData.add(pJsonData[i]);
+		Entry.m_Data.add(pJsonData[i]);
 }
 
 CCreatorLayerTilemap *CCreatorGroupInfo::AddTileLayer(const char *pName)
@@ -822,14 +834,14 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 		}
 	}
 
-	// save the json data as a MAPITEMTYPE_JSON item
-	if(m_JsonData.size())
+	// save the json data as MAPITEMTYPE_JSON items
+	for(auto &Entry : m_lpJsonData)
 	{
-		const int JsonIndex = DataFile.AddData(m_JsonData.size(), m_JsonData.base_ptr());
+		const int JsonIndex = DataFile.AddData(Entry.m_Data.size(), Entry.m_Data.base_ptr());
 		CMapItemJson JsonItem;
 		JsonItem.m_Version = CMapItemJson::CURRENT_VERSION;
 		JsonItem.m_Data = JsonIndex;
-		DataFile.AddItem(MAPITEMTYPE_JSON, 0, sizeof(CMapItemJson), &JsonItem);
+		DataFile.AddItem(MAPITEMTYPE_JSON, Entry.m_ID, sizeof(CMapItemJson), &JsonItem);
 	}
 
 	DataFile.Finish();

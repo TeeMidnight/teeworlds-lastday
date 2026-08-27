@@ -37,6 +37,9 @@ public:
 	int GetCID() const { return m_ClientID; }
 	bool IsDummy() const { return m_Dummy; }
 
+	// game menu
+	bool m_HideTip;
+
 	void Tick();
 	void PostTick();
 	void Snap(int SnappingClient);
@@ -117,10 +120,36 @@ public:
 	CGameWorld *GameWorld() const { return m_pWorld; }
 	void SwitchWorld(CGameWorld *pWorld);
 
+	struct CInventory
+	{
+		enum
+		{
+			MAX_ITEMS = 16,
+		};
+
+		struct SItem
+		{
+			char m_aResId[32];
+			int m_Count;
+		};
+
+		SItem m_aItems[MAX_ITEMS];
+		int m_NumItems;
+
+		CPlayer *m_pPlayer;
+
+		CInventory();
+		int Find(const char *pResId) const;
+		int Get(const char *pResId) const;
+		void Add(const char *pResId, int Count);
+	};
+
 	struct CStatus
 	{
 		int m_Sanity;
+		CInventory m_Inventory;
 	} m_Status;
+
 private:
 	CCharacter *m_pCharacter;
 	CGameWorld *m_pWorld;

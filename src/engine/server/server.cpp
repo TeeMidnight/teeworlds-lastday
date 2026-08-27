@@ -33,9 +33,9 @@
 
 #include <mastersrv/mastersrv.h>
 
+#include "mapgen.h"
 #include "register.h"
 #include "server.h"
-#include "mapgen.h"
 
 #include <signal.h>
 
@@ -1946,6 +1946,36 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID)
 		return true;
 	}
 	return false;
+}
+
+void CServer::UnloadMap(unsigned MapID)
+{
+	// never unload the main map
+	if(MapID == m_MainMapID)
+		return;
+
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	if(!pInfo)
+		return;
+
+	// keep the map while a client is still connected to it (it may be
+	// downloading the map data or currently using it)
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(m_aClients[i].m_State != CClient::STATE_EMPTY && m_aClients[i].m_MapID == MapID)
+			return;
+	}
+
+	if(pInfo->m_pData)
+	{
+		mem_free(pInfo->m_pData);
+		pInfo->m_pData = 0;
+	}
+	pInfo->m_Loaded = false;
+
+	char aBuf[64];
+	str_format(aBuf, sizeof(aBuf), "unloaded map '%s'", pInfo->m_aName);
+	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "map", aBuf);
 }
 
 static CServer *CreateServer() { return new CServer(); }

@@ -15,7 +15,14 @@ class CMapCreator
 	array<CCreatorImage *> m_lpImages;
 	array<CCreatorEnvelope *> m_lpEnvelopes;
 
-	array<char> m_JsonData;
+	// multiple json data entries, each written as a MAPITEMTYPE_JSON item
+	// with the given id (0 = entrances, 1 = resources, ...)
+	struct CJsonEntry
+	{
+		int m_ID;
+		array<char> m_Data;
+	};
+	array<CJsonEntry> m_lpJsonData;
 
 	void *m_ImageLock;
 	void *m_EnvelopeLock;
@@ -39,8 +46,8 @@ public:
 
 	// stores arbitrary json data (e.g. the entrance definitions of a
 	// generated world) which is written to the map as a MAPITEMTYPE_JSON
-	// item on save
-	void AddJsonData(const char *pJsonData, int Size);
+	// item on save. Multiple entries with distinct ids can be added.
+	void AddJsonData(const char *pJsonData, int Size, int ID = 0);
 
 	bool SaveMap(EMapType MapType, const char *pMap);
 };

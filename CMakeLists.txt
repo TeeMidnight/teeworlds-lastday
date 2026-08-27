@@ -654,6 +654,7 @@ set(EXPECTED_DATA
   countryflags/ZW.png
   countryflags/default.png
   countryflags/index.json
+  languages/zh.json
   mapres/bg_cloud1.png
   mapres/bg_cloud2.png
   mapres/bg_cloud3.png
@@ -944,6 +945,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/pickup.h
   entities/projectile.cpp
   entities/projectile.h
+  entities/resource.cpp
+  entities/resource.h
   entity.cpp
   entity.h
   eventhandler.cpp
@@ -952,6 +955,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamecontext.h
   gamecontroller.cpp
   gamecontroller.h
+  gamemenu.cpp
+  gamemenu.h
   gameworld.cpp
   gameworld.h
   player.cpp

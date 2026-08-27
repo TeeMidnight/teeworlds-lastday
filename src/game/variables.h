@@ -5,6 +5,8 @@
 #undef GAME_VARIABLES_H // this file will be included several times
 
 // server
+MACRO_CONFIG_STR(SvLanguagefile, sv_languagefile, 255, "", CFGFLAG_SERVER | CFGFLAG_SAVE, "What language file to use (on server)")
+
 MACRO_CONFIG_STR(SvMotd, sv_motd, 900, "", CFGFLAG_SAVE | CFGFLAG_SERVER, "Message of the day to display for the clients")
 MACRO_CONFIG_INT(SvTeamdamage, sv_teamdamage, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Team damage")
 MACRO_CONFIG_INT(SvSpamprotection, sv_spamprotection, 1, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Spam protection")

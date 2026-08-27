@@ -11,6 +11,50 @@ MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 CGameContext *CPlayer::GameServer() const { return m_pWorld->GameServer(); }
 IServer *CPlayer::Server() const { return m_pWorld->Server(); }
 
+CPlayer::CInventory::CInventory()
+{
+	m_pPlayer = 0;
+	m_NumItems = 0;
+	mem_zero(m_aItems, sizeof(m_aItems));
+}
+
+int CPlayer::CInventory::Find(const char *pResId) const
+{
+	for(int i = 0; i < m_NumItems; i++)
+		if(str_comp(m_aItems[i].m_aResId, pResId) == 0)
+			return i;
+	return -1;
+}
+
+int CPlayer::CInventory::Get(const char *pResId) const
+{
+	const int Index = Find(pResId);
+	return Index >= 0 ? m_aItems[Index].m_Count : 0;
+}
+
+void CPlayer::CInventory::Add(const char *pResId, int Count)
+{
+	int Index = Find(pResId);
+	if(Index < 0)
+	{
+		if(m_NumItems >= MAX_ITEMS)
+			return;
+		Index = m_NumItems++;
+		str_copy(m_aItems[Index].m_aResId, pResId, sizeof(m_aItems[Index].m_aResId));
+		m_aItems[Index].m_Count = 0;
+	}
+	m_aItems[Index].m_Count += Count;
+
+	// notify the player about the obtained item
+	if(m_pPlayer)
+	{
+		char aMsg[128];
+		str_format(aMsg, sizeof(aMsg), Localize("You got: %s x%d", "Item Pickup"),
+			Localize(pResId, "Item Name"), m_aItems[Index].m_Count);
+		m_pPlayer->GameServer()->SendChat(-1, CHAT_ALL, m_pPlayer->GetCID(), aMsg);
+	}
+}
+
 CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 {
 	m_pWorld = pWorld;
@@ -32,9 +76,11 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_DeadSpecMode = false;
 	m_Spawning = false;
 	m_MapLoading = false;
+	m_HideTip = false;
 	mem_zero(&m_Latency, sizeof(m_Latency));
 
 	m_Status.m_Sanity = 100;
+	m_Status.m_Inventory.m_pPlayer = this;
 }
 
 CPlayer::~CPlayer()
@@ -135,7 +181,7 @@ void CPlayer::Snap(int SnappingClient)
 		pPlayerInfo->m_PlayerFlags |= PLAYERFLAG_WATCHING;
 
 	pPlayerInfo->m_Latency = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
-	pPlayerInfo->m_Score = m_Score;
+	pPlayerInfo->m_Score = m_Status.m_Sanity;
 
 	CNetObj_PlayerInfoExtra *pPlayerInfoExtra = static_cast<CNetObj_PlayerInfoExtra *>(Server()->SnapNewItem(NETOBJTYPE_PLAYERINFOEXTRA, m_ClientID, sizeof(CNetObj_PlayerInfoExtra)));
 	if(!pPlayerInfoExtra)

@@ -21,6 +21,28 @@ JSON_KEY_TR="tr"
 
 SOURCE_LOCALIZE_RE=re.compile(br'Localize\("(?P<str>([^"\\]|\\.)*)"(, ?"(?P<ctxt>([^"\\]|\\.)*)")?\)')
 
+# context used for item names (res_id) in the inventory menu
+ITEM_NAME_CTXT = "Item Name"
+
+def parse_item_names():
+	"""Collects the item names (res_id) from the map generation data so they
+	can be translated in the inventory menu."""
+	l10n = defaultdict(lambda: str)
+
+	def walk(node):
+		if isinstance(node, dict):
+			if node.get("res_id"):
+				l10n[(node["res_id"], ITEM_NAME_CTXT)] = ""
+			for v in node.values():
+				walk(v)
+		elif isinstance(node, list):
+			for v in node:
+				walk(v)
+
+	with open("datasrc/maps/worlds.json", encoding='utf-8') as f:
+		walk(json.load(f))
+	return l10n
+
 def parse_source():
 	l10n_client = defaultdict(lambda: str)
 	l10n_server = defaultdict(lambda: str)
@@ -105,6 +127,11 @@ def write_languagefile(outputfilename, l10n_client_src, l10n_server_src, old_l10
 
 if __name__ == '__main__':
 	l10n_client, l10n_server = parse_source()
+
+	# add item names (res_id) from the map data, e.g. "stone", "grass"
+	item_names = parse_item_names()
+	for entry, _ in item_names.items():
+		l10n_server[entry] = ""
 
 	for filename in os.listdir("datasrc/languages"):
 		try:

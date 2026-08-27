@@ -82,6 +82,17 @@
                 ],
                 "entrance": "Darkness"
             }
+        ],
+        "resources": [
+            {
+                "res_id": "stone",
+                "display": "armor",
+                "proba": 30,
+                "hardness_min": 1,
+                "hardness_max": 5,
+                "respawntime_min": 60,
+                "respawntime_max": 120
+            }
         ]
     },
     {
@@ -124,6 +135,17 @@
                     }
                 ],
                 "entrance": "Heaven"
+            }
+        ],
+        "resources": [
+            {
+                "res_id": "grass",
+                "display": "health",
+                "proba": 30,
+                "hardness_min": 1,
+                "hardness_max": 1,
+                "respawntime_min": 60,
+                "respawntime_max": 120
             }
         ]
     },
