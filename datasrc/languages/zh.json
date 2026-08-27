@@ -74,8 +74,8 @@
 		},
 		{
 			"context": "Item Pickup",
-			"or": "You got: %s x%d",
-			"tr": "你获得了：%s x%d"
+			"or": "You got: %s x%d (%d)",
+			"tr": "你获得了：%s x%d (%d)"
 		},
 		{
 			"context": "Item Name",

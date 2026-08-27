@@ -81,6 +81,15 @@ static CTile *LoadTiles(CDataFileReader *pDataFile, int DataIndex, int Width, in
 	return pTiles;
 }
 
+// a marker position on a game layer: a flag stand anchor (where structs are
+// pasted) or a red team spawn point (where resources are placed)
+struct CAnchor
+{
+	int m_Type; // ENTITY_FLAGSTAND_RED / ENTITY_FLAGSTAND_BLUE / 0 for spawns
+	int m_X;
+	int m_Y;
+};
+
 // pastes the tiles of the source layer into the destination layer at the
 // given offset. Only the tiles inside the struct region (source coordinates
 // RegionX1..RegionX2, RegionY1..RegionY2) are pasted; the rest of the struct
@@ -119,7 +128,9 @@ static void PasteTiles(CTile *pDst, int DstWidth, int DstHeight, const CTile *pS
 // scans a struct layer and records the positions of the red/blue flag stand
 // anchors as well as the bounding box of the actual (non empty, non anchor)
 // content. The bounding box is accumulated over all game/template layers.
-static void ScanStructTiles(const CTile *pTiles, int Width, int Height, int *pRedX, int *pRedY, int *pBlueX, int *pBlueY, int *pMinX, int *pMinY, int *pMaxX, int *pMaxY)
+// Red team spawn points inside the struct are collected into lRedSpawns
+// (struct coordinates).
+static void ScanStructTiles(const CTile *pTiles, int Width, int Height, int *pRedX, int *pRedY, int *pBlueX, int *pBlueY, int *pMinX, int *pMinY, int *pMaxX, int *pMaxY, array<CAnchor> *pRedSpawns = 0)
 {
 	for(int y = 0; y < Height; y++)
 	{
@@ -135,6 +146,15 @@ static void ScanStructTiles(const CTile *pTiles, int Width, int Height, int *pRe
 			{
 				*pBlueX = x;
 				*pBlueY = y;
+			}
+			else if(Index == ENTITY_OFFSET + ENTITY_SPAWN_RED)
+			{
+				if(pRedSpawns)
+				{
+					CAnchor &Spawn = pRedSpawns->emplace();
+					Spawn.m_X = x;
+					Spawn.m_Y = y;
+				}
 			}
 			else if(Index != 0)
 			{
@@ -573,15 +593,21 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 	int GameWidth = 0, GameHeight = 0;
 	CTile *pGameTiles = nullptr;
 
-	struct CAnchor
-	{
-		int m_Type; // ENTITY_FLAGSTAND_RED / ENTITY_FLAGSTAND_BLUE
-		int m_X;
-		int m_Y;
-	};
 	array<CAnchor> lAnchors;
 	// the red team spawn points where the configured resources are placed
 	array<CAnchor> lRedSpawns;
+
+	// resource spots contributed by the structs: a struct's own resources
+	// are only placed on the red team spawn points inside that struct
+	struct CStructResourceSpot
+	{
+		int m_X;
+		int m_Y;
+		int m_ConfigStart; // first index into lStructResourceConfigs
+		int m_ConfigCount;
+	};
+	array<CResourceConfig> lStructResourceConfigs;
+	array<CStructResourceSpot> lStructResourceSpots;
 
 	struct CBaseTemplate
 	{
@@ -723,6 +749,11 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 			pGameTiles[lAnchors[a].m_Y * GameWidth + lAnchors[a].m_X].m_Index = 0;
 			pGameTiles[lAnchors[a].m_Y * GameWidth + lAnchors[a].m_X].m_Flags = 0;
 		}
+		for(int a = 0; a < lRedSpawns.size(); a++)
+		{
+			pGameTiles[lRedSpawns[a].m_Y * GameWidth + lRedSpawns[a].m_X].m_Index = 0;
+			pGameTiles[lRedSpawns[a].m_Y * GameWidth + lRedSpawns[a].m_X].m_Flags = 0;
+		}
 	}
 
 	// the entrances carried by the struct maps, translated into the base
@@ -766,6 +797,8 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 
 			int RedX = -1, RedY = -1, BlueX = -1, BlueY = -1;
 			int MinX = 1 << 30, MinY = 1 << 30, MaxX = -1, MaxY = -1;
+			// red team spawn points inside the struct (struct coordinates)
+			array<CAnchor> lStructRedSpawns;
 
 			for(int g = 0; g < SGroupsNum; g++)
 			{
@@ -798,7 +831,7 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 						pStructGameTiles = pTiles;
 						StructGameWidth = pTilemap->m_Width;
 						StructGameHeight = pTilemap->m_Height;
-						ScanStructTiles(pTiles, pTilemap->m_Width, pTilemap->m_Height, &RedX, &RedY, &BlueX, &BlueY, &MinX, &MinY, &MaxX, &MaxY);
+						ScanStructTiles(pTiles, pTilemap->m_Width, pTilemap->m_Height, &RedX, &RedY, &BlueX, &BlueY, &MinX, &MinY, &MaxX, &MaxY, &lStructRedSpawns);
 					}
 					else if(IsTemplateGroup)
 					{
@@ -837,6 +870,22 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 				ParseStructEntrances(pStored, lStructEntranceRects);
 				delete[] pStored;
 			}
+
+			// the struct's own resources are only placed on the red team
+			// spawn points inside the struct; remember the config range for
+			// this struct (empty structs contribute nothing)
+			const int StructConfigStart = lStructResourceConfigs.size();
+			if(Struct.m_ResourcesJson.size())
+			{
+				const int StoredLen = Struct.m_ResourcesJson.size();
+				char *pStored = new char[StoredLen + 1];
+				if(StoredLen > 0)
+					mem_copy(pStored, Struct.m_ResourcesJson.base_ptr(), StoredLen);
+				pStored[StoredLen] = 0;
+				ParseResources(pStored, lStructResourceConfigs);
+				delete[] pStored;
+			}
+			const int StructConfigCount = lStructResourceConfigs.size() - StructConfigStart;
 
 			// corners of the struct content: the struct's own flag stands
 			// define them, otherwise fall back to the content bounding box.
@@ -916,6 +965,20 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 					Entrance.m_EndY = Rect.m_EndY == INT_MAX ? INT_MAX : StructTopY + OffsetY + Rect.m_EndY;
 					str_copy(Entrance.m_aTarget, Rect.m_aTarget, sizeof(Entrance.m_aTarget));
 				}
+
+				// the struct's resources go to the red spawn points inside
+				// the pasted struct, translated into base map coordinates
+				if(StructConfigCount > 0)
+				{
+					for(int rs = 0; rs < lStructRedSpawns.size(); rs++)
+					{
+						CStructResourceSpot &Spot = lStructResourceSpots.emplace();
+						Spot.m_X = lStructRedSpawns[rs].m_X + OffsetX;
+						Spot.m_Y = lStructRedSpawns[rs].m_Y + OffsetY;
+						Spot.m_ConfigStart = StructConfigStart;
+						Spot.m_ConfigCount = StructConfigCount;
+					}
+				}
 				MergedAnchors++;
 			}
 
@@ -955,8 +1018,8 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 	// ---------------------------------------------------------------
 	array<CResourceEntry> lResources;
 	{
-		// collect the resource configs: base + structs
-		array<CResourceConfig> lResourceConfigs;
+		// base resources go to the base map's red team spawn points
+		array<CResourceConfig> lBaseResourceConfigs;
 		if(pInstruction->m_ResourcesJson.size())
 		{
 			const int StoredLen = pInstruction->m_ResourcesJson.size();
@@ -964,49 +1027,48 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 			if(StoredLen > 0)
 				mem_copy(pStored, pInstruction->m_ResourcesJson.base_ptr(), StoredLen);
 			pStored[StoredLen] = 0;
-			ParseResources(pStored, lResourceConfigs);
-			delete[] pStored;
-		}
-		for(int s = 0; s < pInstruction->m_Structs.size(); s++)
-		{
-			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
-			if(!Struct.m_ResourcesJson.size())
-				continue;
-			const int StoredLen = Struct.m_ResourcesJson.size();
-			char *pStored = new char[StoredLen + 1];
-			if(StoredLen > 0)
-				mem_copy(pStored, Struct.m_ResourcesJson.base_ptr(), StoredLen);
-			pStored[StoredLen] = 0;
-			ParseResources(pStored, lResourceConfigs);
+			ParseResources(pStored, lBaseResourceConfigs);
 			delete[] pStored;
 		}
 
-		// roll each resource on every red team spawn point
+		// roll a config at one spot; the salts keep base and struct rolls
+		// deterministic and distinct from each other
+		auto RollResource = [&](const CResourceConfig &Config, int X, int Y, int SpotIndex, int SaltBase)
+		{
+			if(!RollChance(Seed, SaltBase + SpotIndex * 100 + 0, Config.m_Proba))
+				return;
+			int Hardness = Config.m_HardnessMin;
+			const int Range = Config.m_HardnessMax - Config.m_HardnessMin + 1;
+			if(Range > 0)
+				Hardness += (int) (DeterministicHash(Seed, SaltBase + 10000 + SpotIndex * 100 + 0) % (unsigned) Range);
+
+			int RespawnTime = Config.m_RespawnTimeMin;
+			const int RespawnRange = Config.m_RespawnTimeMax - Config.m_RespawnTimeMin + 1;
+			if(RespawnRange > 0)
+				RespawnTime += (int) (DeterministicHash(Seed, SaltBase + 20000 + SpotIndex * 100 + 0) % (unsigned) RespawnRange);
+
+			CResourceEntry &Entry = lResources.emplace();
+			str_copy(Entry.m_aResId, Config.m_aResId, sizeof(Entry.m_aResId));
+			str_copy(Entry.m_aDisplay, Config.m_aDisplay, sizeof(Entry.m_aDisplay));
+			Entry.m_X = X;
+			Entry.m_Y = Y;
+			Entry.m_Hardness = Hardness;
+			Entry.m_RespawnTime = RespawnTime;
+		};
+
+		// base map resources on the base red team spawn points
 		for(int r = 0; r < lRedSpawns.size(); r++)
 		{
-			for(int c = 0; c < lResourceConfigs.size(); c++)
-			{
-				const CResourceConfig &Config = lResourceConfigs[c];
-				if(!RollChance(Seed, 10000 + r * 100 + c, Config.m_Proba))
-					continue;
-				int Hardness = Config.m_HardnessMin;
-				const int Range = Config.m_HardnessMax - Config.m_HardnessMin + 1;
-				if(Range > 0)
-					Hardness += (int) (DeterministicHash(Seed, 20000 + r * 100 + c) % (unsigned) Range);
+			for(int c = 0; c < lBaseResourceConfigs.size(); c++)
+				RollResource(lBaseResourceConfigs[c], lRedSpawns[r].m_X, lRedSpawns[r].m_Y, r, 10000);
+		}
 
-				int RespawnTime = Config.m_RespawnTimeMin;
-				const int RespawnRange = Config.m_RespawnTimeMax - Config.m_RespawnTimeMin + 1;
-				if(RespawnRange > 0)
-					RespawnTime += (int) (DeterministicHash(Seed, 30000 + r * 100 + c) % (unsigned) RespawnRange);
-
-				CResourceEntry &Entry = lResources.emplace();
-				str_copy(Entry.m_aResId, Config.m_aResId, sizeof(Entry.m_aResId));
-				str_copy(Entry.m_aDisplay, Config.m_aDisplay, sizeof(Entry.m_aDisplay));
-				Entry.m_X = lRedSpawns[r].m_X;
-				Entry.m_Y = lRedSpawns[r].m_Y;
-				Entry.m_Hardness = Hardness;
-				Entry.m_RespawnTime = RespawnTime;
-			}
+		// struct resources only on the red spawn points inside the structs
+		for(int s = 0; s < lStructResourceSpots.size(); s++)
+		{
+			const CStructResourceSpot &Spot = lStructResourceSpots[s];
+			for(int c = 0; c < Spot.m_ConfigCount; c++)
+				RollResource(lStructResourceConfigs[Spot.m_ConfigStart + c], Spot.m_X, Spot.m_Y, s, 40000);
 		}
 	}
 	array<char> lResourceJson;

@@ -385,6 +385,16 @@ void CGameContext::SendVoteOptions(int ClientID)
 
 void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID)
 {
+	if(pPlayer->GameWorld()->WorldID() == MapID)
+	{
+		vec2 SpawnPos;
+		if(m_pController->CanSpawn(pPlayer->GameWorld(), pPlayer->GetTeam(), &SpawnPos))
+		{
+			pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), SpawnPos);
+		}
+		return;
+	}
+
 	if(Server()->SwitchClientMap(pPlayer->GetCID(), MapID))
 	{
 		CGameWorld **ppWorld = m_pWorlds[MapID];

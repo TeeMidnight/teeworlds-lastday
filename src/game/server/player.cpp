@@ -49,8 +49,8 @@ void CPlayer::CInventory::Add(const char *pResId, int Count)
 	if(m_pPlayer)
 	{
 		char aMsg[128];
-		str_format(aMsg, sizeof(aMsg), Localize("You got: %s x%d", "Item Pickup"),
-			Localize(pResId, "Item Name"), m_aItems[Index].m_Count);
+		str_format(aMsg, sizeof(aMsg), Localize("You got: %s x%d (%d)", "Item Pickup"),
+			Localize(pResId, "Item Name"), Count, m_aItems[Index].m_Count);
 		m_pPlayer->GameServer()->SendChat(-1, CHAT_ALL, m_pPlayer->GetCID(), aMsg);
 	}
 }
