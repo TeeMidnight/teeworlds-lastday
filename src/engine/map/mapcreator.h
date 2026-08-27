@@ -15,6 +15,8 @@ class CMapCreator
 	array<CCreatorImage *> m_lpImages;
 	array<CCreatorEnvelope *> m_lpEnvelopes;
 
+	array<char> m_JsonData;
+
 	void *m_ImageLock;
 	void *m_EnvelopeLock;
 	void *m_GroupLock;
@@ -34,6 +36,11 @@ public:
 	CCreatorGroupInfo *AddGroup(const char *pName);
 
 	void AddMiniMap();
+
+	// stores arbitrary json data (e.g. the entrance definitions of a
+	// generated world) which is written to the map as a MAPITEMTYPE_JSON
+	// item on save
+	void AddJsonData(const char *pJsonData, int Size);
 
 	bool SaveMap(EMapType MapType, const char *pMap);
 };

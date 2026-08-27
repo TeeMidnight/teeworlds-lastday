@@ -380,7 +380,12 @@ void CGameContext::SendVoteOptions(int ClientID)
 void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID)
 {
 	if(Server()->SwitchClientMap(pPlayer->GetCID(), MapID))
-		pPlayer->SwitchWorld(*m_pWorlds[MapID]);
+	{
+		CGameWorld **ppWorld = m_pWorlds[MapID];
+		CGameWorld *pWorld = ppWorld ? *ppWorld : nullptr;
+		if(pWorld)
+			pPlayer->SwitchWorld(pWorld);
+	}
 }
 
 void CGameContext::SendTuningParams(int ClientID)

@@ -128,6 +128,7 @@ CMapCreator::CMapCreator(IStorage *pStorage, IConsole *pConsole) :
 
 	m_ImageLock = lock_create();
 	m_EnvelopeLock = lock_create();
+	m_GroupLock = lock_create();
 }
 
 CMapCreator::~CMapCreator()
@@ -183,6 +184,7 @@ CMapCreator::~CMapCreator()
 
 	lock_destroy(m_ImageLock);
 	lock_destroy(m_EnvelopeLock);
+	lock_destroy(m_GroupLock);
 }
 
 CCreatorImage *CMapCreator::AddEmbeddedImage(const char *pImageName, bool Flag)
@@ -371,6 +373,13 @@ void CMapCreator::AddMiniMap()
 	}
 }
 
+void CMapCreator::AddJsonData(const char *pJsonData, int Size)
+{
+	m_JsonData.clear();
+	for(int i = 0; i < Size; i++)
+		m_JsonData.add(pJsonData[i]);
+}
+
 CCreatorLayerTilemap *CCreatorGroupInfo::AddTileLayer(const char *pName)
 {
 	lock_wait(m_LayerLock);
@@ -551,6 +560,10 @@ void CCreatorImage::AnalyzeTileFlags()
 {
 	mem_zero(m_aTileFlags, sizeof(m_aTileFlags));
 
+	// external images have no pixel data and therefore no tile flags
+	if(!m_pImageData)
+		return;
+
 	int tw = m_Width / 16; // tilesizes
 	int th = m_Height / 16;
 	if(tw == th)
@@ -727,6 +740,7 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 			if(pLayer->m_Type == ELayerType::TILES)
 			{
 				CCreatorLayerTilemap *pTilemap = (CCreatorLayerTilemap *) pLayer;
+				pTilemap->PrepareForSave();
 
 				CMapItemLayerTilemap Item;
 
@@ -806,6 +820,16 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 				DataFile.AddItem(MAPITEMTYPE_LAYER, NumLayers++, sizeof(CMapItemLayerQuads), &Item);
 			}
 		}
+	}
+
+	// save the json data as a MAPITEMTYPE_JSON item
+	if(m_JsonData.size())
+	{
+		const int JsonIndex = DataFile.AddData(m_JsonData.size(), m_JsonData.base_ptr());
+		CMapItemJson JsonItem;
+		JsonItem.m_Version = CMapItemJson::CURRENT_VERSION;
+		JsonItem.m_Data = JsonIndex;
+		DataFile.AddItem(MAPITEMTYPE_JSON, 0, sizeof(CMapItemJson), &JsonItem);
 	}
 
 	DataFile.Finish();

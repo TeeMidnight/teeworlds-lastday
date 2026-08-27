@@ -19,6 +19,7 @@
 #include <engine/shared/econ.h>
 #include <engine/shared/filecollection.h>
 #include <engine/shared/http_request.h>
+#include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
 #include <engine/shared/mapchecker.h>
 #include <engine/shared/netban.h>
@@ -34,6 +35,7 @@
 
 #include "register.h"
 #include "server.h"
+#include "mapgen.h"
 
 #include <signal.h>
 
@@ -1353,6 +1355,23 @@ unsigned CServer::PushMapList(const char *pMapName)
 	return MapID;
 }
 
+void CServer::RegisterMapEntrances(const char *pJsonData)
+{
+	// the map info's MapVersion contains the entrance json of a generated
+	// world; register every entrance target map so the players can switch
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(pJsonData, "entrances");
+	if(!pJson || pJson->type != json_array)
+		return;
+	for(unsigned i = 0; i < pJson->u.array.length; i++)
+	{
+		const json_value &rEntrance = (*pJson)[i];
+		const json_value &rTarget = rEntrance["entrance"];
+		if(rTarget.type == json_string)
+			PushMapList(rTarget.u.string.ptr);
+	}
+}
+
 int CServer::LoadMap(unsigned MapID)
 {
 	CMapInfo *pInfo = m_MapInfos[MapID];
@@ -1365,9 +1384,47 @@ int CServer::LoadMap(CMapInfo *pInfo)
 		return 1;
 	char aBuf[IO_MAX_PATH_LENGTH];
 	str_format(aBuf, sizeof(aBuf), "maps/%s.map", pInfo->m_aName);
+	bool IsGenerated = false;
 
-	// check for valid standard map
-	if(!m_pMapChecker->ReadAndValidateMap(aBuf, IStorage::TYPE_ALL))
+	// a requested map may be a generated "<base>_<seed>" map: split at the
+	// last underscore and parse the numeric seed
+	const char *pUnderscore = 0;
+	for(const char *p = pInfo->m_aName; *p; p++)
+	{
+		if(*p == '_')
+			pUnderscore = p;
+	}
+	if(pUnderscore && pUnderscore[1] && str_is_number(pUnderscore + 1) == 0)
+	{
+		const int BaseLen = (int) (pUnderscore - pInfo->m_aName);
+		if(BaseLen > 0 && BaseLen < 64)
+		{
+			char aBaseMap[64];
+			str_copy(aBaseMap, pInfo->m_aName, BaseLen + 1);
+			const int Seed = str_toint(pUnderscore + 1);
+
+			// the generated map file is generatedmaps/<name>.map
+			char aGenPath[IO_MAX_PATH_LENGTH];
+			str_format(aGenPath, sizeof(aGenPath), "generatedmaps/%s.map", pInfo->m_aName);
+			char aMapFile[64];
+			str_format(aMapFile, sizeof(aMapFile), "%s.map", pInfo->m_aName);
+			char aFoundPath[IO_MAX_PATH_LENGTH];
+			if(!Storage()->FindFile(aMapFile, "generatedmaps", IStorage::TYPE_ALL, aFoundPath, sizeof(aFoundPath)))
+			{
+				// the map has not been generated yet — generate it now
+				if(!m_pMapGen || !m_pMapGen->RequestNewMap(aBaseMap, Seed))
+				{
+					Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "mapgen", "failed to generate the map");
+					return 0;
+				}
+			}
+			str_copy(aBuf, aGenPath, sizeof(aBuf));
+			IsGenerated = true;
+		}
+	}
+
+	// check for valid standard map (generated maps are always accepted)
+	if(!IsGenerated && !m_pMapChecker->ReadAndValidateMap(aBuf, IStorage::TYPE_ALL))
 	{
 		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "mapchecker", "invalid standard map");
 		return 0;
@@ -1402,19 +1459,30 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	}
 
 	CMapItemInfo *pItem = (CMapItemInfo *) m_pMap->FindItem(MAPITEMTYPE_INFO, 0);
-	char aTemp[32];
 	if(pItem && pItem->m_Version == 1)
 	{
 		if(pItem->m_MapVersion > -1)
 		{
-			str_copy(aTemp, (char *) m_pMap->GetData(pItem->m_MapVersion), sizeof(aTemp));
-			PushMapList(aTemp);
+			const char *pMapVersion = (const char *) m_pMap->GetData(pItem->m_MapVersion);
+			if(pMapVersion)
+				PushMapList(pMapVersion);
 		}
 		if(pItem->m_Credits > -1)
 		{
-			str_copy(aTemp, (char *) m_pMap->GetData(pItem->m_Credits), sizeof(aTemp));
-			PushMapList(aTemp);
+			const char *pCredits = (const char *) m_pMap->GetData(pItem->m_Credits);
+			if(pCredits)
+				PushMapList(pCredits);
 		}
+	}
+
+	// generated worlds register their entrance targets from the
+	// MAPITEMTYPE_JSON item
+	CMapItemJson *pJsonItem = (CMapItemJson *) m_pMap->FindItem(MAPITEMTYPE_JSON, 0);
+	if(pJsonItem && pJsonItem->m_Version == CMapItemJson::CURRENT_VERSION && pJsonItem->m_Data > -1)
+	{
+		const char *pJsonData = (const char *) m_pMap->GetData(pJsonItem->m_Data);
+		if(pJsonData)
+			RegisterMapEntrances(pJsonData);
 	}
 
 	GameServer()->RequestLoadWorld(pInfo->m_MapID);
@@ -1435,6 +1503,7 @@ void CServer::InitInterfaces(IKernel *pKernel)
 	m_pMap = pKernel->RequestInterface<IEngineMap>();
 	m_pMapChecker = pKernel->RequestInterface<IMapChecker>();
 	m_pStorage = pKernel->RequestInterface<IStorage>();
+	m_pMapGen = new CMapGen(m_pStorage, m_pConsole);
 }
 
 int CServer::Run()
@@ -1607,6 +1676,9 @@ int CServer::Run()
 
 void CServer::Free()
 {
+	delete m_pMapGen;
+	m_pMapGen = nullptr;
+
 	if(m_pMap)
 	{
 		m_pMap->Unload();
@@ -1860,8 +1932,13 @@ void CServer::SnapSetStaticsize(int ItemType, int Size)
 
 bool CServer::SwitchClientMap(int ClientID, unsigned MapID)
 {
-	if(m_MapInfos[MapID])
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	if(pInfo)
 	{
+		// load the map first (this also generates missing maps and creates
+		// the game world); do not switch if the load failed
+		if(!LoadMap(pInfo))
+			return false;
 		m_aClients[ClientID].Reset(false);
 		m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 		m_aClients[ClientID].m_MapID = MapID;

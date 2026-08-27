@@ -33,6 +33,8 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_Spawning = false;
 	m_MapLoading = false;
 	mem_zero(&m_Latency, sizeof(m_Latency));
+
+	m_Status.m_Sanity = 100;
 }
 
 CPlayer::~CPlayer()
@@ -46,7 +48,7 @@ void CPlayer::Tick()
 	if(!IsDummy() && !Server()->ClientIngame(m_ClientID))
 		return;
 
-	Server()->SetClientScore(m_ClientID, m_Score);
+	Server()->SetClientScore(m_ClientID, m_Status.m_Sanity);
 
 	// do latency stuff
 	{

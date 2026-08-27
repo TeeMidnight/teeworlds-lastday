@@ -3,6 +3,10 @@
 
 #include <generated/server_data.h>
 
+#include <engine/shared/jsonparser.h>
+
+#include <climits>
+
 #include "entities/character.h"
 #include "entity.h"
 #include "gamecontext.h"
@@ -67,9 +71,73 @@ void CGameWorld::InitCollision(IMap *pMap)
 	if(pItem && pItem->m_Version == 1)
 	{
 		if(pItem->m_MapVersion > -1)
+		{
+			// classic mechanism: the MapVersion directly names the entrance
+			// target map (main world, e.g. Connector)
 			str_copy(m_aEntrances[0], (char *) pMap->GetData(pItem->m_MapVersion), sizeof(m_aEntrances[0]));
+		}
 		if(pItem->m_Credits > -1)
 			str_copy(m_aEntrances[1], (char *) pMap->GetData(pItem->m_Credits), sizeof(m_aEntrances[1]));
+	}
+
+	// generated worlds carry their entrance definitions as json in the
+	// MAPITEMTYPE_JSON item
+	CMapItemJson *pJsonItem = (CMapItemJson *) pMap->FindItem(MAPITEMTYPE_JSON, 0);
+	if(pJsonItem && pJsonItem->m_Version == CMapItemJson::CURRENT_VERSION && pJsonItem->m_Data > -1)
+	{
+		const char *pJsonData = (const char *) pMap->GetData(pJsonItem->m_Data);
+		if(pJsonData)
+			ParseEntrances(pJsonData);
+	}
+}
+
+void CGameWorld::ParseEntrances(const char *pJsonData)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(pJsonData, "entrances");
+	if(!pJson || pJson->type != json_array)
+		return;
+	for(unsigned i = 0; i < pJson->u.array.length; i++)
+	{
+		const json_value &rEntrance = (*pJson)[i];
+		if(rEntrance.type != json_object)
+			continue;
+		const json_value &rTarget = rEntrance["entrance"];
+		if(rTarget.type != json_string)
+			continue;
+
+		const json_value &rTiles = rEntrance["tiles"];
+		for(unsigned t = 0; t < rTiles.u.array.length; t++)
+		{
+			const json_value &rRect = rTiles[t];
+			if(rRect.type != json_object)
+				continue;
+
+			// a string value ("ignore") means this axis is not restricted at
+			// all: entrances outside the map bounds are recognized as well
+			const json_value &rStartX = rRect["tiles_start_x"];
+			const json_value &rStartY = rRect["tiles_start_y"];
+			const json_value &rEndX = rRect["tiles_end_x"];
+			const json_value &rEndY = rRect["tiles_end_y"];
+
+			int StartX = rStartX.type == json_string ? INT_MIN : (int) (json_int_t) rStartX;
+			int StartY = rStartY.type == json_string ? INT_MIN : (int) (json_int_t) rStartY;
+			int EndX = rEndX.type == json_string ? INT_MAX : (int) (json_int_t) rEndX;
+			int EndY = rEndY.type == json_string ? INT_MAX : (int) (json_int_t) rEndY;
+
+			// make sure start <= end
+			if(StartX > EndX)
+				std::swap(StartX, EndX);
+			if(StartY > EndY)
+				std::swap(StartY, EndY);
+
+			CEntranceInfo &Entrance = m_lEntrances.emplace();
+			Entrance.m_StartX = StartX;
+			Entrance.m_StartY = StartY;
+			Entrance.m_EndX = EndX;
+			Entrance.m_EndY = EndY;
+			str_copy(Entrance.m_aTargetMap, rTarget.u.string.ptr, sizeof(Entrance.m_aTargetMap));
+		}
 	}
 }
 

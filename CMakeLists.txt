@@ -692,6 +692,9 @@ set(EXPECTED_DATA
   maps/Heaven.map
   maps/Underground.map
   maps/Wonderland.map
+  maps/struct/Underground_Left.map
+  maps/struct/Wonderland_Post.map
+  maps/worlds.json
 )
 
 set_glob(DATA GLOB_RECURSE "json;map;png;rules;ttc;ttf;txt;opus" datasrc ${EXPECTED_DATA})
@@ -924,6 +927,8 @@ list(APPEND TARGETS_OWN engine-shared game-shared)
 
 # Sources
 set_src(ENGINE_SERVER GLOB src/engine/server
+  mapgen.cpp
+  mapgen.h
   register.cpp
   register.h
   server.cpp

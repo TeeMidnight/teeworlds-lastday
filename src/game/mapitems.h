@@ -20,6 +20,7 @@ enum
 	MAPITEMTYPE_LAYER,
 	MAPITEMTYPE_ENVPOINTS,
 	MAPITEMTYPE_SOUND,
+	MAPITEMTYPE_JSON = 16,
 
 	CURVETYPE_STEP = 0,
 	CURVETYPE_LINEAR,
@@ -102,6 +103,19 @@ struct CMapItemInfo
 	int m_MapVersion;
 	int m_Credits;
 	int m_License;
+};
+
+// holds arbitrary json data (e.g. the entrance definitions of a generated
+// world). The json string itself is stored as a data chunk referenced by
+// m_Data.
+struct CMapItemJson
+{
+	enum
+	{
+		CURRENT_VERSION = 1
+	};
+	int m_Version;
+	int m_Data;
 };
 
 struct CMapItemImage_v1

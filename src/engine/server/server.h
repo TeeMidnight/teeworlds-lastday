@@ -155,6 +155,7 @@ public:
 
 	IEngineMap *m_pMap;
 	IMapChecker *m_pMapChecker;
+	class CMapGen *m_pMapGen;
 
 	int64 m_GameStartTime;
 	bool m_RunServer;
@@ -254,6 +255,7 @@ public:
 	unsigned PushMapList(const char *pMapName);
 	int LoadMap(unsigned MapID);
 	int LoadMap(CMapInfo *pInfo);
+	void RegisterMapEntrances(const char *pJsonData);
 
 	void InitRegister(class IEngine *pEngine, class CConfig *pConfig, class IConsole *pConsole, TOKEN SecurityToken);
 	void InitInterfaces(IKernel *pKernel);

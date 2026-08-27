@@ -1,5 +1,7 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
+#include <base/math.h>
+#include <cmath>
 #include <engine/shared/config.h>
 
 #include <game/mapitems.h>
@@ -464,15 +466,64 @@ bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 
 	if(!pChr)
 		return false;
 
-	int Flag = pChr->GameWorld()->Collision()->TestBoxMoveAt(LastPos, NewPos, ColBox);
+	CGameWorld *pWorld = pChr->GameWorld();
+
+	// generated worlds define their entrances as tile regions in the map
+	// info; teleport the character when it enters one of these regions.
+	// The whole movement path is checked (like the collision box movement
+	// test) so fast characters cannot skip over a single-tile entrance row.
+	if(pWorld->m_lEntrances.size())
+	{
+		vec2 Pos = LastPos;
+		const auto FindEntrance = [&](int *pEntranceIndex) {
+			// the tile of a position: use floor so that positions inside a
+			// tile (e.g. interpolated path samples) are attributed correctly
+			const int TileX = (int) floor(Pos.x / 32.0f);
+			const int TileY = (int) floor(Pos.y / 32.0f);
+			for(int i = 0; i < pWorld->m_lEntrances.size(); i++)
+			{
+				const CGameWorld::CEntranceInfo &Entrance = pWorld->m_lEntrances[i];
+				if(TileX >= Entrance.m_StartX && TileX <= Entrance.m_EndX &&
+					TileY >= Entrance.m_StartY && TileY <= Entrance.m_EndY)
+				{
+					*pEntranceIndex = i;
+					return true;
+				}
+			}
+			return false;
+		};
+
+		int EntranceIndex = -1;
+		const float Distance = distance(NewPos, LastPos);
+		const int Steps = maximum(1, (int) Distance);
+		// sample the whole path from LastPos to NewPos (every step is less
+		// than one tile, so no tile of the path can be skipped)
+		const vec2 Step = (NewPos - LastPos) / (float) Steps;
+		for(int i = 0; i <= Steps; i++)
+		{
+			if(FindEntrance(&EntranceIndex))
+				break;
+			Pos = Pos + Step;
+		}
+		if(EntranceIndex >= 0)
+		{
+			pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pWorld->m_lEntrances[EntranceIndex].m_aTargetMap));
+			return true;
+		}
+		return false;
+	}
+
+	// the main world (e.g. Connector) uses the classic entrance tiles and
+	// the directly named entrance maps from the map info
+	int Flag = pWorld->Collision()->TestBoxMoveAt(LastPos, NewPos, ColBox);
 	if(Flag & COLFLAG_ENTRANCE_1_FLAG)
 	{
-		pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pChr->GameWorld()->m_aEntrances[0]));
+		pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pWorld->m_aEntrances[0]));
 		return true;
 	}
 	if(Flag & COLFLAG_ENTRANCE_2_FLAG)
 	{
-		pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pChr->GameWorld()->m_aEntrances[1]));
+		pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pWorld->m_aEntrances[1]));
 		return true;
 	}
 	return false;

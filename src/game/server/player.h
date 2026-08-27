@@ -117,6 +117,10 @@ public:
 	CGameWorld *GameWorld() const { return m_pWorld; }
 	void SwitchWorld(CGameWorld *pWorld);
 
+	struct CStatus
+	{
+		int m_Sanity;
+	} m_Status;
 private:
 	CCharacter *m_pCharacter;
 	CGameWorld *m_pWorld;

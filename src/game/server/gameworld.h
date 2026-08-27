@@ -62,6 +62,18 @@ public:
 	array<vec2> m_alSpawnPoints[3];
 	void InitCollision(class IMap *pMap);
 
+	// entrance regions defined in the map info (MapVersion json) of the
+	// generated worlds. When a character enters one of these tile regions
+	// it is teleported to the target map.
+	struct CEntranceInfo
+	{
+		int m_StartX, m_StartY; // tile coordinates, inclusive
+		int m_EndX, m_EndY;
+		char m_aTargetMap[64];
+	};
+	array<CEntranceInfo> m_lEntrances;
+	void ParseEntrances(const char *pJsonData);
+
 	typedef array<CEntity *>::range TypeRange;
 	TypeRange DoTypeRange(int Type);
 
