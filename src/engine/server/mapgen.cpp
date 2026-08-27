@@ -252,7 +252,7 @@ static int DeriveTargetSeed(int Seed, const char *pTarget)
 	h *= 0x85EBCA6Bu;
 	h ^= h >> 13;
 	// 1 is the floor backbone, so the exits use the instances 1..64
-	return 1 + (int) (h % 64);
+	return 1 + (int) (h % 1024);
 }
 
 void CMapGen::WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEntrances, int Seed, const array<CStructEntrance> &lStructEntrances)
