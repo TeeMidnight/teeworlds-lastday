@@ -158,7 +158,7 @@
                         "tiles_start_x": "ignore",
                         "tiles_start_y": -1,
                         "tiles_end_x": "ignore",
-                        "tiles_end_y": 1
+                        "tiles_end_y": 0
                     }
                 ],
                 "entrance": "Heaven"
