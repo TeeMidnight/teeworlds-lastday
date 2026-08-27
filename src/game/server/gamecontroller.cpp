@@ -291,7 +291,7 @@ bool CGameController::IsFriendlyFire(int ClientID1, int ClientID2, int Damage) c
 	if(!GameServer()->m_apPlayers[ClientID1] || !GameServer()->m_apPlayers[ClientID2])
 		return false;
 
-	return false;
+	return true;
 }
 
 bool CGameController::IsFriendlyTeamFire(int Team1, int Team2, int Damage) const
