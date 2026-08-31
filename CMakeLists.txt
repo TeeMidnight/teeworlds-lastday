@@ -705,6 +705,7 @@ set(EXPECTED_DATA
   maps/Underground.map
   maps/Wonderland.map
   maps/struct/Darkness_Platform.map
+  maps/struct/Grounded_Resources.map
   maps/struct/Underground_Left.map
   maps/struct/Wonderland_Post.map
   maps/worlds/Darkness.json
