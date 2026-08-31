@@ -1,0 +1,16 @@
+{
+    "base": "Heaven",
+    "entrances": [
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": "ignore",
+                    "tiles_start_y": 48,
+                    "tiles_end_x": "ignore",
+                    "tiles_end_y": 50
+                }
+            ],
+            "entrance": "Wonderland"
+        }
+    ]
+}

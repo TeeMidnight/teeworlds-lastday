@@ -689,7 +689,7 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 	pThis->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
 
 	// notify the mod about the drop
-	if(pThis->m_aClients[ClientID].m_State >= CClient::STATE_READY)
+	if(pThis->m_aClients[ClientID].m_State >= CClient::STATE_EMPTY)
 	{
 		pThis->m_aClients[ClientID].m_Quitting = true;
 		pThis->GameServer()->OnClientDrop(ClientID, pReason);
@@ -1935,10 +1935,6 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID)
 	CMapInfo *pInfo = m_MapInfos[MapID];
 	if(pInfo)
 	{
-		// load the map first (this also generates missing maps and creates
-		// the game world); do not switch if the load failed
-		if(!LoadMap(pInfo))
-			return false;
 		m_aClients[ClientID].Reset(false);
 		m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 		m_aClients[ClientID].m_MapID = MapID;

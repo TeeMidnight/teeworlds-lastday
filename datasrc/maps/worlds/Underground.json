@@ -1,0 +1,74 @@
+{
+    "base": "Underground",
+    "structs": [
+        {
+            "base": "Underground_Left",
+            "entrances": [
+                {
+                    "tiles": [
+                        {
+                            "tiles_start_x": 0,
+                            "tiles_start_y": 0,
+                            "tiles_end_x": 7,
+                            "tiles_end_y": 2
+                        }
+                    ],
+                    "entrance": "Grasswalk"
+                }
+            ],
+            "proba": 50
+        },
+        {
+            "base": "Underground_Left",
+            "entrances": [
+                {
+                    "tiles": [
+                        {
+                            "tiles_start_x": 0,
+                            "tiles_start_y": 0,
+                            "tiles_end_x": 7,
+                            "tiles_end_y": 2
+                        }
+                    ],
+                    "entrance": "Heaven"
+                }
+            ],
+            "proba": 50,
+            "resources": [
+                {
+                    "res_id": "heaven_ore",
+                    "display": "armor",
+                    "proba": 10,
+                    "hardness_min": 5,
+                    "hardness_max": 10,
+                    "respawntime_min": 120,
+                    "respawntime_max": 240
+                }
+            ]
+        }
+    ],
+    "entrances": [
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": 511,
+                    "tiles_start_y": "ignore",
+                    "tiles_end_x": "ignore",
+                    "tiles_end_y": "ignore"
+                }
+            ],
+            "entrance": "Darkness"
+        }
+    ],
+    "resources": [
+        {
+            "res_id": "stone",
+            "display": "armor",
+            "proba": 30,
+            "hardness_min": 1,
+            "hardness_max": 5,
+            "respawntime_min": 60,
+            "respawntime_max": 120
+        }
+    ]
+}

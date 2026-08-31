@@ -21,26 +21,33 @@ JSON_KEY_TR="tr"
 
 SOURCE_LOCALIZE_RE=re.compile(br'Localize\("(?P<str>([^"\\]|\\.)*)"(, ?"(?P<ctxt>([^"\\]|\\.)*)")?\)')
 
-# context used for item names (res_id) in the inventory menu
+# contexts used for item names and descriptions in the inventory menu
 ITEM_NAME_CTXT = "Item Name"
+ITEM_DESC_CTXT = "Item Desc"
 
 def parse_item_names():
-	"""Collects the item names (res_id) from the map generation data so they
-	can be translated in the inventory menu."""
+	"""Collects the item names and descriptions from datasrc/items/*.json so
+	they can be translated in the inventory menu."""
 	l10n = defaultdict(lambda: str)
 
-	def walk(node):
-		if isinstance(node, dict):
-			if node.get("res_id"):
-				l10n[(node["res_id"], ITEM_NAME_CTXT)] = ""
-			for v in node.values():
-				walk(v)
-		elif isinstance(node, list):
-			for v in node:
-				walk(v)
+	items_dir = "datasrc/items"
+	if not os.path.isdir(items_dir):
+		return l10n
 
-	with open("datasrc/maps/worlds.json", encoding='utf-8') as f:
-		walk(json.load(f))
+	for filename in sorted(os.listdir(items_dir)):
+		if not filename.endswith(".json"):
+			continue
+		with open(os.path.join(items_dir, filename), encoding='utf-8') as f:
+			item = json.load(f)
+		if not isinstance(item, dict):
+			continue
+		if item.get("name"):
+			l10n[(item["name"], ITEM_NAME_CTXT)] = ""
+		desc = item.get("desc") or item.get("Desc")
+		if desc:
+			# the description context carries the item name so that two items
+			# sharing the same description text get separate translations
+			l10n[(desc, ITEM_DESC_CTXT + ": " + item["name"])] = ""
 	return l10n
 
 def parse_source():

@@ -26,7 +26,8 @@ class CMapGen
 			array<char> m_ResourcesJson; // serialized resources json of this struct (optional)
 		};
 
-		char m_aBaseMap[64];
+		char m_aFloorName[64]; // unique floor/map name (the file name)
+		char m_aBaseMap[64]; // the base map file to load (the "base" field)
 		array<CStruct> m_Structs;
 		array<char> m_DefaultEntrances;
 		array<char> m_ResourcesJson; // serialized resources json of this base (optional)
@@ -36,6 +37,13 @@ class CMapGen
 	hash_table<unsigned, CInstruction *, 4> m_lInstructions;
 
 	static void FreeInstruction(CInstruction *&pInstruction, void *pUser);
+
+	// IStorage::ListDirectory callback: loads every "<floorname>.json" file
+	// found in the "maps/worlds" directory
+	static int ListWorldsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
+
+	// parse a single floor config file and register its CInstruction
+	void LoadFloor(const char *pFloorName, const char *pFilePath);
 
 	// serializes the entrance array, appending "_<seed>" to the entrance
 	// targets that are themselves generated worlds (configured in
@@ -48,11 +56,11 @@ public:
 	CMapGen(class IStorage *pStorage, class IConsole *pConsole);
 	~CMapGen();
 
-	// Generates a new map from the given base map, merging the configured
-	// struct maps at the positions marked by the flag stand entities of the
-	// base map's game layer. The result is written to
-	// "generatedmaps/<BaseMap>.map". Returns true on success.
-	bool RequestNewMap(const char *pBaseMap, int Seed);
+	// Generates a new map for the given floor (the floor name, e.g. the map
+	// name prefix "<FloorName>_<Seed>"). The floor's instruction carries the
+	// actual base map file to load. The result is written to
+	// "generatedmaps/<FloorName>_<Seed>.map". Returns true on success.
+	bool RequestNewMap(const char *pFloorName, int Seed);
 };
 
 #endif // ENGINE_SERVER_MAPGEN_H

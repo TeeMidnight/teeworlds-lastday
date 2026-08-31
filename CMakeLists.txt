@@ -236,6 +236,8 @@ find_package(Git)
 find_package(GTest)
 find_package(SPNG)
 find_package(Threads)
+find_package(SQLite3)
+find_package(PostgreSQL)
 
 
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
@@ -286,6 +288,15 @@ show_dependency_status("Curl" CURL)
 show_dependency_status("spng" spng)
 show_dependency_status("Python3" Python3)
 show_dependency_status("Zlib" ZLIB)
+show_dependency_status("SQLite3" SQLite3)
+show_dependency_status("PostgreSQL" PostgreSQL)
+
+if(NOT(SQLite3_FOUND))
+  message(SEND_ERROR "You must install sqlite3 (e.g. libsqlite3-dev) to compile LastDay")
+endif()
+if(NOT(PostgreSQL_FOUND))
+  message(SEND_ERROR "You must install libpq (e.g. libpq-dev) to compile LastDay")
+endif()
 
 if(NOT(Python3_FOUND))
   message(SEND_ERROR "You must install Python to compile Teeworlds")
@@ -693,9 +704,17 @@ set(EXPECTED_DATA
   maps/Heaven.map
   maps/Underground.map
   maps/Wonderland.map
+  maps/struct/Darkness_Platform.map
   maps/struct/Underground_Left.map
   maps/struct/Wonderland_Post.map
-  maps/worlds.json
+  maps/worlds/Darkness.json
+  maps/worlds/Grasswalk.json
+  maps/worlds/Heaven.json
+  maps/worlds/Underground.json
+  maps/worlds/Wonderland.json
+  items/grass.json
+  items/heaven_ore.json
+  items/stone.json
 )
 
 set_glob(DATA GLOB_RECURSE "json;map;png;rules;ttc;ttf;txt;opus" datasrc ${EXPECTED_DATA})
@@ -937,6 +956,16 @@ set_src(ENGINE_SERVER GLOB src/engine/server
 )
 set_src(GAME_SERVER GLOB_RECURSE src/game/server
   alloc.h
+  database/account.cpp
+  database/account.h
+  database/jsonpath.h
+  database/playerdb.cpp
+  database/playerdb.h
+  database/playerdb_postgres.cpp
+  database/playerdb_postgres.h
+  database/playerdb_sqlite.cpp
+  database/playerdb_sqlite.h
+  database/playerdb_util.h
   entities/character.cpp
   entities/character.h
   entities/laser.cpp
@@ -959,6 +988,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamemenu.h
   gameworld.cpp
   gameworld.h
+  item.cpp
+  item.h
   player.cpp
   player.h
 )
@@ -974,7 +1005,7 @@ else()
 endif()
 
 # Libraries
-set(LIBS_SERVER ${LIBS})
+set(LIBS_SERVER ${LIBS} SQLite3::SQLite3 PostgreSQL::PostgreSQL)
 
 # Target
 set(TARGET_SERVER ${SERVER_EXECUTABLE})

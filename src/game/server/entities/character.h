@@ -7,6 +7,7 @@
 
 #include <game/gamecore.h>
 #include <game/server/entity.h>
+#include <game/server/player.h>
 
 class CCharacter : public CHitableEntity
 {
@@ -138,6 +139,9 @@ private:
 	int m_ReckoningTick; // tick that we are performing dead reckoning From
 	CCharacterCore m_SendCore; // core that we should send
 	CCharacterCore m_ReckoningCore; // the dead reckoning core
+
+	friend void CPlayer::SaveStatus(class CPlayerDB *pDB);
+	friend void CPlayer::LoadStatus(class CPlayerDB *pDB);
 };
 
 #endif

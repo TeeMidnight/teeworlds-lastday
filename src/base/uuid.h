@@ -24,6 +24,9 @@ typedef struct
 extern const Uuid UUID_ZEROED;
 
 Uuid random_uuid();
+// RFC 4122 version 7: a time-ordered UUID (Unix epoch milliseconds in the
+// first 48 bits, random in the rest).
+Uuid time_uuid();
 Uuid calculate_uuid(const char *name);
 // The buffer length should be at least UUID_MAXSTRSIZE.
 void format_uuid(Uuid uuid, char *buffer, int size);

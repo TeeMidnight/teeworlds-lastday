@@ -5,6 +5,14 @@
 
 #include "alloc.h"
 
+#include <base/uuid.h>
+
+#include <game/server/item.h>
+
+class CPlayerDB;
+class CGameWorld;
+class CCharacter;
+
 enum
 {
 	WEAPON_GAME = -3, // team switching etc
@@ -36,9 +44,6 @@ public:
 	int GetTeam() const { return m_Team; }
 	int GetCID() const { return m_ClientID; }
 	bool IsDummy() const { return m_Dummy; }
-
-	// game menu
-	bool m_HideTip;
 
 	void Tick();
 	void PostTick();
@@ -120,35 +125,21 @@ public:
 	CGameWorld *GameWorld() const { return m_pWorld; }
 	void SwitchWorld(CGameWorld *pWorld);
 
-	struct CInventory
-	{
-		enum
-		{
-			MAX_ITEMS = 16,
-		};
-
-		struct SItem
-		{
-			char m_aResId[32];
-			int m_Count;
-		};
-
-		SItem m_aItems[MAX_ITEMS];
-		int m_NumItems;
-
-		CPlayer *m_pPlayer;
-
-		CInventory();
-		int Find(const char *pResId) const;
-		int Get(const char *pResId) const;
-		void Add(const char *pResId, int Count);
-	};
-
 	struct CStatus
 	{
+		bool m_HideTip; // game menu
 		int m_Sanity;
-		CInventory m_Inventory;
+		int m_Level;
 	} m_Status;
+
+	// account (bound on login / register)
+	Uuid m_AccountUuid;
+	bool m_LoggedIn;
+
+	// persist the player status (sanity, inventory) to/from the player
+	// database; each field is accessed individually through its json path
+	void SaveStatus(class CPlayerDB *pDB);
+	void LoadStatus(class CPlayerDB *pDB);
 
 private:
 	CCharacter *m_pCharacter;

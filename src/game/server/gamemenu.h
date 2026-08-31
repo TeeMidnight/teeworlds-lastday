@@ -56,6 +56,7 @@ public:
 	void SendMenuChat(int ClientID, const char *pChat);
 
 	void ClearOptions(int ClientID);
+	void RefreshMenu(int ClientID);
 	void SetPlayerPage(int ClientID, unsigned Page);
 	void SetPlayerPage(int ClientID, const char *pPage);
 

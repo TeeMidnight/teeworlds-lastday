@@ -6,53 +6,80 @@
 #include "gamecontroller.h"
 #include "player.h"
 
+#include <game/server/database/playerdb.h>
+#include <game/server/database/playerdb_util.h>
+
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
 CGameContext *CPlayer::GameServer() const { return m_pWorld->GameServer(); }
 IServer *CPlayer::Server() const { return m_pWorld->Server(); }
 
-CPlayer::CInventory::CInventory()
+void CPlayer::SaveStatus(CPlayerDB *pDB)
 {
-	m_pPlayer = 0;
-	m_NumItems = 0;
-	mem_zero(m_aItems, sizeof(m_aItems));
-}
+	if(!pDB || m_AccountUuid == UUID_ZEROED)
+		return;
 
-int CPlayer::CInventory::Find(const char *pResId) const
-{
-	for(int i = 0; i < m_NumItems; i++)
-		if(str_comp(m_aItems[i].m_aResId, pResId) == 0)
-			return i;
-	return -1;
-}
+	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("sanity"), m_Status.m_Sanity);
+	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), m_Status.m_Level);
+	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), m_Status.m_HideTip);
 
-int CPlayer::CInventory::Get(const char *pResId) const
-{
-	const int Index = Find(pResId);
-	return Index >= 0 ? m_aItems[Index].m_Count : 0;
-}
-
-void CPlayer::CInventory::Add(const char *pResId, int Count)
-{
-	int Index = Find(pResId);
-	if(Index < 0)
+	// characters
+	if(m_pCharacter)
 	{
-		if(m_NumItems >= MAX_ITEMS)
-			return;
-		Index = m_NumItems++;
-		str_copy(m_aItems[Index].m_aResId, pResId, sizeof(m_aItems[Index].m_aResId));
-		m_aItems[Index].m_Count = 0;
+		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("health"), m_pCharacter->m_Health);
+		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("armor"), m_pCharacter->m_Armor);
 	}
-	m_aItems[Index].m_Count += Count;
-
-	// notify the player about the obtained item
-	if(m_pPlayer)
+	// clear the previous inventory, then store each item as an array element
+	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
+	pDB->DelJson(m_AccountUuid, CJsonPath().Key("inventory"));
+	for(int i = 0; i < Inventory.m_NumItems; i++)
 	{
-		char aMsg[128];
-		str_format(aMsg, sizeof(aMsg), Localize("You got: %s x%d (%d)", "Item Pickup"),
-			Localize(pResId, "Item Name"), Count, m_aItems[Index].m_Count);
-		m_pPlayer->GameServer()->SendChat(-1, CHAT_ALL, m_pPlayer->GetCID(), aMsg);
+		const CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[i];
+		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), Item.m_aResId);
+		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), Item.m_Count);
 	}
+}
+
+void CPlayer::LoadStatus(CPlayerDB *pDB)
+{
+	if(!pDB || m_AccountUuid == UUID_ZEROED)
+		return;
+
+	// reset to defaults
+	m_Status.m_Sanity = 100;
+	m_Status.m_Level = 0;
+	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
+	Inventory.m_NumItems = 0;
+	mem_zero(Inventory.m_aItems, sizeof(Inventory.m_aItems));
+
+	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("sanity"), &m_Status.m_Sanity);
+	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), &m_Status.m_Level);
+	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), &m_Status.m_HideTip);
+
+	// character infos
+	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("health"), &m_pCharacter->m_Health);
+	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("armor"), &m_pCharacter->m_Armor);
+
+	// read the inventory item by item (no whole-json read)
+	int NumItems = 0;
+	if(pDB->GetJsonLength(m_AccountUuid, CJsonPath().Key("inventory"), &NumItems))
+	{
+		for(int i = 0; i < NumItems && Inventory.m_NumItems < CItemSystem::CInventory::MAX_ITEMS; i++)
+		{
+			char aResId[32];
+			if(!GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), aResId, sizeof(aResId)))
+				continue;
+			int Count = 0;
+			GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), &Count);
+			CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Inventory.m_NumItems];
+			str_copy(Item.m_aResId, aResId, sizeof(Item.m_aResId));
+			Item.m_Count = Count;
+			Inventory.m_NumItems++;
+		}
+	}
+
+	// refresh menu
+	GameServer()->GameMenu()->RefreshMenu(m_ClientID);
 }
 
 CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
@@ -76,11 +103,13 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_DeadSpecMode = false;
 	m_Spawning = false;
 	m_MapLoading = false;
-	m_HideTip = false;
 	mem_zero(&m_Latency, sizeof(m_Latency));
 
+	m_Status.m_HideTip = false;
 	m_Status.m_Sanity = 100;
-	m_Status.m_Inventory.m_pPlayer = this;
+
+	m_AccountUuid = UUID_ZEROED;
+	m_LoggedIn = false;
 }
 
 CPlayer::~CPlayer()
@@ -452,6 +481,9 @@ void CPlayer::SetTeam(int Team, bool DoChatMsg)
 
 void CPlayer::TryRespawn()
 {
+	if(m_pCharacter)
+		return;
+
 	vec2 SpawnPos;
 
 	if(!GameServer()->m_pController->CanSpawn(GameWorld(), m_Team, &SpawnPos))

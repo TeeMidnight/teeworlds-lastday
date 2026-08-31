@@ -27,6 +27,32 @@ Uuid random_uuid()
 	return Result;
 }
 
+Uuid time_uuid()
+{
+	Uuid Result;
+	secure_random_fill(&Result, sizeof(Result));
+
+	// RFC 4122 version 7: time-ordered UUID
+	const int64 TimestampMs = time_get() / 1000;
+
+	Result.m_aData[0] = (unsigned char) ((TimestampMs >> 40) & 0xFF);
+	Result.m_aData[1] = (unsigned char) ((TimestampMs >> 32) & 0xFF);
+	Result.m_aData[2] = (unsigned char) ((TimestampMs >> 24) & 0xFF);
+	Result.m_aData[3] = (unsigned char) ((TimestampMs >> 16) & 0xFF);
+	Result.m_aData[4] = (unsigned char) ((TimestampMs >> 8) & 0xFF);
+	Result.m_aData[5] = (unsigned char) (TimestampMs & 0xFF);
+
+	// set version 7
+	Result.m_aData[6] &= 0x0f;
+	Result.m_aData[6] |= 0x70;
+
+	// set variant 1 (RFC 4122)
+	Result.m_aData[8] &= 0x3f;
+	Result.m_aData[8] |= 0x80;
+
+	return Result;
+}
+
 Uuid calculate_uuid(const char *name)
 {
 	MD5_CTX Md5;

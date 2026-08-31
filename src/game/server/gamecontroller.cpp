@@ -17,6 +17,9 @@
 #include "gamecontroller.h"
 #include "player.h"
 
+#include <game/server/database/account.h>
+#include <game/server/database/playerdb.h>
+
 CGameController::CGameController(CGameContext *pGameServer)
 {
 	m_pGameServer = pGameServer;
@@ -401,6 +404,10 @@ bool CGameController::GetStartRespawnState() const
 // team
 bool CGameController::CanChangeTeam(CPlayer *pPlayer, int JoinTeam) const
 {
+	// joining the game (leaving spectator) requires a logged-in account;
+	// server bots/dummies are exempt
+	if(JoinTeam != TEAM_SPECTATORS && !pPlayer->IsDummy() && !pPlayer->m_LoggedIn)
+		return false;
 	return true;
 }
 
@@ -539,10 +546,117 @@ void CGameController::Com_About(IConsole::IResult *pResult, void *pContext)
 	pSelf->SendSystemChat(ClientID, MOD_NAME " v" MOD_VERSION " by Bamcane");
 }
 
+void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	int ClientID = pCmdContext->m_ClientID;
+	CPlayer *pPlayer = pSelf->GameServer()->m_apPlayers[ClientID];
+	CPlayerDB *pDB = pSelf->GameServer()->PlayerDB();
+
+	if(!pPlayer)
+		return;
+	if(!pDB)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("The database is not available.", "Account"));
+		return;
+	}
+	if(pResult->NumArguments() < 2)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("Usage: /register <username> <password>", "Account"));
+		return;
+	}
+	if(pPlayer->m_LoggedIn)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("You are already logged in.", "Account"));
+		return;
+	}
+
+	const char *pUsername = pResult->GetString(0);
+	const char *pPassword = pResult->GetString(1);
+
+	CPlayerDB::SPlayerData Row;
+	if(pDB->FindByName(pUsername, Row))
+	{
+		pSelf->SendSystemChat(ClientID, Localize("This username is already taken.", "Account"));
+		return;
+	}
+
+	mem_zero(&Row, sizeof(Row));
+	Row.m_Uuid = time_uuid();
+	str_copy(Row.m_aUsername, pUsername, sizeof(Row.m_aUsername));
+	HashPassword(Row.m_aPasswordHash, sizeof(Row.m_aPasswordHash), pPassword);
+
+	if(!pDB->InsertPlayer(Row))
+	{
+		pSelf->SendSystemChat(ClientID, Localize("Failed to create the account.", "Account"));
+		return;
+	}
+
+	pPlayer->m_AccountUuid = Row.m_Uuid;
+	pPlayer->m_LoggedIn = true;
+	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
+		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
+	pPlayer->SaveStatus(pDB); // persist the initial status fields
+	pSelf->SendSystemChat(ClientID, Localize("Account created. You are now logged in.", "Account"));
+}
+
+void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	int ClientID = pCmdContext->m_ClientID;
+	CPlayer *pPlayer = pSelf->GameServer()->m_apPlayers[ClientID];
+	CPlayerDB *pDB = pSelf->GameServer()->PlayerDB();
+
+	if(!pPlayer)
+		return;
+	if(!pDB)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("The database is not available.", "Account"));
+		return;
+	}
+	if(pResult->NumArguments() < 2)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("Usage: /login <username> <password>", "Account"));
+		return;
+	}
+	if(pPlayer->m_LoggedIn)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("You are already logged in.", "Account"));
+		return;
+	}
+
+	const char *pUsername = pResult->GetString(0);
+	const char *pPassword = pResult->GetString(1);
+
+	CPlayerDB::SPlayerData Row;
+	if(!pDB->FindByName(pUsername, Row))
+	{
+		pSelf->SendSystemChat(ClientID, Localize("No such account.", "Account"));
+		return;
+	}
+	if(!VerifyPassword(Row.m_aPasswordHash, pPassword))
+	{
+		pSelf->SendSystemChat(ClientID, Localize("Wrong password.", "Account"));
+		return;
+	}
+
+	pPlayer->m_AccountUuid = Row.m_Uuid;
+	pPlayer->m_LoggedIn = true;
+	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
+		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
+	pPlayer->TryRespawn();
+	pPlayer->LoadStatus(pDB);
+	pSelf->SendSystemChat(ClientID, Localize("Logged in.", "Account"));
+}
+
 void CGameController::RegisterChatCommands(CCommandManager *pManager)
 {
 	pManager->AddCommand("about", "About the mod", "", Com_About, this);
 	pManager->AddCommand("info", "About the mod", "", Com_About, this);
+	pManager->AddCommand("register", "Register a new account", "s[username] s[password]", ComRegister, this);
+	pManager->AddCommand("login", "Log in to an account", "s[username] s[password]", ComLogin, this);
 }
 
 bool CGameController::CanCharacterWeaponFullAuto(CCharacter *pChr, int Weapon)
@@ -623,7 +737,7 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 				{
 					CPlayer *pPlayer = pChr->GetPlayer();
 					if(pPlayer)
-						pPlayer->m_Status.m_Inventory.Add(aResId, 1);
+						GameServer()->Item()->AddItem(pPlayer->GetCID(), aResId, 1);
 					pChr->GameWorld()->CreateSound(pRes->GetPos(), SOUND_PICKUP_ARMOR);
 				}
 				else

@@ -164,6 +164,11 @@ void CGameMenu::ClearOptions(int ClientID)
 	m_aPlayerData[ClientID].m_NumVoteOptions = 0;
 }
 
+void CGameMenu::RefreshMenu(int ClientID)
+{
+	SetPlayerPage(ClientID, m_aPlayerData[ClientID].m_CurrentPage);
+}
+
 void CGameMenu::SetPlayerPage(int ClientID, unsigned Page)
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
@@ -197,18 +202,18 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		}
 		else if(str_comp(VoteStatus.m_aCmd, "HIDDEN") == 0)
 		{
-			pMenu->GameServer()->m_apPlayers[ClientID]->m_HideTip = true;
+			pMenu->GameServer()->m_apPlayers[ClientID]->m_Status.m_HideTip = true;
 		}
 	}
 
 	pMenu->ClearOptions(ClientID);
 	pMenu->AddPageTitle();
 	// TIP
-	if(!pMenu->GameServer()->m_apPlayers[ClientID]->m_HideTip)
+	if(!pMenu->GameServer()->m_apPlayers[ClientID]->m_Status.m_HideTip)
 	{
 		pMenu->AddOption(Localize("If you don't want to close menu when you use a option,", "Menu Main"), "DISPLAY");
 		pMenu->AddOption(Localize("then you can input this in your console:", "Menu Main"), "DISPLAY");
-		pMenu->AddOption(Localize("ui_close_window_after_changing_setting 0", "Menu Main"), "DISPLAY");
+		pMenu->AddOption("ui_close_window_after_changing_setting 0", "DISPLAY");
 
 		pMenu->AddOption(Localize("(Click this to hide this tip)", "Menu Main"), "HIDDEN");
 
@@ -219,7 +224,7 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
 		pMenu->AddOptionFormat(Localize("Name: %s", "Menu Main"), "DISPLAY", "-", pMenu->Server()->ClientName(ClientID));
 		if(pPlayer)
-			pMenu->AddOptionFormat(Localize("Score: %d", "Menu Main"), "DISPLAY", "-", pPlayer->m_Score);
+			pMenu->AddOptionFormat(Localize("Level: %d", "Menu Main"), "DISPLAY", "-", pPlayer->m_Status.m_Level);
 	}
 	pMenu->AddHorizontalRule();
 	// options
@@ -233,20 +238,34 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 
 bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
 {
-	pMenu->ClearOptions(ClientID);
-	pMenu->AddPageTitle();
-
 	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
 	if(!pPlayer)
 		return true;
 
-	const CPlayer::CInventory &Inventory = pPlayer->m_Status.m_Inventory;
-	for(int i = 0; i < CPlayer::CInventory::MAX_ITEMS; i++)
+	// if the player clicked an item, show its description
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_comp(VoteStatus.m_aCmd, "NONE") != 0)
+	{
+		const char *pDesc = pMenu->GameServer()->Item()->GetDesc(VoteStatus.m_aCmd);
+		if(pDesc && pDesc[0])
+		{
+			const char *pName = pMenu->GameServer()->Item()->GetName(VoteStatus.m_aCmd);
+			char aCtx[128];
+			str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pName);
+			pMenu->GameServer()->SendChat(-1, CHAT_ALL, ClientID, Localize(pDesc, aCtx));
+		}
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+
+	const CItemSystem::CInventory &Inventory = pMenu->GameServer()->Item()->GetInventory(ClientID);
+	for(int i = 0; i < CItemSystem::CInventory::MAX_ITEMS; i++)
 	{
 		if(i < Inventory.m_NumItems)
 		{
-			pMenu->AddOptionFormat(Localize("%d. %s: %d", "Menu Inventory"), "DISPLAY", "-",
-				i + 1, Localize(Inventory.m_aItems[i].m_aResId, "Item Name"), Inventory.m_aItems[i].m_Count); // Localize() the item names come from datasrc/maps/worlds.json "res_id"
+			const char *pName = pMenu->GameServer()->Item()->GetName(Inventory.m_aItems[i].m_aResId);
+			pMenu->AddOptionFormat(Localize("%d. %s: %d", "Menu Inventory"), Inventory.m_aItems[i].m_aResId, "-",
+				i + 1, Localize(pName, "Item Name"), Inventory.m_aItems[i].m_Count);
 		}
 		else
 		{

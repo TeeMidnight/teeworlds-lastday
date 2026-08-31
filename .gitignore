@@ -18,6 +18,7 @@ scripts/work/
 /freetype.dll
 /autoexec.cfg
 Info.plist
+/database
 
 crapnet*
 fake_server*

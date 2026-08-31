@@ -98,7 +98,7 @@ struct CAnchor
 // base), otherwise they are treated as transparent. The flag stand markers
 // are never pasted (they are only anchors for the merge).
 static void PasteTiles(CTile *pDst, int DstWidth, int DstHeight, const CTile *pSrc, int SrcWidth, int SrcHeight,
-	int OffsetX, int OffsetY, bool PasteAir, int RegionX1, int RegionY1, int RegionX2, int RegionY2)
+	int OffsetX, int OffsetY, bool PasteAir, int RegionX1, int RegionY1, int RegionX2, int RegionY2, bool IsGameLayer = false)
 {
 	for(int y = RegionY1; y <= RegionY2; y++)
 	{
@@ -117,10 +117,12 @@ static void PasteTiles(CTile *pDst, int DstWidth, int DstHeight, const CTile *pS
 			const CTile &SrcTile = pSrc[y * SrcWidth + x];
 			if(!PasteAir && SrcTile.m_Index == 0)
 				continue;
-			if(SrcTile.m_Index == ENTITY_OFFSET + ENTITY_FLAGSTAND_RED || SrcTile.m_Index == ENTITY_OFFSET + ENTITY_FLAGSTAND_BLUE || SrcTile.m_Index == ENTITY_OFFSET + ENTITY_SPAWN_RED)
+			if(IsGameLayer && (SrcTile.m_Index == ENTITY_OFFSET + ENTITY_FLAGSTAND_RED || SrcTile.m_Index == ENTITY_OFFSET + ENTITY_FLAGSTAND_BLUE))
 				continue;
 			pDst[DstY * DstWidth + DstX] = SrcTile;
 			pDst[DstY * DstWidth + DstX].m_Skip = 0;
+			if(IsGameLayer && SrcTile.m_Index == ENTITY_OFFSET + ENTITY_SPAWN_RED)
+				pDst[DstY * DstWidth + DstX].m_Index = TILE_AIR;
 		}
 	}
 }
@@ -428,69 +430,94 @@ CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 	m_pStorage = pStorage;
 	m_pConsole = pConsole;
 
-	// load maps instruction
+	// load the floor instructions from the "maps/worlds" directory; each
+	// "<floorname>.json" file holds the config of one generated floor
+	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "maps/worlds", ListWorldsCallback, this);
+}
+
+int CMapGen::ListWorldsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+{
+	CMapGen *pSelf = static_cast<CMapGen *>(pUser);
+	if(IsDir)
+		return 0;
+
+	const int Len = str_length(pFilename);
+	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
+		return 0;
+
+	// the floor name is the file name without the ".json" suffix
+	char aFloorName[64];
+	str_copy(aFloorName, pFilename, sizeof(aFloorName));
+	aFloorName[Len - 5] = '\0';
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), "maps/worlds/%s", pFilename);
+	pSelf->LoadFloor(aFloorName, aPath);
+	return 0;
+}
+
+void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
+{
 	CJsonParser Parser;
-	json_value *pJson = Parser.ParseFile("maps/worlds.json", pStorage, IStorage::TYPE_ALL);
-	if(!pJson || pJson->type != json_array)
+	json_value *pJson = Parser.ParseFile(pFilePath, m_pStorage, IStorage::TYPE_ALL);
+	if(!pJson || pJson->type != json_object)
 	{
-		dbg_msg("mapgen", "failed to load 'maps/worlds.json'");
+		dbg_msg("mapgen", "failed to load floor '%s' from '%s'", pFloorName, pFilePath);
 		return;
 	}
-	const json_value &rBasesArray = *pJson;
-	for(unsigned index = 0; index < rBasesArray.u.array.length; index++)
+
+	const json_value &rBase = *pJson;
+	CInstruction *pFloor = new CInstruction();
+	str_copy(pFloor->m_aFloorName, pFloorName, sizeof(pFloor->m_aFloorName));
+	str_copy(pFloor->m_aBaseMap, rBase["base"], sizeof(pFloor->m_aBaseMap));
+
+	const json_value &rStructsArray = rBase["structs"];
+	for(unsigned j = 0; j < rStructsArray.u.array.length; j++)
 	{
-		const json_value &rBase = rBasesArray[index];
-		if(rBase.type != json_object)
+		const json_value &rStruct = rStructsArray[j];
+		if(rStruct.type != json_object)
 			continue;
-		CInstruction *pFloor = new CInstruction();
-		str_copy(pFloor->m_aBaseMap, rBase["base"], sizeof(pFloor->m_aBaseMap));
+		CInstruction::CStruct &Struct = pFloor->m_Structs.emplace();
+		str_copy(Struct.m_aBaseMap, rStruct["base"], sizeof(Struct.m_aBaseMap));
+		Struct.m_GenerateProba = (int) (json_int_t) rStruct["proba"];
 
-		const json_value &rStructsArray = rBase["structs"];
-		for(unsigned j = 0; j < rStructsArray.u.array.length; j++)
+		// the struct may carry its own entrances, configured here in
+		// worlds.json (a single object or an array); serialize them for
+		// later use
+		const json_value &rStructEntrances = rStruct["entrances"];
+		if(rStructEntrances.type == json_array || rStructEntrances.type == json_object)
 		{
-			const json_value &rStruct = rStructsArray[j];
-			if(rStruct.type != json_object)
-				continue;
-			CInstruction::CStruct &Struct = pFloor->m_Structs.emplace();
-			str_copy(Struct.m_aBaseMap, rStruct["base"], sizeof(Struct.m_aBaseMap));
-			Struct.m_GenerateProba = (int) (json_int_t) rStruct["proba"];
-
-			// the struct may carry its own entrances, configured here in
-			// worlds.json (a single object or an array); serialize them for
-			// later use
-			const json_value &rStructEntrances = rStruct["entrances"];
-			if(rStructEntrances.type == json_array || rStructEntrances.type == json_object)
-			{
-				memory_stream<char> StructStream(&Struct.m_EntrancesJson);
-				CJsonWriter StructWriter(&StructStream);
-				WriteJsonValue(&StructWriter, rStructEntrances);
-			}
-
-			// the struct may carry its own resources
-			const json_value &rStructResources = rStruct["resources"];
-			if(rStructResources.type == json_array)
-			{
-				memory_stream<char> StructResStream(&Struct.m_ResourcesJson);
-				CJsonWriter StructResWriter(&StructResStream);
-				WriteJsonValue(&StructResWriter, rStructResources);
-			}
+			memory_stream<char> StructStream(&Struct.m_EntrancesJson);
+			CJsonWriter StructWriter(&StructStream);
+			WriteJsonValue(&StructWriter, rStructEntrances);
 		}
 
-		memory_stream<char> Stream(&pFloor->m_DefaultEntrances);
-		CJsonWriter Writer(&Stream);
-		WriteJsonValue(&Writer, rBase["entrances"]);
-
-		// the base may carry its own resources
-		const json_value &rBaseResources = rBase["resources"];
-		if(rBaseResources.type == json_array)
+		// the struct may carry its own resources
+		const json_value &rStructResources = rStruct["resources"];
+		if(rStructResources.type == json_array)
 		{
-			memory_stream<char> ResStream(&pFloor->m_ResourcesJson);
-			CJsonWriter ResWriter(&ResStream);
-			WriteJsonValue(&ResWriter, rBaseResources);
+			memory_stream<char> StructResStream(&Struct.m_ResourcesJson);
+			CJsonWriter StructResWriter(&StructResStream);
+			WriteJsonValue(&StructResWriter, rStructResources);
 		}
-
-		m_lInstructions.set(str_quickhash(pFloor->m_aBaseMap), pFloor);
 	}
+
+	memory_stream<char> Stream(&pFloor->m_DefaultEntrances);
+	CJsonWriter Writer(&Stream);
+	WriteJsonValue(&Writer, rBase["entrances"]);
+
+	// the base may carry its own resources
+	const json_value &rBaseResources = rBase["resources"];
+	if(rBaseResources.type == json_array)
+	{
+		memory_stream<char> ResStream(&pFloor->m_ResourcesJson);
+		CJsonWriter ResWriter(&ResStream);
+		WriteJsonValue(&ResWriter, rBaseResources);
+	}
+
+	// keyed by the unique floor name (the file name), so that two floors
+	// sharing the same base map do not collide
+	m_lInstructions.set(str_quickhash(pFloor->m_aFloorName), pFloor);
 }
 
 CMapGen::~CMapGen()
@@ -504,18 +531,18 @@ void CMapGen::FreeInstruction(CInstruction *&pInstruction, void *pUser)
 	pInstruction = nullptr;
 }
 
-bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
+bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 {
-	CInstruction **ppInstruction = m_lInstructions.get(str_quickhash(pBaseMap));
+	CInstruction **ppInstruction = m_lInstructions.get(str_quickhash(pFloorName));
 	CInstruction *pInstruction = ppInstruction ? *ppInstruction : nullptr;
 	if(!pInstruction)
 	{
-		dbg_msg("mapgen", "the base map '%s' has no generation instructions", pBaseMap);
+		dbg_msg("mapgen", "the floor '%s' has no generation instructions", pFloorName);
 		return false;
 	}
 
 	char aBasePath[IO_MAX_PATH_LENGTH];
-	str_format(aBasePath, sizeof(aBasePath), "maps/%s.map", pBaseMap);
+	str_format(aBasePath, sizeof(aBasePath), "maps/%s.map", pInstruction->m_aBaseMap);
 
 	CDataFileReader BaseFile;
 	if(!BaseFile.Open(Storage(), aBasePath, IStorage::TYPE_ALL))
@@ -552,7 +579,7 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 			lCreatorImages.add(Creator.AddExternalImage(aImageName, pImage->m_Width, pImage->m_Height));
 		else
 		{
-			dbg_msg("mapgen", "base map '%s' uses embedded images, which are not supported by the generator", pBaseMap);
+			dbg_msg("mapgen", "base map '%s' uses embedded images, which are not supported by the generator", pInstruction->m_aBaseMap);
 			lCreatorImages.add(nullptr);
 		}
 	}
@@ -932,7 +959,7 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 				// merge the game layer: the struct region fully defines its
 				// tiles (air included), overwriting the base
 				PasteTiles(pGameTiles, GameWidth, GameHeight, pStructGameTiles, StructGameWidth, StructGameHeight,
-					OffsetX, OffsetY, true, RegionX1, RegionY1, RegionX2, RegionY2);
+					OffsetX, OffsetY, true, RegionX1, RegionY1, RegionX2, RegionY2, true);
 
 				// merge the layers with the same name under the "Template"
 				// group; inside the struct region the layer is fully defined
@@ -983,7 +1010,7 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 			}
 
 			if(MergedAnchors > 0)
-				dbg_msg("mapgen", "merged struct '%s' into '%s' (%d anchor(s))", Struct.m_aBaseMap, pBaseMap, MergedAnchors);
+				dbg_msg("mapgen", "merged struct '%s' into '%s' (%d anchor(s))", Struct.m_aBaseMap, pFloorName, MergedAnchors);
 
 			delete[] pStructGameTiles;
 			for(int st = 0; st < lStructTemplates.size(); st++)
@@ -1085,7 +1112,7 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 	Storage()->CreateFolder("generatedmaps", IStorage::TYPE_SAVE);
 
 	char aOutName[64];
-	str_format(aOutName, sizeof(aOutName), "%s_%d", pBaseMap, Seed);
+	str_format(aOutName, sizeof(aOutName), "%s_%d", pFloorName, Seed);
 	Creator.AddJsonData(lEntranceJson.base_ptr(), lEntranceJson.size(), 0);
 	Creator.AddJsonData(lResourceJson.base_ptr(), lResourceJson.size(), 1);
 
@@ -1095,6 +1122,6 @@ bool CMapGen::RequestNewMap(const char *pBaseMap, int Seed)
 		return false;
 	}
 
-	dbg_msg("mapgen", "generated map 'generatedmaps/%s.map' from base '%s'", aOutName, pBaseMap);
+	dbg_msg("mapgen", "generated map 'generatedmaps/%s.map' from base '%s'", aOutName, pInstruction->m_aBaseMap);
 	return true;
 }

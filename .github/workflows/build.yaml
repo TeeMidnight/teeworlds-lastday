@@ -56,6 +56,8 @@ jobs:
           openssl:p
           curl:p
           libspng:p
+          sqlite3:p
+          libpq:p
 
     - name: Checkout SDL3
       if: contains(matrix.os, 'ubuntu')
@@ -69,7 +71,7 @@ jobs:
       if: contains(matrix.os, 'ubuntu')
       run: |
         sudo apt-get update -y
-        sudo apt-get install pkg-config ninja-build libfreetype6-dev libopus-dev libopusfile-dev libspng-dev libcurl4-openssl-dev libgl1-mesa-dev -y
+        sudo apt-get install pkg-config ninja-build libfreetype6-dev libopus-dev libopusfile-dev libspng-dev libcurl4-openssl-dev libsqlite3-dev libpq-dev libgl1-mesa-dev -y
         sudo apt-get install build-essential git cmake libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libwayland-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libibus-1.0-dev libdbus-1-dev libudev-dev libinput-dev libts-dev libjpeg-dev libwebp-dev -y
         cd SDL
         cmake . -DCMAKE_BUILD_TYPE=Release -DSDL_TEST=OFF -DSDL_STATIC=OFF 
@@ -129,88 +131,3 @@ jobs:
       with:
         name: teeworlds-archive-${{ matrix.os }}
         path: release/artifacts
-
-  build-bam:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        include:
-        - os: ubuntu-latest
-          archtitecture: "x86_64"
-          shell: "bash"
-        - os: windows-latest
-          archtitecture: "x86_64"
-          shell: "msys2"
-    defaults:
-      run:
-        shell: ${{ matrix.shell }} {0}
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-
-    - name: Checkout bam
-      uses: actions/checkout@v4
-      with:
-        repository: matricks/bam
-        ref: a44a2c7dc16caae7ac457f17dfd14a87e7059c57
-        path: ./bam
-
-    - name: Checkout SDL3
-      if: contains(matrix.os, 'ubuntu')
-      uses: actions/checkout@v4
-      with:
-        repository: libsdl-org/SDL
-        ref: release-3.2.28
-        path: ./SDL
-    
-    - name: Prepare MSYS2 (Windows)
-      if: contains(matrix.os, 'windows')
-      uses: msys2/setup-msys2@v2
-      with:
-        msystem: UCRT64
-        update: true
-        pacboy: >-
-          toolchain:p
-          cmake:p
-          ninja:p
-          zlib:p
-          sdl3:p
-          freetype:p
-          opus:p
-          opusfile:p
-          openssl:p
-          curl:p
-          libspng:p
-
-    - name: Prepare Linux
-      if: contains(matrix.os, 'ubuntu')
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install libfreetype6-dev libopus-dev libopusfile-dev libspng-dev libcurl4-openssl-dev libgl1-mesa-dev -y
-        sudo apt-get install build-essential git cmake libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libwayland-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libibus-1.0-dev libdbus-1-dev libudev-dev libinput-dev libts-dev libjpeg-dev libwebp-dev -y
-        cd bam
-        ./make_unix.sh
-        cd ../SDL
-        cmake . -DCMAKE_BUILD_TYPE=Release
-        sudo make install
-
-    - name: Prepare Windows
-      if: contains(matrix.os, 'windows')
-      run: |
-        cd bam
-        ./make_win64_msvc.bat
-
-    - name: Build in debug mode
-      run: ./bam/bam conf=debug all
-    - name: Test debug
-      run: ./build/${{ matrix.archtitecture }}/debug/ArchiveServer shutdown
-
-    - name: Build in release mode
-      run: ./bam/bam conf=release all
-    - name: Test release
-      run: ./build/${{ matrix.archtitecture }}/release/ArchiveServer shutdown
-

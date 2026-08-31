@@ -18,7 +18,10 @@
 #include "entities/projectile.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
+#include "item.h"
 #include "player.h"
+
+#include <game/server/database/playerdb.h>
 
 enum
 {
@@ -85,6 +88,8 @@ void CGameContext::Clear()
 	int NumVoteOptions = m_NumVoteOptions;
 	CTuningParams Tuning = m_Tuning;
 	CGameMenu *pGameMenu = m_pGameMenu;
+	CPlayerDB *pPlayerDB = m_pPlayerDB;
+	CItemSystem *pItemSystem = m_pItemSystem;
 
 	m_Resetting = true;
 	this->~CGameContext();
@@ -97,6 +102,8 @@ void CGameContext::Clear()
 	m_NumVoteOptions = NumVoteOptions;
 	m_Tuning = Tuning;
 	m_pGameMenu = pGameMenu;
+	m_pPlayerDB = pPlayerDB;
+	m_pItemSystem = pItemSystem;
 }
 
 class CCharacter *CGameContext::GetPlayerChar(int ClientID)
@@ -650,6 +657,16 @@ void CGameContext::OnClientEnter(int ClientID)
 		Server()->SendPackMsg(&Msg, MSGFLAG_NOSEND, -1);
 	}
 
+	// a player that is not logged in may only spectate; they must log in (or
+	// register) before they are allowed to join the game
+	if(!m_apPlayers[ClientID]->m_LoggedIn)
+	{
+		m_apPlayers[ClientID]->SetTeam(TEAM_SPECTATORS);
+		SendBroadcast(ClientID, Localize("You are not logged in. Use /login <username> <password> or /register <username> <password> to join the game.", "Account"));
+	}
+
+	// the player must log in or register to bind an account; guest players
+	// start with a fresh status
 	Server()->ExpireServerInfo();
 }
 
@@ -704,6 +721,14 @@ void CGameContext::OnClientTeamChange(int ClientID)
 
 void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 {
+	// since the player might disconnect in the map loading, we do a check here to make sure the player exists
+	// as the CServer will call this function when player is in the connecting state.
+	if(!m_apPlayers[ClientID])
+		return;
+
+	// persist the player's status before dropping
+	SavePlayerData(m_apPlayers[ClientID]);
+
 	AbortVoteOnDisconnect(ClientID);
 	m_pController->OnPlayerDisconnect(m_apPlayers[ClientID]);
 
@@ -722,9 +747,11 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 		CNetMsg_Sv_ClientDrop Msg;
 		Msg.m_ClientID = ClientID;
 		Msg.m_pReason = pReason;
-		Msg.m_Silent = false;
+		Msg.m_Silent = true;
+		/*
 		if(Config()->m_SvSilentSpectatorMode && m_apPlayers[ClientID]->GetTeam() == TEAM_SPECTATORS)
 			Msg.m_Silent = true;
+		*/
 		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_NORECORD, -1);
 	}
 
@@ -972,6 +999,10 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 					m_VoteUpdate = true;
 				pPlayer->m_TeamChangeTick = Server()->Tick() + Server()->TickSpeed() * 3;
 				m_pController->DoTeamChange(pPlayer, pMsg->m_Team);
+			}
+			else if(pMsg->m_Team != TEAM_SPECTATORS && !pPlayer->m_LoggedIn)
+			{
+				SendChat(-1, CHAT_ALL, ClientID, Localize("You must be logged in to join the game. Use /login <username> <password>.", "Account"));
 			}
 		}
 		else if(MsgID == NETMSGTYPE_CL_SETSPECTATORMODE)
@@ -1521,6 +1552,25 @@ void CGameContext::OnInit()
 
 	m_pController->RegisterChatCommands(CommandManager());
 
+	// initialize the player database (runtime schema creation)
+	{
+		CPlayerDB::SConfig DbConfig;
+		DbConfig.m_pBackend = Config()->m_SvDbBackend;
+		DbConfig.m_pPath = Config()->m_SvDbPath;
+		DbConfig.m_pConnString = Config()->m_SvDbConnstring;
+		m_pPlayerDB = CreatePlayerDB(DbConfig);
+		if(m_pPlayerDB && !m_pPlayerDB->Init())
+		{
+			dbg_msg("playerdb", "failed to initialize player database, running without persistence");
+			delete m_pPlayerDB;
+			m_pPlayerDB = 0;
+		}
+	}
+
+	// initialize the item system (loads datasrc/items/*.json)
+	m_pItemSystem = new CItemSystem();
+	m_pItemSystem->Init(this, Storage());
+
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 
 	Console()->Chain("sv_vote_kick", ConchainSettingUpdate, this);
@@ -1531,8 +1581,29 @@ void CGameContext::OnInit()
 	Console()->Chain("sv_languagefile", ConchainLanguageUpdate, this);
 }
 
+void CGameContext::SavePlayerData(CPlayer *pPlayer)
+{
+	if(!m_pPlayerDB || !pPlayer || pPlayer->IsDummy() || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
+		return;
+
+	pPlayer->SaveStatus(m_pPlayerDB);
+}
+
 void CGameContext::OnShutdown()
 {
+	// flush every connected player to the database before tearing down
+	if(m_pPlayerDB)
+	{
+		for(int i = 0; i < MAX_CLIENTS; i++)
+			if(m_apPlayers[i])
+				SavePlayerData(m_apPlayers[i]);
+		delete m_pPlayerDB;
+		m_pPlayerDB = 0;
+	}
+
+	delete m_pItemSystem;
+	m_pItemSystem = 0;
+
 	delete m_pController;
 	m_pController = 0;
 	Clear();

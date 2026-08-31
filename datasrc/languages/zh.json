@@ -18,6 +18,31 @@
 			"tr": "(点击此处隐藏提示)"
 		},
 		{
+			"context": "Account",
+			"or": "Account created. You are now logged in.",
+			"tr": "账号创建成功，你已登录。"
+		},
+		{
+			"context": "Account",
+			"or": "Failed to create the account.",
+			"tr": "创建账号失败。"
+		},
+		{
+			"context": "Item Desc: Heaven Ore",
+			"or": "From the heaven, but it contains darkness.",
+			"tr": "来自天堂，但其中蕴含着黑暗。"
+		},
+		{
+			"context": "Item Name",
+			"or": "Grass",
+			"tr": "草"
+		},
+		{
+			"context": "Item Name",
+			"or": "Heaven Ore",
+			"tr": "天矿"
+		},
+		{
 			"context": "Menu Main",
 			"or": "If you don't want to close menu when you use a option,",
 			"tr": "如果你不想在使用选项时关闭菜单，"
@@ -33,6 +58,26 @@
 			"tr": "背包"
 		},
 		{
+			"context": "Item Desc: Stone",
+			"or": "It's common.",
+			"tr": "很常见。"
+		},
+		{
+			"context": "Item Desc: Grass",
+			"or": "It's like grass, but it's not from any plant.",
+			"tr": "它像草，但并非来自任何植物。"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Level: %d",
+			"tr": "等级：%d"
+		},
+		{
+			"context": "Account",
+			"or": "Logged in.",
+			"tr": "登录成功。"
+		},
+		{
 			"context": "MAIN",
 			"or": "Main Menu",
 			"tr": "主菜单"
@@ -43,19 +88,14 @@
 			"tr": "名字：%s"
 		},
 		{
+			"context": "Account",
+			"or": "No such account.",
+			"tr": "没有这个账号。"
+		},
+		{
 			"context": "Menu",
 			"or": "Previous Page",
 			"tr": "上一页"
-		},
-		{
-			"context": "Menu Main",
-			"or": "Score: %d",
-			"tr": "分数：%d"
-		},
-		{
-			"context": "Menu Main",
-			"or": "Server Vote",
-			"tr": "服务器投票"
 		},
 		{
 			"context": "VOTE",
@@ -63,9 +103,44 @@
 			"tr": "服务器投票"
 		},
 		{
+			"context": "Menu Main",
+			"or": "Server Vote",
+			"tr": "服务器投票"
+		},
+		{
+			"context": "Item Name",
+			"or": "Stone",
+			"tr": "石头"
+		},
+		{
+			"context": "Account",
+			"or": "The database is not available.",
+			"tr": "数据库不可用。"
+		},
+		{
 			"context": "Vote Menu Server Vote",
 			"or": "There's no any server vote",
 			"tr": "这里没有任何服务器投票"
+		},
+		{
+			"context": "Account",
+			"or": "This username is already taken.",
+			"tr": "该用户名已被占用。"
+		},
+		{
+			"context": "Account",
+			"or": "Usage: /login <username> <password>",
+			"tr": "用法：/login <用户名> <密码>"
+		},
+		{
+			"context": "Account",
+			"or": "Usage: /register <username> <password>",
+			"tr": "用法：/register <用户名> <密码>"
+		},
+		{
+			"context": "Account",
+			"or": "Wrong password.",
+			"tr": "密码错误。"
 		},
 		{
 			"context": "Character died",
@@ -73,29 +148,29 @@
 			"tr": "你 无 法 逃 离"
 		},
 		{
+			"context": "Account",
+			"or": "You are already logged in.",
+			"tr": "你已登录。"
+		},
+		{
+			"context": "Account",
+			"or": "You are not logged in. Use /login <username> <password> or /register <username> <password> to join the game.",
+			"tr": "你尚未登录。请使用 /login <用户名> <密码> 或 /register <用户名> <密码> 加入游戏。"
+		},
+		{
 			"context": "Item Pickup",
 			"or": "You got: %s x%d (%d)",
 			"tr": "你获得了：%s x%d (%d)"
 		},
 		{
-			"context": "Item Name",
-			"or": "grass",
-			"tr": "草"
-		},
-		{
-			"context": "Item Name",
-			"or": "stone",
-			"tr": "石头"
+			"context": "Account",
+			"or": "You must be logged in to join the game. Use /login <username> <password>.",
+			"tr": "你必须登录才能加入游戏。请使用 /login <用户名> <密码>。"
 		},
 		{
 			"context": "Menu Main",
 			"or": "then you can input this in your console:",
 			"tr": "那么你可以在控制台输入："
-		},
-		{
-			"context": "Menu Main",
-			"or": "ui_close_window_after_changing_setting 0",
-			"tr": "ui_close_window_after_changing_setting 0"
 		}
 	]
 }

@@ -1,0 +1,38 @@
+{
+    "base": "Grasswalk",
+    "entrances": [
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": 108,
+                    "tiles_start_y": 17,
+                    "tiles_end_x": 110,
+                    "tiles_end_y": 19
+                }
+            ],
+            "entrance": "Connector"
+        },
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": "ignore",
+                    "tiles_start_y": -1,
+                    "tiles_end_x": "ignore",
+                    "tiles_end_y": 1
+                }
+            ],
+            "entrance": "Heaven"
+        }
+    ],
+    "resources": [
+        {
+            "res_id": "grass",
+            "display": "health",
+            "proba": 30,
+            "hardness_min": 1,
+            "hardness_max": 1,
+            "respawntime_min": 60,
+            "respawntime_max": 120
+        }
+    ]
+}

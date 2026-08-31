@@ -15,6 +15,9 @@
 #include "gamemenu.h"
 #include "gameworld.h"
 
+class CPlayerDB;
+class CItemSystem;
+
 /*
 	Tick
 		Game Context (CGameContext::tick)
@@ -88,7 +91,17 @@ public:
 
 	CGameMenu *m_pGameMenu;
 
+	CPlayerDB *m_pPlayerDB;
+
+	CItemSystem *m_pItemSystem;
+
 	CGameMenu *GameMenu() const { return m_pGameMenu; }
+	CPlayerDB *PlayerDB() const { return m_pPlayerDB; }
+	CItemSystem *Item() const { return m_pItemSystem; }
+
+	// persist a player's status to the database (only when the player is
+	// logged in to an account)
+	void SavePlayerData(class CPlayer *pPlayer);
 
 	CCommandManager m_CommandManager;
 
