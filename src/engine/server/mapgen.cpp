@@ -481,6 +481,11 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 		str_copy(Struct.m_aBaseMap, rStruct["base"], sizeof(Struct.m_aBaseMap));
 		Struct.m_GenerateProba = (int) (json_int_t) rStruct["proba"];
 
+		// whether empty struct tiles overwrite the base map inside the struct
+		// region (default true, matching the previous hardcoded behavior)
+		const json_value &rPasteAir = rStruct["paste_air"];
+		Struct.m_PasteAir = rPasteAir.type == json_boolean ? (bool) rPasteAir : true;
+
 		// the struct may carry its own entrances, configured here in
 		// worlds.json (a single object or an array); serialize them for
 		// later use
@@ -959,7 +964,7 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 				// merge the game layer: the struct region fully defines its
 				// tiles (air included), overwriting the base
 				PasteTiles(pGameTiles, GameWidth, GameHeight, pStructGameTiles, StructGameWidth, StructGameHeight,
-					OffsetX, OffsetY, true, RegionX1, RegionY1, RegionX2, RegionY2, true);
+					OffsetX, OffsetY, Struct.m_PasteAir, RegionX1, RegionY1, RegionX2, RegionY2, true);
 
 				// merge the layers with the same name under the "Template"
 				// group; inside the struct region the layer is fully defined
@@ -972,7 +977,7 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 						{
 							PasteTiles(lBaseTemplates[bt].m_pTiles, lBaseTemplates[bt].m_Width, lBaseTemplates[bt].m_Height,
 								lStructTemplates[st].m_pTiles, lStructTemplates[st].m_Width, lStructTemplates[st].m_Height,
-								OffsetX, OffsetY, true, RegionX1, RegionY1, RegionX2, RegionY2);
+								OffsetX, OffsetY, Struct.m_PasteAir, RegionX1, RegionY1, RegionX2, RegionY2);
 						}
 					}
 				}

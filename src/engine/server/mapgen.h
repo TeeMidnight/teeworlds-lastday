@@ -22,6 +22,7 @@ class CMapGen
 		{
 			char m_aBaseMap[64];
 			int m_GenerateProba;
+			bool m_PasteAir; // whether empty struct tiles overwrite the base (default true)
 			array<char> m_EntrancesJson; // serialized entrances json of this struct (optional)
 			array<char> m_ResourcesJson; // serialized resources json of this struct (optional)
 		};
