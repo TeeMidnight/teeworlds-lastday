@@ -51,14 +51,16 @@ bool CLocalizationDatabase::Load(const char *pFilename, IStorage *pStorage, ICon
 	m_StringsHeap.Reset();
 
 	// extract data
-	const json_value &rStart = (*pJsonData)[Server ? "server strings" : "client strings"];
-	if(rStart.type == json_array)
-	{
+	auto LoadSection = [&](const char *pSection) {
+		const json_value &rStart = (*pJsonData)[pSection];
+		if(rStart.type != json_array)
+			return;
 		for(unsigned i = 0; i < rStart.u.array.length; ++i)
 		{
 			bool Valid = true;
 			const char *pOr = (const char *) rStart[i]["or"];
 			const char *pTr = (const char *) rStart[i]["tr"];
+			char aInfo[256];
 			while(pOr[0] && pTr[0])
 			{
 				for(; pOr[0] && pOr[0] != '%'; ++pOr)
@@ -70,8 +72,8 @@ bool CLocalizationDatabase::Load(const char *pFilename, IStorage *pStorage, ICon
 				if((pOr[0] && (!pTr[0] || pOr[1] != pTr[1])) || (pTr[0] && (!pOr[0] || pTr[1] != pOr[1])))
 				{
 					Valid = false;
-					str_format(aBuf, sizeof(aBuf), "skipping invalid entry or:'%s', tr:'%s'", (const char *) rStart[i]["or"], (const char *) rStart[i]["tr"]);
-					pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "localization", aBuf);
+					str_format(aInfo, sizeof(aInfo), "skipping invalid entry or:'%s', tr:'%s'", (const char *) rStart[i]["or"], (const char *) rStart[i]["tr"]);
+					pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "localization", aInfo);
 					break;
 				}
 				if(pOr[0])
@@ -82,7 +84,14 @@ bool CLocalizationDatabase::Load(const char *pFilename, IStorage *pStorage, ICon
 			if(Valid)
 				AddString((const char *) rStart[i]["or"], (const char *) rStart[i]["tr"], (const char *) rStart[i]["context"]);
 		}
-	}
+	};
+
+	if(Server)
+		LoadSection("server strings");
+	else
+		LoadSection("client strings");
+	// item strings carry the item names/descriptions/types and are loaded on both
+	LoadSection("item strings");
 
 	m_CurrentVersion = ++m_VersionCounter;
 	return true;

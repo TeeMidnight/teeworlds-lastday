@@ -736,8 +736,7 @@ int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int
 				if(Depleted)
 				{
 					CPlayer *pPlayer = pChr->GetPlayer();
-					if(pPlayer)
-						GameServer()->Item()->AddItem(pPlayer->GetCID(), aResId, 1);
+					if(pPlayer && !GameServer()->Item()->AddItem(pPlayer->GetCID(), aResId, 1)) continue;
 					pChr->GameWorld()->CreateSound(pRes->GetPos(), SOUND_PICKUP_ARMOR);
 				}
 				else

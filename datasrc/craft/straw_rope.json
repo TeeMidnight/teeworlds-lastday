@@ -1,0 +1,15 @@
+{
+    "craft_id": "straw_rope",
+    "needed":
+    [
+        {
+            "type": "grass",
+            "count": 4
+        }
+    ],
+    "result":
+    {
+        "item_id": "straw_rope",
+        "count": 1
+    }
+}

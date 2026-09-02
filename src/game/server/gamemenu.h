@@ -72,6 +72,7 @@ private:
 	int m_CurrentClientID;
 	static bool MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	static bool MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 
 	hash_table<unsigned, CMenuPage, 8> m_MenuPages;
 

@@ -32,6 +32,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 
 	Register("MAIN", "Main Menu", MenuMain, nullptr); // Localize("Main Menu", "MAIN")
 	Register("INVENTORY", "Inventory", MenuInventory, nullptr); // Localize("Inventory", "INVENTORY")
+	Register("CRAFT", "Craft", MenuCraft, nullptr); // Localize("Craft", "CRAFT")
 }
 
 void CGameMenu::Register(const char *pPageName, const char *pTitle, FMenuCallback pfnFunc, void *pUser, const char *pParent)
@@ -200,6 +201,11 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->SetPlayerPage(ClientID, "VOTE");
 			return false;
 		}
+		else if(str_comp(VoteStatus.m_aCmd, "PAGE CRAFT") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "CRAFT");
+			return false;
+		}
 		else if(str_comp(VoteStatus.m_aCmd, "HIDDEN") == 0)
 		{
 			pMenu->GameServer()->m_apPlayers[ClientID]->m_Status.m_HideTip = true;
@@ -230,6 +236,7 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	// options
 	{
 		pMenu->AddOption(Localize("Inventory", "Menu Main"), "PAGE INVENTORY", "★");
+		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
 	}
 
@@ -251,7 +258,7 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 			const char *pName = pMenu->GameServer()->Item()->GetName(VoteStatus.m_aCmd);
 			char aCtx[128];
 			str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pName);
-			pMenu->GameServer()->SendChat(-1, CHAT_ALL, ClientID, Localize(pDesc, aCtx));
+			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Localize(pDesc, aCtx));
 		}
 	}
 
@@ -264,7 +271,7 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 		if(i < Inventory.m_NumItems)
 		{
 			const char *pName = pMenu->GameServer()->Item()->GetName(Inventory.m_aItems[i].m_aResId);
-			pMenu->AddOptionFormat(Localize("%d. %s: %d", "Menu Inventory"), Inventory.m_aItems[i].m_aResId, "-",
+			pMenu->AddOptionFormat("%d. %s: %d", Inventory.m_aItems[i].m_aResId, "-",
 				i + 1, Localize(pName, "Item Name"), Inventory.m_aItems[i].m_Count);
 		}
 		else
@@ -272,6 +279,105 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 			pMenu->AddOptionFormat(Localize("%d. None", "Menu Inventory"), "DISPLAY", "-", i + 1);
 		}
 	}
+
+	return true;
+}
+
+// -- crafting menu -------------------------------------------------------
+
+// data threaded through CItemSystem::ForEachCraft
+struct CCraftMenuData
+{
+	CItemSystem *m_pItem;
+	CGameMenu *m_pMenu;
+	int m_ClientID;
+	int m_Index;
+};
+
+// renders one recipe as a block of menu rows (also used only from MenuCraft)
+static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
+{
+	CCraftMenuData *pData = static_cast<CCraftMenuData *>(pUser);
+	CGameMenu *pMenu = pData->m_pMenu;
+	const int ClientID = pData->m_ClientID;
+
+	const char *pResultName = pData->m_pItem->GetName(Craft.m_aResultItemId);
+	pData->m_Index++;
+	pMenu->AddOptionFormat("%d. %s x%d", Craft.m_aCraftId, "→",
+		pData->m_Index, Localize(pResultName, "Item Name"), Craft.m_ResultCount);
+
+	for(int i = 0; i < Craft.m_NumNeeded; i++)
+	{
+		const CItemSystem::SIngredient &Need = Craft.m_aNeeded[i];
+		const int Have = pData->m_pItem->GetIngredientCount(ClientID, Need);
+
+		if(Need.m_IsTool)
+		{
+			if(Need.m_MatchByType)
+				pMenu->AddOptionFormat(Localize("   [tool] any %s", "Menu Craft"), "DISPLAY", "-",
+					Localize(Need.m_aType, "Item Type"));
+			else
+				pMenu->AddOptionFormat(Localize("   [tool] %s", "Menu Craft"), "DISPLAY", "-",
+					Localize(pData->m_pItem->GetName(Need.m_aItemId), "Item Name"));
+		}
+		else
+		{
+			if(Need.m_MatchByType)
+				pMenu->AddOptionFormat(Localize("   any %s %d/%d", "Menu Craft"), "DISPLAY", "-",
+					Localize(Need.m_aType, "Item Type"), Have, Need.m_Count);
+			else
+				pMenu->AddOptionFormat("   %s %d/%d", "DISPLAY", "-",
+					Localize(pData->m_pItem->GetName(Need.m_aItemId), "Item Name"), Have, Need.m_Count);
+		}
+	}
+}
+
+bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void)pUserData;
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+
+	// if the player clicked a recipe, try to craft it
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_comp(VoteStatus.m_aCmd, "NONE") != 0)
+	{
+		const CItemSystem::ECraftResult Result = pItem->Craft(ClientID, VoteStatus.m_aCmd);
+		if(Result == CItemSystem::CRAFT_OK)
+		{
+			const CItemSystem::SCraftDef *pCraft = pItem->GetCraft(VoteStatus.m_aCmd);
+			if(pCraft)
+			{
+				char aMsg[128];
+				str_format(aMsg, sizeof(aMsg), Localize("Crafted: %s x%d", "Menu Craft"),
+					Localize(pItem->GetName(pCraft->m_aResultItemId), "Item Name"), pCraft->m_ResultCount);
+				pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, aMsg);
+			}
+		}
+		else if(Result == CItemSystem::CRAFT_NO_MATERIALS)
+		{
+			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID,
+				Localize("Not enough materials.", "Menu Craft"));
+		}
+		else // CRAFT_NO_SPACE
+		{
+			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID,
+				Localize("Not enough inventory space.", "Menu Craft"));
+		}
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+
+	if(pItem->m_Crafts.size() == 0)
+	{
+		pMenu->AddOption(Localize("No recipes available.", "Menu Craft"), "DISPLAY", "-");
+		return true;
+	}
+
+	pMenu->AddOption(Localize("Click a recipe to craft it. Tools are not consumed.", "Menu Craft"), "DISPLAY", "-");
+	pMenu->AddHorizontalRule();
+
+	CCraftMenuData Data = {pItem, pMenu, ClientID, 0};
+	pItem->ForEachCraft(CraftListCallback, &Data);
 
 	return true;
 }

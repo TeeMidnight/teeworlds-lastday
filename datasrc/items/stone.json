@@ -1,4 +1,5 @@
 {
     "name": "Stone",
-    "desc": "It's common."
+    "desc": "It's common.",
+    "item_type": ["stone"]
 }
