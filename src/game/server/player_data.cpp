@@ -24,11 +24,15 @@ void CPlayer::SaveStatus(CPlayerDB *pDB)
 	// clear the previous inventory, then store each item as an array element
 	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
 	pDB->DelJson(m_AccountUuid, CJsonPath().Key("inventory"));
-	for(int i = 0; i < Inventory.m_NumItems; i++)
+	int i = 0;
+	for(int Slot = 0; Slot < CItemSystem::CInventory::MAX_ITEMS; Slot++)
 	{
-		const CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[i];
+		if(Inventory.IsEmpty(Slot))
+			continue;
+		const CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Slot];
 		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), Item.m_aResId);
 		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), Item.m_Count);
+		i++;
 	}
 
 	// store the loadout slot layout (res_id per slot, "" for empty)
@@ -88,7 +92,6 @@ void CPlayer::LoadStatus(CPlayerDB *pDB)
 	for(int i = 0; i < NUM_WEAPONS; i++)
 		m_Status.m_aLoadout[i][0] = '\0';
 	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
-	Inventory.m_NumItems = 0;
 	mem_zero(Inventory.m_aItems, sizeof(Inventory.m_aItems));
 
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("sanity"), &m_Status.m_Sanity);
@@ -108,21 +111,24 @@ void CPlayer::LoadStatus(CPlayerDB *pDB)
 			GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("loadout").Index(i), m_Status.m_aLoadout[i], sizeof(m_Status.m_aLoadout[i]));
 	}
 
-	// read the inventory item by item (no whole-json read)
+	// read the inventory item by item (no whole-json read); items are stored
+	// as a compact array, so each entry goes into the first free slot
 	int NumItems = 0;
 	if(pDB->GetJsonLength(m_AccountUuid, CJsonPath().Key("inventory"), &NumItems))
 	{
-		for(int i = 0; i < NumItems && Inventory.m_NumItems < CItemSystem::CInventory::MAX_ITEMS; i++)
+		for(int i = 0; i < NumItems; i++)
 		{
 			char aResId[32];
 			if(!GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), aResId, sizeof(aResId)))
 				continue;
 			int Count = 0;
 			GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), &Count);
-			CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Inventory.m_NumItems];
+			const int Slot = Inventory.FindEmpty();
+			if(Slot < 0)
+				break; // inventory full
+			CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Slot];
 			str_copy(Item.m_aResId, aResId, sizeof(Item.m_aResId));
 			Item.m_Count = Count;
-			Inventory.m_NumItems++;
 		}
 	}
 

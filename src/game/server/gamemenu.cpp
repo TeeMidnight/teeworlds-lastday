@@ -32,10 +32,14 @@ void CGameMenu::Init(CGameContext *pGameServer)
 
 	m_MenuPages.clear();
 	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
 		m_aLoadoutSlot[i] = -1;
+		m_aItemViewId[i][0] = '\0';
+	}
 
 	Register("MAIN", "Main Menu", MenuMain, nullptr); // Localize("Main Menu", "MAIN")
 	Register("INVENTORY", "Inventory", MenuInventory, nullptr); // Localize("Inventory", "INVENTORY")
+	Register("ITEMVIEW", "Item", MenuItemView, nullptr, "INVENTORY"); // Localize("Item", "ITEMVIEW")
 	Register("CRAFT", "Craft", MenuCraft, nullptr); // Localize("Craft", "CRAFT")
 	Register("LOADOUT", "Loadout", MenuLoadout, nullptr); // Localize("Loadout", "LOADOUT")
 	Register("WEAPONPICK", "Choose Weapon", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Weapon", "WEAPONPICK")
@@ -261,16 +265,16 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 	if(!pPlayer)
 		return true;
 
-	// if the player clicked an item, show its description
+	// the player clicked an item row: open its detail view instead of
+	// printing a one-line hint
 	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_comp(VoteStatus.m_aCmd, "NONE") != 0)
 	{
-		const char *pDesc = pMenu->GameServer()->Item()->GetDesc(VoteStatus.m_aCmd);
-		if(pDesc && pDesc[0])
+		CItemSystem *pItem = pMenu->GameServer()->Item();
+		if(pItem->GetItemCount(ClientID, VoteStatus.m_aCmd) > 0)
 		{
-			const char *pName = pMenu->GameServer()->Item()->GetName(VoteStatus.m_aCmd);
-			char aCtx[128];
-			str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pName);
-			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Localize(pDesc, aCtx));
+			str_copy(pMenu->m_aItemViewId[ClientID], VoteStatus.m_aCmd, sizeof(pMenu->m_aItemViewId[ClientID]));
+			pMenu->SetPlayerPage(ClientID, "ITEMVIEW");
+			return false;
 		}
 	}
 
@@ -280,7 +284,7 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 	const CItemSystem::CInventory &Inventory = pMenu->GameServer()->Item()->GetInventory(ClientID);
 	for(int i = 0; i < CItemSystem::CInventory::MAX_ITEMS; i++)
 	{
-		if(i < Inventory.m_NumItems)
+		if(!Inventory.IsEmpty(i))
 		{
 			const char *pName = pMenu->GameServer()->Item()->GetName(Inventory.m_aItems[i].m_aResId);
 			pMenu->AddOptionFormat("%d. %s: %d", Inventory.m_aItems[i].m_aResId, "-",
@@ -290,6 +294,109 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 		{
 			pMenu->AddOptionFormat(Localize("%d. None", "Menu Inventory"), "DISPLAY", "-", i + 1);
 		}
+	}
+
+	return true;
+}
+
+void CGameMenu::AddWrappedLinesOption(const char *pText)
+{
+	const int MaxCharsPerLine = (VOTE_DESC_LENGTH - 2) / 2; // conservative for CJK
+	const char *pCursor = pText;
+	while(pCursor && pCursor[0])
+	{
+		char aLine[VOTE_DESC_LENGTH];
+		str_utf8_copy_num(aLine, pCursor, sizeof(aLine), MaxCharsPerLine);
+		if(!aLine[0])
+			break;
+		AddOption(aLine, "DISPLAY");
+		const int Advance = str_length(aLine);
+		if(Advance <= 0)
+			break;
+		pCursor += Advance;
+	}
+}
+
+void CGameMenu::AddWrappedLinesOptionFormat(const char *pDesc, ...)
+{
+	va_list List;
+	va_start(List, pDesc);
+	char aBuf[VOTE_DESC_LENGTH * 4];
+	vsnprintf(aBuf, sizeof(aBuf), pDesc, List);
+	va_end(List);
+	AddWrappedLinesOption(aBuf);
+}
+
+bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void)pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+	const char *pResId = pMenu->m_aItemViewId[ClientID];
+	if(!pResId[0] || pItem->GetItemCount(ClientID, pResId) <= 0)
+	{
+		// the item is gone (used up / removed): go back to the inventory
+		pMenu->SetPlayerPage(ClientID, "INVENTORY");
+		return false;
+	}
+
+	const int Count = pItem->GetItemCount(ClientID, pResId);
+	const char *pName = pItem->GetName(pResId);
+	const char *pLocalizedName = Localize(pName, "Item Name");
+
+	// "use" the item; the vote reason box can carry how many to use
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "USE") == 0)
+	{
+		int UseCount = 1;
+		if(VoteStatus.m_aReason[0])
+		{
+			UseCount = str_toint(VoteStatus.m_aReason);
+			if(UseCount < 1)
+				UseCount = 1;
+		}
+		const int Used = pItem->UseItem(ClientID, pResId, UseCount);
+		if(Used > 0)
+		{
+			char aMsg[128];
+			str_format(aMsg, sizeof(aMsg), Localize("Used: %s x%d", "Menu Inventory"), pLocalizedName, Used);
+			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, aMsg);
+		}
+		else
+		{
+			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID,
+				Localize("Nothing to restore.", "Menu Inventory"));
+		}
+		// refresh: back to the list, or keep viewing if still owned
+		pMenu->SetPlayerPage(ClientID, "INVENTORY");
+		return false;
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+
+	char aHeader[VOTE_DESC_LENGTH];
+	str_format(aHeader, sizeof(aHeader), "%s x%d", pLocalizedName, Count);
+	pMenu->AddOption(aHeader, "DISPLAY", "=");
+
+	// description (localized), wrapped over several rows
+	const char *pDesc = pItem->GetDesc(pResId);
+	if(pDesc && pDesc[0])
+	{
+		char aCtx[128];
+		str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pName);
+		pMenu->AddWrappedLinesOption(Localize(pDesc, aCtx));
+	}
+
+	pMenu->AddHorizontalRule();
+
+	// actions
+	if(pItem->IsUsable(pResId))
+	{
+		pMenu->AddOption(Localize("Use", "Menu Inventory"), "USE", "★");
+		pMenu->AddOption(Localize("Use a number as the vote reason to use that many.", "Menu Inventory"), "DISPLAY", "-");
 	}
 
 	return true;
@@ -562,8 +669,10 @@ bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class 
 	// any owned item can be placed on a slot; only weapon items actually fire
 	CItemSystem *pItem = pMenu->GameServer()->Item();
 	const CItemSystem::CInventory &Inventory = pItem->GetInventory(ClientID);
-	for(int i = 0; i < Inventory.m_NumItems; i++)
+	for(int i = 0; i < CItemSystem::CInventory::MAX_ITEMS; i++)
 	{
+		if(Inventory.IsEmpty(i))
+			continue;
 		const char *pResId = Inventory.m_aItems[i].m_aResId;
 		const char *pName = pItem->GetName(pResId);
 		if(!pName[0])

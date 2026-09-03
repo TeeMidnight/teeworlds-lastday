@@ -7,18 +7,26 @@
 #include <game/server/gamecontext.h>
 
 // ---------------------------------------------------------------
-// CItemSystem::CInventory
+// CItemSystem::CInventory (inventory / item loading lives here; use effects
+// and crafting live in item_use.cpp / item_craft.cpp)
 // ---------------------------------------------------------------
 CItemSystem::CInventory::CInventory()
 {
-	m_NumItems = 0;
 	mem_zero(m_aItems, sizeof(m_aItems));
 }
 
 int CItemSystem::CInventory::Find(const char *pResId) const
 {
-	for(int i = 0; i < m_NumItems; i++)
-		if(str_comp(m_aItems[i].m_aResId, pResId) == 0)
+	for(int i = 0; i < MAX_ITEMS; i++)
+		if(m_aItems[i].m_aResId[0] != '\0' && str_comp(m_aItems[i].m_aResId, pResId) == 0)
+			return i;
+	return -1;
+}
+
+int CItemSystem::CInventory::FindEmpty() const
+{
+	for(int i = 0; i < MAX_ITEMS; i++)
+		if(m_aItems[i].m_aResId[0] == '\0')
 			return i;
 	return -1;
 }
@@ -27,6 +35,15 @@ int CItemSystem::CInventory::Get(const char *pResId) const
 {
 	const int Index = Find(pResId);
 	return Index >= 0 ? m_aItems[Index].m_Count : 0;
+}
+
+void CItemSystem::CInventory::ClearSlot(int Index)
+{
+	if(Index >= 0 && Index < MAX_ITEMS)
+	{
+		m_aItems[Index].m_aResId[0] = '\0';
+		m_aItems[Index].m_Count = 0;
+	}
 }
 
 // ---------------------------------------------------------------
@@ -110,6 +127,22 @@ void CItemSystem::LoadItem(const char *pResId, const char *pFilePath)
 	if(Damage.type == json_integer || Damage.type == json_double)
 		Item.m_Damage = (int) (json_int_t) Damage;
 
+	// use effect: an optional "use" object declares what happens when the
+	// player uses the item from the inventory menu (consumes one)
+	const json_value &Use = (*pJson)["use"];
+	if(Use.type == json_object)
+	{
+		Item.m_Use.m_HasUse = true;
+		Item.m_Use.m_Health = 0;
+		Item.m_Use.m_Sanity = 0;
+		const json_value &Health = Use["health"];
+		if(Health.type == json_integer || Health.type == json_double)
+			Item.m_Use.m_Health = (int) (json_int_t) Health;
+		const json_value &Sanity = Use["sanity"];
+		if(Sanity.type == json_integer || Sanity.type == json_double)
+			Item.m_Use.m_Sanity = (int) (json_int_t) Sanity;
+	}
+
 	m_Items.set(str_quickhash(pResId), Item);
 	dbg_msg("items", "loaded item '%s' ('%s')", pResId, Item.m_aName);
 }
@@ -138,14 +171,14 @@ bool CItemSystem::AddItem(int ClientID, const char *pResId, int Count, bool Sile
 	int Index = Inventory.Find(pResId);
 	if(Index < 0)
 	{
-		if(Inventory.m_NumItems >= CInventory::MAX_ITEMS)
+		Index = Inventory.FindEmpty();
+		if(Index < 0)
 		{
 			// no free slot: don't insert; tell the player unless silent
 			if(!SilentFail)
 				m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("No inventory space!", "Item Pickup"));
 			return false;
 		}
-		Index = Inventory.m_NumItems++;
 		str_copy(Inventory.m_aItems[Index].m_aResId, pResId, sizeof(Inventory.m_aItems[Index].m_aResId));
 		Inventory.m_aItems[Index].m_Count = 0;
 	}
@@ -193,9 +226,13 @@ int CItemSystem::GetIngredientCount(int ClientID, const SIngredient &Need) const
 		return Inventory.Get(Need.m_aItemId);
 
 	int Total = 0;
-	for(int i = 0; i < Inventory.m_NumItems; i++)
+	for(int i = 0; i < CInventory::MAX_ITEMS; i++)
+	{
+		if(Inventory.IsEmpty(i))
+			continue;
 		if(HasItemType(Inventory.m_aItems[i].m_aResId, Need.m_aType))
 			Total += Inventory.m_aItems[i].m_Count;
+	}
 	return Total;
 }
 
@@ -222,6 +259,10 @@ bool CItemSystem::RemoveItem(int ClientID, const char *pResId, int Count)
 		return false;
 
 	Inventory.m_aItems[Index].m_Count -= Count;
+
+	// the stack is gone: clear the slot instead of moving the others
+	if(Inventory.m_aItems[Index].m_Count <= 0)
+		Inventory.ClearSlot(Index);
 	return true;
 }
 
@@ -230,9 +271,13 @@ bool CItemSystem::HasItemHash(int ClientID, unsigned Hash) const
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
 		return false;
 	const CInventory &Inventory = m_aInventories[ClientID];
-	for(int i = 0; i < Inventory.m_NumItems; i++)
+	for(int i = 0; i < CInventory::MAX_ITEMS; i++)
+	{
+		if(Inventory.IsEmpty(i))
+			continue;
 		if(str_quickhash(Inventory.m_aItems[i].m_aResId) == Hash)
 			return true;
+	}
 	return false;
 }
 
@@ -241,9 +286,13 @@ const char *CItemSystem::GetResIdByHash(int ClientID, unsigned Hash) const
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
 		return nullptr;
 	const CInventory &Inventory = m_aInventories[ClientID];
-	for(int i = 0; i < Inventory.m_NumItems; i++)
+	for(int i = 0; i < CInventory::MAX_ITEMS; i++)
+	{
+		if(Inventory.IsEmpty(i))
+			continue;
 		if(str_quickhash(Inventory.m_aItems[i].m_aResId) == Hash)
 			return Inventory.m_aItems[i].m_aResId;
+	}
 	return nullptr;
 }
 
@@ -278,8 +327,10 @@ int CItemSystem::GetAmmoCountForWeapon(int ClientID, const char *pWeaponName) co
 
 	const CInventory &Inventory = m_aInventories[ClientID];
 	int Total = 0;
-	for(int i = 0; i < Inventory.m_NumItems; i++)
+	for(int i = 0; i < CInventory::MAX_ITEMS; i++)
 	{
+		if(Inventory.IsEmpty(i))
+			continue;
 		const SItemDef *pItem = m_Items.get(str_quickhash(Inventory.m_aItems[i].m_aResId));
 		if(!pItem)
 			continue;
@@ -299,8 +350,10 @@ int CItemSystem::ConsumeAmmoForWeapon(int ClientID, const char *pWeaponName)
 		return 0;
 
 	CInventory &Inventory = m_aInventories[ClientID];
-	for(int i = 0; i < Inventory.m_NumItems; i++)
+	for(int i = 0; i < CInventory::MAX_ITEMS; i++)
 	{
+		if(Inventory.IsEmpty(i))
+			continue;
 		const SItemDef *pItem = m_Items.get(str_quickhash(Inventory.m_aItems[i].m_aResId));
 		if(!pItem)
 			continue;
@@ -308,8 +361,11 @@ int CItemSystem::ConsumeAmmoForWeapon(int ClientID, const char *pWeaponName)
 		{
 			if(str_comp(pItem->m_aAmmoFor[k], pWeaponName) == 0 && Inventory.m_aItems[i].m_Count > 0)
 			{
-				Inventory.m_aItems[i].m_Count--;
-				return pItem->m_Damage;
+				// consume one round; RemoveItem clears the slot when the
+				// stack reaches zero (it does not move other slots)
+				const int Damage = pItem->m_Damage;
+				RemoveItem(ClientID, Inventory.m_aItems[i].m_aResId, 1);
+				return Damage;
 			}
 		}
 	}
@@ -353,7 +409,7 @@ void CItemSystem::AddAmmoForWeapon(int ClientID, const char *pWeaponName, int Co
 }
 
 // ---------------------------------------------------------------
-// crafting
+// craft loading
 // ---------------------------------------------------------------
 int CItemSystem::ListCraftsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
 {
@@ -424,116 +480,4 @@ void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath)
 	m_Crafts.set(str_quickhash(pCraftId), Craft);
 	dbg_msg("craft", "loaded craft '%s' -> %s x%d (%d ingredient(s))",
 		pCraftId, Craft.m_aResultItemId, Craft.m_ResultCount, Craft.m_NumNeeded);
-}
-
-void CItemSystem::ForEachCraft(FCraftCallback pfnFunc, void *pUser)
-{
-	m_Crafts.for_each((hash_table<unsigned, SCraftDef, 8>::foreach_function) pfnFunc, pUser);
-}
-
-const CItemSystem::SCraftDef *CItemSystem::GetCraft(const char *pCraftId) const
-{
-	return m_Crafts.get(str_quickhash(pCraftId));
-}
-
-bool CItemSystem::ReserveIngredients(int ClientID, const SCraftDef *pCraft, int *pTake) const
-{
-	if(!pCraft || ClientID < 0 || ClientID >= MAX_CLIENTS)
-		return false;
-
-	const CInventory &Inventory = m_aInventories[ClientID];
-
-	// available (still unreserved) quantity per inventory slot
-	int aAvail[CInventory::MAX_ITEMS];
-	for(int i = 0; i < Inventory.m_NumItems; i++)
-		aAvail[i] = Inventory.m_aItems[i].m_Count;
-
-	// try to satisfy each ingredient against the same shared availability, so a
-	// single physical item can never be used by two different materials
-	for(int i = 0; i < pCraft->m_NumNeeded; i++)
-	{
-		const SIngredient &Need = pCraft->m_aNeeded[i];
-
-		if(Need.m_IsTool)
-		{
-			// a tool must simply be owned; it is never consumed
-			bool Found = false;
-			for(int k = 0; k < Inventory.m_NumItems && !Found; k++)
-			{
-				if(aAvail[k] <= 0)
-					continue;
-				if(Need.m_MatchByType)
-					Found = HasItemType(Inventory.m_aItems[k].m_aResId, Need.m_aType);
-				else
-					Found = str_comp(Inventory.m_aItems[k].m_aResId, Need.m_aItemId) == 0;
-			}
-			if(!Found)
-				return false;
-			continue;
-		}
-
-		int Remaining = Need.m_Count;
-		for(int k = 0; k < Inventory.m_NumItems && Remaining > 0; k++)
-		{
-			if(aAvail[k] <= 0)
-				continue;
-			if(Need.m_MatchByType)
-			{
-				if(!HasItemType(Inventory.m_aItems[k].m_aResId, Need.m_aType))
-					continue;
-			}
-			else
-			{
-				if(str_comp(Inventory.m_aItems[k].m_aResId, Need.m_aItemId) != 0)
-					continue;
-			}
-			const int Take = minimum(Remaining, aAvail[k]);
-			aAvail[k] -= Take;
-			Remaining -= Take;
-		}
-		if(Remaining > 0)
-			return false;
-	}
-
-	// report what to remove per slot
-	for(int k = 0; k < Inventory.m_NumItems; k++)
-		pTake[k] = Inventory.m_aItems[k].m_Count - aAvail[k];
-	return true;
-}
-
-bool CItemSystem::HasIngredients(int ClientID, const SCraftDef *pCraft) const
-{
-	int aTake[CInventory::MAX_ITEMS];
-	return ReserveIngredients(ClientID, pCraft, aTake);
-}
-
-CItemSystem::ECraftResult CItemSystem::Craft(int ClientID, const char *pCraftId)
-{
-	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
-		return CRAFT_NO_MATERIALS;
-
-	SCraftDef *pCraft = m_Crafts.get(str_quickhash(pCraftId));
-	if(!pCraft)
-		return CRAFT_NO_MATERIALS;
-
-	// separate the failure reasons: missing materials vs. no room for the result
-	if(!HasIngredients(ClientID, pCraft))
-		return CRAFT_NO_MATERIALS;
-
-	CInventory &Inventory = m_aInventories[ClientID];
-	if(Inventory.Find(pCraft->m_aResultItemId) < 0 &&
-		Inventory.m_NumItems >= CInventory::MAX_ITEMS)
-		return CRAFT_NO_SPACE;
-
-	// consume the reserved non-tool ingredients; tools are kept
-	int aTake[CInventory::MAX_ITEMS] = {0};
-	if(!ReserveIngredients(ClientID, pCraft, aTake))
-		return CRAFT_NO_MATERIALS;
-	for(int k = 0; k < Inventory.m_NumItems; k++)
-		if(aTake[k] > 0)
-			Inventory.m_aItems[k].m_Count -= aTake[k];
-
-	// the slot was already checked above, so a silent add cannot fail again
-	AddItem(ClientID, pCraft->m_aResultItemId, pCraft->m_ResultCount, true);
-	return CRAFT_OK;
 }

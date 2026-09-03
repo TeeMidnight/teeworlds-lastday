@@ -1,5 +1,9 @@
 {
     "name": "G rass",
     "desc": "It's like grass, but it's not from any plant.",
-    "item_type": ["grass"]
+    "item_type": ["grass"],
+    "use": {
+        "health": 2,
+        "sanity": 5
+    }
 }

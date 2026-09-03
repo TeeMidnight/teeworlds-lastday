@@ -65,11 +65,16 @@ public:
 	void AddOption(const char *pDesc, const char *pCommand, const char *pPrefix = "");
 
 	void AddOptionFormat(const char *pDesc, const char *pCommand, const char *pPrefix, ...);
+	// wraps long text into DISPLAY rows (safe for multibyte utf-8)
+	void AddWrappedLinesOption(const char *pText);
+	void AddWrappedLinesOptionFormat(const char *pDesc, ...);
 
 private:
 	int m_CurrentClientID;
 	static bool MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// shows one item: description + actions ("use", ...)
+	static bool MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// loadout (weapon equipment) menu
 	static bool MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
@@ -78,6 +83,8 @@ private:
 	// slot the player picked in MenuLoadout, before picking the weapon in
 	// MenuWeaponPick; -1 = none
 	int m_aLoadoutSlot[MAX_CLIENTS];
+	// item (res_id) the player is currently inspecting in MenuItemView
+	char m_aItemViewId[MAX_CLIENTS][32];
 
 	hash_table<unsigned, CMenuPage, 8> m_MenuPages;
 

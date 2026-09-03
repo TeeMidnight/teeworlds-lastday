@@ -1761,7 +1761,19 @@ int str_toint(const char *str);
 float str_tofloat(const char *str);
 int str_isspace(char c);
 char str_uppercase(char c);
-unsigned str_quickhash(const char *str);
+
+#ifdef __cplusplus
+inline constexpr      // C++17
+#else
+static inline         // C99
+#endif
+unsigned str_quickhash(const char *str)
+{
+	unsigned hash = 5381;
+	for(; *str; str++)
+		hash = ((hash << 5) + hash) + (*str); /* hash * 33 + c */
+	return hash;
+}
 
 enum
 {

@@ -290,6 +290,11 @@
 			"tr": "背包"
 		},
 		{
+			"context": "ITEMVIEW",
+			"or": "Item",
+			"tr": "物品"
+		},
+		{
 			"context": "Menu Loadout",
 			"or": "Item placed on the slot.",
 			"tr": "物品已放入槽位。"
@@ -350,6 +355,11 @@
 			"tr": "材料不足。"
 		},
 		{
+			"context": "Menu Inventory",
+			"or": "Nothing to restore.",
+			"tr": "没有可恢复的数值。"
+		},
+		{
 			"context": "Menu",
 			"or": "Previous Page",
 			"tr": "上一页"
@@ -393,6 +403,21 @@
 			"context": "Account",
 			"or": "Usage: /register <username> <password>",
 			"tr": "用法：/register <用户名> <密码>"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Use",
+			"tr": "使用"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Use a number as the vote reason to use that many.",
+			"tr": "在投票理由里填数字可一次使用多个。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Used: %s x%d",
+			"tr": "已使用：%s x%d"
 		},
 		{
 			"context": "Account",

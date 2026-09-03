@@ -13,6 +13,24 @@ class IStorage;
 // player's inventory
 class CItemSystem
 {
+public:
+	// use effects applied when the player "uses" the item from the inventory
+	// menu (consumes one). defined through the optional "use" json object.
+	struct SUse
+	{
+		int m_Health; // restore health (clamped to max)
+		int m_Sanity; // restore sanity (clamped to 100)
+		bool m_HasUse; // whether a "use" object was declared
+
+		SUse() :
+			m_Health(0),
+			m_Sanity(0),
+			m_HasUse(false)
+		{
+		}
+	};
+
+private:
 	class CGameContext *m_pGameServer;
 	class IStorage *m_pStorage;
 
@@ -38,6 +56,7 @@ class CItemSystem
 		// damage dealt when this item is used as ammo (0 = use the weapon's
 		// default damage)
 		int m_Damage;
+		SUse m_Use;
 	};
 	hash_table<unsigned, SItemDef, 8> m_Items; // keyed by str_quickhash(res_id)
 
@@ -89,7 +108,10 @@ public:
 	// callback used to enumerate all loaded recipes
 	typedef void (*FCraftCallback)(SCraftDef &Craft, void *pUser);
 	void ForEachCraft(FCraftCallback pfnFunc, void *pUser);
-	// a player's inventory: a fixed-size list of items (res_id + count)
+	// a player's inventory: a fixed number of slots. an empty slot has an
+	// empty res_id. slots never move: removing an item that reaches zero
+	// simply clears the slot, and adding a new item goes into the first
+	// empty slot.
 	struct CInventory
 	{
 		enum
@@ -104,13 +126,18 @@ public:
 		};
 
 		SItem m_aItems[MAX_ITEMS];
-		int m_NumItems;
 
 		CInventory();
 		// index of the item with the given res_id, or -1
 		int Find(const char *pResId) const;
+		// index of the first empty slot, or -1 when the inventory is full
+		int FindEmpty() const;
 		// current count of the item, or 0
 		int Get(const char *pResId) const;
+		// whether the slot is empty
+		bool IsEmpty(int Index) const { return Index < 0 || Index >= MAX_ITEMS || m_aItems[Index].m_aResId[0] == '\0'; }
+		// clear the slot (used when its count reaches zero)
+		void ClearSlot(int Index);
 	};
 
 	// one inventory per client
@@ -131,6 +158,16 @@ public:
 	const char *GetName(const char *pResId) const;
 	// description of the item, or "" when unknown
 	const char *GetDesc(const char *pResId) const;
+	// whether the item definition declares a "use" effect (see UseItem)
+	bool IsUsable(const char *pResId) const;
+	// the item's declared use effects; m_HasUse false when none
+	SUse GetUse(const char *pResId) const;
+
+	// consume up to Count items and apply their "use" effects to the player
+	// (health/sanity). stops early once nothing is left to restore (full
+	// health/sanity) or the player runs out of the item. returns how many
+	// items were actually consumed.
+	int UseItem(int ClientID, const char *pResId, int Count = 1);
 	// optional item_type of the item: whether the item carries the given type
 	bool HasItemType(const char *pResId, const char *pType) const;
 	// total quantity the player owns that matches this ingredient (by id or by type)
