@@ -61,6 +61,7 @@ void CItemSystem::LoadItem(const char *pResId, const char *pFilePath)
 		return;
 
 	SItemDef Item;
+	str_copy(Item.m_aResId, pResId, sizeof(Item.m_aResId));
 	str_copy(Item.m_aName, (*pJson)["name"], sizeof(Item.m_aName));
 	const char *pDesc = (*pJson)["desc"];
 	if(!pDesc[0])
@@ -70,19 +71,44 @@ void CItemSystem::LoadItem(const char *pResId, const char *pFilePath)
 	// item_type: a single string or an array of strings
 	Item.m_NumTypes = 0;
 	const json_value &Types = (*pJson)["item_type"];
-	if(Types.type == json_string && ((const char *)Types)[0])
+	if(Types.type == json_string && ((const char *) Types)[0])
 	{
-		str_copy(Item.m_aTypes[Item.m_NumTypes++], (const char *)Types, sizeof(Item.m_aTypes[0]));
+		str_copy(Item.m_aTypes[Item.m_NumTypes++], (const char *) Types, sizeof(Item.m_aTypes[0]));
 	}
 	else if(Types.type == json_array)
 	{
-		for(unsigned i = 0; i < Types.u.array.length && Item.m_NumTypes < (int)SItemDef::MAX_TYPES; i++)
+		for(unsigned i = 0; i < Types.u.array.length && Item.m_NumTypes < (int) SItemDef::MAX_TYPES; i++)
 		{
 			const json_value &Type = Types[i];
-			if(Type.type == json_string && ((const char *)Type)[0])
-				str_copy(Item.m_aTypes[Item.m_NumTypes++], (const char *)Type, sizeof(Item.m_aTypes[0]));
+			if(Type.type == json_string && ((const char *) Type)[0])
+				str_copy(Item.m_aTypes[Item.m_NumTypes++], (const char *) Type, sizeof(Item.m_aTypes[0]));
 		}
 	}
+
+	// ammo_for: which weapons this item can be used as ammo for (a single
+	// string or an array of strings). an item with at least one entry is an
+	// ammo item.
+	Item.m_NumAmmoFor = 0;
+	const json_value &AmmoFor = (*pJson)["ammo_for"];
+	if(AmmoFor.type == json_string && ((const char *) AmmoFor)[0])
+	{
+		str_copy(Item.m_aAmmoFor[Item.m_NumAmmoFor++], (const char *) AmmoFor, sizeof(Item.m_aAmmoFor[0]));
+	}
+	else if(AmmoFor.type == json_array)
+	{
+		for(unsigned i = 0; i < AmmoFor.u.array.length && Item.m_NumAmmoFor < (int) SItemDef::MAX_AMMO_FOR; i++)
+		{
+			const json_value &Weapon = AmmoFor[i];
+			if(Weapon.type == json_string && ((const char *) Weapon)[0])
+				str_copy(Item.m_aAmmoFor[Item.m_NumAmmoFor++], (const char *) Weapon, sizeof(Item.m_aAmmoFor[0]));
+		}
+	}
+
+	// damage dealt when used as ammo (0 = use the weapon's default)
+	Item.m_Damage = 0;
+	const json_value &Damage = (*pJson)["damage"];
+	if(Damage.type == json_integer || Damage.type == json_double)
+		Item.m_Damage = (int) (json_int_t) Damage;
 
 	m_Items.set(str_quickhash(pResId), Item);
 	dbg_msg("items", "loaded item '%s' ('%s')", pResId, Item.m_aName);
@@ -173,6 +199,159 @@ int CItemSystem::GetIngredientCount(int ClientID, const SIngredient &Need) const
 	return Total;
 }
 
+bool CItemSystem::HasItem(int ClientID, const char *pResId) const
+{
+	return GetItemCount(ClientID, pResId) > 0;
+}
+
+int CItemSystem::GetItemCount(int ClientID, const char *pResId) const
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return 0;
+	return m_aInventories[ClientID].Get(pResId);
+}
+
+bool CItemSystem::RemoveItem(int ClientID, const char *pResId, int Count)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || Count <= 0)
+		return false;
+
+	CInventory &Inventory = m_aInventories[ClientID];
+	const int Index = Inventory.Find(pResId);
+	if(Index < 0 || Inventory.m_aItems[Index].m_Count < Count)
+		return false;
+
+	Inventory.m_aItems[Index].m_Count -= Count;
+	return true;
+}
+
+bool CItemSystem::HasItemHash(int ClientID, unsigned Hash) const
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return false;
+	const CInventory &Inventory = m_aInventories[ClientID];
+	for(int i = 0; i < Inventory.m_NumItems; i++)
+		if(str_quickhash(Inventory.m_aItems[i].m_aResId) == Hash)
+			return true;
+	return false;
+}
+
+const char *CItemSystem::GetResIdByHash(int ClientID, unsigned Hash) const
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return nullptr;
+	const CInventory &Inventory = m_aInventories[ClientID];
+	for(int i = 0; i < Inventory.m_NumItems; i++)
+		if(str_quickhash(Inventory.m_aItems[i].m_aResId) == Hash)
+			return Inventory.m_aItems[i].m_aResId;
+	return nullptr;
+}
+
+// callback used by WeaponNeedsAmmo to scan every item definition
+struct SAmmoScanData
+{
+	const char *m_pWeaponName;
+	bool m_Found;
+};
+
+void CItemSystem::AmmoScanCallback(SItemDef &Item, void *pUser)
+{
+	SAmmoScanData *pData = static_cast<SAmmoScanData *>(pUser);
+	for(int k = 0; k < Item.m_NumAmmoFor; k++)
+		if(str_comp(Item.m_aAmmoFor[k], pData->m_pWeaponName) == 0)
+			pData->m_Found = true;
+}
+
+bool CItemSystem::WeaponNeedsAmmo(const char *pWeaponName)
+{
+	// a weapon needs ammo when at least one item definition is usable as its
+	// ammo (declared through "ammo_for")
+	SAmmoScanData Data = {pWeaponName, false};
+	m_Items.for_each(AmmoScanCallback, &Data);
+	return Data.m_Found;
+}
+
+int CItemSystem::GetAmmoCountForWeapon(int ClientID, const char *pWeaponName) const
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return 0;
+
+	const CInventory &Inventory = m_aInventories[ClientID];
+	int Total = 0;
+	for(int i = 0; i < Inventory.m_NumItems; i++)
+	{
+		const SItemDef *pItem = m_Items.get(str_quickhash(Inventory.m_aItems[i].m_aResId));
+		if(!pItem)
+			continue;
+		for(int k = 0; k < pItem->m_NumAmmoFor; k++)
+			if(str_comp(pItem->m_aAmmoFor[k], pWeaponName) == 0)
+			{
+				Total += Inventory.m_aItems[i].m_Count;
+				break;
+			}
+	}
+	return Total;
+}
+
+int CItemSystem::ConsumeAmmoForWeapon(int ClientID, const char *pWeaponName)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return 0;
+
+	CInventory &Inventory = m_aInventories[ClientID];
+	for(int i = 0; i < Inventory.m_NumItems; i++)
+	{
+		const SItemDef *pItem = m_Items.get(str_quickhash(Inventory.m_aItems[i].m_aResId));
+		if(!pItem)
+			continue;
+		for(int k = 0; k < pItem->m_NumAmmoFor; k++)
+		{
+			if(str_comp(pItem->m_aAmmoFor[k], pWeaponName) == 0 && Inventory.m_aItems[i].m_Count > 0)
+			{
+				Inventory.m_aItems[i].m_Count--;
+				return pItem->m_Damage;
+			}
+		}
+	}
+	return 0;
+}
+
+// callback used by AddAmmoForWeapon to find the first ammo item for a weapon
+struct SAmmoAddData
+{
+	const char *m_pWeaponName;
+	char m_aResId[32];
+	bool m_Found;
+};
+
+void CItemSystem::AmmoAddCallback(CItemSystem::SItemDef &Item, void *pUser)
+{
+	SAmmoAddData *pData = static_cast<SAmmoAddData *>(pUser);
+	if(pData->m_Found)
+		return;
+	for(int k = 0; k < Item.m_NumAmmoFor; k++)
+	{
+		if(str_comp(Item.m_aAmmoFor[k], pData->m_pWeaponName) == 0)
+		{
+			str_copy(pData->m_aResId, Item.m_aResId, sizeof(pData->m_aResId));
+			pData->m_Found = true;
+			return;
+		}
+	}
+}
+
+void CItemSystem::AddAmmoForWeapon(int ClientID, const char *pWeaponName, int Count)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || Count <= 0)
+		return;
+
+	// add to the first ammo item definition usable by this weapon
+	SAmmoAddData Data = {pWeaponName, {0}, false};
+	m_Items.for_each(AmmoAddCallback, &Data);
+	if(Data.m_Found)
+		AddItem(ClientID, Data.m_aResId, Count, true);
+}
+
 // ---------------------------------------------------------------
 // crafting
 // ---------------------------------------------------------------
@@ -210,33 +389,33 @@ void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath)
 	Craft.m_NumNeeded = 0;
 
 	const json_value &Result = (*pJson)["result"];
-	str_copy(Craft.m_aResultItemId, (const char *)Result["item_id"], sizeof(Craft.m_aResultItemId));
+	str_copy(Craft.m_aResultItemId, (const char *) Result["item_id"], sizeof(Craft.m_aResultItemId));
 	const json_value &ResultCount = Result["count"];
 	if(ResultCount.type == json_integer || ResultCount.type == json_double)
-		Craft.m_ResultCount = (int)(json_int_t)ResultCount;
+		Craft.m_ResultCount = (int) (json_int_t) ResultCount;
 
 	// one or more ingredients in "needed"
 	const json_value &Needed = (*pJson)["needed"];
-	const int NumIng = (Needed.type == json_array) ? (int)Needed.u.array.length : ((Needed.type == json_object) ? 1 : 0);
-	for(int i = 0; i < NumIng && Craft.m_NumNeeded < (int)(sizeof(Craft.m_aNeeded) / sizeof(Craft.m_aNeeded[0])); i++)
+	const int NumIng = (Needed.type == json_array) ? (int) Needed.u.array.length : ((Needed.type == json_object) ? 1 : 0);
+	for(int i = 0; i < NumIng && Craft.m_NumNeeded < (int) (sizeof(Craft.m_aNeeded) / sizeof(Craft.m_aNeeded[0])); i++)
 	{
 		const json_value &Ing = (Needed.type == json_array) ? Needed[i] : Needed;
 		SIngredient &Need = Craft.m_aNeeded[Craft.m_NumNeeded];
 		// by default match an exact item id
-		str_copy(Need.m_aItemId, (const char *)Ing["item_id"], sizeof(Need.m_aItemId));
+		str_copy(Need.m_aItemId, (const char *) Ing["item_id"], sizeof(Need.m_aItemId));
 		Need.m_aType[0] = '\0';
 		Need.m_MatchByType = false;
 		// if a "type" is given, match by item_type instead of an exact id
 		const json_value &TypeVal = Ing["type"];
-		if(TypeVal.type == json_string && ((const char *)TypeVal)[0])
+		if(TypeVal.type == json_string && ((const char *) TypeVal)[0])
 		{
 			Need.m_MatchByType = true;
-			str_copy(Need.m_aType, (const char *)TypeVal, sizeof(Need.m_aType));
+			str_copy(Need.m_aType, (const char *) TypeVal, sizeof(Need.m_aType));
 		}
 		Need.m_Count = 1;
 		const json_value &Count = Ing["count"];
 		if(Count.type == json_integer || Count.type == json_double)
-			Need.m_Count = (int)(json_int_t)Count;
+			Need.m_Count = (int) (json_int_t) Count;
 		const json_value &Tool = Ing["tool"];
 		Need.m_IsTool = (Tool.type == json_boolean) && Tool.u.boolean != 0;
 		Craft.m_NumNeeded++;
@@ -249,7 +428,7 @@ void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath)
 
 void CItemSystem::ForEachCraft(FCraftCallback pfnFunc, void *pUser)
 {
-	m_Crafts.for_each((hash_table<unsigned, SCraftDef, 8>::foreach_function)pfnFunc, pUser);
+	m_Crafts.for_each((hash_table<unsigned, SCraftDef, 8>::foreach_function) pfnFunc, pUser);
 }
 
 const CItemSystem::SCraftDef *CItemSystem::GetCraft(const char *pCraftId) const

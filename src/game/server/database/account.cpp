@@ -6,8 +6,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
-namespace
-{
+namespace {
 const int SALT_LEN = 16;
 const int HASH_LEN = 32; // SHA-256
 const int ITERATIONS = 100000;

@@ -1,5 +1,3 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_SERVER_GAMEMENU_H
 #define GAME_SERVER_GAMEMENU_H
 
@@ -73,6 +71,13 @@ private:
 	static bool MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// loadout (weapon equipment) menu
+	static bool MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	static bool MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+
+	// slot the player picked in MenuLoadout, before picking the weapon in
+	// MenuWeaponPick; -1 = none
+	int m_aLoadoutSlot[MAX_CLIENTS];
 
 	hash_table<unsigned, CMenuPage, 8> m_MenuPages;
 

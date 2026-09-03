@@ -1,0 +1,7 @@
+{
+    "name": "Shotgun Shell",
+    "desc": "A shell loaded with pellets for the shotgun.",
+    "item_type": ["ammo"],
+    "ammo_for": ["shotgun"],
+    "damage": 1
+}

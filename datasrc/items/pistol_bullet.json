@@ -1,0 +1,7 @@
+{
+    "name": "Pistol Bullet",
+    "desc": "Standard pistol ammunition.",
+    "item_type": ["ammo"],
+    "ammo_for": ["gun"],
+    "damage": 4
+}

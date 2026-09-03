@@ -20,6 +20,8 @@
 #include "gamecontroller.h"
 #include "item.h"
 #include "player.h"
+#include "weapon.h"
+#include "weaponmanager.h"
 
 #include <game/server/database/playerdb.h>
 
@@ -884,7 +886,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			char aDesc[VOTE_DESC_LENGTH] = {0};
 			char aCmd[VOTE_CMD_LENGTH] = {0};
 			const char *pReason = pMsg->m_Reason[0] ? pMsg->m_Reason : "No reason given";
-			
+
 			if(str_comp_nocase(pMsg->m_Type, "kick") == 0)
 			{
 				if(!Config()->m_SvVoteKick || m_pController->GetRealPlayerNum() < Config()->m_SvVoteKickMin)
@@ -1551,6 +1553,9 @@ void CGameContext::OnInit()
 	m_pController = new CGameController(this);
 
 	m_pController->RegisterChatCommands(CommandManager());
+
+	// collect the statically registered weapon classes (prints the list)
+	WeaponManager()->OutputRegisteredWeapons();
 
 	// initialize the player database (runtime schema creation)
 	{

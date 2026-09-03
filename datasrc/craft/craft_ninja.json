@@ -1,0 +1,23 @@
+{
+    "craft_id": "craft_ninja",
+    "needed":
+    [
+        {
+            "item_id": "heaven_ore",
+            "count": 2
+        },
+        {
+            "item_id": "stone_bricks",
+            "count": 1
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 1
+        }
+    ],
+    "result":
+    {
+        "item_id": "ninja",
+        "count": 1
+    }
+}

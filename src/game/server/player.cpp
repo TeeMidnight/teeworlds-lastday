@@ -6,81 +6,10 @@
 #include "gamecontroller.h"
 #include "player.h"
 
-#include <game/server/database/playerdb.h>
-#include <game/server/database/playerdb_util.h>
-
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
 CGameContext *CPlayer::GameServer() const { return m_pWorld->GameServer(); }
 IServer *CPlayer::Server() const { return m_pWorld->Server(); }
-
-void CPlayer::SaveStatus(CPlayerDB *pDB)
-{
-	if(!pDB || m_AccountUuid == UUID_ZEROED)
-		return;
-
-	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("sanity"), m_Status.m_Sanity);
-	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), m_Status.m_Level);
-	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), m_Status.m_HideTip);
-
-	// characters
-	if(m_pCharacter)
-	{
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("health"), m_pCharacter->m_Health);
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("armor"), m_pCharacter->m_Armor);
-	}
-	// clear the previous inventory, then store each item as an array element
-	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
-	pDB->DelJson(m_AccountUuid, CJsonPath().Key("inventory"));
-	for(int i = 0; i < Inventory.m_NumItems; i++)
-	{
-		const CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[i];
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), Item.m_aResId);
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), Item.m_Count);
-	}
-}
-
-void CPlayer::LoadStatus(CPlayerDB *pDB)
-{
-	if(!pDB || m_AccountUuid == UUID_ZEROED)
-		return;
-
-	// reset to defaults
-	m_Status.m_Sanity = 100;
-	m_Status.m_Level = 0;
-	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
-	Inventory.m_NumItems = 0;
-	mem_zero(Inventory.m_aItems, sizeof(Inventory.m_aItems));
-
-	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("sanity"), &m_Status.m_Sanity);
-	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), &m_Status.m_Level);
-	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), &m_Status.m_HideTip);
-
-	// character infos
-	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("health"), &m_pCharacter->m_Health);
-	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("armor"), &m_pCharacter->m_Armor);
-
-	// read the inventory item by item (no whole-json read)
-	int NumItems = 0;
-	if(pDB->GetJsonLength(m_AccountUuid, CJsonPath().Key("inventory"), &NumItems))
-	{
-		for(int i = 0; i < NumItems && Inventory.m_NumItems < CItemSystem::CInventory::MAX_ITEMS; i++)
-		{
-			char aResId[32];
-			if(!GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), aResId, sizeof(aResId)))
-				continue;
-			int Count = 0;
-			GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), &Count);
-			CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Inventory.m_NumItems];
-			str_copy(Item.m_aResId, aResId, sizeof(Item.m_aResId));
-			Item.m_Count = Count;
-			Inventory.m_NumItems++;
-		}
-	}
-
-	// refresh menu
-	GameServer()->GameMenu()->RefreshMenu(m_ClientID);
-}
 
 CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 {
@@ -107,6 +36,10 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 
 	m_Status.m_HideTip = false;
 	m_Status.m_Sanity = 100;
+	m_Status.m_Level = 0;
+	m_Status.m_LoadoutSet = false;
+	for(int i = 0; i < NUM_WEAPONS; i++)
+		m_Status.m_aLoadout[i][0] = '\0';
 
 	m_AccountUuid = UUID_ZEROED;
 	m_LoggedIn = false;
@@ -210,7 +143,7 @@ void CPlayer::Snap(int SnappingClient)
 		pPlayerInfo->m_PlayerFlags |= PLAYERFLAG_WATCHING;
 
 	pPlayerInfo->m_Latency = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
-	pPlayerInfo->m_Score = m_Status.m_Sanity;
+	pPlayerInfo->m_Score = m_Status.m_Level;
 
 	CNetObj_PlayerInfoExtra *pPlayerInfoExtra = static_cast<CNetObj_PlayerInfoExtra *>(Server()->SnapNewItem(NETOBJTYPE_PLAYERINFOEXTRA, m_ClientID, sizeof(CNetObj_PlayerInfoExtra)));
 	if(!pPlayerInfoExtra)

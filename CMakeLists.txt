@@ -451,15 +451,28 @@ foreach(candidate ${DATA_STALE})
 endforeach()
 
 ########################################################################
-# COPY DATA AND DLLS
+# COPY DATA: every datasrc file becomes a ninja build step, so editing
+# datasrc/* re-copies the data file on the next build
 ########################################################################
 
+set(DATA_COPY_OUTPUTS)
 foreach(datafile ${DATA})
   file(RELATIVE_PATH OUT ${PROJECT_SOURCE_DIR}/datasrc ${datafile})
-  get_filename_component(DESTINATION data/${OUT} PATH)
+  set(DEST "${PROJECT_BINARY_DIR}/data/${OUT}")
+  get_filename_component(DESTINATION ${DEST} PATH)
   file(MAKE_DIRECTORY ${DESTINATION})
-  file(COPY ${datafile} DESTINATION ${DESTINATION})
+  add_custom_command(
+    OUTPUT ${DEST}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${datafile} ${DEST}
+    DEPENDS ${datafile}
+    COMMENT "Copying data/${OUT}"
+  )
+  list(APPEND DATA_COPY_OUTPUTS ${DEST})
 endforeach()
+
+# one target aggregating all data copies, built with the default target so
+# `ninja` refreshes the data directory from datasrc
+add_custom_target(copy-data ALL DEPENDS ${DATA_COPY_OUTPUTS})
 
 ########################################################################
 # CODE GENERATION
@@ -723,6 +736,17 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   item.h
   player.cpp
   player.h
+  player_data.cpp
+  weapon.h
+  weaponmanager.cpp
+  weaponmanager.h
+  weapons/weapon_grenade.cpp
+  weapons/weapon_gun.cpp
+  weapons/weapon_hammer.cpp
+  weapons/weapon_hand.cpp
+  weapons/weapon_laser.cpp
+  weapons/weapon_ninja.cpp
+  weapons/weapon_shotgun.cpp
 )
 set(GAME_GENERATED_SERVER
   src/generated/server_data.cpp

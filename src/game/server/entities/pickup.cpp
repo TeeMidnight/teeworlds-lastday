@@ -34,9 +34,6 @@ void CPickup::Tick()
 		{
 			// respawn
 			m_SpawnTick = -1;
-
-			if(m_Type == PICKUP_GRENADE || m_Type == PICKUP_SHOTGUN || m_Type == PICKUP_LASER)
-				GameWorld()->CreateSound(m_Pos, SOUND_WEAPON_SPAWN);
 		}
 		else
 			return;
@@ -68,51 +65,8 @@ void CPickup::Tick()
 				}
 				break;
 
-			case PICKUP_GRENADE:
-				if(pChr->GiveWeapon(WEAPON_GRENADE, g_pData->m_Weapons.m_aId[WEAPON_GRENADE].m_Maxammo))
-				{
-					Picked = true;
-					GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_GRENADE);
-					if(pChr->GetPlayer())
-						GameServer()->SendWeaponPickup(pChr->GetCID(), WEAPON_GRENADE);
-				}
-				break;
-			case PICKUP_SHOTGUN:
-				if(pChr->GiveWeapon(WEAPON_SHOTGUN, g_pData->m_Weapons.m_aId[WEAPON_SHOTGUN].m_Maxammo))
-				{
-					Picked = true;
-					GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_SHOTGUN);
-					if(pChr->GetPlayer())
-						GameServer()->SendWeaponPickup(pChr->GetCID(), WEAPON_SHOTGUN);
-				}
-				break;
-			case PICKUP_LASER:
-				if(pChr->GiveWeapon(WEAPON_LASER, g_pData->m_Weapons.m_aId[WEAPON_LASER].m_Maxammo))
-				{
-					Picked = true;
-					GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_SHOTGUN);
-					if(pChr->GetPlayer())
-						GameServer()->SendWeaponPickup(pChr->GetCID(), WEAPON_LASER);
-				}
-				break;
-
-			case PICKUP_NINJA:
-			{
-				Picked = true;
-				// activate ninja on target player
-				pChr->GiveNinja();
-
-				// loop through all players, setting their emotes
-				for(CGameWorld::TypeRange r = GameWorld()->DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
-				{
-					CCharacter *pC = static_cast<CCharacter *>(r.front());
-					if(pC != pChr)
-						pC->SetEmote(EMOTE_SURPRISE, Server()->Tick() + Server()->TickSpeed());
-				}
-
-				pChr->SetEmote(EMOTE_ANGRY, Server()->Tick() + 1200 * Server()->TickSpeed() / 1000);
-				break;
-			}
+				// weapons are no longer obtained from pickups: they are items and
+				// have to be crafted / given through the item system
 
 			default:
 				break;

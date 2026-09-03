@@ -1,10 +1,12 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <engine/shared/memheap.h>
 
+#include "entities/character.h"
 #include "gamecontext.h"
 #include "gamemenu.h"
+#include "item.h"
 #include "player.h"
+#include "weapon.h"
+#include "weaponmanager.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -29,10 +31,14 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	}
 
 	m_MenuPages.clear();
+	for(int i = 0; i < MAX_CLIENTS; i++)
+		m_aLoadoutSlot[i] = -1;
 
 	Register("MAIN", "Main Menu", MenuMain, nullptr); // Localize("Main Menu", "MAIN")
 	Register("INVENTORY", "Inventory", MenuInventory, nullptr); // Localize("Inventory", "INVENTORY")
 	Register("CRAFT", "Craft", MenuCraft, nullptr); // Localize("Craft", "CRAFT")
+	Register("LOADOUT", "Loadout", MenuLoadout, nullptr); // Localize("Loadout", "LOADOUT")
+	Register("WEAPONPICK", "Choose Weapon", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Weapon", "WEAPONPICK")
 }
 
 void CGameMenu::Register(const char *pPageName, const char *pTitle, FMenuCallback pfnFunc, void *pUser, const char *pParent)
@@ -206,6 +212,11 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->SetPlayerPage(ClientID, "CRAFT");
 			return false;
 		}
+		else if(str_comp(VoteStatus.m_aCmd, "PAGE LOADOUT") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "LOADOUT");
+			return false;
+		}
 		else if(str_comp(VoteStatus.m_aCmd, "HIDDEN") == 0)
 		{
 			pMenu->GameServer()->m_apPlayers[ClientID]->m_Status.m_HideTip = true;
@@ -237,6 +248,7 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	{
 		pMenu->AddOption(Localize("Inventory", "Menu Main"), "PAGE INVENTORY", "★");
 		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
+		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
 	}
 
@@ -334,7 +346,7 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 
 bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
 {
-	(void)pUserData;
+	(void) pUserData;
 	CItemSystem *pItem = pMenu->GameServer()->Item();
 
 	// if the player clicked a recipe, try to craft it
@@ -452,4 +464,112 @@ CGameMenu::CPlayerData::CPlayerData()
 CGameMenu::CPlayerData::~CPlayerData()
 {
 	delete m_pVoteOptionHeap;
+}
+
+// -- loadout (weapon equipment) menu ------------------------------------
+
+bool CGameMenu::MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	// a slot was clicked: remember it and show the weapon picker
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "NONE") != 0 && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0)
+	{
+		int Slot = -1;
+		if(sscanf(VoteStatus.m_aCmd, "PICK %d", &Slot) == 1 && Slot >= 0 && Slot < NUM_WEAPONS)
+		{
+			pMenu->m_aLoadoutSlot[ClientID] = Slot;
+			pMenu->SetPlayerPage(ClientID, "WEAPONPICK");
+			return false;
+		}
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+
+	CCharacter *pChr = pMenu->GameServer()->GetPlayerChar(ClientID);
+	if(pChr)
+		pChr->UnequipMissingWeapons(); // drop slots whose item is gone
+
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+	for(int i = 0; i < NUM_WEAPONS; i++)
+	{
+		const unsigned Item = pChr ? pChr->WeaponAtSlot(i) : 0;
+		const IWeaponInterface *pWeapon = Item ? WeaponManager()->GetWeapon(Item) : nullptr;
+
+		// resolve the display name through the item system (translated), the
+		// weapon class name is only a res_id fallback
+		const char *pResId = Item ? pItem->GetResIdByHash(ClientID, Item) : nullptr;
+		const char *pRawName = pResId ? pItem->GetName(pResId) : (pWeapon ? pWeapon->Name() : nullptr);
+
+		char aDesc[VOTE_DESC_LENGTH];
+		if(pRawName && pRawName[0])
+		{
+			const char *pName = Localize(pRawName, "Item Name");
+			if(pWeapon)
+				str_format(aDesc, sizeof(aDesc), "%d. %s", i + 1, pName);
+			else
+				// an item without a corresponding weapon (e.g. a resource):
+				// falls back to the hand
+				str_format(aDesc, sizeof(aDesc), Localize("%d. %s (hand)", "Menu Loadout"), i + 1, pName);
+		}
+		else if(Item != 0)
+			str_format(aDesc, sizeof(aDesc), Localize("%d. (hand)", "Menu Loadout"), i + 1);
+		else
+			str_format(aDesc, sizeof(aDesc), Localize("%d. (empty)", "Menu Loadout"), i + 1);
+
+		char aCmd[16];
+		str_format(aCmd, sizeof(aCmd), "PICK %d", i);
+		pMenu->AddOption(aDesc, aCmd);
+	}
+
+	return true;
+}
+
+bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	const int Slot = pMenu->m_aLoadoutSlot[ClientID];
+
+	// an item was clicked: put it onto the pending slot, then go back
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "NONE") != 0 && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0)
+	{
+		CCharacter *pChr = pMenu->GameServer()->GetPlayerChar(ClientID);
+		if(pChr && Slot >= 0 && Slot < NUM_WEAPONS && pChr->EquipWeaponSlot(Slot, str_quickhash(VoteStatus.m_aCmd)))
+		{
+			// persist the new slot layout for the next spawn
+			pPlayer->CaptureLoadout();
+			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Localize("Item placed on the slot.", "Menu Loadout"));
+		}
+		else
+			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Localize("Failed to place that item.", "Menu Loadout"));
+		pMenu->SetPlayerPage(ClientID, "LOADOUT");
+		return false;
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	pMenu->AddOption(Localize("Select an item to place on this slot.", "Menu Loadout"), "DISPLAY", "-");
+	pMenu->AddHorizontalRule();
+
+	// any owned item can be placed on a slot; only weapon items actually fire
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+	const CItemSystem::CInventory &Inventory = pItem->GetInventory(ClientID);
+	for(int i = 0; i < Inventory.m_NumItems; i++)
+	{
+		const char *pResId = Inventory.m_aItems[i].m_aResId;
+		const char *pName = pItem->GetName(pResId);
+		if(!pName[0])
+			pName = pResId;
+		pMenu->AddOption(Localize(pName, "Item Name"), pResId);
+	}
+
+	return true;
 }

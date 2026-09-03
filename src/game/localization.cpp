@@ -51,7 +51,8 @@ bool CLocalizationDatabase::Load(const char *pFilename, IStorage *pStorage, ICon
 	m_StringsHeap.Reset();
 
 	// extract data
-	auto LoadSection = [&](const char *pSection) {
+	auto LoadSection = [&](const char *pSection)
+	{
 		const json_value &rStart = (*pJsonData)[pSection];
 		if(rStart.type != json_array)
 			return;

@@ -1,8 +1,8 @@
 #ifndef GAME_SERVER_ITEM_H
 #define GAME_SERVER_ITEM_H
 
-#include <base/tl/hashtable.h>
 #include <base/system.h>
+#include <base/tl/hashtable.h>
 
 #include <engine/shared/protocol.h>
 
@@ -21,18 +21,33 @@ class CItemSystem
 		enum
 		{
 			MAX_TYPES = 4,
+			MAX_AMMO_FOR = 4,
 		};
+		char m_aResId[32];
 		char m_aName[64];
 		char m_aDesc[256];
 		// an item can belong to several types (e.g. an ore is both "ore" and
 		// "stone"); used to match crafting ingredients by type
 		char m_aTypes[MAX_TYPES][32];
 		int m_NumTypes;
+		// weapons (by weapon name) this item can be used as ammo for. an item
+		// with at least one entry is an ammo item; the weapon consumes it from
+		// the player's inventory when firing.
+		char m_aAmmoFor[MAX_AMMO_FOR][32];
+		int m_NumAmmoFor;
+		// damage dealt when this item is used as ammo (0 = use the weapon's
+		// default damage)
+		int m_Damage;
 	};
 	hash_table<unsigned, SItemDef, 8> m_Items; // keyed by str_quickhash(res_id)
 
 	static int ListItemsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	void LoadItem(const char *pResId, const char *pFilePath);
+
+	// scans every item definition for one usable as ammo for a weapon
+	static void AmmoScanCallback(SItemDef &Item, void *pUser);
+	// finds the first ammo item definition usable by a weapon
+	static void AmmoAddCallback(SItemDef &Item, void *pUser);
 
 	static int ListCraftsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	void LoadCraft(const char *pCraftId, const char *pFilePath);
@@ -120,6 +135,32 @@ public:
 	bool HasItemType(const char *pResId, const char *pType) const;
 	// total quantity the player owns that matches this ingredient (by id or by type)
 	int GetIngredientCount(int ClientID, const SIngredient &Need) const;
+
+	// whether the player owns at least one item whose res_id hash equals Hash
+	bool HasItemHash(int ClientID, unsigned Hash) const;
+	// res_id of the first owned item whose hash equals Hash, or nullptr
+	const char *GetResIdByHash(int ClientID, unsigned Hash) const;
+
+	// whether the player owns at least one of the given item
+	bool HasItem(int ClientID, const char *pResId) const;
+	// current count of the given item in the player's inventory, or 0
+	int GetItemCount(int ClientID, const char *pResId) const;
+	// remove up to Count of the given item from the player's inventory.
+	// returns false (and removes nothing) when the player does not own enough.
+	bool RemoveItem(int ClientID, const char *pResId, int Count);
+
+	// whether any item definition is usable as ammo for the given weapon
+	// (i.e. the weapon needs ammo; otherwise it is unlimited, e.g. hammer)
+	bool WeaponNeedsAmmo(const char *pWeaponName);
+	// total ammo the player has that is usable by the given weapon
+	int GetAmmoCountForWeapon(int ClientID, const char *pWeaponName) const;
+	// consume one ammo item usable by the given weapon from the player's
+	// inventory. returns the damage of the consumed ammo, or 0 when the
+	// player had no ammo for the weapon.
+	int ConsumeAmmoForWeapon(int ClientID, const char *pWeaponName);
+	// add Count ammo usable by the given weapon to the player's inventory
+	// (adds to the first ammo item that matches the weapon)
+	void AddAmmoForWeapon(int ClientID, const char *pWeaponName, int Count);
 
 	// the recipe with the given craft_id, or nullptr
 	const SCraftDef *GetCraft(const char *pCraftId) const;

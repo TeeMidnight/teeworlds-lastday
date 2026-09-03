@@ -1,0 +1,5 @@
+{
+    "name": "Pistol",
+    "desc": "A simple pistol. Fires pistol bullets.",
+    "item_type": ["weapon"]
+}

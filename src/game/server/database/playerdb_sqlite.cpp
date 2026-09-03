@@ -5,8 +5,7 @@
 
 #include <sqlite3.h>
 
-namespace
-{
+namespace {
 // convert a dot-notation json path ("inventory.0.count") into a SQLite
 // json path ("$.inventory[0].count")
 bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
@@ -117,8 +116,8 @@ bool CDatabaseSQLite::FindByName(const char *pUsername, SPlayerData &out)
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-			"SELECT uuid, username, password FROM players WHERE username = ?1;",
-			-1, &pStmt, 0) != SQLITE_OK)
+		   "SELECT uuid, username, password FROM players WHERE username = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, pUsername, -1, SQLITE_TRANSIENT);
 
@@ -150,8 +149,8 @@ bool CDatabaseSQLite::InsertPlayer(const SPlayerData &Player)
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-			"INSERT INTO players (uuid, username, password) VALUES (?1, ?2, ?3);",
-			-1, &pStmt, 0) != SQLITE_OK)
+		   "INSERT INTO players (uuid, username, password) VALUES (?1, ?2, ?3);",
+		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aUuid, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 2, Player.m_aUsername, -1, SQLITE_TRANSIENT);
@@ -174,8 +173,8 @@ bool CDatabaseSQLite::LoadByUuid(const Uuid &Uuid, SPlayerData &out)
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-			"SELECT uuid, username, password FROM players WHERE uuid = ?1;",
-			-1, &pStmt, 0) != SQLITE_OK)
+		   "SELECT uuid, username, password FROM players WHERE uuid = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aUuid, -1, SQLITE_TRANSIENT);
 
@@ -209,8 +208,8 @@ bool CDatabaseSQLite::GetJson(const Uuid &Uuid, const CJsonPath &Path, char *pOu
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-			"SELECT json_extract(data, ?2) FROM players WHERE uuid = ?1;",
-			-1, &pStmt, 0) != SQLITE_OK)
+		   "SELECT json_extract(data, ?2) FROM players WHERE uuid = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aUuid, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 2, aJsonPath, -1, SQLITE_TRANSIENT);
@@ -239,8 +238,8 @@ bool CDatabaseSQLite::SetJson(const Uuid &Uuid, const CJsonPath &Path, const cha
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-			"UPDATE players SET data = json_set(data, ?2, json(?3)) WHERE uuid = ?1;",
-			-1, &pStmt, 0) != SQLITE_OK)
+		   "UPDATE players SET data = json_set(data, ?2, json(?3)) WHERE uuid = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aUuid, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 2, aJsonPath, -1, SQLITE_TRANSIENT);
@@ -267,8 +266,8 @@ bool CDatabaseSQLite::DelJson(const Uuid &Uuid, const CJsonPath &Path)
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-			"UPDATE players SET data = json_remove(data, ?2) WHERE uuid = ?1;",
-			-1, &pStmt, 0) != SQLITE_OK)
+		   "UPDATE players SET data = json_remove(data, ?2) WHERE uuid = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aUuid, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 2, aJsonPath, -1, SQLITE_TRANSIENT);
@@ -294,8 +293,8 @@ bool CDatabaseSQLite::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-			"SELECT json_array_length(data, ?2) FROM players WHERE uuid = ?1;",
-			-1, &pStmt, 0) != SQLITE_OK)
+		   "SELECT json_array_length(data, ?2) FROM players WHERE uuid = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aUuid, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 2, aJsonPath, -1, SQLITE_TRANSIENT);

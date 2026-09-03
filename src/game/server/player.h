@@ -7,11 +7,14 @@
 
 #include <base/uuid.h>
 
+#include <generated/protocol.h>
+
 #include <game/server/item.h>
 
 class CPlayerDB;
 class CGameWorld;
 class CCharacter;
+class CGameContext;
 
 enum
 {
@@ -130,16 +133,30 @@ public:
 		bool m_HideTip; // game menu
 		int m_Sanity;
 		int m_Level;
+		// loadout (slot layout, persisted): which item res_id is placed on
+		// every loadout slot ("" = empty). the loadout is a player-level
+		// setting: the character copies it on spawn and the menu edits it
+		// through the character.
+		bool m_LoadoutSet; // true once the player customized the loadout
+		char m_aLoadout[NUM_WEAPONS][32];
 	} m_Status;
 
 	// account (bound on login / register)
 	Uuid m_AccountUuid;
 	bool m_LoggedIn;
 
-	// persist the player status (sanity, inventory) to/from the player
-	// database; each field is accessed individually through its json path
+	// persist the player status (sanity, inventory, loadout) to/from the
+	// player database; each field is accessed individually through its json
+	// path
 	void SaveStatus(class CPlayerDB *pDB);
 	void LoadStatus(class CPlayerDB *pDB);
+
+	// capture the current character's slot layout into m_Status.m_aLoadout
+	// and mark the loadout as customized (m_Status.m_LoadoutSet)
+	void CaptureLoadout();
+	// apply m_Status.m_aLoadout onto the character: equip every slot whose
+	// item the player still owns (missing items leave the slot empty)
+	void ApplyLoadout();
 
 private:
 	CCharacter *m_pCharacter;

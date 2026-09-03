@@ -15,7 +15,10 @@
 #include "entities/resource.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
+#include "item.h"
 #include "player.h"
+#include "weapon.h"
+#include "weaponmanager.h"
 
 #include <game/server/database/account.h>
 #include <game/server/database/playerdb.h>
@@ -126,9 +129,39 @@ void CGameController::OnCharacterSpawn(CCharacter *pChr)
 	// default health
 	pChr->IncreaseHealth(10);
 
-	// give default weapons
-	pChr->GiveWeapon(WEAPON_HAMMER, -1);
-	pChr->GiveWeapon(WEAPON_GUN, 10);
+	CPlayer *pPlayer = pChr->GetPlayer();
+	if(pChr->NumWeaponsHeld() == 0)
+	{
+		if(pPlayer && pPlayer->m_Status.m_LoadoutSet)
+		{
+			// restore the player's saved slot layout
+			pPlayer->ApplyLoadout();
+		}
+		else
+		{
+			// first spawn / no custom layout yet: equip all owned weapons
+			int Slot = 0;
+			for(int i = 0; i < WeaponManager()->NumWeapons() && Slot < NUM_WEAPONS; i++)
+			{
+				IWeaponInterface *pWeapon = WeaponManager()->GetWeaponByIndex(i);
+				if(pWeapon && GameServer()->Item()->HasItem(pChr->GetCID(), pWeapon->Name()))
+					pChr->EquipWeaponSlot(Slot++, pWeapon->ID());
+			}
+		}
+	}
+
+	// make sure the active slot actually holds a weapon
+	if(pChr->GetActiveWeapon() == 0)
+	{
+		for(int i = 0; i < NUM_WEAPONS; i++)
+		{
+			if(pChr->WeaponAtSlot(i) != 0)
+			{
+				pChr->SetWeapon(i);
+				break;
+			}
+		}
+	}
 }
 
 bool CGameController::OnEntity(CGameWorld *pWorld, int Index, vec2 Pos)
@@ -152,17 +185,8 @@ bool CGameController::OnEntity(CGameWorld *pWorld, int Index, vec2 Pos)
 		case ENTITY_HEALTH_1:
 			Type = PICKUP_HEALTH;
 			break;
-		case ENTITY_WEAPON_SHOTGUN:
-			Type = PICKUP_SHOTGUN;
-			break;
-		case ENTITY_WEAPON_GRENADE:
-			Type = PICKUP_GRENADE;
-			break;
-		case ENTITY_WEAPON_LASER:
-			Type = PICKUP_LASER;
-			break;
-		case ENTITY_POWERUP_NINJA:
-			Type = PICKUP_NINJA;
+			// weapon pickups are intentionally not spawned anymore: weapons are
+			// items now and have to be crafted / given through the item system
 	}
 
 	if(Type != -1)
@@ -597,6 +621,13 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	pPlayer->m_LoggedIn = true;
 	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
 		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
+
+	// starting kit for a new account: hammer + pistol + 100 pistol bullets
+	CItemSystem *pItem = pSelf->GameServer()->Item();
+	pItem->AddItem(ClientID, "hammer", 1, true);
+	pItem->AddItem(ClientID, "gun", 1, true);
+	pItem->AddItem(ClientID, "pistol_bullet", 100, true);
+
 	pPlayer->SaveStatus(pDB); // persist the initial status fields
 	pSelf->SendSystemChat(ClientID, Localize("Account created. You are now logged in.", "Account"));
 }
@@ -659,164 +690,7 @@ void CGameController::RegisterChatCommands(CCommandManager *pManager)
 	pManager->AddCommand("login", "Log in to an account", "s[username] s[password]", ComLogin, this);
 }
 
-bool CGameController::CanCharacterWeaponFullAuto(CCharacter *pChr, int Weapon)
-{
-	return Weapon == WEAPON_GRENADE || Weapon == WEAPON_SHOTGUN || Weapon == WEAPON_LASER;
-}
-
 void CGameController::SendSystemChat(int TargetID, const char *pMsg)
 {
 	GameServer()->SendChat(-1, CHAT_ALL, TargetID, pMsg);
-}
-
-int CGameController::OnCharacterFireWeapon(CCharacter *pChr, vec2 Direction, int Weapon)
-{
-	if(!pChr)
-		return 0;
-
-	int ClientID = pChr->GetCID();
-	vec2 ChrPos = pChr->GetPos();
-	vec2 ProjStartPos = ChrPos + Direction * pChr->GetProximityRadius() * 0.75f;
-
-	int ReloadTimer = 0;
-	switch(Weapon)
-	{
-		case WEAPON_HAMMER:
-		{
-			pChr->GameWorld()->CreateSound(ChrPos, SOUND_HAMMER_FIRE);
-
-			array<CEntity *> lpEnts;
-			lpEnts.hint_size(8);
-			int Hits = 0;
-			const int Num = pChr->GameWorld()->FindFlagEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
-			for(int i = 0; i < Num; ++i)
-			{
-				CCharacter *pTarget = static_cast<CCharacter *>(lpEnts[i]);
-
-				if((pTarget == pChr) || pChr->GameWorld()->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos(), NULL, NULL))
-					continue;
-
-				// set his velocity to fast upward (for now)
-				if(length(pTarget->GetPos() - ProjStartPos) > 0.0f)
-					pChr->GameWorld()->CreateHammerHit(pTarget->GetPos() - normalize(pTarget->GetPos() - ProjStartPos) * pChr->GetProximityRadius() * 0.5f);
-				else
-					pChr->GameWorld()->CreateHammerHit(ProjStartPos);
-
-				vec2 Dir;
-				if(length(pTarget->GetPos() - ChrPos) > 0.0f)
-					Dir = normalize(pTarget->GetPos() - ChrPos);
-				else
-					Dir = vec2(0.f, -1.f);
-
-				pTarget->TakeHit(vec2(0.f, -1.f) + normalize(Dir + vec2(0.f, -1.1f)) * 10.0f, Dir * -1, g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage,
-					pChr, Weapon);
-				Hits++;
-			}
-
-			// harvest resources with the hammer (default 1 hardness per hit)
-			array<CEntity *> lpResEnts;
-			const int NumRes = pChr->GameWorld()->FindEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f + 20.0f, lpResEnts, CGameWorld::ENTTYPE_RESOURCE);
-			for(int i = 0; i < NumRes; ++i)
-			{
-				CResourceEntity *pRes = static_cast<CResourceEntity *>(lpResEnts[i]);
-				if(pRes->IsRespawning())
-					continue;
-				if(pChr->GameWorld()->Collision()->IntersectLine(ProjStartPos, pRes->GetPos(), NULL, NULL))
-					continue;
-
-				// remember the resource id before the hit: the entity is
-				// destroyed when it gets depleted
-				const bool Depleted = pRes->RemainingHardness() <= 1;
-				char aResId[32];
-				if(Depleted)
-					str_copy(aResId, pRes->ResId(), sizeof(aResId));
-
-				pRes->TakeHit(1);
-
-				if(Depleted)
-				{
-					CPlayer *pPlayer = pChr->GetPlayer();
-					if(pPlayer && !GameServer()->Item()->AddItem(pPlayer->GetCID(), aResId, 1)) continue;
-					pChr->GameWorld()->CreateSound(pRes->GetPos(), SOUND_PICKUP_ARMOR);
-				}
-				else
-				{
-					pChr->GameWorld()->CreateHammerHit(pRes->GetPos());
-				}
-				Hits++;
-			}
-
-			// if we Hit anything, we have to wait for the reload
-			if(Hits)
-				ReloadTimer = Server()->TickSpeed() / 3;
-		}
-		break;
-
-		case WEAPON_GUN:
-		{
-			new CProjectile(pChr->GameWorld(), WEAPON_GUN,
-				ClientID,
-				ProjStartPos,
-				Direction,
-				(int) (Server()->TickSpeed() * GameServer()->Tuning()->m_GunLifetime),
-				g_pData->m_Weapons.m_Gun.m_pBase->m_Damage, false, 0, -1, WEAPON_GUN);
-
-			pChr->GameWorld()->CreateSound(ChrPos, SOUND_GUN_FIRE);
-		}
-		break;
-
-		case WEAPON_SHOTGUN:
-		{
-			int ShotSpread = 2;
-
-			for(int i = -ShotSpread; i <= ShotSpread; ++i)
-			{
-				float Spreading[] = {-0.185f, -0.070f, 0, 0.070f, 0.185f};
-				float a = angle(Direction);
-				a += Spreading[i + 2];
-				float v = 1 - (absolute(i) / (float) ShotSpread);
-				float Speed = mix((float) GameServer()->Tuning()->m_ShotgunSpeeddiff, 1.0f, v);
-				new CProjectile(pChr->GameWorld(), WEAPON_SHOTGUN,
-					ClientID,
-					ProjStartPos,
-					vec2(cosf(a), sinf(a)) * Speed,
-					(int) (Server()->TickSpeed() * GameServer()->Tuning()->m_ShotgunLifetime),
-					g_pData->m_Weapons.m_Shotgun.m_pBase->m_Damage, false, 0, -1, WEAPON_SHOTGUN);
-			}
-
-			pChr->GameWorld()->CreateSound(ChrPos, SOUND_SHOTGUN_FIRE);
-		}
-		break;
-
-		case WEAPON_GRENADE:
-		{
-			new CProjectile(pChr->GameWorld(), WEAPON_GRENADE,
-				ClientID,
-				ProjStartPos,
-				Direction,
-				(int) (Server()->TickSpeed() * GameServer()->Tuning()->m_GrenadeLifetime),
-				g_pData->m_Weapons.m_Grenade.m_pBase->m_Damage, true, 0, SOUND_GRENADE_EXPLODE, WEAPON_GRENADE);
-
-			pChr->GameWorld()->CreateSound(ChrPos, SOUND_GRENADE_FIRE);
-		}
-		break;
-
-		case WEAPON_LASER:
-		{
-			new CLaser(pChr->GameWorld(), ChrPos, Direction, GameServer()->Tuning()->m_LaserReach, ClientID, g_pData->m_Weapons.m_aId[WEAPON_LASER].m_Damage);
-			pChr->GameWorld()->CreateSound(ChrPos, SOUND_LASER_FIRE);
-		}
-		break;
-
-		case WEAPON_NINJA:
-		{
-			pChr->DoNinjaFire(Direction, g_pData->m_Weapons.m_Ninja.m_Movetime * Server()->TickSpeed() / 1000);
-			pChr->GameWorld()->CreateSound(ChrPos, SOUND_NINJA_FIRE);
-		}
-		break;
-	}
-	if(!ReloadTimer)
-		ReloadTimer = g_pData->m_Weapons.m_aId[Weapon].m_Firedelay * Server()->TickSpeed() / 1000;
-
-	return ReloadTimer;
 }

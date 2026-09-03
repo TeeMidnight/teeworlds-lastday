@@ -137,11 +137,8 @@ public:
 	void RegisterChatCommands(CCommandManager *pManager);
 
 	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }
-	bool CanCharacterWeaponFullAuto(class CCharacter *pChr, int Weapon);
 
 	void SendSystemChat(int TargetID, const char *pMsg);
-	// return: Reload timer
-	int OnCharacterFireWeapon(class CCharacter *pChr, vec2 Direction, int Weapon);
 	bool IsCharacterSnapable(int SnappingClient, int ClientID) const { return true; }
 };
 

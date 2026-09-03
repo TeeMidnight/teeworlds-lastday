@@ -1,0 +1,5 @@
+{
+    "name": "Laser",
+    "desc": "A high-tech laser rifle. Fires laser charges.",
+    "item_type": ["weapon"]
+}

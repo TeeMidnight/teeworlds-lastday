@@ -5,8 +5,7 @@
 
 #include <libpq-fe.h>
 
-namespace
-{
+namespace {
 // convert a dot-notation json path ("inventory.0.count") into a PostgreSQL
 // jsonb text[] path ("{inventory,0,count}")
 bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)

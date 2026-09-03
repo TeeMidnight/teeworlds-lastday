@@ -1,0 +1,5 @@
+{
+    "name": "Shotgun",
+    "desc": "A sturdy shotgun. Fires shotgun shells.",
+    "item_type": ["weapon"]
+}

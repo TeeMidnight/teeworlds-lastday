@@ -5,9 +5,13 @@
 
 #include <generated/protocol.h>
 
+#include <base/tl/array.h>
+
 #include <game/gamecore.h>
 #include <game/server/entity.h>
 #include <game/server/player.h>
+
+class CWeaponNinja;
 
 class CCharacter : public CHitableEntity
 {
@@ -40,7 +44,6 @@ public:
 	void DoWeaponSwitch();
 
 	void HandleWeapons();
-	void HandleNinja();
 
 	void OnPredictedInput(CNetObj_PlayerInput *pNewInput);
 	void OnDirectInput(CNetObj_PlayerInput *pNewInput);
@@ -58,27 +61,40 @@ public:
 	bool IncreaseHealth(int Amount);
 	bool IncreaseArmor(int Amount);
 
-	bool GiveWeapon(int Weapon, int Ammo);
-	void GiveNinja();
-
 	void SetEmote(int Emote, int Tick);
 
 	bool IsAlive() const { return m_Alive; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
 	int GetCID();
 
-	// need this hook for gamecontroller to call ninja fire
-	void DoNinjaFire(vec2 Direction, int MoveTime);
-	// need this hook for gamecontroller to enable weapons, -1 to enable all
-	void EnableWeapon(int WeaponID);
-	// need this hook for gamecontroller to disable weapons, -1 to disable all, but remember to enable at least one weapon unless you want the server get stuck
-	void DisableWeapon(int WeaponID);
-	// need this hook for gamecontroller to remove weapon, it's different from the function DisableWeapon.
-	void RemoveWeapon(int WeaponID);
+	// the item hash (str_quickhash of the item res_id) in the active loadout
+	// slot, or 0 when the slot is empty. for weapon items this equals the
+	// weapon id; for non-weapon items it matches no registered weapon.
+	unsigned GetActiveWeapon() const { return WeaponAtSlot(m_ActiveWeapon); }
+
+	// loadout (equipment menu) helpers; Slot is 0-based (0..NUM_WEAPONS-1),
+	// matching the client weapon key minus one. the slot holds an item: any
+	// owned item can be placed, only weapon items actually fire.
+	bool EquipWeaponSlot(int Slot, unsigned ItemHash);
+	unsigned WeaponAtSlot(int Slot) const; // item hash, 0 = empty
+	int NumWeaponsHeld() const;
+
+	// the weapon the player may actually fire in the active slot: the slot's
+	// weapon item when it exists, otherwise the fallback "hand" (needs no
+	// item). items without a weapon and missing items also resolve to hand.
+	unsigned GetUsableWeapon();
+	// clear every slot whose item no longer exists; returns whether anything
+	// was unequipped
+	bool UnequipMissingWeapons();
+
 	// need this hook for gamecontroller
 	void TeleTo(vec2 Pos, bool KeepSpeed);
 
 private:
+	// the ninja weapon drives its own state machine through OnTick and needs
+	// direct access to the per-character ninja state
+	friend class CWeaponNinja;
+
 	// player controlling this character
 	class CPlayer *m_pPlayer;
 
@@ -87,17 +103,13 @@ private:
 	// weapon info
 	array<CEntity *> m_lpHitObjects;
 
-	struct WeaponStat
-	{
-		int m_AmmoRegenStart;
-		int m_Ammo;
-		bool m_Got;
-		bool m_Valid;
-	} m_aWeapons[NUM_WEAPONS];
+	// loadout: NUM_WEAPONS fixed slots, each holds the hash of the item placed
+	// on it (weapon items: hash == weapon id). slot order matches the client's
+	// weapon selection keys (1..NUM_WEAPONS).
+	unsigned m_aWeapons[NUM_WEAPONS]; // str_quickhash(item res_id), 0 = empty
 
-	int m_ActiveWeapon;
-	int m_LastWeapon;
-	int m_QueuedWeapon;
+	int m_ActiveWeapon; // slot index of the currently held weapon (0..NUM_WEAPONS-1)
+	int m_QueuedWeapon; // slot index to switch to, or -1
 
 	int m_ReloadTimer;
 	int m_AttackTick;
@@ -123,11 +135,11 @@ private:
 
 	int m_TriggeredEvents;
 
-	// ninja
+	// ninja dash/swing state, driven by CWeaponNinja (permanent weapon: no
+	// activation timer, the swing only runs for a short window after firing)
 	struct
 	{
 		vec2 m_ActivationDir;
-		int m_ActivationTick;
 		int m_CurrentMoveTime;
 		int m_OldVelAmount;
 	} m_Ninja;

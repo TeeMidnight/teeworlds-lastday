@@ -1,0 +1,7 @@
+{
+    "name": "Crude Grenade",
+    "desc": "A hand-made explosive. Not very refined, but it gets the job done.",
+    "item_type": ["ammo"],
+    "ammo_for": ["grenade"],
+    "damage": 12
+}

@@ -1,0 +1,5 @@
+{
+    "name": "Ninja Katana",
+    "desc": "A sharp blade that lets you dash and swing. It never wears out.",
+    "item_type": ["weapon"]
+}

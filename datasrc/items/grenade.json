@@ -1,0 +1,5 @@
+{
+    "name": "Grenade Launcher",
+    "desc": "Launches crude grenades.",
+    "item_type": ["weapon"]
+}

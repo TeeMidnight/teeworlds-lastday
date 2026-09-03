@@ -3,9 +3,54 @@
 	"client strings": [],
 	"item strings": [
 		{
+			"context": "Item Desc: Laser Charge",
+			"or": "A charged cell that powers the laser.",
+			"tr": "为激光枪供能的充能电池。"
+		},
+		{
+			"context": "Item Desc: Crude Grenade",
+			"or": "A hand-made explosive. Not very refined, but it gets the job done.",
+			"tr": "手工制作的爆炸物。不太精致，但能完成任务。"
+		},
+		{
+			"context": "Item Desc: Laser",
+			"or": "A high-tech laser rifle. Fires laser charges.",
+			"tr": "高科技激光步枪。发射激光电池。"
+		},
+		{
+			"context": "Item Desc: Ninja Katana",
+			"or": "A sharp blade that lets you dash and swing. It never wears out.",
+			"tr": "锋利的刀刃，可以突进与挥砍。永不磨损。"
+		},
+		{
+			"context": "Item Desc: Shotgun Shell",
+			"or": "A shell loaded with pellets for the shotgun.",
+			"tr": "装满弹丸的霰弹枪弹药。"
+		},
+		{
+			"context": "Item Desc: Pistol",
+			"or": "A simple pistol. Fires pistol bullets.",
+			"tr": "简单的手枪。发射手枪子弹。"
+		},
+		{
+			"context": "Item Desc: Shotgun",
+			"or": "A sturdy shotgun. Fires shotgun shells.",
+			"tr": "坚固的霰弹枪。发射霰弹壳。"
+		},
+		{
+			"context": "Item Desc: Hammer",
+			"or": "A trusty hammer. No ammo needed.",
+			"tr": "可靠的锤子。无需弹药。"
+		},
+		{
 			"context": "Item Desc: Stone Bricks",
 			"or": "Cleanly cut stone blocks.",
 			"tr": "切割整齐的石砖。"
+		},
+		{
+			"context": "Item Name",
+			"or": "Crude Grenade",
+			"tr": "粗制手雷"
 		},
 		{
 			"context": "Item Desc: Heaven Ore",
@@ -16,6 +61,16 @@
 			"context": "Item Name",
 			"or": "G rass",
 			"tr": "艹早"
+		},
+		{
+			"context": "Item Name",
+			"or": "Grenade Launcher",
+			"tr": "榴弹发射器"
+		},
+		{
+			"context": "Item Name",
+			"or": "Hammer",
+			"tr": "锤子"
 		},
 		{
 			"context": "Item Name",
@@ -39,6 +94,51 @@
 		},
 		{
 			"context": "Item Name",
+			"or": "Laser",
+			"tr": "激光枪"
+		},
+		{
+			"context": "Item Name",
+			"or": "Laser Charge",
+			"tr": "激光电池"
+		},
+		{
+			"context": "Item Desc: Grenade Launcher",
+			"or": "Launches crude grenades.",
+			"tr": "发射粗制手雷。"
+		},
+		{
+			"context": "Item Name",
+			"or": "Ninja Katana",
+			"tr": "忍者刀"
+		},
+		{
+			"context": "Item Name",
+			"or": "Pistol",
+			"tr": "手枪"
+		},
+		{
+			"context": "Item Name",
+			"or": "Pistol Bullet",
+			"tr": "手枪子弹"
+		},
+		{
+			"context": "Item Name",
+			"or": "Shotgun",
+			"tr": "霰弹枪"
+		},
+		{
+			"context": "Item Name",
+			"or": "Shotgun Shell",
+			"tr": "霰弹壳"
+		},
+		{
+			"context": "Item Desc: Pistol Bullet",
+			"or": "Standard pistol ammunition.",
+			"tr": "标准手枪弹药。"
+		},
+		{
+			"context": "Item Name",
 			"or": "Stone",
 			"tr": "石头"
 		},
@@ -51,6 +151,11 @@
 			"context": "Item Name",
 			"or": "Straw Rope",
 			"tr": "草绳"
+		},
+		{
+			"context": "Item Type",
+			"or": "ammo",
+			"tr": "弹药"
 		},
 		{
 			"context": "Item Type",
@@ -81,6 +186,11 @@
 			"context": "Item Type",
 			"or": "stone",
 			"tr": "石头"
+		},
+		{
+			"context": "Item Type",
+			"or": "weapon",
+			"tr": "武器"
 		}
 	],
 	"server strings": [
@@ -100,6 +210,21 @@
 			"tr": "   任意 %s %d/%d"
 		},
 		{
+			"context": "Menu Loadout",
+			"or": "%d. %s (hand)",
+			"tr": "%d. %s (空手)"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "%d. (empty)",
+			"tr": "%d. (空)"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "%d. (hand)",
+			"tr": "%d. (空手)"
+		},
+		{
 			"context": "Menu Inventory",
 			"or": "%d. None",
 			"tr": "%d. 无"
@@ -113,6 +238,11 @@
 			"context": "Account",
 			"or": "Account created. You are now logged in.",
 			"tr": "账号创建成功，你已登录。"
+		},
+		{
+			"context": "WEAPONPICK",
+			"or": "Choose Weapon",
+			"tr": "选择武器"
 		},
 		{
 			"context": "Menu Craft",
@@ -140,6 +270,11 @@
 			"tr": "创建账号失败。"
 		},
 		{
+			"context": "Menu Loadout",
+			"or": "Failed to place that item.",
+			"tr": "无法放置该物品。"
+		},
+		{
 			"context": "Menu Main",
 			"or": "If you don't want to close menu when you use a option,",
 			"tr": "如果你不想在使用选项时关闭菜单，"
@@ -155,9 +290,24 @@
 			"tr": "背包"
 		},
 		{
+			"context": "Menu Loadout",
+			"or": "Item placed on the slot.",
+			"tr": "物品已放入槽位。"
+		},
+		{
 			"context": "Menu Main",
 			"or": "Level: %d",
 			"tr": "等级：%d"
+		},
+		{
+			"context": "LOADOUT",
+			"or": "Loadout",
+			"tr": "装备栏"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Loadout",
+			"tr": "装备栏"
 		},
 		{
 			"context": "Account",
@@ -177,7 +327,7 @@
 		{
 			"context": "Item Pickup",
 			"or": "No inventory space!",
-			"tr": ""
+			"tr": "背包空间不足！"
 		},
 		{
 			"context": "Menu Craft",
@@ -192,17 +342,22 @@
 		{
 			"context": "Menu Craft",
 			"or": "Not enough inventory space.",
-			"tr": ""
+			"tr": "背包空间不足。"
 		},
 		{
 			"context": "Menu Craft",
 			"or": "Not enough materials.",
-			"tr": ""
+			"tr": "材料不足。"
 		},
 		{
 			"context": "Menu",
 			"or": "Previous Page",
 			"tr": "上一页"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "Select an item to place on this slot.",
+			"tr": "选择要放入此槽位的物品。"
 		},
 		{
 			"context": "VOTE",

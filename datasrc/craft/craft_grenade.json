@@ -1,0 +1,19 @@
+{
+    "craft_id": "craft_grenade",
+    "needed":
+    [
+        {
+            "item_id": "heaven_ore",
+            "count": 2
+        },
+        {
+            "item_id": "stone_bricks",
+            "count": 2
+        }
+    ],
+    "result":
+    {
+        "item_id": "grenade",
+        "count": 1
+    }
+}

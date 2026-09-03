@@ -5,6 +5,8 @@
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/player.h>
+#include <game/server/weapon.h>
+#include <game/server/weaponmanager.h>
 #include <generated/server_data.h>
 
 #include "character.h"
@@ -59,9 +61,13 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_EmoteStop = -1;
 	m_LastAction = -1;
 	m_LastNoAmmoSound = -1;
-	m_ActiveWeapon = WEAPON_GUN;
-	m_LastWeapon = WEAPON_HAMMER;
+	m_ActiveWeapon = WEAPON_HAMMER; // slot 0
 	m_QueuedWeapon = -1;
+
+	// the loadout is (re)filled by the game controller from the weapons the
+	// player owns as items; clear any stale state from a previous life
+	for(int i = 0; i < NUM_WEAPONS; i++)
+		m_aWeapons[i] = 0;
 
 	m_pPlayer = pPlayer;
 	m_Pos = Pos;
@@ -78,9 +84,6 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	GameWorld()->InsertEntity(this);
 	m_Alive = true;
 
-	for(int i = 0; i < NUM_WEAPONS; i++)
-		m_aWeapons[i].m_Valid = true;
-
 	GameServer()->m_pController->OnCharacterSpawn(this);
 
 	return true;
@@ -92,19 +95,19 @@ void CCharacter::Destroy()
 	m_Alive = false;
 }
 
-void CCharacter::SetWeapon(int W)
+// Slot is a loadout slot index (0..NUM_WEAPONS-1)
+void CCharacter::SetWeapon(int Slot)
 {
-	if(W == m_ActiveWeapon)
+	if(Slot == m_ActiveWeapon)
 		return;
 
-	m_LastWeapon = m_ActiveWeapon;
 	m_QueuedWeapon = -1;
-	m_ActiveWeapon = W;
+	m_ActiveWeapon = Slot;
 	GameWorld()->CreateSound(m_Pos, SOUND_WEAPON_SWITCH);
 
 	if(m_ActiveWeapon < 0 || m_ActiveWeapon >= NUM_WEAPONS)
 		m_ActiveWeapon = 0;
-	m_aWeapons[m_ActiveWeapon].m_AmmoRegenStart = -1;
+	WeaponManager()->OnWeaponSwitch(this);
 }
 
 bool CCharacter::IsGrounded()
@@ -116,89 +119,10 @@ bool CCharacter::IsGrounded()
 	return false;
 }
 
-void CCharacter::HandleNinja()
-{
-	if(m_ActiveWeapon != WEAPON_NINJA)
-		return;
-
-	if((Server()->Tick() - m_Ninja.m_ActivationTick) > (g_pData->m_Weapons.m_Ninja.m_Duration * Server()->TickSpeed() / 1000))
-	{
-		// time's up, return
-		m_aWeapons[WEAPON_NINJA].m_Got = false;
-		m_ActiveWeapon = m_LastWeapon;
-
-		// reset velocity and current move
-		if(m_Ninja.m_CurrentMoveTime > 0)
-			m_Core.m_Vel = m_Ninja.m_ActivationDir * m_Ninja.m_OldVelAmount;
-		m_Ninja.m_CurrentMoveTime = -1;
-
-		SetWeapon(m_ActiveWeapon);
-		return;
-	}
-
-	// force ninja Weapon
-	SetWeapon(WEAPON_NINJA);
-
-	m_Ninja.m_CurrentMoveTime--;
-
-	if(m_Ninja.m_CurrentMoveTime == 0)
-	{
-		// reset velocity
-		m_Core.m_Vel = m_Ninja.m_ActivationDir * m_Ninja.m_OldVelAmount;
-	}
-	else if(m_Ninja.m_CurrentMoveTime > 0)
-	{
-		// Set velocity
-		m_Core.m_Vel = m_Ninja.m_ActivationDir * g_pData->m_Weapons.m_Ninja.m_Velocity;
-		vec2 OldPos = m_Pos;
-		GameWorld()->Collision()->MoveBox(&m_Core.m_Pos, &m_Core.m_Vel, vec2(GetProximityRadius(), GetProximityRadius()), 0.f);
-
-		// reset velocity so the client doesn't predict stuff
-		m_Core.m_Vel = vec2(0.f, 0.f);
-
-		// check if we hit anything along the way
-		const float Radius = GetProximityRadius() * 2.0f;
-		const vec2 Center = OldPos + (m_Pos - OldPos) * 0.5f;
-		array<CEntity *> lpEnts;
-		lpEnts.hint_size(8);
-		const int Num = GameWorld()->FindFlagEntities(Center, Radius, lpEnts, CGameWorld::ENTFLAG_HITABLE);
-
-		for(int i = 0; i < Num; ++i)
-		{
-			if(lpEnts[i] == this)
-				continue;
-
-			// make sure we haven't hit this object before
-			bool AlreadyHit = false;
-			for(int j = 0; j < m_lpHitObjects.size(); j++)
-			{
-				if(m_lpHitObjects[j] == lpEnts[i])
-				{
-					AlreadyHit = true;
-					break;
-				}
-			}
-			if(AlreadyHit)
-				continue;
-
-			// check so we are sufficiently close
-			if(distance(lpEnts[i]->GetPos(), m_Pos) > Radius)
-				continue;
-
-			// Hit a player, give him damage and stuffs...
-			GameWorld()->CreateSound(lpEnts[i]->GetPos(), SOUND_NINJA_HIT);
-			m_lpHitObjects.add(lpEnts[i]);
-
-			// set his velocity to fast upward (for now)
-			static_cast<CHitableEntity *>(lpEnts[i])->TakeHit(vec2(0, -10.0f), m_Ninja.m_ActivationDir * -1, g_pData->m_Weapons.m_Ninja.m_pBase->m_Damage, this, WEAPON_NINJA);
-		}
-	}
-}
-
 void CCharacter::DoWeaponSwitch()
 {
 	// make sure we can switch
-	if(m_ReloadTimer != 0 || m_QueuedWeapon == -1 || m_aWeapons[WEAPON_NINJA].m_Got)
+	if(m_ReloadTimer != 0 || m_QueuedWeapon == -1)
 		return;
 
 	// switch Weapon
@@ -220,8 +144,7 @@ void CCharacter::HandleWeaponSwitch()
 		while(Next) // Next Weapon selection
 		{
 			WantedWeapon = (WantedWeapon + 1) % NUM_WEAPONS;
-			if(m_aWeapons[WantedWeapon].m_Got && m_aWeapons[WantedWeapon].m_Valid)
-				Next--;
+			Next--;
 		}
 	}
 
@@ -230,8 +153,7 @@ void CCharacter::HandleWeaponSwitch()
 		while(Prev) // Prev Weapon selection
 		{
 			WantedWeapon = (WantedWeapon - 1) < 0 ? NUM_WEAPONS - 1 : WantedWeapon - 1;
-			if(m_aWeapons[WantedWeapon].m_Got && m_aWeapons[WantedWeapon].m_Valid)
-				Prev--;
+			Prev--;
 		}
 	}
 
@@ -240,7 +162,7 @@ void CCharacter::HandleWeaponSwitch()
 		WantedWeapon = m_Input.m_WantedWeapon - 1;
 
 	// check for insane values
-	if(WantedWeapon >= 0 && WantedWeapon < NUM_WEAPONS && WantedWeapon != m_ActiveWeapon && m_aWeapons[WantedWeapon].m_Got && m_aWeapons[WantedWeapon].m_Valid)
+	if(WantedWeapon >= 0 && WantedWeapon < NUM_WEAPONS && WantedWeapon != m_ActiveWeapon)
 		m_QueuedWeapon = WantedWeapon;
 
 	DoWeaponSwitch();
@@ -254,19 +176,30 @@ void CCharacter::FireWeapon()
 	DoWeaponSwitch();
 	vec2 Direction = normalize(vec2(m_LatestInput.m_TargetX, m_LatestInput.m_TargetY));
 
+	// the weapon the player may actually use: the slot's weapon when its item
+	// is owned, otherwise the fallback hand (punch, no item needed)
+	const unsigned ActiveWeaponID = GetUsableWeapon();
+
 	// check if we gonna fire
 	bool WillFire = false;
 	if(CountInput(m_LatestPrevInput.m_Fire, m_LatestInput.m_Fire).m_Presses)
 		WillFire = true;
 
-	if(GameServer()->m_pController->CanCharacterWeaponFullAuto(this, m_ActiveWeapon) && (m_LatestInput.m_Fire & 1) && m_aWeapons[m_ActiveWeapon].m_Ammo)
+	if(WeaponManager()->IsFullAuto(ActiveWeaponID) && (m_LatestInput.m_Fire & 1))
 		WillFire = true;
 
 	if(!WillFire)
 		return;
 
-	// check for ammo
-	if(!m_aWeapons[m_ActiveWeapon].m_Ammo)
+	IWeaponInterface *pWeapon = WeaponManager()->GetWeapon(ActiveWeaponID);
+	if(!pWeapon)
+		return;
+
+	// ammo comes from the player's inventory (item system). a weapon that has
+	// no ammo item defined (e.g. hammer, hand) is unlimited.
+	const char *pWeaponName = pWeapon->Name();
+	if(GameServer()->Item()->WeaponNeedsAmmo(pWeaponName) &&
+		GameServer()->Item()->GetAmmoCountForWeapon(GetCID(), pWeaponName) <= 0)
 	{
 		// 125ms is a magical limit of how fast a human can click
 		m_ReloadTimer = 125 * Server()->TickSpeed() / 1000;
@@ -281,22 +214,23 @@ void CCharacter::FireWeapon()
 	if(Config()->m_Debug)
 	{
 		char aBuf[256];
-		str_format(aBuf, sizeof(aBuf), "shot player='%d:%s' team=%d weapon=%d", m_pPlayer->GetCID(), Server()->ClientName(m_pPlayer->GetCID()), m_pPlayer->GetTeam(), m_ActiveWeapon);
+		str_format(aBuf, sizeof(aBuf), "shot player='%d:%s' team=%d weapon='%s'", m_pPlayer->GetCID(), Server()->ClientName(m_pPlayer->GetCID()), m_pPlayer->GetTeam(), pWeaponName);
 		GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
 	}
 
 	m_AttackTick = Server()->Tick();
 
-	if(m_aWeapons[m_ActiveWeapon].m_Ammo > 0) // -1 == unlimited
-		m_aWeapons[m_ActiveWeapon].m_Ammo--;
+	// consume one ammo item from the inventory and use its damage
+	int AmmoDamage = 0;
+	if(GameServer()->Item()->WeaponNeedsAmmo(pWeaponName))
+		AmmoDamage = GameServer()->Item()->ConsumeAmmoForWeapon(GetCID(), pWeaponName);
 
-	m_ReloadTimer = GameServer()->m_pController->OnCharacterFireWeapon(this, Direction, m_ActiveWeapon);
+	m_ReloadTimer = WeaponManager()->FireWeapon(this, Direction, ActiveWeaponID, AmmoDamage);
 }
 
 void CCharacter::HandleWeapons()
 {
-	// ninja
-	HandleNinja();
+	WeaponManager()->TickWeapon(this);
 
 	// check reload timer
 	if(m_ReloadTimer)
@@ -307,55 +241,6 @@ void CCharacter::HandleWeapons()
 
 	// fire Weapon, if wanted
 	FireWeapon();
-
-	// ammo regen
-	int AmmoRegenTime = g_pData->m_Weapons.m_aId[m_ActiveWeapon].m_Ammoregentime;
-	if(AmmoRegenTime && m_aWeapons[m_ActiveWeapon].m_Ammo >= 0)
-	{
-		// If equipped and not active, regen ammo?
-		if(m_ReloadTimer <= 0)
-		{
-			if(m_aWeapons[m_ActiveWeapon].m_AmmoRegenStart < 0)
-				m_aWeapons[m_ActiveWeapon].m_AmmoRegenStart = Server()->Tick();
-
-			if((Server()->Tick() - m_aWeapons[m_ActiveWeapon].m_AmmoRegenStart) >= AmmoRegenTime * Server()->TickSpeed() / 1000)
-			{
-				// Add some ammo
-				m_aWeapons[m_ActiveWeapon].m_Ammo = minimum(m_aWeapons[m_ActiveWeapon].m_Ammo + 1,
-					g_pData->m_Weapons.m_aId[m_ActiveWeapon].m_Maxammo);
-				m_aWeapons[m_ActiveWeapon].m_AmmoRegenStart = -1;
-			}
-		}
-		else
-		{
-			m_aWeapons[m_ActiveWeapon].m_AmmoRegenStart = -1;
-		}
-	}
-
-	return;
-}
-
-bool CCharacter::GiveWeapon(int Weapon, int Ammo)
-{
-	if(m_aWeapons[Weapon].m_Ammo < g_pData->m_Weapons.m_aId[Weapon].m_Maxammo || !m_aWeapons[Weapon].m_Got)
-	{
-		m_aWeapons[Weapon].m_Got = true;
-		m_aWeapons[Weapon].m_Ammo = minimum(g_pData->m_Weapons.m_aId[Weapon].m_Maxammo, Ammo);
-		return true;
-	}
-	return false;
-}
-
-void CCharacter::GiveNinja()
-{
-	m_Ninja.m_ActivationTick = Server()->Tick();
-	m_aWeapons[WEAPON_NINJA].m_Got = true;
-	m_aWeapons[WEAPON_NINJA].m_Ammo = -1;
-	if(m_ActiveWeapon != WEAPON_NINJA)
-		m_LastWeapon = m_ActiveWeapon;
-	m_ActiveWeapon = WEAPON_NINJA;
-
-	GameWorld()->CreateSound(m_Pos, SOUND_PICKUP_NINJA);
 }
 
 void CCharacter::SetEmote(int Emote, int Tick)
@@ -369,46 +254,112 @@ int CCharacter::GetCID()
 	return m_pPlayer->GetCID();
 }
 
-void CCharacter::DoNinjaFire(vec2 Direction, int MoveTime)
+// loadout (equipment menu) helpers; Slot is 0-based (0..NUM_WEAPONS-1)
+// the slot holds an item (hash of its res_id); for weapon items the hash
+// equals the weapon id. any owned item can be placed: only weapon items
+// actually fire, everything else resolves to the hand fallback.
+bool CCharacter::EquipWeaponSlot(int Slot, unsigned ItemHash)
 {
-	m_lpHitObjects.clear();
-	m_lpHitObjects.hint_size(4);
-	m_Ninja.m_ActivationDir = Direction;
-	m_Ninja.m_CurrentMoveTime = MoveTime;
-	m_Ninja.m_OldVelAmount = length(m_Core.m_Vel);
-}
+	if(Slot < 0 || Slot >= NUM_WEAPONS)
+		return false;
+	if(ItemHash != 0)
+	{
+		// the item must exist in the player's inventory
+		if(!GameServer()->Item()->HasItemHash(GetCID(), ItemHash))
+			return false;
+	}
 
-void CCharacter::EnableWeapon(int WeaponID)
-{
-	if(WeaponID == -1)
+	// remove the item from its previous slot so it is not duplicated
+	for(int i = 0; i < NUM_WEAPONS; i++)
+		if(i != Slot && m_aWeapons[i] == ItemHash)
+			m_aWeapons[i] = 0;
+
+	m_aWeapons[Slot] = ItemHash;
+
+	// if the active slot became empty (its weapon was removed), switch to
+	// another equipped weapon
+	if(m_aWeapons[m_ActiveWeapon] == 0)
 	{
 		for(int i = 0; i < NUM_WEAPONS; i++)
 		{
-			EnableWeapon(i);
+			if(m_aWeapons[i] != 0)
+			{
+				m_ActiveWeapon = i;
+				break;
+			}
 		}
 	}
-	if(WeaponID < 0 || WeaponID >= NUM_WEAPONS)
-		return;
-	m_aWeapons[WeaponID].m_Valid = true;
+	return true;
 }
 
-void CCharacter::DisableWeapon(int WeaponID)
+unsigned CCharacter::WeaponAtSlot(int Slot) const
 {
-	if(WeaponID == -1)
+	if(Slot < 0 || Slot >= NUM_WEAPONS)
+		return 0;
+	return m_aWeapons[Slot];
+}
+
+int CCharacter::NumWeaponsHeld() const
+{
+	int Count = 0;
+	for(int i = 0; i < NUM_WEAPONS; i++)
+		if(m_aWeapons[i] != 0)
+			Count++;
+	return Count;
+}
+
+unsigned CCharacter::GetUsableWeapon()
+{
+	const unsigned SlotItem = WeaponAtSlot(m_ActiveWeapon);
+	if(SlotItem != 0)
+	{
+		// the item must still exist in the inventory
+		if(!GameServer()->Item()->HasItemHash(GetCID(), SlotItem))
+		{
+			// the item is gone: auto-unequip this slot
+			m_aWeapons[m_ActiveWeapon] = 0;
+			return WeaponID("hand");
+		}
+
+		IWeaponInterface *pWeapon = WeaponManager()->GetWeapon(SlotItem);
+		if(pWeapon)
+			return SlotItem;
+		// else: an item without a corresponding weapon (e.g. a resource)
+		// stays equipped but falls back to the hand
+	}
+	// empty slot, non-weapon item, or missing item: hand (no item needed)
+	return WeaponID("hand");
+}
+
+bool CCharacter::UnequipMissingWeapons()
+{
+	bool Changed = false;
+	for(int i = 0; i < NUM_WEAPONS; i++)
+	{
+		const unsigned SlotItem = m_aWeapons[i];
+		if(SlotItem == 0)
+			continue;
+		// the slot holds an item that no longer exists: clear it
+		if(!GameServer()->Item()->HasItemHash(GetCID(), SlotItem))
+		{
+			m_aWeapons[i] = 0;
+			Changed = true;
+		}
+	}
+
+	// if the active slot was cleared, switch to another occupied slot
+	if(m_aWeapons[m_ActiveWeapon] == 0)
 	{
 		for(int i = 0; i < NUM_WEAPONS; i++)
 		{
-			DisableWeapon(i);
+			if(m_aWeapons[i] != 0)
+			{
+				m_ActiveWeapon = i;
+				break;
+			}
 		}
 	}
-	if(WeaponID < 0 || WeaponID >= NUM_WEAPONS)
-		return;
-	m_aWeapons[WeaponID].m_Valid = false;
-}
-
-void CCharacter::RemoveWeapon(int WeaponID)
-{
-	m_aWeapons[WeaponID].m_Got = false;
+	return Changed;
 }
 
 void CCharacter::TeleTo(vec2 Pos, bool KeepSpeed)
@@ -495,7 +446,7 @@ void CCharacter::TickDefered()
 
 	// apply drag velocity when the player is not firing ninja
 	// and set it back to 0 for the next tick
-	if(m_ActiveWeapon != WEAPON_NINJA || m_Ninja.m_CurrentMoveTime < 0)
+	if(GetUsableWeapon() != WeaponID("ninja") || m_Ninja.m_CurrentMoveTime <= 0)
 		m_Core.AddDragVelocity();
 	m_Core.ResetDragVelocity();
 
@@ -584,12 +535,9 @@ void CCharacter::TickDefered()
 void CCharacter::TickPaused()
 {
 	++m_AttackTick;
-	++m_Ninja.m_ActivationTick;
 	++m_ReckoningTick;
 	if(m_LastAction != -1)
 		++m_LastAction;
-	if(m_aWeapons[m_ActiveWeapon].m_AmmoRegenStart > -1)
-		++m_aWeapons[m_ActiveWeapon].m_AmmoRegenStart;
 	if(m_EmoteStop > -1)
 		++m_EmoteStop;
 }
@@ -831,7 +779,10 @@ void CCharacter::Snap(int SnappingClient)
 	pCharacter->m_Armor = 0;
 	pCharacter->m_TriggeredEvents = m_TriggeredEvents;
 
-	pCharacter->m_Weapon = m_ActiveWeapon;
+	// snap the weapon the player may actually use: an empty slot or an unowned
+	// weapon snaps as the hand (-1, no weapon shown)
+	const unsigned ActiveSnapWeaponID = GetUsableWeapon();
+	pCharacter->m_Weapon = WeaponManager()->SnapStyle(ActiveSnapWeaponID);
 	pCharacter->m_AttackTick = m_AttackTick;
 
 	pCharacter->m_Direction = m_Input.m_Direction;
@@ -841,10 +792,19 @@ void CCharacter::Snap(int SnappingClient)
 	{
 		pCharacter->m_Health = m_Health;
 		pCharacter->m_Armor = m_Armor;
-		if(m_ActiveWeapon == WEAPON_NINJA)
-			pCharacter->m_AmmoCount = m_Ninja.m_ActivationTick + g_pData->m_Weapons.m_Ninja.m_Duration * Server()->TickSpeed() / 1000;
-		else if(m_aWeapons[m_ActiveWeapon].m_Ammo > 0)
-			pCharacter->m_AmmoCount = m_aWeapons[m_ActiveWeapon].m_Ammo;
+		if(ActiveSnapWeaponID != 0)
+		{
+			IWeaponInterface *pWeapon = WeaponManager()->GetWeapon(ActiveSnapWeaponID);
+			if(pWeapon)
+			{
+				// ammo comes from the player's inventory; weapons without an
+				// ammo item (e.g. hammer, ninja, hand) show a full bar instead
+				if(GameServer()->Item()->WeaponNeedsAmmo(pWeapon->Name()))
+					pCharacter->m_AmmoCount = GameServer()->Item()->GetAmmoCountForWeapon(GetCID(), pWeapon->Name());
+				else
+					pCharacter->m_AmmoCount = pWeapon->MaxAmmo();
+			}
+		}
 	}
 
 	if(pCharacter->m_Emote == EMOTE_NORMAL)

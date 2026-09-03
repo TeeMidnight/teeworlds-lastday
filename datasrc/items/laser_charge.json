@@ -1,0 +1,7 @@
+{
+    "name": "Laser Charge",
+    "desc": "A charged cell that powers the laser.",
+    "item_type": ["ammo"],
+    "ammo_for": ["laser"],
+    "damage": 10
+}
