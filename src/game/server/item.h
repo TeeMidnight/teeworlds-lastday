@@ -58,7 +58,7 @@ private:
 		int m_Damage;
 		SUse m_Use;
 	};
-	hash_table<unsigned, SItemDef, 8> m_Items; // keyed by str_quickhash(res_id)
+	hash_table<unsigned, SItemDef, 16> m_Items; // keyed by str_quickhash(res_id)
 
 	static int ListItemsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	void LoadItem(const char *pResId, const char *pFilePath);
@@ -103,7 +103,7 @@ private:
 	bool ReserveIngredients(int ClientID, const SCraftDef *pCraft, int *pTake) const;
 
 public:
-	hash_table<unsigned, SCraftDef, 8> m_Crafts; // keyed by str_quickhash(craft_id)
+	hash_table<unsigned, SCraftDef, 16> m_Crafts; // keyed by str_quickhash(craft_id)
 
 	// callback used to enumerate all loaded recipes
 	typedef void (*FCraftCallback)(SCraftDef &Craft, void *pUser);
