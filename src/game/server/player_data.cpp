@@ -1,4 +1,6 @@
-
+#include "entities/character.h"
+#include "gamecontext.h"
+#include "gamecontroller.h"
 #include "player.h"
 
 #include <game/server/database/playerdb.h>
