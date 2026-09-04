@@ -169,6 +169,9 @@ void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *p
 	}
 	else // Mode == CHAT_WHISPER
 	{
+		if(ChatterClientID == -1)
+			Msg.m_Mode = CHAT_ALL;
+
 		// send to the clients
 		Msg.m_TargetID = To;
 		if(ChatterClientID != -1)
