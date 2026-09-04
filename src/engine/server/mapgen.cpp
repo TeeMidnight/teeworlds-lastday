@@ -793,12 +793,71 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 	array<CStructEntrance> lStructEntrances;
 
 	// ---------------------------------------------------------------
-	// merge the structs into the base layers
+	// plan the struct placements: decide first, for every anchor, which
+	// struct types are rolled in, and tally the results. The struct maps
+	// are only loaded below when at least one anchor actually needs them,
+	// instead of loading every struct map up front and only then deciding
+	// whether to paste it.
 	// ---------------------------------------------------------------
-	if(pGameTiles)
+	struct CStructPlacement
+	{
+		int m_StructIndex; // index into pInstruction->m_Structs
+		int m_AnchorIndex; // index into lAnchors
+	};
+	array<CStructPlacement> lStructPlacements;
+	array<int> lPlacementsPerStruct; // placement count per struct, parallel to pInstruction->m_Structs
 	{
 		for(int s = 0; s < pInstruction->m_Structs.size(); s++)
 		{
+			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
+			int Count = 0;
+			for(int a = 0; a < lAnchors.size(); a++)
+			{
+				// every anchor is an independent structure instance: each of
+				// them rolls its own probability. The salt is unchanged, so
+				// the generated maps stay identical to the previous version.
+				if(!RollChance(Seed, (s + 1) * 1000 + (a + 1), Struct.m_GenerateProba))
+					continue;
+				CStructPlacement &Placement = lStructPlacements.emplace();
+				Placement.m_StructIndex = s;
+				Placement.m_AnchorIndex = a;
+				Count++;
+			}
+			lPlacementsPerStruct.add(Count);
+		}
+
+		// statistics: summarize how the anchors are distributed over the
+		// struct types, so the merge step below knows what it will place
+		dbg_msg("mapgen", "anchor plan for '%s': %d anchor(s) -> %d placement(s)",
+			pFloorName, lAnchors.size(), lStructPlacements.size());
+		for(int s = 0; s < pInstruction->m_Structs.size(); s++)
+		{
+			if(lPlacementsPerStruct[s] <= 0)
+				continue;
+			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
+			dbg_msg("mapgen", "  %2d x '%s' (proba %3d%%, paste_air=%s)",
+				lPlacementsPerStruct[s], Struct.m_aBaseMap, Struct.m_GenerateProba,
+				Struct.m_PasteAir ? "true" : "false");
+		}
+	}
+
+	// ---------------------------------------------------------------
+	// merge the planned structs into the base layers
+	// ---------------------------------------------------------------
+	if(pGameTiles)
+	{
+		// the placements are grouped by struct index in ascending order, so
+		// every struct type owns a contiguous run of lStructPlacements
+		int PlacementPos = 0; // first placement of the next struct type
+		for(int s = 0; s < pInstruction->m_Structs.size(); s++)
+		{
+			const int NumPlacements = lPlacementsPerStruct[s];
+			if(NumPlacements == 0)
+				continue; // the roll came up empty on every anchor, skip the map
+
+			const int FirstPlacement = PlacementPos;
+			PlacementPos += NumPlacements;
+
 			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
 
 			char aStructPath[IO_MAX_PATH_LENGTH];
@@ -948,14 +1007,10 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 			const int RegionY2 = RedY >= 0 ? BottomLeftY : (HasContent ? MaxY : StructGameHeight - 1);
 
 			int MergedAnchors = 0;
-			for(int a = 0; a < lAnchors.size(); a++)
+			for(int p = FirstPlacement; p < PlacementPos; p++)
 			{
-				// every anchor is an independent structure instance: each of
-				// them rolls its own probability
-				if(!RollChance(Seed, (s + 1) * 1000 + (a + 1), Struct.m_GenerateProba))
-					continue;
-
-				const CAnchor &Anchor = lAnchors[a];
+				// paste the pre-planned placements of this struct type
+				const CAnchor &Anchor = lAnchors[lStructPlacements[p].m_AnchorIndex];
 				const int CornerX = Anchor.m_Type == ENTITY_FLAGSTAND_RED ? BottomLeftX : TopRightX;
 				const int CornerY = Anchor.m_Type == ENTITY_FLAGSTAND_RED ? BottomLeftY : TopRightY;
 				const int OffsetX = Anchor.m_X - CornerX;
