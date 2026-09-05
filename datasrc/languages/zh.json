@@ -78,6 +78,11 @@
 			"tr": "它足够牢固。"
 		},
 		{
+			"context": "Item Desc: Sword",
+			"or": "A sharp sword that cuts harder than the hammer. No ammo needed.",
+			"tr": "一把锋利的剑，挥砍比锤子更有力。无需弹药。"
+		},
+		{
 			"context": "Item Name",
 			"or": "Crude Grenade",
 			"tr": "粗制手雷"
@@ -153,6 +158,11 @@
 			"tr": "草绳"
 		},
 		{
+			"context": "Item Name",
+			"or": "Sword",
+			"tr": "剑"
+		},
+		{
 			"context": "Item Type",
 			"or": "ammo",
 			"tr": "弹药"
@@ -161,6 +171,11 @@
 			"context": "Item Type",
 			"or": "block",
 			"tr": "方块"
+		},
+		{
+			"context": "Item Type",
+			"or": "cutter",
+			"tr": "切割工具"
 		},
 		{
 			"context": "Item Type",
@@ -321,13 +336,13 @@
 		},
 		{
 			"context": "Menu Craft",
-			"or": "   [tool] %s",
-			"tr": "   [工具] %s"
+			"or": "   [tool] %s %s",
+			"tr": "   [工具] %s %s"
 		},
 		{
 			"context": "Menu Craft",
-			"or": "   [tool] any %s",
-			"tr": "   [工具] 任意 %s"
+			"or": "   [tool] any %s %s",
+			"tr": "   [工具] 任意 %s %s"
 		},
 		{
 			"context": "Menu Craft",
@@ -393,6 +408,16 @@
 			"context": "Menu Inventory",
 			"or": "Used: %s x%d",
 			"tr": "已使用：%s x%d"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Type: %s",
+			"tr": "类型：%s"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Types: %s",
+			"tr": "类型：%s"
 		},
 		{
 			"context": "Menu Loadout",

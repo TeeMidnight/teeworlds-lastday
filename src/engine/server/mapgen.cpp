@@ -806,14 +806,18 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 	};
 	array<CStructPlacement> lStructPlacements;
 	array<int> lPlacementsPerStruct; // placement count per struct, parallel to pInstruction->m_Structs
+	lPlacementsPerStruct.hint_size(pInstruction->m_Structs.size());
+	for(int s = 0; s < pInstruction->m_Structs.size(); s++)
 	{
-		for(int s = 0; s < pInstruction->m_Structs.size(); s++)
+		lPlacementsPerStruct.add(0);
+	}
+	{
+		for(int a = 0; a < lAnchors.size(); a++)
 		{
-			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
-			int Count = 0;
-			for(int a = 0; a < lAnchors.size(); a++)
+			for(int s = 0; s < pInstruction->m_Structs.size(); s++)
 			{
-				// every anchor is an independent structure instance: each of
+				const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
+				// every anchor is an independent structure instance: each of structure
 				// them rolls its own probability. The salt is unchanged, so
 				// the generated maps stay identical to the previous version.
 				if(!RollChance(Seed, (s + 1) * 1000 + (a + 1), Struct.m_GenerateProba))
@@ -821,9 +825,9 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 				CStructPlacement &Placement = lStructPlacements.emplace();
 				Placement.m_StructIndex = s;
 				Placement.m_AnchorIndex = a;
-				Count++;
+				lPlacementsPerStruct[s]++;
+				break;
 			}
-			lPlacementsPerStruct.add(Count);
 		}
 
 		// statistics: summarize how the anchors are distributed over the

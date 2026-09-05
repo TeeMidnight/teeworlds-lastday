@@ -1,0 +1,5 @@
+{
+    "name": "Sword",
+    "desc": "A sharp sword that cuts harder than the hammer. No ammo needed.",
+    "item_type": ["cutter", "weapon"]
+}

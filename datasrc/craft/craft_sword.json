@@ -1,5 +1,5 @@
 {
-    "craft_id": "craft_grenade",
+    "craft_id": "craft_sword",
     "needed":
     [
         {
@@ -8,12 +8,16 @@
         },
         {
             "item_id": "stone_bricks",
-            "count": 2
+            "count": 1
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 1
         }
     ],
     "result":
     {
-        "item_id": "grenade",
+        "item_id": "sword",
         "count": 1
     }
 }

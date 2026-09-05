@@ -1,5 +1,5 @@
 {
     "name": "Hammer",
     "desc": "A trusty hammer. No ammo needed.",
-    "item_type": ["weapon"]
+    "item_type": ["weapon", "cutter"]
 }

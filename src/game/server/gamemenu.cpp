@@ -327,6 +327,34 @@ void CGameMenu::AddWrappedLinesOptionFormat(const char *pDesc, ...)
 	AddWrappedLinesOption(aBuf);
 }
 
+// data threaded through CItemSystem::ForEachItemType (item view menu): joins
+// the localized type tags of the inspected item into one comma separated line
+struct SItemTypeLineData
+{
+	char m_aTypes[VOTE_DESC_LENGTH * 4];
+	int m_Len;
+	int m_Count;
+};
+
+static void ItemTypeLineCallback(const char *pType, void *pUser)
+{
+	SItemTypeLineData *pData = static_cast<SItemTypeLineData *>(pUser);
+	const char *pLocalized = Localize(pType, "Item Type");
+	const int SepLen = pData->m_Count > 0 ? 2 : 0; // ", " between types
+	const int AddLen = str_length(pLocalized) + SepLen;
+	if(pData->m_Len + AddLen < (int) sizeof(pData->m_aTypes))
+	{
+		if(pData->m_Count > 0)
+		{
+			pData->m_aTypes[pData->m_Len++] = ',';
+			pData->m_aTypes[pData->m_Len++] = ' ';
+		}
+		str_copy(pData->m_aTypes + pData->m_Len, pLocalized, sizeof(pData->m_aTypes) - pData->m_Len);
+		pData->m_Len += str_length(pLocalized);
+	}
+	pData->m_Count++;
+}
+
 bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
 {
 	(void) pUserData;
@@ -414,6 +442,19 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		pMenu->AddWrappedLinesOption(Localize(pDesc, aCtx));
 	}
 
+	// item types (e.g. "weapon"), localized, listed below the description
+	SItemTypeLineData TypeLine = {{'\0'}, 0, 0};
+	pItem->ForEachItemType(pResId, ItemTypeLineCallback, &TypeLine);
+	if(TypeLine.m_Count > 0)
+	{
+		char aTypeRow[VOTE_DESC_LENGTH * 4];
+		if(TypeLine.m_Count == 1)
+			str_format(aTypeRow, sizeof(aTypeRow), Localize("Type: %s", "Menu Inventory"), TypeLine.m_aTypes);
+		else
+			str_format(aTypeRow, sizeof(aTypeRow), Localize("Types: %s", "Menu Inventory"), TypeLine.m_aTypes);
+		pMenu->AddWrappedLinesOption(aTypeRow);
+	}
+
 	pMenu->AddHorizontalRule();
 
 	// actions
@@ -458,12 +499,15 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 
 		if(Need.m_IsTool)
 		{
+			// a tool must simply be owned (it is never consumed): mark
+			// whether the player owns it (☑) or not (☒)
+			const char *pMark = Have > 0 ? "☑" : "☒";
 			if(Need.m_MatchByType)
-				pMenu->AddOptionFormat(Localize("   [tool] any %s", "Menu Craft"), "DISPLAY", "-",
-					Localize(Need.m_aType, "Item Type"));
+				pMenu->AddOptionFormat(Localize("   [tool] any %s %s", "Menu Craft"), "DISPLAY", "-",
+					Localize(Need.m_aType, "Item Type"), pMark);
 			else
-				pMenu->AddOptionFormat(Localize("   [tool] %s", "Menu Craft"), "DISPLAY", "-",
-					Localize(pData->m_pItem->GetName(Need.m_aItemId), "Item Name"));
+				pMenu->AddOptionFormat(Localize("   [tool] %s %s", "Menu Craft"), "DISPLAY", "-",
+					Localize(pData->m_pItem->GetName(Need.m_aItemId), "Item Name"), pMark);
 		}
 		else
 		{

@@ -216,6 +216,17 @@ bool CItemSystem::HasItemType(const char *pResId, const char *pType) const
 	return false;
 }
 
+void CItemSystem::ForEachItemType(const char *pResId, FItemTypeCallback pfnFunc, void *pUser) const
+{
+	if(!pfnFunc || !pResId || !pResId[0])
+		return;
+	const SItemDef *pItem = m_Items.get(str_quickhash(pResId));
+	if(!pItem)
+		return;
+	for(int i = 0; i < pItem->m_NumTypes; i++)
+		pfnFunc(pItem->m_aTypes[i], pUser);
+}
+
 int CItemSystem::GetIngredientCount(int ClientID, const SIngredient &Need) const
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)

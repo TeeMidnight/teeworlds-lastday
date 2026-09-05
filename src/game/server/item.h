@@ -172,6 +172,11 @@ public:
 	int UseItem(int ClientID, const char *pResId, int Count = 1);
 	// optional item_type of the item: whether the item carries the given type
 	bool HasItemType(const char *pResId, const char *pType) const;
+	// callback used to enumerate the type tags of a single item
+	typedef void (*FItemTypeCallback)(const char *pType, void *pUser);
+	// calls pfnFunc for every type tag of the item (e.g. "weapon", "ore").
+	// pfnFunc is not called when the item is unknown or declares no types.
+	void ForEachItemType(const char *pResId, FItemTypeCallback pfnFunc, void *pUser) const;
 	// total quantity the player owns that matches this ingredient (by id or by type)
 	int GetIngredientCount(int ClientID, const SIngredient &Need) const;
 

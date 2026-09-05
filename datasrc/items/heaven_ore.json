@@ -1,5 +1,5 @@
 {
     "name": "Heaven Ore",
     "Desc": "From the heaven, but it contains darkness.",
-    "item_type": ["heavenly", "ore", "stone"]
+    "item_type": ["heavenly", "ore"]
 }

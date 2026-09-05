@@ -749,8 +749,11 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   weapons/weapon_hammer.cpp
   weapons/weapon_hand.cpp
   weapons/weapon_laser.cpp
+  weapons/weapon_melee.cpp
+  weapons/weapon_melee.h
   weapons/weapon_ninja.cpp
   weapons/weapon_shotgun.cpp
+  weapons/weapon_sword.cpp
 )
 set(GAME_GENERATED_SERVER
   src/generated/server_data.cpp
