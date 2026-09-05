@@ -1,8 +1,8 @@
-#ifndef GAME_SERVER_DATABASE_PLAYERDB_UTIL_H
-#define GAME_SERVER_DATABASE_PLAYERDB_UTIL_H
+#ifndef GAME_SERVER_DATABASE_DATABASE_UTIL_H
+#define GAME_SERVER_DATABASE_DATABASE_UTIL_H
 
+#include <game/server/database/database.h>
 #include <game/server/database/jsonpath.h>
-#include <game/server/database/playerdb.h>
 
 // serialize a value to a JSON literal
 inline void JsonValueToString(char *pOut, int Size, int Value)
@@ -48,7 +48,7 @@ inline void JsonValueToString(char *pOut, int Size, const char *pValue)
 // path and the value:
 //   SetJsonField(pDB, uuid, CJsonPath().Key("sanity"), 100);
 template<typename T>
-void SetJsonField(CPlayerDB *pDB, const Uuid &uuid, const CJsonPath &path, const T &value)
+void SetJsonField(CDatabase *pDB, const Uuid &uuid, const CJsonPath &path, const T &value)
 {
 	char aBuf[256];
 	JsonValueToString(aBuf, sizeof(aBuf), value);
@@ -67,7 +67,7 @@ inline void JsonValueFromString(const char *pStr, float &Value) { Value = str_to
 //   bool HideTip;
 //   if(GetJsonField(pDB, uuid, CJsonPath().Key("hide_tip"), &HideTip)) ...
 template<typename T>
-bool GetJsonField(CPlayerDB *pDB, const Uuid &uuid, const CJsonPath &path, T *pValue)
+bool GetJsonField(CDatabase *pDB, const Uuid &uuid, const CJsonPath &path, T *pValue)
 {
 	char aBuf[256];
 	if(!pDB->GetJson(uuid, path, aBuf, sizeof(aBuf)))
@@ -77,7 +77,7 @@ bool GetJsonField(CPlayerDB *pDB, const Uuid &uuid, const CJsonPath &path, T *pV
 }
 
 // read a raw json value (e.g. a whole object) into a buffer
-inline bool GetJsonFieldRaw(CPlayerDB *pDB, const Uuid &uuid, const CJsonPath &path, char *pOut, int Size)
+inline bool GetJsonFieldRaw(CDatabase *pDB, const Uuid &uuid, const CJsonPath &path, char *pOut, int Size)
 {
 	return pDB->GetJson(uuid, path, pOut, Size);
 }

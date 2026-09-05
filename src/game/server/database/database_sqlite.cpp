@@ -1,5 +1,5 @@
-/* SQLite (embedded) backend for the Player database. */
-#include <game/server/database/playerdb_sqlite.h>
+/* SQLite (embedded) backend for the database. */
+#include <game/server/database/database_sqlite.h>
 
 #include <base/system.h>
 
@@ -80,7 +80,7 @@ bool CDatabaseSQLite::Init()
 
 	if(sqlite3_open(m_aPath, &m_pDB) != SQLITE_OK)
 	{
-		dbg_msg("playerdb", "failed to open sqlite database '%s': %s", m_aPath, m_pDB ? sqlite3_errmsg(m_pDB) : "unknown error");
+		dbg_msg("database", "failed to open sqlite database '%s': %s", m_aPath, m_pDB ? sqlite3_errmsg(m_pDB) : "unknown error");
 		if(m_pDB)
 		{
 			sqlite3_close(m_pDB);
@@ -89,23 +89,28 @@ bool CDatabaseSQLite::Init()
 		return false;
 	}
 
-	// create the schema at runtime (idempotent); the "data" column is JSON
+	// create the schema at runtime (idempotent); the "data" column is JSON.
+	// world_saves rows carry the auto-increment cell "id" as primary key
 	const char *pCreate =
 		"CREATE TABLE IF NOT EXISTS players ("
 		" uuid TEXT PRIMARY KEY,"
 		" username TEXT NOT NULL UNIQUE,"
 		" password TEXT NOT NULL,"
+		" data JSON NOT NULL DEFAULT '{}');"
+		"CREATE TABLE IF NOT EXISTS world_saves ("
+		" \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,"
+		" map TEXT NOT NULL UNIQUE,"
 		" data JSON NOT NULL DEFAULT '{}');";
 
 	char *pErr = 0;
 	if(sqlite3_exec(m_pDB, pCreate, 0, 0, &pErr) != SQLITE_OK)
 	{
-		dbg_msg("playerdb", "failed to create schema: %s", pErr ? pErr : "unknown error");
+		dbg_msg("database", "failed to create schema: %s", pErr ? pErr : "unknown error");
 		sqlite3_free(pErr);
 		return false;
 	}
 
-	dbg_msg("playerdb", "sqlite database ready at '%s'", m_aPath);
+	dbg_msg("database", "sqlite database ready at '%s'", m_aPath);
 	return true;
 }
 
@@ -158,7 +163,7 @@ bool CDatabaseSQLite::InsertPlayer(const SPlayerData &Player)
 
 	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
-		dbg_msg("playerdb", "failed to insert Player '%s': %s", Player.m_aUsername, sqlite3_errmsg(m_pDB));
+		dbg_msg("database", "failed to insert Player '%s': %s", Player.m_aUsername, sqlite3_errmsg(m_pDB));
 	sqlite3_finalize(pStmt);
 	return Ok;
 }
@@ -247,7 +252,7 @@ bool CDatabaseSQLite::SetJson(const Uuid &Uuid, const CJsonPath &Path, const cha
 
 	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
-		dbg_msg("playerdb", "failed to set json field '%s' of '%s': %s", Path.c_str(), aUuid, sqlite3_errmsg(m_pDB));
+		dbg_msg("database", "failed to set json field '%s' of '%s': %s", Path.c_str(), aUuid, sqlite3_errmsg(m_pDB));
 	sqlite3_finalize(pStmt);
 	return Ok;
 }
@@ -274,7 +279,7 @@ bool CDatabaseSQLite::DelJson(const Uuid &Uuid, const CJsonPath &Path)
 
 	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
-		dbg_msg("playerdb", "failed to remove json field '%s' of '%s': %s", Path.c_str(), aUuid, sqlite3_errmsg(m_pDB));
+		dbg_msg("database", "failed to remove json field '%s' of '%s': %s", Path.c_str(), aUuid, sqlite3_errmsg(m_pDB));
 	sqlite3_finalize(pStmt);
 	return Ok;
 }
@@ -307,4 +312,65 @@ bool CDatabaseSQLite::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int
 	}
 	sqlite3_finalize(pStmt);
 	return Found;
+}
+
+bool CDatabaseSQLite::SaveWorldSave(const char *pMap, const char *pJsonData)
+{
+	if(!m_pDB || !pMap || !pJsonData)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT OR REPLACE INTO world_saves (map, data) VALUES (?1, json(?2));",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, pMap, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, pJsonData, -1, SQLITE_TRANSIENT);
+
+	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to save world save on '%s': %s", pMap, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::GetWorldSaveData(const char *pMap, char *pOut, int Size)
+{
+	if(!m_pDB || !pMap || !pOut)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT data FROM world_saves WHERE map = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, pMap, -1, SQLITE_TRANSIENT);
+
+	bool Found = false;
+	if(sqlite3_step(pStmt) == SQLITE_ROW && sqlite3_column_type(pStmt, 0) != SQLITE_NULL)
+	{
+		Found = true;
+		str_copy(pOut, (const char *) sqlite3_column_text(pStmt, 0), Size);
+	}
+	sqlite3_finalize(pStmt);
+	return Found;
+}
+
+bool CDatabaseSQLite::DeleteWorldSave(const char *pMap)
+{
+	if(!m_pDB || !pMap)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "DELETE FROM world_saves WHERE map = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, pMap, -1, SQLITE_TRANSIENT);
+
+	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to delete world save on '%s': %s", pMap, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
 }

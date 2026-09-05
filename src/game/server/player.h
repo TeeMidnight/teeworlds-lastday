@@ -11,7 +11,7 @@
 
 #include <game/server/item.h>
 
-class CPlayerDB;
+class CDatabase;
 class CGameWorld;
 class CCharacter;
 class CGameContext;
@@ -146,10 +146,10 @@ public:
 	bool m_LoggedIn;
 
 	// persist the player status (sanity, inventory, loadout) to/from the
-	// player database; each field is accessed individually through its json
+	// database; each field is accessed individually through its json
 	// path
-	void SaveStatus(class CPlayerDB *pDB);
-	void LoadStatus(class CPlayerDB *pDB);
+	void SaveStatus(class CDatabase *pDB);
+	void LoadStatus(class CDatabase *pDB);
 
 	// capture the current character's slot layout into m_Status.m_aLoadout
 	// and mark the loadout as customized (m_Status.m_LoadoutSet)

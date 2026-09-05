@@ -130,7 +130,8 @@ def write_languagefile(outputfilename, l10n_client_src, l10n_server_src, l10n_it
 	}
 
 	for key in (JSON_KEY_CLIENT, JSON_KEY_SERVER, JSON_KEY_ITEM):
-		result[key].sort(key=lambda entry: entry[JSON_KEY_OR])
+		# sort by context first, then by the original string within a context
+		result[key].sort(key=lambda entry: (entry.get(JSON_KEY_CTXT) or "", entry[JSON_KEY_OR]))
 
 	json.dump(
 		result,

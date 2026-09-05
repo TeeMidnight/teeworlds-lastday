@@ -3,10 +3,10 @@
 #include "gamecontroller.h"
 #include "player.h"
 
-#include <game/server/database/playerdb.h>
-#include <game/server/database/playerdb_util.h>
+#include <game/server/database/database.h>
+#include <game/server/database/database_util.h>
 
-void CPlayer::SaveStatus(CPlayerDB *pDB)
+void CPlayer::SaveStatus(CDatabase *pDB)
 {
 	if(!pDB || m_AccountUuid == UUID_ZEROED)
 		return;
@@ -80,7 +80,7 @@ void CPlayer::ApplyLoadout()
 	}
 }
 
-void CPlayer::LoadStatus(CPlayerDB *pDB)
+void CPlayer::LoadStatus(CDatabase *pDB)
 {
 	if(!pDB || m_AccountUuid == UUID_ZEROED)
 		return;

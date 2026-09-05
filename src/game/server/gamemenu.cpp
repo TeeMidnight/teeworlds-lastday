@@ -329,7 +329,7 @@ void CGameMenu::AddWrappedLinesOptionFormat(const char *pDesc, ...)
 
 bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
 {
-	(void)pUserData;
+	(void) pUserData;
 	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
 	if(!pPlayer)
 		return true;
@@ -374,6 +374,30 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		return false;
 	}
 
+	// "drop" the item (thrown as a CDroppedPickup); the vote reason box can
+	// carry how many to drop
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DROP") == 0)
+	{
+		int DropCount = 1;
+		if(VoteStatus.m_aReason[0])
+		{
+			DropCount = str_toint(VoteStatus.m_aReason);
+			if(DropCount < 1)
+				DropCount = 1;
+		}
+
+		// throw the item in the direction the player is currently looking
+		vec2 Direction(0.0f, 0.0f);
+		CCharacter *pChr = pPlayer->GetCharacter();
+		if(pChr)
+			Direction = pChr->AimDirection() * 12.0f;
+		pMenu->GameServer()->DropItem(ClientID, pResId, DropCount, Direction);
+
+		// refresh: back to the list, or keep viewing if still owned
+		pMenu->SetPlayerPage(ClientID, "INVENTORY");
+		return false;
+	}
+
 	pMenu->ClearOptions(ClientID);
 	pMenu->AddPageTitle();
 
@@ -398,6 +422,8 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		pMenu->AddOption(Localize("Use", "Menu Inventory"), "USE", "★");
 		pMenu->AddOption(Localize("Use a number as the vote reason to use that many.", "Menu Inventory"), "DISPLAY", "-");
 	}
+	pMenu->AddOption(Localize("Drop", "Menu Inventory"), "DROP", "★");
+	pMenu->AddOption(Localize("Use a number as the vote reason to drop that many.", "Menu Inventory"), "DISPLAY", "-");
 
 	return true;
 }

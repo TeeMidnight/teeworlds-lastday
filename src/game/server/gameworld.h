@@ -28,6 +28,7 @@ public:
 
 		ENTTYPE_RIWALL,
 		ENTTYPE_RESOURCE,
+		ENTTYPE_DROPPEDPICKUP,
 		NUM_ENTTYPES,
 
 		ENTFLAG_HITABLE = 1,
@@ -58,6 +59,20 @@ public:
 
 	unsigned m_WorldID;
 	unsigned WorldID() const { return m_WorldID; }
+
+	// canonical name of the map backing this world (e.g. "Connector" or the
+	// generated "<floor>_<seed>"); used as the persistence key of the world
+	// saves in the database
+	char m_aMapName[64];
+
+	// persist the whole state of this world (dropped item pickups today,
+	// and any future world attributes added later) into the world_saves row
+	// of m_aMapName. Called when the world is unloaded and when the server
+	// shuts down; never while the world is running.
+	void SaveToDatabase();
+	// restore the world state from its world_saves row. Called when the
+	// world is loaded; does not write to the database.
+	void RestoreFromDatabase();
 
 	CGameWorld(CGameContext *pGameServer);
 	~CGameWorld();

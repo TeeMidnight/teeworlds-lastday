@@ -284,6 +284,7 @@ public:
 	void SnapSetStaticsize(int ItemType, int Size);
 
 	virtual bool SwitchClientMap(int ClientID, unsigned MapID);
+	virtual const char *GetMapName(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);
 };
 

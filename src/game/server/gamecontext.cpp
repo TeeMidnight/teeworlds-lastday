@@ -15,6 +15,7 @@
 #include <generated/server_data.h>
 
 #include "entities/character.h"
+#include "entities/dropped_pickup.h"
 #include "entities/projectile.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
@@ -23,7 +24,7 @@
 #include "weapon.h"
 #include "weaponmanager.h"
 
-#include <game/server/database/playerdb.h>
+#include <game/server/database/database.h>
 
 enum
 {
@@ -90,7 +91,7 @@ void CGameContext::Clear()
 	int NumVoteOptions = m_NumVoteOptions;
 	CTuningParams Tuning = m_Tuning;
 	CGameMenu *pGameMenu = m_pGameMenu;
-	CPlayerDB *pPlayerDB = m_pPlayerDB;
+	CDatabase *pDatabase = m_pDatabase;
 	CItemSystem *pItemSystem = m_pItemSystem;
 
 	m_Resetting = true;
@@ -104,7 +105,7 @@ void CGameContext::Clear()
 	m_NumVoteOptions = NumVoteOptions;
 	m_Tuning = Tuning;
 	m_pGameMenu = pGameMenu;
-	m_pPlayerDB = pPlayerDB;
+	m_pDatabase = pDatabase;
 	m_pItemSystem = pItemSystem;
 }
 
@@ -373,28 +374,6 @@ void CGameContext::SendVoteClearOptions(int ClientID)
 	Server()->SendPackMsg(&ClearMsg, MSGFLAG_VITAL, ClientID);
 }
 
-void CGameContext::SendVoteOptions(int ClientID)
-{
-	CVoteOptionServer *pCurrent = m_pVoteOptionFirst;
-	while(pCurrent)
-	{
-		// count options for actual packet
-		int NumOptions = 0;
-		for(CVoteOptionServer *p = pCurrent; p && NumOptions < MAX_VOTE_OPTION_ADD; p = p->m_pNext, ++NumOptions)
-			;
-
-		// pack and send vote list packet
-		CMsgPacker Msg(NETMSGTYPE_SV_VOTEOPTIONLISTADD);
-		Msg.AddInt(NumOptions);
-		while(pCurrent && NumOptions--)
-		{
-			Msg.AddString(pCurrent->m_aDescription, VOTE_DESC_LENGTH);
-			pCurrent = pCurrent->m_pNext;
-		}
-		Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
-	}
-}
-
 void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID)
 {
 	if(pPlayer->GameWorld()->WorldID() == MapID)
@@ -414,6 +393,51 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID)
 		if(pWorld)
 			pPlayer->SwitchWorld(pWorld);
 	}
+}
+
+bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction)
+{
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
+	if(!pChr)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You need to be in the game to drop items.", "Item Drop"));
+		return false;
+	}
+
+	if(!pItemId[0])
+		return false;
+	if(Count <= 0)
+		Count = 1;
+
+	CItemSystem *pItems = Item();
+	if(!pItems->IsKnownItem(pItemId))
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("Unknown item.", "Item Drop"));
+		return false;
+	}
+	const int Owned = pItems->GetItemCount(ClientID, pItemId);
+	if(Owned <= 0)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You do not have this item.", "Item Drop"));
+		return false;
+	}
+	if(Owned < Count)
+		Count = Owned;
+
+	if(!pItems->RemoveItem(ClientID, pItemId, Count))
+		return false;
+
+	CGameWorld *pWorld = pChr->GameWorld();
+	// no database write here: the world's drops are persisted when the
+	// world is unloaded or the server shuts down
+	new CDroppedPickup(pWorld, pChr->GetPos(), Direction, pItemId, Count);
+
+	const char *pName = pItems->GetName(pItemId);
+	char aMsg[128];
+	str_format(aMsg, sizeof(aMsg), Localize("You dropped: %s x%d", "Item Drop"), Localize(pName, "Item Name"), Count);
+	SendChat(-1, CHAT_WHISPER, ClientID, aMsg);
+	return true;
 }
 
 void CGameContext::SendTuningParams(int ClientID)
@@ -553,9 +577,13 @@ void CGameContext::OnTick()
 #endif
 
 	// periodically unload worlds that no player is in anymore, so the
-	// server frees memory while idle (every ~30 seconds)
+	// server frees memory while idle (every ~30 seconds). World content
+	// (dropped items etc.) is only persisted when a world is unloaded or
+	// the server shuts down, never while it is loaded.
 	if(Server()->Tick() % (Server()->TickSpeed() * 30) == 0)
+	{
 		UnloadIdleWorlds();
+	}
 }
 
 // Server hooks
@@ -1115,7 +1143,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			m_pController->OnPlayerInfoChange(pPlayer);
 
 			SendVoteClearOptions(ClientID);
-			SendVoteOptions(ClientID);
+			// SendVoteOptions(ClientID);
 			SendTuningParams(ClientID);
 			SendReadyToEnter(pPlayer);
 		}
@@ -1560,18 +1588,18 @@ void CGameContext::OnInit()
 	// collect the statically registered weapon classes (prints the list)
 	WeaponManager()->OutputRegisteredWeapons();
 
-	// initialize the player database (runtime schema creation)
+	// initialize the database (runtime schema creation)
 	{
-		CPlayerDB::SConfig DbConfig;
+		CDatabase::SConfig DbConfig;
 		DbConfig.m_pBackend = Config()->m_SvDbBackend;
 		DbConfig.m_pPath = Config()->m_SvDbPath;
 		DbConfig.m_pConnString = Config()->m_SvDbConnstring;
-		m_pPlayerDB = CreatePlayerDB(DbConfig);
-		if(m_pPlayerDB && !m_pPlayerDB->Init())
+		m_pDatabase = CreateDatabase(DbConfig);
+		if(m_pDatabase && !m_pDatabase->Init())
 		{
-			dbg_msg("playerdb", "failed to initialize player database, running without persistence");
-			delete m_pPlayerDB;
-			m_pPlayerDB = 0;
+			dbg_msg("database", "failed to initialize the database, running without persistence");
+			delete m_pDatabase;
+			m_pDatabase = 0;
 		}
 	}
 
@@ -1591,22 +1619,31 @@ void CGameContext::OnInit()
 
 void CGameContext::SavePlayerData(CPlayer *pPlayer)
 {
-	if(!m_pPlayerDB || !pPlayer || pPlayer->IsDummy() || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
+	if(!m_pDatabase || !pPlayer || pPlayer->IsDummy() || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
 		return;
 
-	pPlayer->SaveStatus(m_pPlayerDB);
+	pPlayer->SaveStatus(m_pDatabase);
 }
 
 void CGameContext::OnShutdown()
 {
+	// persist the world content (dropped items etc.) of every loaded world
+	// before tearing down
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		(void) pUser;
+		if(pWorld)
+			pWorld->SaveToDatabase();
+	}, nullptr);
+
 	// flush every connected player to the database before tearing down
-	if(m_pPlayerDB)
+	if(m_pDatabase)
 	{
 		for(int i = 0; i < MAX_CLIENTS; i++)
 			if(m_apPlayers[i])
 				SavePlayerData(m_apPlayers[i]);
-		delete m_pPlayerDB;
-		m_pPlayerDB = 0;
+		delete m_pDatabase;
+		m_pDatabase = 0;
 	}
 
 	delete m_pItemSystem;
@@ -1727,6 +1764,13 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 	CGameWorld *pNewWorld = new CGameWorld(this);
 	pNewWorld->m_WorldID = MapID;
 	pNewWorld->InitCollision(Kernel()->RequestInterface<IMap>());
+
+	// remember the canonical map name: it is the persistence key of the
+	// world saves stored in the database
+	str_copy(pNewWorld->m_aMapName, Server()->GetMapName(MapID), sizeof(pNewWorld->m_aMapName));
+	// restore the saved state (dropped items etc.) of this world
+	pNewWorld->RestoreFromDatabase();
+
 	m_pWorlds.set(MapID, pNewWorld);
 }
 
@@ -1748,6 +1792,9 @@ bool CGameContext::UnloadWorld(unsigned MapID)
 		if(m_apPlayers[i] && m_apPlayers[i]->GameWorld() == pWorld)
 			return false;
 	}
+
+	// persist the world state (dropped items etc.) before destroying it
+	pWorld->SaveToDatabase();
 
 	delete pWorld;
 	m_pWorlds.remove(MapID);

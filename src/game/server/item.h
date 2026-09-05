@@ -158,6 +158,8 @@ public:
 	const char *GetName(const char *pResId) const;
 	// description of the item, or "" when unknown
 	const char *GetDesc(const char *pResId) const;
+	// whether an item definition exists for this res_id
+	bool IsKnownItem(const char *pResId) const { return m_Items.get(str_quickhash(pResId)) != 0; }
 	// whether the item definition declares a "use" effect (see UseItem)
 	bool IsUsable(const char *pResId) const;
 	// the item's declared use effects; m_HasUse false when none

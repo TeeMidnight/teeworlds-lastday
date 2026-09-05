@@ -703,15 +703,17 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   database/account.cpp
   database/account.h
   database/jsonpath.h
-  database/playerdb.cpp
-  database/playerdb.h
-  database/playerdb_postgres.cpp
-  database/playerdb_postgres.h
-  database/playerdb_sqlite.cpp
-  database/playerdb_sqlite.h
-  database/playerdb_util.h
+  database/database.cpp
+  database/database.h
+  database/database_postgres.cpp
+  database/database_postgres.h
+  database/database_sqlite.cpp
+  database/database_sqlite.h
+  database/database_util.h
   entities/character.cpp
   entities/character.h
+  entities/dropped_pickup.cpp
+  entities/dropped_pickup.h
   entities/laser.cpp
   entities/laser.h
   entities/pickup.cpp

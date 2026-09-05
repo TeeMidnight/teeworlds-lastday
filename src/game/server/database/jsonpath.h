@@ -5,7 +5,7 @@
 
 // A fluent builder for a dot-notation json path, e.g.
 //   CJsonPath().Key("inventory").Index(0).Key("count")  ->  "inventory.0.count"
-// The built path is passed to CPlayerDB::GetJson / SetJson / DelJson.
+// The built path is passed to CDatabase::GetJson / SetJson / DelJson.
 class CJsonPath
 {
 	char m_aPath[128];

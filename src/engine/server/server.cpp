@@ -1944,6 +1944,12 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID)
 	return false;
 }
 
+const char *CServer::GetMapName(unsigned MapID)
+{
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	return pInfo ? pInfo->GetMapName() : "";
+}
+
 void CServer::UnloadMap(unsigned MapID)
 {
 	// never unload the main map

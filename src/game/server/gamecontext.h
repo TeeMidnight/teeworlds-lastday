@@ -15,7 +15,7 @@
 #include "gamemenu.h"
 #include "gameworld.h"
 
-class CPlayerDB;
+class CDatabase;
 class CItemSystem;
 
 /*
@@ -91,17 +91,22 @@ public:
 
 	CGameMenu *m_pGameMenu;
 
-	CPlayerDB *m_pPlayerDB;
+	CDatabase *m_pDatabase;
 
 	CItemSystem *m_pItemSystem;
 
 	CGameMenu *GameMenu() const { return m_pGameMenu; }
-	CPlayerDB *PlayerDB() const { return m_pPlayerDB; }
+	CDatabase *Database() const { return m_pDatabase; }
 	CItemSystem *Item() const { return m_pItemSystem; }
 
 	// persist a player's status to the database (only when the player is
 	// logged in to an account)
 	void SavePlayerData(class CPlayer *pPlayer);
+
+	// remove Count copies of pItemId from the player's inventory and spawn
+	// a CDroppedPickup at the player, thrown with the given initial velocity
+	// (units per tick). Returns false (with a chat message) on failure.
+	bool DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction);
 
 	CCommandManager m_CommandManager;
 
@@ -166,7 +171,6 @@ public:
 	void SendVoteSet(int Type, int ToClientID);
 	void SendVoteStatus(int ClientID, int Total, int Yes, int No);
 	void SendVoteClearOptions(int ClientID);
-	void SendVoteOptions(int ClientID);
 
 	//
 	void SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID);

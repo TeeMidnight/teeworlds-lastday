@@ -90,6 +90,10 @@ public:
 	// need this hook for gamecontroller
 	void TeleTo(vec2 Pos, bool KeepSpeed);
 
+	// the normalized direction the player is currently aiming at
+	// (e.g. used to throw dropped items)
+	vec2 AimDirection() const;
+
 private:
 	// the ninja weapon drives its own state machine through OnTick and needs
 	// direct access to the per-character ninja state
@@ -152,8 +156,8 @@ private:
 	CCharacterCore m_SendCore; // core that we should send
 	CCharacterCore m_ReckoningCore; // the dead reckoning core
 
-	friend void CPlayer::SaveStatus(class CPlayerDB *pDB);
-	friend void CPlayer::LoadStatus(class CPlayerDB *pDB);
+	friend void CPlayer::SaveStatus(class CDatabase *pDB);
+	friend void CPlayer::LoadStatus(class CDatabase *pDB);
 };
 
 #endif

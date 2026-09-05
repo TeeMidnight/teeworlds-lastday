@@ -1,5 +1,5 @@
-/* PostgreSQL (libpq) backend for the Player database. */
-#include <game/server/database/playerdb_postgres.h>
+/* PostgreSQL (libpq) backend for the database. */
+#include <game/server/database/database_postgres.h>
 
 #include <base/system.h>
 
@@ -56,7 +56,7 @@ bool CDatabasePostgres::Init()
 	m_pConn = PQconnectdb(m_aConnString);
 	if(PQstatus(m_pConn) != CONNECTION_OK)
 	{
-		dbg_msg("playerdb", "failed to connect to postgres: %s", PQerrorMessage(m_pConn));
+		dbg_msg("database", "failed to connect to postgres: %s", PQerrorMessage(m_pConn));
 		PQfinish(m_pConn);
 		m_pConn = 0;
 		return false;
@@ -74,12 +74,25 @@ bool CDatabasePostgres::Init()
 	PGresult *pRes = PQexec(m_pConn, pCreate);
 	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
-		dbg_msg("playerdb", "failed to create schema: %s", PQresultErrorMessage(pRes));
+		dbg_msg("database", "failed to create schema: %s", PQresultErrorMessage(pRes));
 	PQclear(pRes);
 
-	if(Ok)
-		dbg_msg("playerdb", "postgres database ready");
-	return Ok;
+	// world-persisted saves with a database-assigned auto-increment cell id
+	const char *pCreateSaves =
+		"CREATE TABLE IF NOT EXISTS world_saves ("
+		" id SERIAL PRIMARY KEY,"
+		" map TEXT NOT NULL UNIQUE,"
+		" data JSONB NOT NULL DEFAULT '{}');";
+
+	pRes = PQexec(m_pConn, pCreateSaves);
+	const bool SavesOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!SavesOk)
+		dbg_msg("database", "failed to create world_saves schema: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+
+	if(Ok && SavesOk)
+		dbg_msg("database", "postgres database ready");
+	return Ok && SavesOk;
 }
 
 bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
@@ -93,7 +106,7 @@ bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
 		1, 0, apParams, 0, 0, 0);
 	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
 	{
-		dbg_msg("playerdb", "FindByName failed: %s", PQresultErrorMessage(pRes));
+		dbg_msg("database", "FindByName failed: %s", PQresultErrorMessage(pRes));
 		PQclear(pRes);
 		return false;
 	}
@@ -126,7 +139,7 @@ bool CDatabasePostgres::InsertPlayer(const SPlayerData &Player)
 		3, 0, apParams, 0, 0, 0);
 	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
-		dbg_msg("playerdb", "failed to insert Player '%s': %s", Player.m_aUsername, PQresultErrorMessage(pRes));
+		dbg_msg("database", "failed to insert Player '%s': %s", Player.m_aUsername, PQresultErrorMessage(pRes));
 	PQclear(pRes);
 	return Ok;
 }
@@ -210,7 +223,7 @@ bool CDatabasePostgres::SetJson(const Uuid &Uuid, const CJsonPath &Path, const c
 		3, 0, apParams, 0, 0, 0);
 	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
-		dbg_msg("playerdb", "failed to set json field '%s' of '%s': %s", Path.c_str(), aUuid, PQresultErrorMessage(pRes));
+		dbg_msg("database", "failed to set json field '%s' of '%s': %s", Path.c_str(), aUuid, PQresultErrorMessage(pRes));
 	PQclear(pRes);
 	return Ok;
 }
@@ -233,7 +246,7 @@ bool CDatabasePostgres::DelJson(const Uuid &Uuid, const CJsonPath &Path)
 		2, 0, apParams, 0, 0, 0);
 	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
-		dbg_msg("playerdb", "failed to remove json field '%s' of '%s': %s", Path.c_str(), aUuid, PQresultErrorMessage(pRes));
+		dbg_msg("database", "failed to remove json field '%s' of '%s': %s", Path.c_str(), aUuid, PQresultErrorMessage(pRes));
 	PQclear(pRes);
 	return Ok;
 }
@@ -265,4 +278,59 @@ bool CDatabasePostgres::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, i
 		*pLength = str_toint(PQgetvalue(pRes, 0, 0));
 	PQclear(pRes);
 	return Found;
+}
+
+bool CDatabasePostgres::SaveWorldSave(const char *pMap, const char *pJsonData)
+{
+	if(!m_pConn || !pMap || !pJsonData)
+		return false;
+
+	const char *apParams[2] = {pMap, pJsonData};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO world_saves (map, data) VALUES ($1, $2::jsonb)"
+		" ON CONFLICT (map) DO UPDATE SET data = EXCLUDED.data;",
+		2, 0, apParams, 0, 0, 0);
+	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to save world save on '%s': %s", pMap, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::GetWorldSaveData(const char *pMap, char *pOut, int Size)
+{
+	if(!m_pConn || !pMap || !pOut)
+		return false;
+
+	const char *apParams[1] = {pMap};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"SELECT data::text FROM world_saves WHERE map = $1;",
+		1, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+
+	const bool Found = PQntuples(pRes) > 0 && !PQgetisnull(pRes, 0, 0);
+	if(Found)
+		str_copy(pOut, PQgetvalue(pRes, 0, 0), Size);
+	PQclear(pRes);
+	return Found;
+}
+
+bool CDatabasePostgres::DeleteWorldSave(const char *pMap)
+{
+	if(!m_pConn || !pMap)
+		return false;
+
+	const char *apParams[1] = {pMap};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"DELETE FROM world_saves WHERE map = $1;",
+		1, 0, apParams, 0, 0, 0);
+	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to delete world save on '%s': %s", pMap, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
 }

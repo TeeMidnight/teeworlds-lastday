@@ -4,7 +4,7 @@
 #include <base/system.h>
 
 // Hash a plaintext password into the "salt_hex$hash_hex" form that is stored
-// in the player database. Uses PBKDF2-HMAC-SHA256 with a random per-password
+// in the database. Uses PBKDF2-HMAC-SHA256 with a random per-password
 // salt.
 void HashPassword(char *pOut, int Size, const char *pPassword);
 

@@ -370,6 +370,14 @@ void CCharacter::TeleTo(vec2 Pos, bool KeepSpeed)
 	m_Core.m_Pos = Pos;
 }
 
+vec2 CCharacter::AimDirection() const
+{
+	vec2 Dir(m_LatestInput.m_TargetX, m_LatestInput.m_TargetY);
+	if(length(Dir) < 0.0001f)
+		Dir = vec2(1.0f, 0.0f);
+	return normalize(Dir);
+}
+
 void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
 {
 	// check for changes

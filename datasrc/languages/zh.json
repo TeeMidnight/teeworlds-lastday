@@ -3,39 +3,19 @@
 	"client strings": [],
 	"item strings": [
 		{
-			"context": "Item Desc: Laser Charge",
-			"or": "A charged cell that powers the laser.",
-			"tr": "为激光枪供能的充能电池。"
-		},
-		{
 			"context": "Item Desc: Crude Grenade",
 			"or": "A hand-made explosive. Not very refined, but it gets the job done.",
 			"tr": "手工制作的爆炸物。不太精致，但能完成任务。"
 		},
 		{
-			"context": "Item Desc: Laser",
-			"or": "A high-tech laser rifle. Fires laser charges.",
-			"tr": "高科技激光步枪。发射激光电池。"
+			"context": "Item Desc: G rass",
+			"or": "It's like grass, but it's not from any plant.",
+			"tr": "它看起来像草，但是不来自于任何植物。"
 		},
 		{
-			"context": "Item Desc: Ninja Katana",
-			"or": "A sharp blade that lets you dash and swing. It never wears out.",
-			"tr": "锋利的刀刃，可以突进与挥砍。永不磨损。"
-		},
-		{
-			"context": "Item Desc: Shotgun Shell",
-			"or": "A shell loaded with pellets for the shotgun.",
-			"tr": "装满弹丸的霰弹枪弹药。"
-		},
-		{
-			"context": "Item Desc: Pistol",
-			"or": "A simple pistol. Fires pistol bullets.",
-			"tr": "简单的手枪。发射手枪子弹。"
-		},
-		{
-			"context": "Item Desc: Shotgun",
-			"or": "A sturdy shotgun. Fires shotgun shells.",
-			"tr": "坚固的霰弹枪。发射霰弹壳。"
+			"context": "Item Desc: Grenade Launcher",
+			"or": "Launches crude grenades.",
+			"tr": "发射粗制手雷。"
 		},
 		{
 			"context": "Item Desc: Hammer",
@@ -43,19 +23,64 @@
 			"tr": "可靠的锤子。无需弹药。"
 		},
 		{
+			"context": "Item Desc: Heaven Ore",
+			"or": "From the heaven, but it contains darkness.",
+			"tr": "来自天堂，但其中蕴含着黑暗。"
+		},
+		{
+			"context": "Item Desc: Laser",
+			"or": "A high-tech laser rifle. Fires laser charges.",
+			"tr": "高科技激光步枪。发射激光电池。"
+		},
+		{
+			"context": "Item Desc: Laser Charge",
+			"or": "A charged cell that powers the laser.",
+			"tr": "为激光枪供能的充能电池。"
+		},
+		{
+			"context": "Item Desc: Ninja Katana",
+			"or": "A sharp blade that lets you dash and swing. It never wears out.",
+			"tr": "锋利的刀刃，可以突进与挥砍。永不磨损。"
+		},
+		{
+			"context": "Item Desc: Pistol",
+			"or": "A simple pistol. Fires pistol bullets.",
+			"tr": "简单的手枪。发射手枪子弹。"
+		},
+		{
+			"context": "Item Desc: Pistol Bullet",
+			"or": "Standard pistol ammunition.",
+			"tr": "标准手枪弹药。"
+		},
+		{
+			"context": "Item Desc: Shotgun",
+			"or": "A sturdy shotgun. Fires shotgun shells.",
+			"tr": "坚固的霰弹枪。发射霰弹壳。"
+		},
+		{
+			"context": "Item Desc: Shotgun Shell",
+			"or": "A shell loaded with pellets for the shotgun.",
+			"tr": "装满弹丸的霰弹枪弹药。"
+		},
+		{
+			"context": "Item Desc: Stone",
+			"or": "It's common.",
+			"tr": "很常见。"
+		},
+		{
 			"context": "Item Desc: Stone Bricks",
 			"or": "Cleanly cut stone blocks.",
 			"tr": "切割整齐的石砖。"
 		},
 		{
+			"context": "Item Desc: Straw Rope",
+			"or": "It's sturdy enough.",
+			"tr": "它足够牢固。"
+		},
+		{
 			"context": "Item Name",
 			"or": "Crude Grenade",
 			"tr": "粗制手雷"
-		},
-		{
-			"context": "Item Desc: Heaven Ore",
-			"or": "From the heaven, but it contains darkness.",
-			"tr": "来自天堂，但其中蕴含着黑暗。"
 		},
 		{
 			"context": "Item Name",
@@ -78,21 +103,6 @@
 			"tr": "天矿"
 		},
 		{
-			"context": "Item Desc: Stone",
-			"or": "It's common.",
-			"tr": "很常见。"
-		},
-		{
-			"context": "Item Desc: G rass",
-			"or": "It's like grass, but it's not from any plant.",
-			"tr": "它看起来像草，但是不来自于任何植物。"
-		},
-		{
-			"context": "Item Desc: Straw Rope",
-			"or": "It's sturdy enough.",
-			"tr": "它足够牢固。"
-		},
-		{
 			"context": "Item Name",
 			"or": "Laser",
 			"tr": "激光枪"
@@ -101,11 +111,6 @@
 			"context": "Item Name",
 			"or": "Laser Charge",
 			"tr": "激光电池"
-		},
-		{
-			"context": "Item Desc: Grenade Launcher",
-			"or": "Launches crude grenades.",
-			"tr": "发射粗制手雷。"
 		},
 		{
 			"context": "Item Name",
@@ -131,11 +136,6 @@
 			"context": "Item Name",
 			"or": "Shotgun Shell",
 			"tr": "霰弹壳"
-		},
-		{
-			"context": "Item Desc: Pistol Bullet",
-			"or": "Standard pistol ammunition.",
-			"tr": "标准手枪弹药。"
 		},
 		{
 			"context": "Item Name",
@@ -195,74 +195,9 @@
 	],
 	"server strings": [
 		{
-			"context": "Menu Craft",
-			"or": "   [tool] %s",
-			"tr": "   [工具] %s"
-		},
-		{
-			"context": "Menu Craft",
-			"or": "   [tool] any %s",
-			"tr": "   [工具] 任意 %s"
-		},
-		{
-			"context": "Menu Craft",
-			"or": "   any %s %d/%d",
-			"tr": "   任意 %s %d/%d"
-		},
-		{
-			"context": "Menu Loadout",
-			"or": "%d. %s (hand)",
-			"tr": "%d. %s (空手)"
-		},
-		{
-			"context": "Menu Loadout",
-			"or": "%d. (empty)",
-			"tr": "%d. (空)"
-		},
-		{
-			"context": "Menu Loadout",
-			"or": "%d. (hand)",
-			"tr": "%d. (空手)"
-		},
-		{
-			"context": "Menu Inventory",
-			"or": "%d. None",
-			"tr": "%d. 无"
-		},
-		{
-			"context": "Menu Main",
-			"or": "(Click this to hide this tip)",
-			"tr": "(点击此处隐藏提示)"
-		},
-		{
 			"context": "Account",
 			"or": "Account created. You are now logged in.",
 			"tr": "账号创建成功，你已登录。"
-		},
-		{
-			"context": "WEAPONPICK",
-			"or": "Choose Weapon",
-			"tr": "选择武器"
-		},
-		{
-			"context": "Menu Craft",
-			"or": "Click a recipe to craft it. Tools are not consumed.",
-			"tr": "点击一个合成表去合成。工具不会被消耗。"
-		},
-		{
-			"context": "CRAFT",
-			"or": "Craft",
-			"tr": "建造"
-		},
-		{
-			"context": "Menu Main",
-			"or": "Craft",
-			"tr": "建造"
-		},
-		{
-			"context": "Menu Craft",
-			"or": "Crafted: %s x%d",
-			"tr": "已建造：%s x%d"
 		},
 		{
 			"context": "Account",
@@ -270,74 +205,9 @@
 			"tr": "创建账号失败。"
 		},
 		{
-			"context": "Menu Loadout",
-			"or": "Failed to place that item.",
-			"tr": "无法放置该物品。"
-		},
-		{
-			"context": "Menu Main",
-			"or": "If you don't want to close menu when you use a option,",
-			"tr": "如果你不想在使用选项时关闭菜单，"
-		},
-		{
-			"context": "INVENTORY",
-			"or": "Inventory",
-			"tr": "背包"
-		},
-		{
-			"context": "Menu Main",
-			"or": "Inventory",
-			"tr": "背包"
-		},
-		{
-			"context": "ITEMVIEW",
-			"or": "Item",
-			"tr": "物品"
-		},
-		{
-			"context": "Menu Loadout",
-			"or": "Item placed on the slot.",
-			"tr": "物品已放入槽位。"
-		},
-		{
-			"context": "Menu Main",
-			"or": "Level: %d",
-			"tr": "等级：%d"
-		},
-		{
-			"context": "LOADOUT",
-			"or": "Loadout",
-			"tr": "装备栏"
-		},
-		{
-			"context": "Menu Main",
-			"or": "Loadout",
-			"tr": "装备栏"
-		},
-		{
 			"context": "Account",
 			"or": "Logged in.",
 			"tr": "登录成功。"
-		},
-		{
-			"context": "MAIN",
-			"or": "Main Menu",
-			"tr": "主菜单"
-		},
-		{
-			"context": "Menu Main",
-			"or": "Name: %s",
-			"tr": "名字：%s"
-		},
-		{
-			"context": "Item Pickup",
-			"or": "No inventory space!",
-			"tr": "背包空间不足！"
-		},
-		{
-			"context": "Menu Craft",
-			"or": "No recipes available.",
-			"tr": "没有可用的合成表。"
 		},
 		{
 			"context": "Account",
@@ -345,49 +215,9 @@
 			"tr": "没有这个账号。"
 		},
 		{
-			"context": "Menu Craft",
-			"or": "Not enough inventory space.",
-			"tr": "背包空间不足。"
-		},
-		{
-			"context": "Menu Craft",
-			"or": "Not enough materials.",
-			"tr": "材料不足。"
-		},
-		{
-			"context": "Menu Inventory",
-			"or": "Nothing to restore.",
-			"tr": "没有可恢复的数值。"
-		},
-		{
-			"context": "Menu",
-			"or": "Previous Page",
-			"tr": "上一页"
-		},
-		{
-			"context": "Menu Loadout",
-			"or": "Select an item to place on this slot.",
-			"tr": "选择要放入此槽位的物品。"
-		},
-		{
-			"context": "VOTE",
-			"or": "Server Vote",
-			"tr": "服务器投票"
-		},
-		{
-			"context": "Menu Main",
-			"or": "Server Vote",
-			"tr": "服务器投票"
-		},
-		{
 			"context": "Account",
 			"or": "The database is not available.",
 			"tr": "数据库不可用。"
-		},
-		{
-			"context": "Vote Menu Server Vote",
-			"or": "There's no any server vote",
-			"tr": "这里没有任何服务器投票"
 		},
 		{
 			"context": "Account",
@@ -405,29 +235,9 @@
 			"tr": "用法：/register <用户名> <密码>"
 		},
 		{
-			"context": "Menu Inventory",
-			"or": "Use",
-			"tr": "使用"
-		},
-		{
-			"context": "Menu Inventory",
-			"or": "Use a number as the vote reason to use that many.",
-			"tr": "在投票理由里填数字可一次使用多个。"
-		},
-		{
-			"context": "Menu Inventory",
-			"or": "Used: %s x%d",
-			"tr": "已使用：%s x%d"
-		},
-		{
 			"context": "Account",
 			"or": "Wrong password.",
 			"tr": "密码错误。"
-		},
-		{
-			"context": "Character died",
-			"or": "YOU CANNOT ESCAPE.",
-			"tr": "你 无 法 逃 离"
 		},
 		{
 			"context": "Account",
@@ -440,19 +250,239 @@
 			"tr": "你尚未登录。请使用 /login <用户名> <密码> 或 /register <用户名> <密码> 加入游戏。"
 		},
 		{
-			"context": "Item Pickup",
-			"or": "You got: %s x%d (%d)",
-			"tr": "你获得了：%s x%d (%d)"
-		},
-		{
 			"context": "Account",
 			"or": "You must be logged in to join the game. Use /login <username> <password>.",
 			"tr": "你必须登录才能加入游戏。请使用 /login <用户名> <密码>。"
 		},
 		{
+			"context": "CRAFT",
+			"or": "Craft",
+			"tr": "建造"
+		},
+		{
+			"context": "Character died",
+			"or": "YOU CANNOT ESCAPE.",
+			"tr": "你 无 法 逃 离"
+		},
+		{
+			"context": "INVENTORY",
+			"or": "Inventory",
+			"tr": "背包"
+		},
+		{
+			"context": "ITEMVIEW",
+			"or": "Item",
+			"tr": "物品"
+		},
+		{
+			"context": "Item Drop",
+			"or": "Unknown item.",
+			"tr": "未知物品。"
+		},
+		{
+			"context": "Item Drop",
+			"or": "You do not have this item.",
+			"tr": "你没有这个物品。"
+		},
+		{
+			"context": "Item Drop",
+			"or": "You dropped: %s x%d",
+			"tr": "你丢弃了：%s x%d"
+		},
+		{
+			"context": "Item Drop",
+			"or": "You need to be in the game to drop items.",
+			"tr": "你需要进入游戏才能丢弃物品。"
+		},
+		{
+			"context": "Item Pickup",
+			"or": "No inventory space!",
+			"tr": "背包空间不足！"
+		},
+		{
+			"context": "Item Pickup",
+			"or": "You got: %s x%d (%d)",
+			"tr": "你获得了：%s x%d (%d)"
+		},
+		{
+			"context": "LOADOUT",
+			"or": "Loadout",
+			"tr": "装备栏"
+		},
+		{
+			"context": "MAIN",
+			"or": "Main Menu",
+			"tr": "主菜单"
+		},
+		{
+			"context": "Menu",
+			"or": "Previous Page",
+			"tr": "上一页"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "   [tool] %s",
+			"tr": "   [工具] %s"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "   [tool] any %s",
+			"tr": "   [工具] 任意 %s"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "   any %s %d/%d",
+			"tr": "   任意 %s %d/%d"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "Click a recipe to craft it. Tools are not consumed.",
+			"tr": "点击一个合成表去合成。工具不会被消耗。"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "Crafted: %s x%d",
+			"tr": "已建造：%s x%d"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "No recipes available.",
+			"tr": "没有可用的合成表。"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "Not enough inventory space.",
+			"tr": "背包空间不足。"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "Not enough materials.",
+			"tr": "材料不足。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "%d. None",
+			"tr": "%d. 无"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Drop",
+			"tr": "丢弃"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Nothing to restore.",
+			"tr": "没有可恢复的数值。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Use",
+			"tr": "使用"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Use a number as the vote reason to drop that many.",
+			"tr": "在投票理由里填数字可一次丢弃多个。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Use a number as the vote reason to use that many.",
+			"tr": "在投票理由里填数字可一次使用多个。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Used: %s x%d",
+			"tr": "已使用：%s x%d"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "%d. %s (hand)",
+			"tr": "%d. %s (空手)"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "%d. (empty)",
+			"tr": "%d. (空)"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "%d. (hand)",
+			"tr": "%d. (空手)"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "Failed to place that item.",
+			"tr": "无法放置该物品。"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "Item placed on the slot.",
+			"tr": "物品已放入槽位。"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "Select an item to place on this slot.",
+			"tr": "选择要放入此槽位的物品。"
+		},
+		{
+			"context": "Menu Main",
+			"or": "(Click this to hide this tip)",
+			"tr": "(点击此处隐藏提示)"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Craft",
+			"tr": "建造"
+		},
+		{
+			"context": "Menu Main",
+			"or": "If you don't want to close menu when you use a option,",
+			"tr": "如果你不想在使用选项时关闭菜单，"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Inventory",
+			"tr": "背包"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Level: %d",
+			"tr": "等级：%d"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Loadout",
+			"tr": "装备栏"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Name: %s",
+			"tr": "名字：%s"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Server Vote",
+			"tr": "服务器投票"
+		},
+		{
 			"context": "Menu Main",
 			"or": "then you can input this in your console:",
 			"tr": "那么你可以在控制台输入："
+		},
+		{
+			"context": "VOTE",
+			"or": "Server Vote",
+			"tr": "服务器投票"
+		},
+		{
+			"context": "Vote Menu Server Vote",
+			"or": "There's no any server vote",
+			"tr": "这里没有任何服务器投票"
+		},
+		{
+			"context": "WEAPONPICK",
+			"or": "Choose Weapon",
+			"tr": "选择武器"
 		}
 	]
 }

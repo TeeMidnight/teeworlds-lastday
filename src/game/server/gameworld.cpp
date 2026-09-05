@@ -1,18 +1,26 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 
+#include <base/math.h>
+#include <base/tl/stream.h>
+
 #include <generated/server_data.h>
 
 #include <engine/shared/jsonparser.h>
+#include <engine/shared/jsonwriter.h>
 
 #include <climits>
 
 #include "entities/character.h"
+#include "entities/dropped_pickup.h"
 #include "entities/resource.h"
 #include "entity.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "gameworld.h"
+#include "item.h"
+
+#include <game/server/database/database.h>
 
 #include <algorithm>
 
@@ -25,6 +33,8 @@ CGameWorld::CGameWorld(CGameContext *pGameServer)
 	m_pConfig = m_pGameServer->Config();
 	m_pServer = m_pGameServer->Server();
 	m_Events.SetGameServer(pGameServer);
+
+	m_aMapName[0] = '\0';
 
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 	{
@@ -498,5 +508,132 @@ void CGameWorld::CreateSound(vec2 Pos, int Sound, int64 Mask)
 		pEvent->m_X = (int) Pos.x;
 		pEvent->m_Y = (int) Pos.y;
 		pEvent->m_SoundID = Sound;
+	}
+}
+
+// ---------------------------------------------------------------
+// world state persistence
+//
+// A world's persistent state lives in one world_saves row (keyed by
+// m_aMapName), as a json document. Each kind of world content owns its own
+// field of that document: dropped item pickups are stored under "drop" as
+// an array. Future world attributes get their own fields here, so both
+// functions below are the single place where the world's state is written
+// and restored.
+//
+// Writes happen only when the world is unloaded or the server shuts down;
+// while a world is loaded it exists purely in memory.
+// ---------------------------------------------------------------
+
+void CGameWorld::SaveToDatabase()
+{
+	CDatabase *pDB = GameServer()->Database();
+	if(!pDB || !m_aMapName[0])
+		return;
+
+	// collect the live dropped pickups of this world
+	array<CDroppedPickup *> lDrops;
+	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_DROPPEDPICKUP); !r.empty(); r.pop_front())
+	{
+		CDroppedPickup *pPickup = static_cast<CDroppedPickup *>(r.front());
+		if(!pPickup->IsMarkedForDestroy())
+			lDrops.add(pPickup);
+	}
+
+	// build the whole world document from scratch
+	array<char> lJson;
+	memory_stream<char> Stream(&lJson);
+	CJsonWriter JsonWriter(&Stream);
+	JsonWriter.BeginObject();
+	JsonWriter.WriteAttribute("drop");
+	JsonWriter.BeginArray();
+	for(int i = 0; i < lDrops.size(); i++)
+	{
+		const CDroppedPickup *pPickup = lDrops[i];
+		JsonWriter.BeginObject();
+		JsonWriter.WriteAttribute("item");
+		JsonWriter.WriteStrValue(pPickup->ItemId());
+		JsonWriter.WriteAttribute("count");
+		JsonWriter.WriteIntValue(pPickup->Count());
+		JsonWriter.WriteAttribute("x");
+		JsonWriter.WriteIntValue(round_to_int(pPickup->GetPos().x));
+		JsonWriter.WriteAttribute("y");
+		JsonWriter.WriteIntValue(round_to_int(pPickup->GetPos().y));
+		JsonWriter.EndObject();
+	}
+	JsonWriter.EndArray();
+	// future world attributes get their own fields of this object here
+	JsonWriter.EndObject();
+	lJson.add(0);
+
+	// write the row from scratch: the old row is deleted first so that no
+	// stale field from a previous session survives, then the whole fresh
+	// document is inserted
+	pDB->DeleteWorldSave(m_aMapName);
+	if(lDrops.size() == 0)
+		return; // nothing to persist: the row stays deleted
+
+	pDB->SaveWorldSave(m_aMapName, lJson.base_ptr());
+}
+
+void CGameWorld::RestoreFromDatabase()
+{
+	CDatabase *pDB = GameServer()->Database();
+	if(!pDB || !m_aMapName[0])
+		return;
+
+	// read the whole world state and recreate the dropped items from the
+	// "drop" array (read only, no writes)
+	char aData[65536];
+	if(!pDB->GetWorldSaveData(m_aMapName, aData, sizeof(aData)))
+		return;
+
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(aData, "world save");
+	if(!pJson || pJson->type != json_object)
+		return;
+
+	const json_value &rDrops = (*pJson)["drop"];
+	if(rDrops.type != json_array)
+		return;
+
+	CItemSystem *pItems = GameServer()->Item();
+	for(unsigned i = 0; i < rDrops.u.array.length; i++)
+	{
+		const json_value &rDrop = rDrops[i];
+		if(rDrop.type != json_object)
+			continue;
+		const json_value &rItem = rDrop["item"];
+		const json_value &rCount = rDrop["count"];
+		const json_value &rX = rDrop["x"];
+		const json_value &rY = rDrop["y"];
+		if(rItem.type != json_string || rCount.type != json_integer || rX.type != json_integer || rY.type != json_integer)
+			continue;
+		// the item definitions may have changed while the world was unloaded
+		if(!pItems->IsKnownItem(rItem.u.string.ptr))
+			continue;
+
+		const int Count = maximum(1, (int) (json_int_t) rCount);
+		const float X = (float) (json_int_t) rX;
+		const float Y = (float) (json_int_t) rY;
+
+		// nudge the spawn position upward when the stored position is stuck
+		// inside a solid tile (e.g. the map was regenerated); skip the entry
+		// when no free spot can be found
+		vec2 SpawnPos(X, Y);
+		bool Stuck = true;
+		for(int Step = 0; Step < 64; Step++)
+		{
+			if(!Collision()->TestBox(SpawnPos, vec2(CDroppedPickup::DROP_BOX, CDroppedPickup::DROP_BOX)))
+			{
+				Stuck = false;
+				break;
+			}
+			SpawnPos.y -= 32.0f;
+		}
+		if(Stuck)
+			continue;
+
+		new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f), rItem.u.string.ptr, Count);
 	}
 }

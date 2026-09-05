@@ -73,6 +73,9 @@ public:
 
 	virtual bool SwitchClientMap(int ClientID, unsigned MapID) = 0;
 
+	// canonical map name of a loaded/known map, or "" when unknown
+	virtual const char *GetMapName(unsigned MapID) = 0;
+
 	// releases the cached map data of a map that no client needs anymore
 	// (the map can be re-loaded on demand if a client switches to it again)
 	virtual void UnloadMap(unsigned MapID) = 0;

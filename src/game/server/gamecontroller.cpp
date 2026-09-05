@@ -21,7 +21,7 @@
 #include "weaponmanager.h"
 
 #include <game/server/database/account.h>
-#include <game/server/database/playerdb.h>
+#include <game/server/database/database.h>
 
 CGameController::CGameController(CGameContext *pGameServer)
 {
@@ -576,7 +576,7 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
 	int ClientID = pCmdContext->m_ClientID;
 	CPlayer *pPlayer = pSelf->GameServer()->m_apPlayers[ClientID];
-	CPlayerDB *pDB = pSelf->GameServer()->PlayerDB();
+	CDatabase *pDB = pSelf->GameServer()->Database();
 
 	if(!pPlayer)
 		return;
@@ -599,7 +599,7 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	const char *pUsername = pResult->GetString(0);
 	const char *pPassword = pResult->GetString(1);
 
-	CPlayerDB::SPlayerData Row;
+	CDatabase::SPlayerData Row;
 	if(pDB->FindByName(pUsername, Row))
 	{
 		pSelf->SendSystemChat(ClientID, Localize("This username is already taken.", "Account"));
@@ -638,7 +638,7 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
 	int ClientID = pCmdContext->m_ClientID;
 	CPlayer *pPlayer = pSelf->GameServer()->m_apPlayers[ClientID];
-	CPlayerDB *pDB = pSelf->GameServer()->PlayerDB();
+	CDatabase *pDB = pSelf->GameServer()->Database();
 
 	if(!pPlayer)
 		return;
@@ -661,7 +661,7 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 	const char *pUsername = pResult->GetString(0);
 	const char *pPassword = pResult->GetString(1);
 
-	CPlayerDB::SPlayerData Row;
+	CDatabase::SPlayerData Row;
 	if(!pDB->FindByName(pUsername, Row))
 	{
 		pSelf->SendSystemChat(ClientID, Localize("No such account.", "Account"));

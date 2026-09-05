@@ -1,11 +1,11 @@
-#include <game/server/database/playerdb.h>
+#include <game/server/database/database.h>
 
 #include <base/system.h>
 
-#include <game/server/database/playerdb_postgres.h>
-#include <game/server/database/playerdb_sqlite.h>
+#include <game/server/database/database_postgres.h>
+#include <game/server/database/database_sqlite.h>
 
-CPlayerDB *CreatePlayerDB(const CPlayerDB::SConfig &Config)
+CDatabase *CreateDatabase(const CDatabase::SConfig &Config)
 {
 	const char *pBackend = Config.m_pBackend && Config.m_pBackend[0] ? Config.m_pBackend : "sqlite";
 
@@ -15,6 +15,6 @@ CPlayerDB *CreatePlayerDB(const CPlayerDB::SConfig &Config)
 	if(str_comp_nocase(pBackend, "postgres") == 0)
 		return new CDatabasePostgres(Config);
 
-	dbg_msg("playerdb", "unknown database backend '%s'", pBackend);
+	dbg_msg("database", "unknown database backend '%s'", pBackend);
 	return 0;
 }

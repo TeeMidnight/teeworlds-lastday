@@ -7,8 +7,8 @@
 // server
 MACRO_CONFIG_STR(SvLanguagefile, sv_languagefile, 255, "", CFGFLAG_SERVER | CFGFLAG_SAVE, "What language file to use (on server)")
 
-// player database
-MACRO_CONFIG_STR(SvDbBackend, sv_db_backend, 16, "sqlite", CFGFLAG_SAVE | CFGFLAG_SERVER, "Player database backend: sqlite or postgres")
+// database
+MACRO_CONFIG_STR(SvDbBackend, sv_db_backend, 16, "sqlite", CFGFLAG_SAVE | CFGFLAG_SERVER, "Database backend: sqlite or postgres")
 MACRO_CONFIG_STR(SvDbPath, sv_db_path, 255, "database/lastday.db", CFGFLAG_SAVE | CFGFLAG_SERVER, "SQLite database file path")
 MACRO_CONFIG_STR(SvDbConnstring, sv_db_connstring, 255, "", CFGFLAG_SAVE | CFGFLAG_SERVER, "PostgreSQL connection string (for the postgres backend)")
 
