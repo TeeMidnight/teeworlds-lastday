@@ -702,7 +702,6 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   alloc.h
   database/account.cpp
   database/account.h
-  database/jsonpath.h
   database/database.cpp
   database/database.h
   database/database_postgres.cpp
@@ -710,6 +709,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   database/database_sqlite.cpp
   database/database_sqlite.h
   database/database_util.h
+  database/jsonpath.h
   entities/character.cpp
   entities/character.h
   entities/dropped_pickup.cpp
