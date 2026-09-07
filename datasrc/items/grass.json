@@ -4,6 +4,6 @@
     "item_type": ["grass"],
     "use": {
         "health": 2,
-        "sanity": 5
+        "forgetting": -5
     }
 }

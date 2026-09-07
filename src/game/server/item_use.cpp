@@ -11,11 +11,13 @@
 //
 // an item can declare an optional "use" object in its json definition:
 //
-//	"use": { "health": 5, "sanity": 10 }
+//	"use": { "health": 5, "forgetting": -5 }
 //
 // using the item consumes one copy and applies the declared effects to the
 // player. the use effects are parsed in CItemSystem::LoadItem (main file),
-// the runtime behaviour lives here.
+// the runtime behaviour lives here. "forgetting" is a delta on the mercury
+// chapter meter: negative values recall (lower the forgetting), positive
+// values make the player forget more.
 // ---------------------------------------------------------------
 
 bool CItemSystem::IsUsable(const char *pResId) const
@@ -50,7 +52,7 @@ int CItemSystem::UseItem(int ClientID, const char *pResId, int Count)
 		return 0;
 
 	// apply the effect repeatedly until the requested amount is used up or
-	// nothing is left to restore (full health/sanity)
+	// nothing is left to restore (full health / forgetting at 0)
 	int Used = 0;
 	while(Used < Count)
 	{
@@ -61,12 +63,12 @@ int CItemSystem::UseItem(int ClientID, const char *pResId, int Count)
 			if(pChr && pChr->IncreaseHealth(Use.m_Health))
 				Applied = true;
 		}
-		if(Use.m_Sanity != 0)
+		if(Use.m_Forgetting != 0)
 		{
-			const int NewSanity = clamp(pPlayer->m_Status.m_Sanity + Use.m_Sanity, 0, 100);
-			if(NewSanity != pPlayer->m_Status.m_Sanity)
+			const int NewForgetting = clamp(pPlayer->m_Status.m_Forgetting + Use.m_Forgetting, 0, 100);
+			if(NewForgetting != pPlayer->m_Status.m_Forgetting)
 			{
-				pPlayer->m_Status.m_Sanity = NewSanity;
+				pPlayer->m_Status.m_Forgetting = NewForgetting;
 				Applied = true;
 			}
 		}

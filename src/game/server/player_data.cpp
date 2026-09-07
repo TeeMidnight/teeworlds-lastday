@@ -11,7 +11,7 @@ void CPlayer::SaveStatus(CDatabase *pDB)
 	if(!pDB || m_AccountUuid == UUID_ZEROED)
 		return;
 
-	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("sanity"), m_Status.m_Sanity);
+	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("forgetting"), m_Status.m_Forgetting);
 	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), m_Status.m_Level);
 	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), m_Status.m_HideTip);
 
@@ -86,7 +86,7 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 		return;
 
 	// reset to defaults
-	m_Status.m_Sanity = 100;
+	m_Status.m_Forgetting = 0;
 	m_Status.m_Level = 0;
 	m_Status.m_LoadoutSet = false;
 	for(int i = 0; i < NUM_WEAPONS; i++)
@@ -94,7 +94,15 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
 	mem_zero(Inventory.m_aItems, sizeof(Inventory.m_aItems));
 
-	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("sanity"), &m_Status.m_Sanity);
+	// mercury chapter: the forgetting meter (0 = clear mind). profiles saved
+	// by the sulfur chapter stored a "sanity" value instead (100 = sane);
+	// migrate it by inverting it into forgetting.
+	if(!GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("forgetting"), &m_Status.m_Forgetting))
+	{
+		int LegacySanity = -1;
+		if(GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("sanity"), &LegacySanity))
+			m_Status.m_Forgetting = clamp(100 - LegacySanity, 0, 100);
+	}
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), &m_Status.m_Level);
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), &m_Status.m_HideTip);
 

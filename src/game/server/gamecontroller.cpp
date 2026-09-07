@@ -111,6 +111,35 @@ int CGameController::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, int
 	for(int i = 0; i < MAX_CLIENTS; ++i)
 		if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->m_DeadSpecMode)
 			GameServer()->m_apPlayers[i]->UpdateDeadSpecMode();
+
+	// mercury chapter: dying erodes the memory. every death raises the
+	// forgetting meter (+20, cap 100). milestones whisper what was lost; a
+	// death that would reach 100 triggers total amnesia: the meter collapses
+	// to 60 so the game never hard-locks (quiet time / recall items lower it
+	// further)
+	CPlayer *pVictimPlayer = pVictim->GetPlayer();
+	if(pVictimPlayer)
+	{
+		const int OldForgetting = pVictimPlayer->m_Status.m_Forgetting;
+		int NewForgetting = clamp(OldForgetting + 20, 0, 100);
+		if(NewForgetting >= 100)
+		{
+			NewForgetting = 60;
+			GameServer()->SendChat(-1, CHAT_WHISPER, pVictimPlayer->GetCID(),
+				Localize("You forget who you are entirely.", "Mercury"));
+		}
+		else
+		{
+			if(OldForgetting < 50 && NewForgetting >= 50)
+				GameServer()->SendChat(-1, CHAT_WHISPER, pVictimPlayer->GetCID(),
+					Localize("You start to forget how to craft some things.", "Mercury"));
+			else if(OldForgetting < 75 && NewForgetting >= 75)
+				GameServer()->SendChat(-1, CHAT_WHISPER, pVictimPlayer->GetCID(),
+					Localize("You can no longer tell what many of your belongings are.", "Mercury"));
+		}
+		pVictimPlayer->m_Status.m_Forgetting = NewForgetting;
+	}
+
 	// do scoreing
 	if(!pKiller || Weapon == WEAPON_GAME)
 		return 0;

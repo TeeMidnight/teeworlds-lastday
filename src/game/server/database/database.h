@@ -2,7 +2,7 @@
  *
  * "players" stores one row per player. Only the identity columns (uuid,
  * username, password) are fixed; every other piece of player state
- * (inventory, sanity, and any future survival stat) is serialized into a
+ * (inventory, forgetting, and any future survival stat) is serialized into a
  * single JSON column ("data") and accessed through json paths. This keeps
  * the schema stable while the survival systems keep evolving.
  *

@@ -131,7 +131,9 @@ public:
 	struct CStatus
 	{
 		bool m_HideTip; // game menu
-		int m_Sanity;
+		// mercury chapter (forgetting): 0..100, 0 = clear mind, 100 = total
+		// amnesia. rises on death, sinks through recall items / quiet time
+		int m_Forgetting;
 		int m_Level;
 		// loadout (slot layout, persisted): which item res_id is placed on
 		// every loadout slot ("" = empty). the loadout is a player-level
@@ -145,7 +147,7 @@ public:
 	Uuid m_AccountUuid;
 	bool m_LoggedIn;
 
-	// persist the player status (sanity, inventory, loadout) to/from the
+	// persist the player status (forgetting, inventory, loadout) to/from the
 	// database; each field is accessed individually through its json
 	// path
 	void SaveStatus(class CDatabase *pDB);

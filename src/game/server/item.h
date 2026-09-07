@@ -19,12 +19,14 @@ public:
 	struct SUse
 	{
 		int m_Health; // restore health (clamped to max)
-		int m_Sanity; // restore sanity (clamped to 100)
+		// forgetting delta (mercury chapter): positive = forget more,
+		// negative = recall (clamped to 0..100)
+		int m_Forgetting;
 		bool m_HasUse; // whether a "use" object was declared
 
 		SUse() :
 			m_Health(0),
-			m_Sanity(0),
+			m_Forgetting(0),
 			m_HasUse(false)
 		{
 		}
@@ -166,9 +168,9 @@ public:
 	SUse GetUse(const char *pResId) const;
 
 	// consume up to Count items and apply their "use" effects to the player
-	// (health/sanity). stops early once nothing is left to restore (full
-	// health/sanity) or the player runs out of the item. returns how many
-	// items were actually consumed.
+	// (health / forgetting). stops early once nothing is left to restore
+	// (full health / forgetting at 0) or the player runs out of the item.
+	// returns how many items were actually consumed.
 	int UseItem(int ClientID, const char *pResId, int Count = 1);
 	// optional item_type of the item: whether the item carries the given type
 	bool HasItemType(const char *pResId, const char *pType) const;
@@ -177,6 +179,20 @@ public:
 	// calls pfnFunc for every type tag of the item (e.g. "weapon", "ore").
 	// pfnFunc is not called when the item is unknown or declares no types.
 	void ForEachItemType(const char *pResId, FItemTypeCallback pfnFunc, void *pUser) const;
+
+	// mercury chapter amnesia. whether knowledge is lost at a given
+	// forgetting level (0 = clear mind, 100 = total amnesia). both rules are
+	// deterministic (hash based) and gradual: more and more entries fade as
+	// the meter rises. any system can ask the same question the menus use.
+	// whether the player would have forgotten this item (name/description).
+	// from 75 forgetting upward items start to fade; at 100 nothing is
+	// remembered. the caller decides how to present a forgotten item.
+	bool IsItemForgotten(int Forgetting, const char *pResId) const;
+	// whether this crafting recipe is forgotten (not craftable anymore).
+	// recipes fade between 50 and 100 forgetting (50: all remembered,
+	// 100: none).
+	bool IsRecipeForgotten(int Forgetting, const char *pCraftId) const;
+
 	// total quantity the player owns that matches this ingredient (by id or by type)
 	int GetIngredientCount(int ClientID, const SIngredient &Need) const;
 

@@ -46,7 +46,7 @@ inline void JsonValueToString(char *pOut, int Size, const char *pValue)
 // store a value at the given json path of a player's data column. The value
 // is serialized to a JSON literal automatically, so callers just pass the
 // path and the value:
-//   SetJsonField(pDB, uuid, CJsonPath().Key("sanity"), 100);
+//   SetJsonField(pDB, uuid, CJsonPath().Key("forgetting"), 0);
 template<typename T>
 void SetJsonField(CDatabase *pDB, const Uuid &uuid, const CJsonPath &path, const T &value)
 {

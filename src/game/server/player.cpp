@@ -35,7 +35,7 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	mem_zero(&m_Latency, sizeof(m_Latency));
 
 	m_Status.m_HideTip = false;
-	m_Status.m_Sanity = 100;
+	m_Status.m_Forgetting = 0; // mercury chapter: start with a clear mind
 	m_Status.m_Level = 0;
 	m_Status.m_LoadoutSet = false;
 	for(int i = 0; i < NUM_WEAPONS; i++)
@@ -56,7 +56,9 @@ void CPlayer::Tick()
 	if(!IsDummy() && !Server()->ClientIngame(m_ClientID))
 		return;
 
-	Server()->SetClientScore(m_ClientID, m_Status.m_Sanity);
+	// the scoreboard shows the player's remaining clarity (100 - forgetting):
+	// a clear mind (low forgetting) ranks above a clouded one
+	Server()->SetClientScore(m_ClientID, 100 - m_Status.m_Forgetting);
 
 	// do latency stuff
 	{
@@ -77,6 +79,14 @@ void CPlayer::Tick()
 			m_Latency.m_AccumMin = 1000;
 			m_Latency.m_AccumMax = 0;
 		}
+	}
+
+	// mercury chapter: quiet, living time lets the player remember again
+	// (forgetting -1 every 20 seconds), so amnesia is never a dead end
+	if(m_pCharacter && m_pCharacter->IsAlive() && m_Status.m_Forgetting > 0 &&
+		(Server()->Tick() % (Server()->TickSpeed() * 20) == 0))
+	{
+		m_Status.m_Forgetting--;
 	}
 
 	if(m_pCharacter && !m_pCharacter->IsAlive())

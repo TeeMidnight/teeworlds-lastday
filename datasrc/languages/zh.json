@@ -335,6 +335,21 @@
 			"tr": "上一页"
 		},
 		{
+			"context": "Mercury",
+			"or": "You start to forget how to craft some things.",
+			"tr": "你开始忘记一些东西的制作方法。"
+		},
+		{
+			"context": "Mercury",
+			"or": "You can no longer tell what many of your belongings are.",
+			"tr": "你已经想不起许多东西是什么了。"
+		},
+		{
+			"context": "Mercury",
+			"or": "You forget who you are entirely.",
+			"tr": "你彻底忘记了自己是谁。"
+		},
+		{
 			"context": "Menu Craft",
 			"or": "   [tool] %s %s",
 			"tr": "   [工具] %s %s"
@@ -366,6 +381,11 @@
 		},
 		{
 			"context": "Menu Craft",
+			"or": "You can't remember any crafting recipes.",
+			"tr": "你想不起任何制作配方。"
+		},
+		{
+			"context": "Menu Craft",
 			"or": "Not enough inventory space.",
 			"tr": "背包空间不足。"
 		},
@@ -388,6 +408,11 @@
 			"context": "Menu Inventory",
 			"or": "Nothing to restore.",
 			"tr": "没有可恢复的数值。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "You can't remember what this is.",
+			"tr": "你想不起来这是什么。"
 		},
 		{
 			"context": "Menu Inventory",
@@ -473,6 +498,11 @@
 			"context": "Menu Main",
 			"or": "Level: %d",
 			"tr": "等级：%d"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Forgetting: %d",
+			"tr": "遗忘度：%d"
 		},
 		{
 			"context": "Menu Main",

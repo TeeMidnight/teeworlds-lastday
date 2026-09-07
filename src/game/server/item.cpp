@@ -134,13 +134,13 @@ void CItemSystem::LoadItem(const char *pResId, const char *pFilePath)
 	{
 		Item.m_Use.m_HasUse = true;
 		Item.m_Use.m_Health = 0;
-		Item.m_Use.m_Sanity = 0;
+		Item.m_Use.m_Forgetting = 0;
 		const json_value &Health = Use["health"];
 		if(Health.type == json_integer || Health.type == json_double)
 			Item.m_Use.m_Health = (int) (json_int_t) Health;
-		const json_value &Sanity = Use["sanity"];
-		if(Sanity.type == json_integer || Sanity.type == json_double)
-			Item.m_Use.m_Sanity = (int) (json_int_t) Sanity;
+		const json_value &Forgetting = Use["forgetting"];
+		if(Forgetting.type == json_integer || Forgetting.type == json_double)
+			Item.m_Use.m_Forgetting = (int) (json_int_t) Forgetting;
 	}
 
 	m_Items.set(str_quickhash(pResId), Item);
@@ -225,6 +225,27 @@ void CItemSystem::ForEachItemType(const char *pResId, FItemTypeCallback pfnFunc,
 		return;
 	for(int i = 0; i < pItem->m_NumTypes; i++)
 		pfnFunc(pItem->m_aTypes[i], pUser);
+}
+
+// mercury chapter amnesia rules. a deterministic hash decides which entries
+// fade first, so the same item/recipe is forgotten consistently for every
+// player and the loss stays gradual instead of an all-or-nothing cutoff.
+bool CItemSystem::IsItemForgotten(int Forgetting, const char *pResId) const
+{
+	// item names/descriptions fade between 75 and 100 forgetting:
+	// 75 = everything remembered, 100 = nothing is
+	if(Forgetting < 75 || !pResId || !pResId[0])
+		return false;
+	return (int) (str_quickhash(pResId) % 100) < (Forgetting - 75) * 4;
+}
+
+bool CItemSystem::IsRecipeForgotten(int Forgetting, const char *pCraftId) const
+{
+	// crafting recipes fade between 50 and 100 forgetting:
+	// 50 = every recipe remembered, 100 = none
+	if(Forgetting < 50 || !pCraftId || !pCraftId[0])
+		return false;
+	return (int) (str_quickhash(pCraftId) % 100) < (Forgetting - 50) * 2;
 }
 
 int CItemSystem::GetIngredientCount(int ClientID, const SIngredient &Need) const

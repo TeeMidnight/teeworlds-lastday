@@ -245,7 +245,11 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
 		pMenu->AddOptionFormat(Localize("Name: %s", "Menu Main"), "DISPLAY", "-", pMenu->Server()->ClientName(ClientID));
 		if(pPlayer)
+		{
 			pMenu->AddOptionFormat(Localize("Level: %d", "Menu Main"), "DISPLAY", "-", pPlayer->m_Status.m_Level);
+			// mercury chapter: the forgetting meter (0 = clear mind)
+			pMenu->AddOptionFormat(Localize("Forgetting: %d", "Menu Main"), "DISPLAY", "-", pPlayer->m_Status.m_Forgetting);
+		}
 	}
 	pMenu->AddHorizontalRule();
 	// options
@@ -258,6 +262,12 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 
 	return true;
 }
+
+// mercury chapter amnesia: whether an item/recipe is forgotten at a given
+// forgetting level is decided by CItemSystem (IsItemForgotten /
+// IsRecipeForgotten), so any system can ask the same question. here the menus
+// only render the result: a forgotten item shows "???" (count and type stay
+// visible), a forgotten recipe is simply not listed.
 
 bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
 {
@@ -286,8 +296,13 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 	{
 		if(!Inventory.IsEmpty(i))
 		{
-			const char *pName = pMenu->GameServer()->Item()->GetName(Inventory.m_aItems[i].m_aResId);
-			pMenu->AddOptionFormat("%d. %s: %d", Inventory.m_aItems[i].m_aResId, "-",
+			const char *pResId = Inventory.m_aItems[i].m_aResId;
+			// amnesia: with high forgetting the player no longer remembers
+			// what this item is (name hidden, count still shown)
+			const char *pName = pMenu->GameServer()->Item()->GetName(pResId);
+			if(pMenu->GameServer()->Item()->IsItemForgotten(pPlayer->m_Status.m_Forgetting, pResId))
+				pName = "???";
+			pMenu->AddOptionFormat("%d. %s: %d", pResId, "-",
 				i + 1, Localize(pName, "Item Name"), Inventory.m_aItems[i].m_Count);
 		}
 		else
@@ -372,7 +387,9 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	}
 
 	const int Count = pItem->GetItemCount(ClientID, pResId);
-	const char *pName = pItem->GetName(pResId);
+	// amnesia: a forgotten item is only shown as "???" (the res_id itself is
+	// never hidden, so the detail page still works)
+	const char *pName = pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, pResId) ? "???" : pItem->GetName(pResId);
 	const char *pLocalizedName = Localize(pName, "Item Name");
 
 	// "use" the item; the vote reason box can carry how many to use
@@ -433,13 +450,21 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	str_format(aHeader, sizeof(aHeader), "%s x%d", pLocalizedName, Count);
 	pMenu->AddOption(aHeader, "DISPLAY", "=");
 
-	// description (localized), wrapped over several rows
-	const char *pDesc = pItem->GetDesc(pResId);
-	if(pDesc && pDesc[0])
+	// description (localized), wrapped over several rows. a forgotten item
+	// (high forgetting) shows no description: the player can't recall it
+	if(pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, pResId))
 	{
-		char aCtx[128];
-		str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pName);
-		pMenu->AddWrappedLinesOption(Localize(pDesc, aCtx));
+		pMenu->AddWrappedLinesOption(Localize("You can't remember what this is.", "Menu Inventory"));
+	}
+	else
+	{
+		const char *pDesc = pItem->GetDesc(pResId);
+		if(pDesc && pDesc[0])
+		{
+			char aCtx[128];
+			str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pName);
+			pMenu->AddWrappedLinesOption(Localize(pDesc, aCtx));
+		}
 	}
 
 	// item types (e.g. "weapon"), localized, listed below the description
@@ -477,6 +502,7 @@ struct CCraftMenuData
 	CItemSystem *m_pItem;
 	CGameMenu *m_pMenu;
 	int m_ClientID;
+	int m_Forgetting;
 	int m_Index;
 };
 
@@ -486,6 +512,10 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 	CCraftMenuData *pData = static_cast<CCraftMenuData *>(pUser);
 	CGameMenu *pMenu = pData->m_pMenu;
 	const int ClientID = pData->m_ClientID;
+
+	// amnesia: a forgotten recipe is simply not listed anymore
+	if(pData->m_pItem->IsRecipeForgotten(pData->m_Forgetting, Craft.m_aCraftId))
+		return;
 
 	const char *pResultName = pData->m_pItem->GetName(Craft.m_aResultItemId);
 	pData->m_Index++;
@@ -565,8 +595,12 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 	pMenu->AddOption(Localize("Click a recipe to craft it. Tools are not consumed.", "Menu Craft"), "DISPLAY", "-");
 	pMenu->AddHorizontalRule();
 
-	CCraftMenuData Data = {pItem, pMenu, ClientID, 0};
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	const int Forgetting = pPlayer ? pPlayer->m_Status.m_Forgetting : 0;
+	CCraftMenuData Data = {pItem, pMenu, ClientID, Forgetting, 0};
 	pItem->ForEachCraft(CraftListCallback, &Data);
+	if(Data.m_Index == 0)
+		pMenu->AddOption(Localize("You can't remember any crafting recipes.", "Menu Craft"), "DISPLAY", "-");
 
 	return true;
 }
