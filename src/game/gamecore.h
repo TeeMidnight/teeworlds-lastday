@@ -180,7 +180,7 @@ public:
 
 	void Init(CWorldCore *pWorld, CCollision *pCollision);
 	void Reset();
-	void Tick(bool UseInput);
+	void Tick(bool UseInput, bool LastDay);
 	void Move();
 
 	void AddDragVelocity();

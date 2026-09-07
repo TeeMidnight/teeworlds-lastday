@@ -2,6 +2,7 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <engine/shared/config.h>
 
+#include <game/collision.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/player.h>
@@ -48,6 +49,8 @@ CCharacter::CCharacter(CGameWorld *pWorld) : CHitableEntity(pWorld, CGameWorld::
 {
 	m_Health = 0;
 	m_Armor = 0;
+	m_Oxygen = 10;
+	m_OxygenTick = 0;
 	m_TriggeredEvents = 0;
 }
 
@@ -63,6 +66,10 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_LastNoAmmoSound = -1;
 	m_ActiveWeapon = WEAPON_HAMMER; // slot 0
 	m_QueuedWeapon = -1;
+
+	// oxygen starts full on every life
+	m_Oxygen = 10;
+	m_OxygenTick = 0;
 
 	// the loadout is (re)filled by the game controller from the weapons the
 	// player owns as items; clear any stale state from a previous life
@@ -426,7 +433,7 @@ void CCharacter::ResetInput()
 void CCharacter::Tick()
 {
 	m_Core.m_Input = m_Input;
-	m_Core.Tick(true);
+	m_Core.Tick(true, true);
 
 	// handle leaving gamelayer
 	if(GameLayerClipped(m_Pos))
@@ -434,8 +441,43 @@ void CCharacter::Tick()
 		Die(m_pPlayer->GetCID(), WEAPON_WORLD);
 	}
 
+	// oxygen: while underwater the player breathes from a 10-tank supply,
+	// one tank every 2 seconds. when the air runs out the player drowns
+	// (one health per second)
+	if(InWater())
+	{
+		if(m_OxygenTick == 0)
+			m_OxygenTick = Server()->Tick() + Server()->TickSpeed() * 2;
+		else if(Server()->Tick() >= m_OxygenTick)
+		{
+			if(m_Oxygen > 0)
+			{
+				m_Oxygen--;
+				m_OxygenTick += Server()->TickSpeed() * 2;
+			}
+			else
+			{
+				m_OxygenTick += Server()->TickSpeed();
+				TakeDamage(vec2(0.f, 0.f), m_Pos, 1, m_pPlayer->GetCID(), WEAPON_WORLD);
+			}
+		}
+	}
+	else
+	{
+		// fresh air refills the lungs: the next dive starts with a full tank
+		m_Oxygen = 10;
+		m_OxygenTick = 0;
+	}
+
 	// handle Weapons
 	HandleWeapons();
+}
+
+bool CCharacter::InWater()
+{
+	// same notion as the physics core: the character is "in water" when its
+	// upper half touches a water tile (wading with wet feet does not count)
+	return GameWorld()->Collision()->TestBox(m_Pos - vec2(0.0f, ms_PhysSize / 2.0f), vec2(ms_PhysSize, ms_PhysSize), CCollision::COLFLAG_WATER);
 }
 
 void CCharacter::TickDefered()
@@ -447,7 +489,7 @@ void CCharacter::TickDefered()
 		if(Server()->GetClientVersion(GetCID()) >= MIN_CORRECTTUNING_CLIENTVERSION)
 			TempWorld.m_Tuning = *GameServer()->Tuning();
 		m_ReckoningCore.Init(&TempWorld, GameWorld()->Collision());
-		m_ReckoningCore.Tick(false);
+		m_ReckoningCore.Tick(false, false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
 	}
@@ -799,7 +841,9 @@ void CCharacter::Snap(int SnappingClient)
 		(!Config()->m_SvStrictSpectateMode && m_pPlayer->GetCID() == GameServer()->m_apPlayers[SnappingClient]->GetSpectatorID()))
 	{
 		pCharacter->m_Health = m_Health;
-		pCharacter->m_Armor = m_Armor;
+		// underwater the armor bar shows the remaining oxygen (the real
+		// armor still absorbs damage but is hidden while diving)
+		pCharacter->m_Armor = InWater() ? m_Oxygen : m_Armor;
 		if(ActiveSnapWeaponID != 0)
 		{
 			IWeaponInterface *pWeapon = WeaponManager()->GetWeapon(ActiveSnapWeaponID);

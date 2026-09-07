@@ -136,6 +136,12 @@ private:
 
 	int m_Health;
 	int m_Armor;
+	// oxygen while underwater (0..10): the armor bar shows it instead of the
+	// real armor; empty oxygen makes the player drown
+	int m_Oxygen;
+	// next tick the oxygen is consumed (or drowning damage dealt); 0 = not
+	// counting down (on dry land)
+	int m_OxygenTick;
 
 	int m_TriggeredEvents;
 
@@ -155,6 +161,10 @@ private:
 	int m_ReckoningTick; // tick that we are performing dead reckoning From
 	CCharacterCore m_SendCore; // core that we should send
 	CCharacterCore m_ReckoningCore; // the dead reckoning core
+
+	// whether the character's physics box currently touches a water tile
+	// (drives the oxygen system)
+	bool InWater();
 
 	friend void CPlayer::SaveStatus(class CDatabase *pDB);
 	friend void CPlayer::LoadStatus(class CDatabase *pDB);

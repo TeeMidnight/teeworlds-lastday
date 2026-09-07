@@ -85,7 +85,7 @@ void CCharacterCore::Reset()
 	m_Death = false;
 }
 
-void CCharacterCore::Tick(bool UseInput)
+void CCharacterCore::Tick(bool UseInput, bool LastDay)
 {
 	m_TriggeredEvents = 0;
 
@@ -93,14 +93,21 @@ void CCharacterCore::Tick(bool UseInput)
 	const bool Grounded =
 		m_pCollision->CheckPoint(m_Pos.x + PHYS_SIZE / 2, m_Pos.y + PHYS_SIZE / 2 + 5) || m_pCollision->CheckPoint(m_Pos.x - PHYS_SIZE / 2, m_Pos.y + PHYS_SIZE / 2 + 5);
 
+	// water state: any corner of the physics box touches a water tile
+	const bool InWater =
+		m_pCollision->TestBox(m_Pos, vec2(PHYS_SIZE, PHYS_SIZE / 2), CCollision::COLFLAG_WATER) && LastDay;
+
 	vec2 TargetDirection = normalize(vec2(m_Input.m_TargetX, m_Input.m_TargetY));
 
-	m_Vel.y += m_pWorld->m_Tuning.m_Gravity;
+	const float WaterFrictionX = 0.9f;
+	const float WaterFrictionY = 0.96f;
+	// water is a thicker medium: gravity pulls only at half strength
+	m_Vel.y += m_pWorld->m_Tuning.m_Gravity * (InWater ? WaterFrictionY : 1.0f);
 
-	float MaxSpeed = Grounded ? m_pWorld->m_Tuning.m_GroundControlSpeed : m_pWorld->m_Tuning.m_AirControlSpeed;
-	float Accel = Grounded ? m_pWorld->m_Tuning.m_GroundControlAccel : m_pWorld->m_Tuning.m_AirControlAccel;
-	float Friction = Grounded ? m_pWorld->m_Tuning.m_GroundFriction : m_pWorld->m_Tuning.m_AirFriction;
-
+	float MaxSpeed = (Grounded ? m_pWorld->m_Tuning.m_GroundControlSpeed : m_pWorld->m_Tuning.m_AirControlSpeed) * (InWater ? WaterFrictionX : 1.0f);
+	float Accel = (Grounded ? m_pWorld->m_Tuning.m_GroundControlAccel : m_pWorld->m_Tuning.m_AirControlAccel) * (InWater ? WaterFrictionX : 1.0f);
+	float Friction = (Grounded ? m_pWorld->m_Tuning.m_GroundFriction : m_pWorld->m_Tuning.m_AirFriction) * (InWater ? WaterFrictionX : 1.0f);
+	
 	// handle input
 	if(UseInput)
 	{
@@ -163,7 +170,21 @@ void CCharacterCore::Tick(bool UseInput)
 	// 2 bit = to keep track if a air-jump has been made
 	if(Grounded)
 		m_Jumped &= ~2;
-
+	else if(InWater)
+		m_Jumped |= 3;
+	// swimming: while in water (and not standing on solid ground) holding the
+	// jump button adds upward acceleration (~3x gravity). the rising speed is
+	// saturated; faster upward velocity (e.g. from a jump impulse) is
+	// preserved, because SaturatedAdd only clamps when the modifier would push
+	// past the bound. releasing the jump lets the player sink again
+	if(InWater)
+	{
+	 	if(UseInput && m_Input.m_Jump)
+			m_Vel.y = SaturatedAdd(-m_pWorld->m_Tuning.m_Gravity * 7.0f, m_pWorld->m_Tuning.m_Gravity * 5.0f, m_Vel.y, -m_pWorld->m_Tuning.m_Gravity * 1.5f);
+		else
+			m_Vel.y *= WaterFrictionY;
+		m_Vel.x *= WaterFrictionX;
+	}
 	// do hook
 	if(m_HookState == HOOK_IDLE)
 	{

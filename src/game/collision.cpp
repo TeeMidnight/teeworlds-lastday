@@ -46,6 +46,11 @@ void CCollision::Init(class CLayers *pLayers)
 			case TILE_UNHOOKABLE:
 				m_lTiles[i] = COLFLAG_SOLID | COLFLAG_UNHOOKABLE;
 				break;
+			case TILE_WATER:
+				// water is not solid: characters can swim through it, but the
+				// flag lets the game react (swimming, laser optics)
+				m_lTiles[i] = COLFLAG_WATER;
+				break;
 			default:
 				m_lTiles[i] = 0;
 		}

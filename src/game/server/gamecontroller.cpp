@@ -232,8 +232,8 @@ enum
 	TILE_FLOOR_ENTRANCE_1 = 35,
 	TILE_FLOOR_ENTRANCE_2 = 36,
 
-	COLFLAG_ENTRANCE_1_FLAG = 1 << 4,
-	COLFLAG_ENTRANCE_2_FLAG = 1 << 5,
+	COLFLAG_ENTRANCE_1_FLAG = 1 << 16,
+	COLFLAG_ENTRANCE_2_FLAG = 1 << 17,
 };
 
 bool CGameController::OnExtraTile(CGameWorld *pWorld, int Index, vec2 Pos)

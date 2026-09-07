@@ -22,6 +22,10 @@ public:
 		COLFLAG_SOLID = 1,
 		COLFLAG_DEATH = 2,
 		COLFLAG_UNHOOKABLE = 4,
+		// water (TILE_WATER): lets entities pass but is detectable, so
+		// swimming and laser reflection/refraction can react to it. bit 4 is
+		// free (the entrance flags moved to bits 16/17)
+		COLFLAG_WATER = 1 << 4,
 	};
 
 	CCollision();
