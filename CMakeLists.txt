@@ -562,6 +562,7 @@ set_src(BASE GLOB_RECURSE src/base
   hash_libtomcrypt.cpp
   hash_openssl.cpp
   math.h
+  system.h
   system/aio.cpp
   system/aio.h
   system/base.h
@@ -588,7 +589,6 @@ set_src(BASE GLOB_RECURSE src/base
   system/thread.h
   system/time.cpp
   system/time.h
-  system.h
   tl/algorithm.h
   tl/allocator.h
   tl/array.h
@@ -622,7 +622,7 @@ set_src(ENGINE_MAP GLOB src/engine/map
   mapcreator.h
   mapitems.h
 )
-set_src(ENGINE_SHARED GLOB src/engine/shared
+set_src(ENGINE_SHARED GLOB_RECURSE src/engine/shared
   compression.cpp
   compression.h
   config.cpp
@@ -650,6 +650,10 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   jsonwriter.cpp
   jsonwriter.h
   kernel.cpp
+  legacy/network7.cpp
+  legacy/network7.h
+  legacy/network_translator.cpp
+  legacy/network_translator.h
   linereader.cpp
   linereader.h
   map.cpp
@@ -682,10 +686,6 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   uuid_manager.h
   zstd_dict.cpp
   zstd_dict.h
-  legacy/network7.cpp
-  legacy/network7.h
-  legacy/network_translator.cpp
-  legacy/network_translator.h
 )
 set(ENGINE_GENERATED_SHARED src/generated/nethash.cpp src/generated/protocol.cpp src/generated/protocol.h src/generated/protocol7.cpp src/generated/protocol7.h)
 set_src(GAME_SHARED GLOB src/game
