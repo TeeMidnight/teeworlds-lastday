@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef ENGINE_SHARED_DEMO_H
 #define ENGINE_SHARED_DEMO_H
 
@@ -18,7 +20,7 @@ class CDemoRecorder : public IDemoRecorder
 	int m_LastTickMarker;
 	int m_LastKeyFrame;
 	int m_FirstTick;
-	unsigned char m_aLastSnapshotData[CSnapshot::MAX_SIZE];
+	array<unsigned char> m_aLastSnapshotData;
 	class CSnapshotDelta *m_pSnapshotDelta;
 	int m_NumTimelineMarkers;
 	int m_aTimelineMarkers[MAX_TIMELINE_MARKERS];
@@ -102,7 +104,7 @@ private:
 
 	CPlaybackInfo m_Info;
 	int m_DemoType;
-	unsigned char m_aLastSnapshotData[CSnapshot::MAX_SIZE];
+	array<unsigned char> m_aLastSnapshotData;
 	int m_LastSnapshotDataSize;
 	class CSnapshotDelta *m_pSnapshotDelta;
 

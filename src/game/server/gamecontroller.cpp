@@ -1,6 +1,9 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
+#include <base/uuid.h>
 #include <engine/shared/config.h>
 #include <cmath>
 
@@ -316,24 +319,12 @@ void CGameController::Snap(int SnappingClient)
 	pGameData->m_GameStateFlags = 0;
 	pGameData->m_GameStateEndTick = 0; // no timer/infinite = 0, on end = GameEndTick, otherwise = GameStateEndTick
 
-	CNetObj_GameDataPrediction *pGameDataPrediction = static_cast<CNetObj_GameDataPrediction *>(Server()->SnapNewItem(NETOBJTYPE_GAMEDATAPREDICTION, 0, sizeof(CNetObj_GameDataPrediction)));
-	if(!pGameDataPrediction)
-		return;
+	// 0.8: prediction flags moved from the removed CNetObj_GameDataPrediction
+	// object into CNetObj_GameData::m_PredictionFlags.
+	pGameData->m_PredictionFlags = GAMEPREDICTIONFLAG_EVENT | GAMEPREDICTIONFLAG_INPUT;
 
-	pGameDataPrediction->m_PredictionFlags = GAMEPREDICTIONFLAG_EVENT | GAMEPREDICTIONFLAG_INPUT;
-	// demo recording
-	if(SnappingClient == -1)
-	{
-		CNetObj_De_GameInfo *pGameInfo = static_cast<CNetObj_De_GameInfo *>(Server()->SnapNewItem(NETOBJTYPE_DE_GAMEINFO, 0, sizeof(CNetObj_De_GameInfo)));
-		if(!pGameInfo)
-			return;
-
-		pGameInfo->m_GameFlags = 0;
-		pGameInfo->m_ScoreLimit = 0;
-		pGameInfo->m_TimeLimit = 0;
-		pGameInfo->m_MatchNum = 0;
-		pGameInfo->m_MatchCurrent = 1;
-	}
+	// 0.8: the De_GameInfo demo object is gone; game info is delivered by the
+	// Sv_GameInfo message via SendGameInfo() (see OnPlayerConnect / CheckGameInfo).
 }
 
 void CGameController::Tick()
@@ -636,7 +627,8 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	}
 
 	mem_zero(&Row, sizeof(Row));
-	Row.m_Uuid = time_uuid();
+	// 0.8: time_uuid() was replaced by random_uuid() from <base/uuid.h>
+	Row.m_Uuid = random_uuid();
 	str_copy(Row.m_aUsername, pUsername, sizeof(Row.m_aUsername));
 	HashPassword(Row.m_aPasswordHash, sizeof(Row.m_aPasswordHash), pPassword);
 

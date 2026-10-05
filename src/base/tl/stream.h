@@ -1,7 +1,12 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef BASE_TL_STREAM_H
 #define BASE_TL_STREAM_H
 
-#include <base/system.h>
+#include <base/system/mem.h>
+#include <base/system/fs.h>
+#include <base/system/io.h>
 #include "array.h"
 
 class stream
@@ -31,12 +36,12 @@ public:
 		io_close(file);
 	}
 
-	virtual unsigned write(const unsigned char *buffer, unsigned size)
+	virtual unsigned write(const unsigned char *buffer, unsigned size) override
 	{
 		return io_write(file, buffer, size);
 	}
 
-	virtual unsigned write_newline()
+	virtual unsigned write_newline() override
 	{
 		return io_write_newline(file);
 	}
@@ -54,7 +59,7 @@ public:
 		end = start + size;
 	}
 
-	virtual unsigned write(const unsigned char *buffer, unsigned size)
+	virtual unsigned write(const unsigned char *buffer, unsigned size) override
 	{
 		if(start + size > end)
 			return 0;
@@ -62,7 +67,7 @@ public:
 		return size;
 	}
 
-	virtual unsigned write_newline()
+	virtual unsigned write_newline() override
 	{
 		if(start >= end)
 			return 0;
@@ -82,18 +87,19 @@ public:
 	memory_stream(array<T> *buffer)
 	{
 		mem_buffer = buffer;
-		buffer->clear();
 	}
 
-	virtual unsigned write(const unsigned char *buffer, unsigned size)
+	virtual unsigned write(const unsigned char *buffer, unsigned size) override
 	{
-		unsigned start = mem_buffer->size();
-		mem_buffer->set_size(start + size);
+		const int start = mem_buffer->size();
+		// append() grows geometrically; set_size() reallocates and copies the
+		// whole buffer on every write, making chunked writes O(n^2)
+		mem_buffer->append((int) size);
 		inplace_memory_stream stream((unsigned char *) mem_buffer->base_ptr() + start, size);
 		return stream.write(buffer, size);
 	}
 
-	virtual unsigned write_newline()
+	virtual unsigned write_newline() override
 	{
 		return write((const unsigned char *) ("\n"), 1);
 	}

@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
 
 #include <engine/map.h>
@@ -225,15 +227,12 @@ void CGameContext::SendSettings(int ClientID)
 
 void CGameContext::SendSkinChange(int ClientID, int TargetID)
 {
-	CNetMsg_Sv_SkinChange Msg;
-	Msg.m_ClientID = ClientID;
-	for(int p = 0; p < NUM_SKINPARTS; p++)
-	{
-		Msg.m_apSkinPartNames[p] = m_apPlayers[ClientID]->m_TeeInfos.m_aaSkinPartNames[p];
-		Msg.m_aUseCustomColors[p] = m_apPlayers[ClientID]->m_TeeInfos.m_aUseCustomColors[p];
-		Msg.m_aSkinPartColors[p] = m_apPlayers[ClientID]->m_TeeInfos.m_aSkinPartColors[p];
-	}
-	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_FLUSH | MSGFLAG_NORECORD, TargetID);
+	// 0.8: there is no Sv_SkinChange message anymore. Skins are part of the
+	// TeeInfo snapshot object, so a skin change is carried by the next snapshot
+	// of that client's TeeInfo. Nothing has to be sent explicitly here; the
+	// (ClientID, TargetID) signature is kept so callers stay unchanged.
+	(void)ClientID;
+	(void)TargetID;
 }
 
 void CGameContext::SendGameMsg(int GameMsgID, int ClientID)
@@ -442,11 +441,10 @@ bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 D
 
 void CGameContext::SendTuningParams(int ClientID)
 {
-	CMsgPacker Msg(NETMSGTYPE_SV_TUNEPARAMS);
-	int *pParams = (int *) &m_Tuning;
-	for(unsigned i = 0; i < sizeof(m_Tuning) / sizeof(int); i++)
-		Msg.AddInt(pParams[i]);
-	Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
+	// 0.8: tuning is no longer a message (Sv_TuneParams). It is a singleton
+	// snapshot object (NETOBJTYPE_TUNING, item id 0) emitted in OnSnap(), so
+	// there is nothing to send here. Callers are kept for timing compatibility.
+	(void)ClientID;
 }
 
 void CGameContext::SendReadyToEnter(CPlayer *pPlayer)
@@ -630,65 +628,12 @@ void CGameContext::OnClientEnter(int ClientID)
 
 	m_VoteUpdate = true;
 
-	// update client infos (others before local)
-	CNetMsg_Sv_ClientInfo NewClientInfoMsg;
-	NewClientInfoMsg.m_ClientID = ClientID;
-	NewClientInfoMsg.m_Local = 0;
-	NewClientInfoMsg.m_Team = m_apPlayers[ClientID]->GetTeam();
-	NewClientInfoMsg.m_pName = Server()->ClientName(ClientID);
-	NewClientInfoMsg.m_pClan = Server()->ClientClan(ClientID);
-	NewClientInfoMsg.m_Country = Server()->ClientCountry(ClientID);
-	NewClientInfoMsg.m_Silent = true;
-
-	if(Config()->m_SvSilentSpectatorMode && m_apPlayers[ClientID]->GetTeam() == TEAM_SPECTATORS)
-		NewClientInfoMsg.m_Silent = true;
-
-	for(int p = 0; p < NUM_SKINPARTS; p++)
-	{
-		NewClientInfoMsg.m_apSkinPartNames[p] = m_apPlayers[ClientID]->m_TeeInfos.m_aaSkinPartNames[p];
-		NewClientInfoMsg.m_aUseCustomColors[p] = m_apPlayers[ClientID]->m_TeeInfos.m_aUseCustomColors[p];
-		NewClientInfoMsg.m_aSkinPartColors[p] = m_apPlayers[ClientID]->m_TeeInfos.m_aSkinPartColors[p];
-	}
-
-	for(int i = 0; i < MAX_CLIENTS; ++i)
-	{
-		if(i == ClientID || !m_apPlayers[i] || (!Server()->ClientIngame(i) && !m_apPlayers[i]->IsDummy()))
-			continue;
-
-		// new info for others
-		if(Server()->ClientIngame(i))
-			Server()->SendPackMsg(&NewClientInfoMsg, MSGFLAG_VITAL | MSGFLAG_NORECORD, i);
-
-		// existing infos for new player
-		CNetMsg_Sv_ClientInfo ClientInfoMsg;
-		ClientInfoMsg.m_ClientID = i;
-		ClientInfoMsg.m_Local = 0;
-		ClientInfoMsg.m_Team = m_apPlayers[i]->GetTeam();
-		ClientInfoMsg.m_pName = Server()->ClientName(i);
-		ClientInfoMsg.m_pClan = Server()->ClientClan(i);
-		ClientInfoMsg.m_Country = Server()->ClientCountry(i);
-		ClientInfoMsg.m_Silent = true;
-		for(int p = 0; p < NUM_SKINPARTS; p++)
-		{
-			ClientInfoMsg.m_apSkinPartNames[p] = m_apPlayers[i]->m_TeeInfos.m_aaSkinPartNames[p];
-			ClientInfoMsg.m_aUseCustomColors[p] = m_apPlayers[i]->m_TeeInfos.m_aUseCustomColors[p];
-			ClientInfoMsg.m_aSkinPartColors[p] = m_apPlayers[i]->m_TeeInfos.m_aSkinPartColors[p];
-		}
-		Server()->SendPackMsg(&ClientInfoMsg, MSGFLAG_VITAL | MSGFLAG_NORECORD, ClientID);
-	}
-
-	// local info
-	NewClientInfoMsg.m_Local = 1;
-	Server()->SendPackMsg(&NewClientInfoMsg, MSGFLAG_VITAL | MSGFLAG_NORECORD, ClientID);
-
-	if(Server()->DemoRecorder_IsRecording())
-	{
-		CNetMsg_De_ClientEnter Msg;
-		Msg.m_pName = NewClientInfoMsg.m_pName;
-		Msg.m_ClientID = ClientID;
-		Msg.m_Team = NewClientInfoMsg.m_Team;
-		Server()->SendPackMsg(&Msg, MSGFLAG_NOSEND, -1);
-	}
+	// 0.8: identity (name, clan, country, skin, team, score) now travels in the
+	// per-client TeeInfo snapshot object, so joining is just announced with the
+	// Sv_ClientEnter message carrying the client id.
+	CNetMsg_Sv_ClientEnter Msg;
+	Msg.m_ClientID = ClientID;
+	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
 
 	// a player that is not logged in may only spectate; they must log in (or
 	// register) before they are allowed to join the game
@@ -766,25 +711,13 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 	m_pController->OnPlayerDisconnect(m_apPlayers[ClientID]);
 
 	// update clients on drop
+	// 0.8: the De_ClientLeave demo message is gone; Sv_ClientDrop is recorded
+	// into demos by the engine like any other vital message.
 	if(Server()->ClientIngame(ClientID) || IsClientBot(ClientID))
 	{
-		if(Server()->DemoRecorder_IsRecording())
-		{
-			CNetMsg_De_ClientLeave Msg;
-			Msg.m_ClientID = ClientID;
-			Msg.m_pName = Server()->ClientName(ClientID);
-			Msg.m_pReason = pReason;
-			Server()->SendPackMsg(&Msg, MSGFLAG_NOSEND, -1);
-		}
-
 		CNetMsg_Sv_ClientDrop Msg;
 		Msg.m_ClientID = ClientID;
 		Msg.m_pReason = pReason;
-		Msg.m_Silent = true;
-		/*
-		if(Config()->m_SvSilentSpectatorMode && m_apPlayers[ClientID]->GetTeam() == TEAM_SPECTATORS)
-			Msg.m_Silent = true;
-		*/
 		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_NORECORD, -1);
 	}
 
@@ -913,7 +846,9 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				pPlayer->m_LastVoteTryTick = Now;
 			}
 
-			m_VoteType = VOTE_UNKNOWN;
+			// 0.8: VOTE_UNKNOWN was removed from the enum; the reference uses
+			// -1 as the "no vote decided yet" sentinel.
+			m_VoteType = -1;
 			char aDesc[VOTE_DESC_LENGTH] = {0};
 			char aCmd[VOTE_CMD_LENGTH] = {0};
 			const char *pReason = pMsg->m_Reason[0] ? pMsg->m_Reason : "No reason given";
@@ -981,7 +916,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				m_VoteClientID = SpectateID;
 			}
 
-			if(m_VoteType != VOTE_UNKNOWN)
+			if(m_VoteType != -1)
 			{
 				m_VoteCreator = ClientID;
 				StartVote(aDesc, aCmd, pReason);
@@ -1091,26 +1026,10 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				pPlayer->m_TeeInfos.m_aSkinPartColors[p] = pMsg->m_aSkinPartColors[p];
 			}
 
-			/*
-			// update all clients
-			for(int i = 0; i < MAX_CLIENTS; ++i)
-			{
-				if(!m_apPlayers[i] || (!Server()->ClientIngame(i) && !m_apPlayers[i]->IsDummy()) || Server()->GetClientVersion(i) < MIN_SKINCHANGE_CLIENTVERSION)
-					continue;
-
-				SendSkinChange(pPlayer->GetCID(), i);
-			}
-			*/
-
 			m_pController->OnPlayerInfoChange(pPlayer);
-			// update all clients
-			for(int i = 0; i < MAX_CLIENTS; ++i)
-			{
-				if(!m_apPlayers[i] || (!Server()->ClientIngame(i) && !m_apPlayers[i]->IsDummy()) || Server()->GetClientVersion(i) < MIN_SKINCHANGE_CLIENTVERSION)
-					continue;
-
-				SendSkinChange(pPlayer->GetCID(), i);
-			}
+			// 0.8: skins live in the TeeInfo snapshot object, so the next
+			// snapshot already carries the update to every client. No explicit
+			// re-send is needed (the old Sv_SkinChange loop is gone).
 		}
 		else if(MsgID == NETMSGTYPE_CL_COMMAND)
 		{
@@ -1656,16 +1575,12 @@ void CGameContext::OnShutdown()
 
 void CGameContext::OnSnap(int ClientID)
 {
-	// add tuning to demo
-	CTuningParams StandardTuning;
-	if(ClientID == -1 && Server()->DemoRecorder_IsRecording() && mem_comp(&StandardTuning, &m_Tuning, sizeof(CTuningParams)) != 0)
-	{
-		CNetObj_De_TuneParams *pTuneParams = static_cast<CNetObj_De_TuneParams *>(Server()->SnapNewItem(NETOBJTYPE_DE_TUNEPARAMS, 0, sizeof(CNetObj_De_TuneParams)));
-		if(!pTuneParams)
-			return;
-
-		mem_copy(pTuneParams->m_aTuneParams, &m_Tuning, sizeof(pTuneParams->m_aTuneParams));
-	}
+	// 0.8: tuning is a singleton snapshot object (NETOBJTYPE_TUNING, item id 0)
+	// instead of the Sv_TuneParams message / the De_TuneParams demo object. The
+	// delta makes it free in the common case and demos record it for free.
+	CNetObj_Tuning *pTuning = static_cast<CNetObj_Tuning *>(Server()->SnapNewItem(NETOBJTYPE_TUNING, 0, sizeof(CNetObj_Tuning)));
+	if(pTuning)
+		mem_copy(pTuning->m_aTuneParams, &m_Tuning, sizeof(pTuning->m_aTuneParams));
 
 	m_pController->Snap(ClientID);
 	if(m_apPlayers[ClientID] && !m_apPlayers[ClientID]->m_MapLoading)

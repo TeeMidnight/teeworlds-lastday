@@ -1,9 +1,11 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef ENGINE_SHARED_PROTOCOL_H
 #define ENGINE_SHARED_PROTOCOL_H
 
-#include <base/system.h>
+#include <base/system/string.h>
 
 /*
 	Connection diagram - How the initialization works.
@@ -86,7 +88,11 @@ enum
 	SERVERINFO_VERSION_LEGACY = -1,
 	SERVERINFO_VERSION_CURRENT, // add extend player info
 
-	MAX_CLIENTS = 64,
+	MAX_CLIENTS = 128,
+	// Tee/TeeInfo snapshot item ID space. [0, MAX_CLIENTS) are real clients
+	// (TeeInfoID == ClientID), [MAX_CLIENTS, MAX_TEES) are reserved for bots,
+	// which are owned by the game/mod layer. 0xffff stays an invalid sentinel.
+	MAX_TEES = 65535,
 	VANILLA_MAX_PLAYERS = 16,
 
 	MAX_INPUT_SIZE = 128,

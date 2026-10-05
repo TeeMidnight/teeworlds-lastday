@@ -1,3 +1,9 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
+#include <base/system/misc.h>
+#include <base/system/string.h>
+
 #include <engine/shared/packer.h>
 
 #include "protocol_ex.h"

@@ -1,3 +1,6 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* PostgreSQL (libpq) backend for the database. */
 #include <game/server/database/database_postgres.h>
 

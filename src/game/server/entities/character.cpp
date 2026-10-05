@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <engine/shared/config.h>
 
 #include <game/collision.h>
@@ -594,9 +596,9 @@ void CCharacter::TickPaused()
 
 bool CCharacter::IncreaseHealth(int Amount)
 {
-	if(m_Health >= 10)
+	if(m_Health >= MAX_HEALTH)
 		return false;
-	m_Health = clamp(m_Health + Amount, 0, 10);
+	m_Health = clamp(m_Health + Amount, 0, MAX_HEALTH);
 	return true;
 }
 
@@ -827,6 +829,12 @@ void CCharacter::Snap(int SnappingClient)
 	pCharacter->m_AmmoCount = 0;
 	pCharacter->m_Health = 0;
 	pCharacter->m_Armor = 0;
+	// 0.8: the maximum values are public and always sent, so that the client can
+	// scale the health/armor bars without knowing the server's tuning. They must
+	// be valid for every character; lastday caps health and armor at 10 (see
+	// IncreaseHealth/IncreaseArmor), so that is the value the HUD has to use.
+	pCharacter->m_MaxHealth = MAX_HEALTH;
+	pCharacter->m_MaxArmor = MAX_ARMOR;
 	pCharacter->m_TriggeredEvents = m_TriggeredEvents;
 
 	// snap the weapon the player may actually use: an empty slot or an unowned

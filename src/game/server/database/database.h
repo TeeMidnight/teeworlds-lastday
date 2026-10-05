@@ -1,3 +1,6 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* LastDay database abstraction.
  *
  * "players" stores one row per player. Only the identity columns (uuid,

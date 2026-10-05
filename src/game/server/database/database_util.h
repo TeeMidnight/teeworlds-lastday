@@ -1,3 +1,6 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef GAME_SERVER_DATABASE_DATABASE_UTIL_H
 #define GAME_SERVER_DATABASE_DATABASE_UTIL_H
 

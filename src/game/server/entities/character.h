@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef GAME_SERVER_ENTITIES_CHARACTER_H
 #define GAME_SERVER_ENTITIES_CHARACTER_H
 
@@ -20,6 +22,12 @@ class CCharacter : public CHitableEntity
 public:
 	// character's size
 	static const int ms_PhysSize = 28;
+
+	// lastday caps health and armor at these values; they are also what the 0.8
+	// CNetObj_Character::m_MaxHealth/m_MaxArmor fields report, so the client can
+	// scale its health and armor bars correctly.
+	static const int MAX_HEALTH = 10;
+	static const int MAX_ARMOR = 10;
 
 	enum
 	{

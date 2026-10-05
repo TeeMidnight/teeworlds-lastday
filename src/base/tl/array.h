@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef BASE_TL_ARRAY_H
 #define BASE_TL_ARRAY_H
 
@@ -276,6 +278,28 @@ public:
 	}
 
 	/*
+		Function: append
+			Grows the array by the given number of (uninitialized) elements
+			using the same geometric growth as add(). Unlike repeated
+			set_size() calls this is amortized O(1) per element.
+
+		Arguments:
+			count - Number of elements to append.
+	*/
+	void append(int count)
+	{
+		const int needed = num_elements + count;
+		if(needed > list_size)
+		{
+			int new_size = list_size < 2 ? needed : list_size + list_size / 2;
+			if(new_size < needed)
+				new_size = needed;
+			alloc(new_size);
+		}
+		num_elements = needed;
+	}
+
+	/*
 		Function: hint_size
 			Allocates the number of elements wanted but
 			does not increase the list size.
@@ -308,21 +332,21 @@ public:
 	}
 
 	/*
-		Function: used_memory
-			Returns how much memory this dynamic array is actually using
-	*/
-	int used_memory() const
-	{
-		return sizeof(array) + sizeof(T) * num_elements;
-	}
-
-	/*
 		Function: memusage
 			Returns how much memory this dynamic array is using
 	*/
 	int memusage() const
 	{
 		return sizeof(array) + sizeof(T) * list_size;
+	}
+
+	/*
+		Function: used_memory
+			Returns how much memory this dynamic array is actually using
+	*/
+	int used_memory() const
+	{
+		return sizeof(array) + sizeof(T) * num_elements;
 	}
 
 	/*

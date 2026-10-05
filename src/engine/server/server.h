@@ -1,13 +1,17 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef ENGINE_SERVER_SERVER_H
 #define ENGINE_SERVER_SERVER_H
 
+#include <base/tl/array.h>
 #include <base/tl/hashtable.h>
 #include <base/tl/sorted_array.h>
 #include <base/tl/string.h>
 
 #include <engine/server.h>
+#include <engine/shared/legacy/network_translator.h>
 #include <engine/shared/memheap.h>
 
 class CSnapIDPool
@@ -148,8 +152,21 @@ public:
 
 	CSnapshotDelta m_SnapshotDelta;
 	CSnapshotBuilder m_SnapshotBuilder;
+	// reusable per-tick buffers, grown on demand instead of fixed 64 KiB stack buffers
+	array<unsigned char> m_SnapshotBuildData;
+	array<unsigned char> m_SnapshotDeltaData;
+	array<unsigned char> m_SnapshotCompData;
+	array<unsigned char> m_DemoSnapshotData;
 	CSnapIDPool m_IDPool;
 	CNetServer m_NetServer;
+
+	// Compatibility layer for 0.7 peers: the server itself speaks 0.8, so every
+	// chunk to/from a legacy client is translated. One translator per client
+	// slot, because each owns its own 0.7 snapshot history and 0.8 baseline.
+	legacy::CNetworkTranslator m_aLegacyTranslators[MAX_CLIENTS];
+	// scratch for translating an outgoing message into 0.7 chunks
+	CNetChunk m_aLegacyOutChunks[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
+
 	CEcon m_Econ;
 	CServerBan m_ServerBan;
 
@@ -226,6 +243,10 @@ public:
 	virtual unsigned GetClientMapID(int ClientID) const;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);
+
+	// Sends one chunk to a client, translating it to the frozen 0.7 protocol
+	// first when the peer negotiated the legacy handshake.
+	void SendTranslated(CNetChunk *pPacket, int ClientID);
 
 	void DoSnapshot();
 

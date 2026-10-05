@@ -230,6 +230,10 @@ if(NOT CMAKE_CROSSCOMPILING)
 endif()
 find_package(ZLIB)
 
+# Packet payload compression for the 0.8 handshake uses zstd with an embedded
+# dictionary (see src/engine/shared/zstd_dict.h).
+find_package(zstd)
+
 find_package(OpenSSL)
 find_package(CURL)
 find_package(Git)
@@ -288,6 +292,7 @@ show_dependency_status("Curl" CURL)
 show_dependency_status("spng" spng)
 show_dependency_status("Python3" Python3)
 show_dependency_status("Zlib" ZLIB)
+show_dependency_status("zstd" zstd)
 show_dependency_status("SQLite3" SQLite3)
 show_dependency_status("PostgreSQL" PostgreSQL)
 
@@ -296,6 +301,9 @@ if(NOT(SQLite3_FOUND))
 endif()
 if(NOT(PostgreSQL_FOUND))
   message(SEND_ERROR "You must install libpq (e.g. libpq-dev) to compile LastDay")
+endif()
+if(NOT(zstd_FOUND))
+  message(SEND_ERROR "You must install libzstd (e.g. libzstd-dev) to compile LastDay")
 endif()
 
 if(NOT(Python3_FOUND))
@@ -496,6 +504,7 @@ function(generate_source output_file script_parameter)
       datasrc/content.py
       datasrc/datatypes.py
       datasrc/network.py
+      datasrc/network7.py
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   )
 endfunction()
@@ -532,6 +541,8 @@ chash("src/generated/nethash.cpp"
 )
 generate_source("src/generated/protocol.cpp" "network_source")
 generate_source("src/generated/protocol.h" "network_header")
+generate_source("src/generated/protocol7.cpp" "network7_source")
+generate_source("src/generated/protocol7.h" "network7_header")
 generate_source("src/generated/server_data.cpp" "server_content_source")
 generate_source("src/generated/server_data.h" "server_content_header")
 
@@ -542,18 +553,41 @@ generate_source("src/generated/server_data.h" "server_content_header")
 
 # Sources
 set_src(BASE GLOB_RECURSE src/base
-  c11/threads.c
-  c11/threads.h
   color.h
   detect.h
-  hash.c
+  hash.cpp
   hash.h
-  hash_bundled.c
+  hash_bundled.cpp
   hash_ctxt.h
-  hash_libtomcrypt.c
-  hash_openssl.c
+  hash_libtomcrypt.cpp
+  hash_openssl.cpp
   math.h
-  system.c
+  system/aio.cpp
+  system/aio.h
+  system/base.h
+  system/debug.cpp
+  system/debug.h
+  system/fs.cpp
+  system/fs.h
+  system/io.cpp
+  system/io.h
+  system/lock.cpp
+  system/lock.h
+  system/mem.cpp
+  system/mem.h
+  system/misc.cpp
+  system/misc.h
+  system/net.cpp
+  system/net.h
+  system/net_internal.h
+  system/semaphore.cpp
+  system/semaphore.h
+  system/string.cpp
+  system/string.h
+  system/thread.cpp
+  system/thread.h
+  system/time.cpp
+  system/time.h
   system.h
   tl/algorithm.h
   tl/allocator.h
@@ -565,7 +599,7 @@ set_src(BASE GLOB_RECURSE src/base
   tl/stream.h
   tl/string.h
   tl/threading.h
-  uuid.c
+  uuid.cpp
   uuid.h
   vmath.h
 )
@@ -646,8 +680,14 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   storage.cpp
   uuid_manager.cpp
   uuid_manager.h
+  zstd_dict.cpp
+  zstd_dict.h
+  legacy/network7.cpp
+  legacy/network7.h
+  legacy/network_translator.cpp
+  legacy/network_translator.h
 )
-set(ENGINE_GENERATED_SHARED src/generated/nethash.cpp src/generated/protocol.cpp src/generated/protocol.h)
+set(ENGINE_GENERATED_SHARED src/generated/nethash.cpp src/generated/protocol.cpp src/generated/protocol.h src/generated/protocol7.cpp src/generated/protocol7.h)
 set_src(GAME_SHARED GLOB src/game
   collision.cpp
   collision.h
@@ -673,7 +713,7 @@ set(GAME_GENERATED_SHARED
 set(DEPS ${DEP_JSON} ${DEP_MD5} ${ZLIB_DEP} ${PNGLITE_DEP})
 
 # Libraries
-set(LIBS ${CMAKE_THREAD_LIBS_INIT} OpenSSL::Crypto CURL::libcurl spng::spng ${PLATFORM_LIBS})
+set(LIBS ${CMAKE_THREAD_LIBS_INIT} OpenSSL::Crypto CURL::libcurl spng::spng zstd::libzstd ${PLATFORM_LIBS})
 if(ZLIB_BUNDLED)
   list(APPEND LIBS ${ZLIB_LIBRARIES})
 else()
@@ -804,9 +844,11 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     fs.cpp
     git_revision.cpp
     hash.cpp
+    http_request.cpp
     io.cpp
     jsonparser.cpp
     jsonwriter.cpp
+    legacy_compat.cpp
     packer.cpp
     sorted_array.cpp
     storage.cpp

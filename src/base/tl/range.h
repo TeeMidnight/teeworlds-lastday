@@ -1,9 +1,12 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef BASE_TL_RANGE_H
 #define BASE_TL_RANGE_H
 
-#include <base/system.h>
+#include <base/system/debug.h>
+#include <base/system/net.h>
 
 /*
 	Group: Range concepts
@@ -221,60 +224,6 @@ protected:
 };
 
 /*
-	Class: conditional_range
-*/
-template<class T, class CONDITION>
-class conditional_range
-{
-public:
-	conditional_range()
-	{
-		begin = 0x0;
-		end = 0x0;
-	}
-
-	conditional_range(T *b, T *e, CONDITION cond)
-	{
-		begin = b;
-		end = e;
-		condition = cond;
-
-		while(!empty() && !condition(*begin))
-		{
-			pop_front();
-		}
-	}
-
-	conditional_range(plain_range<T> range, CONDITION cond) :
-		conditional_range(&range.front(), &range.back(), cond)
-	{
-	}
-
-	bool empty() const { return begin >= end; }
-
-	void pop_front()
-	{
-		dbg_assert(!empty(), "empty");
-		begin++;
-		while(!empty() && !condition(*begin))
-		{
-			begin++;
-		}
-	}
-
-	T &front()
-	{
-		dbg_assert(!empty(), "empty");
-		return *begin;
-	}
-
-protected:
-	T *begin;
-	T *end;
-	CONDITION condition;
-};
-
-/*
 	Class: plain_range_sorted
 
 	Concepts:
@@ -339,5 +288,63 @@ R reverse(reverse_range<R> range)
 {
 	return range.range;
 }
+
+/*
+	Class: conditional_range
+
+	Iterates a plain_range but skips every element the condition rejects.
+	Used by the game world to walk only the entities that carry a given
+	object flag.
+*/
+template<class T, class CONDITION>
+class conditional_range
+{
+public:
+	conditional_range()
+	{
+		begin = 0x0;
+		end = 0x0;
+	}
+
+	conditional_range(T *b, T *e, CONDITION cond)
+	{
+		begin = b;
+		end = e;
+		condition = cond;
+
+		while(!empty() && !condition(*begin))
+		{
+			pop_front();
+		}
+	}
+
+	conditional_range(plain_range<T> range, CONDITION cond) :
+		conditional_range(&range.front(), &range.back(), cond)
+	{
+	}
+
+	bool empty() const { return begin >= end; }
+
+	void pop_front()
+	{
+		dbg_assert(!empty(), "empty");
+		begin++;
+		while(!empty() && !condition(*begin))
+		{
+			begin++;
+		}
+	}
+
+	T &front()
+	{
+		dbg_assert(!empty(), "empty");
+		return *begin;
+	}
+
+protected:
+	T *begin;
+	T *end;
+	CONDITION condition;
+};
 
 #endif // BASE_TL_RANGE_H

@@ -1,3 +1,6 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef GAME_SERVER_WEAPONS_WEAPON_MELEE_H
 #define GAME_SERVER_WEAPONS_WEAPON_MELEE_H
 
@@ -15,7 +18,7 @@ public:
 	// slower punch delay)
 	int FireDelay() const override { return 125; }
 	int DefaultAmmo() const override { return -1; }
-	int MaxAmmo() const override { return 10; }
+	int MaxAmmo() const override { return -1; }
 
 	// damage one swing deals to characters. every melee weapon decides its
 	// own value (hammer: weapon data, hand: 1, sword: hammer damage + 2)

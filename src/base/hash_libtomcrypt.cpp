@@ -1,3 +1,7 @@
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 // SHA-256. Adapted from https://github.com/kalven/sha-2, which was adapted
 // from LibTomCrypt. This code is Public Domain.
 
@@ -126,7 +130,7 @@ static void sha_init(sha256_state *md)
 static void sha_process(sha256_state *md, const void *src, u32 inlen)
 {
 	const u32 block_size = 64;
-	const unsigned char *in = src;
+	const unsigned char *in = (const unsigned char *) src;
 
 	while(inlen > 0)
 	{

@@ -1,3 +1,6 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
 #include <base/system.h>
 #include <engine/engine.h>
@@ -43,10 +46,13 @@ CHttpRequest::CHttpRequest(const char *pRequest, const char *pUrl, long TimeoutS
 	m_IsChecked = false;
 	m_TimeoutSeconds = TimeoutSeconds;
 	m_PostData.clear();
+	m_ReceivedData.clear();
 }
 
 void CHttpRequest::PostData(const unsigned char *pPost, int Size)
 {
+	// memory_stream appends, so the previous body has to be dropped explicitly.
+	m_PostData.clear();
 	memory_stream<unsigned char> Stream(&m_PostData);
 	Stream.write(pPost, Size);
 }

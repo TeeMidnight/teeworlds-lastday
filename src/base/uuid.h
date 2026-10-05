@@ -1,3 +1,9 @@
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
+/* Portions from DDNet (zlib license) - https://github.com/ddnet/ddnet                       */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef BASE_UUID_H
 #define BASE_UUID_H
 
@@ -24,9 +30,6 @@ typedef struct
 extern const Uuid UUID_ZEROED;
 
 Uuid random_uuid();
-// RFC 4122 version 7: a time-ordered UUID (Unix epoch milliseconds in the
-// first 48 bits, random in the rest).
-Uuid time_uuid();
 Uuid calculate_uuid(const char *name);
 // The buffer length should be at least UUID_MAXSTRSIZE.
 void format_uuid(Uuid uuid, char *buffer, int size);

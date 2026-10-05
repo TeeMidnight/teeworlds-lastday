@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 
 #include <base/math.h>
 #include <base/system.h>
@@ -467,6 +469,7 @@ void CServer::InitRconPasswordIfUnset()
 
 int CServer::SendMsg(CMsgPacker *pMsg, int Flags, int ClientID)
 {
+
 	CNetChunk Packet;
 	if(!pMsg)
 		return -1;
@@ -501,14 +504,33 @@ int CServer::SendMsg(CMsgPacker *pMsg, int Flags, int ClientID)
 				if(m_aClients[i].m_State == CClient::STATE_INGAME && !m_aClients[i].m_Quitting)
 				{
 					Packet.m_ClientID = i;
-					m_NetServer.Send(&Packet);
+					SendTranslated(&Packet, i);
 				}
 			}
 		}
 		else
-			m_NetServer.Send(&Packet);
+			SendTranslated(&Packet, ClientID);
 	}
 	return 0;
+}
+
+
+void CServer::SendTranslated(CNetChunk *pPacket, int ClientID)
+{
+	// The 0.8 -> 0.7 half of the translator runs here.
+	if(ClientID >= 0 && ClientID < MAX_CLIENTS && m_NetServer.ClientIsLegacy(ClientID))
+	{
+		const int NumOut = m_aLegacyTranslators[ClientID].TranslateServerToClientChunk(
+			pPacket->m_pData, pPacket->m_DataSize, pPacket->m_Flags, m_aLegacyOutChunks, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
+		for(int i = 0; i < NumOut; i++)
+		{
+			m_aLegacyOutChunks[i].m_ClientID = ClientID;
+			m_NetServer.Send(&m_aLegacyOutChunks[i]);
+		}
+		return;
+	}
+
+	m_NetServer.Send(pPacket);
 }
 
 void CServer::DoSnapshot()
@@ -519,16 +541,14 @@ void CServer::DoSnapshot()
 	/*
 	if(m_DemoRecorder.IsRecording())
 	{
-		char aData[CSnapshot::MAX_SIZE];
-		int SnapshotSize;
-
 		// build snap and possibly add some messages
 		m_SnapshotBuilder.Init();
 		GameServer()->OnSnap(-1);
-		SnapshotSize = m_SnapshotBuilder.Finish(aData);
+		m_DemoSnapshotData.set_size(m_SnapshotBuilder.RequiredSize());
+		int SnapshotSize = m_SnapshotBuilder.Finish(m_DemoSnapshotData.base_ptr());
 
 		// write snapshot
-		m_DemoRecorder.RecordSnapshot(Tick(), aData, SnapshotSize);
+		m_DemoRecorder.RecordSnapshot(Tick(), m_DemoSnapshotData.base_ptr(), SnapshotSize);
 	}
 	*/
 
@@ -548,10 +568,6 @@ void CServer::DoSnapshot()
 			continue;
 
 		{
-			char aData[CSnapshot::MAX_SIZE];
-			CSnapshot *pData = (CSnapshot *) aData; // Fix compiler warning for strict-aliasing
-			char aDeltaData[CSnapshot::MAX_SIZE];
-			char aCompData[CSnapshot::MAX_SIZE];
 			int SnapshotSize;
 			int Crc;
 			static CSnapshot EmptySnap;
@@ -564,7 +580,9 @@ void CServer::DoSnapshot()
 
 			GameServer()->OnSnap(i);
 
-			// finish snapshot
+			// finish snapshot into the reusable build buffer
+			m_SnapshotBuildData.set_size(m_SnapshotBuilder.RequiredSize());
+			CSnapshot *pData = (CSnapshot *) m_SnapshotBuildData.base_ptr();
 			SnapshotSize = m_SnapshotBuilder.Finish(pData);
 			Crc = pData->Crc();
 
@@ -591,7 +609,8 @@ void CServer::DoSnapshot()
 			}
 
 			// create delta
-			DeltaSize = m_SnapshotDelta.CreateDelta(pDeltashot, pData, aDeltaData);
+			m_SnapshotDeltaData.set_size(m_SnapshotBuilder.RequiredSize() * 2 + 4096);
+			DeltaSize = m_SnapshotDelta.CreateDelta(pDeltashot, pData, m_SnapshotDeltaData.base_ptr());
 
 			if(DeltaSize > 0)
 			{
@@ -600,10 +619,19 @@ void CServer::DoSnapshot()
 				const int MaxSize = MAX_SNAPSHOT_PACKSIZE;
 				int NumPackets;
 
-				SnapshotSize = CVariableInt::Compress(aDeltaData, DeltaSize, aCompData, sizeof(aCompData));
-				NumPackets = (SnapshotSize + MaxSize - 1) / MaxSize;
+				m_SnapshotCompData.set_size(DeltaSize + DeltaSize / 2 + 4096);
+				SnapshotSize = CVariableInt::Compress(m_SnapshotDeltaData.base_ptr(), DeltaSize, m_SnapshotCompData.base_ptr(), m_SnapshotCompData.size());
+				if(SnapshotSize < 0)
+				{
+					char aBuf[64];
+					str_format(aBuf, sizeof(aBuf), "intpack failed! (%d)", SnapshotSize);
+					m_pConsole->Print(IConsole::OUTPUT_LEVEL_DEBUG, "server", aBuf);
+					NumPackets = 0;
+				}
+				else
+					NumPackets = (SnapshotSize + MaxSize - 1) / MaxSize;
 
-				for(int n = 0, Left = SnapshotSize; Left > 0; n++)
+				for(int n = 0, Left = SnapshotSize; Left > 0 && NumPackets > 0; n++)
 				{
 					int Chunk = Left < MaxSize ? Left : MaxSize;
 					Left -= Chunk;
@@ -615,7 +643,7 @@ void CServer::DoSnapshot()
 						Msg.AddInt(m_CurrentGameTick - DeltaTick);
 						Msg.AddInt(Crc);
 						Msg.AddInt(Chunk);
-						Msg.AddRaw(&aCompData[n * MaxSize], Chunk);
+						Msg.AddRaw(&m_SnapshotCompData[n * MaxSize], Chunk);
 						SendMsg(&Msg, MSGFLAG_FLUSH, i);
 					}
 					else
@@ -627,7 +655,7 @@ void CServer::DoSnapshot()
 						Msg.AddInt(n);
 						Msg.AddInt(Crc);
 						Msg.AddInt(Chunk);
-						Msg.AddRaw(&aCompData[n * MaxSize], Chunk);
+						Msg.AddRaw(&m_SnapshotCompData[n * MaxSize], Chunk);
 						SendMsg(&Msg, MSGFLAG_FLUSH, i);
 					}
 				}
@@ -1315,7 +1343,24 @@ void CServer::PumpNetwork()
 			}
 		}
 		else
-			ProcessClientPacket(&Packet);
+		{
+			// Inbound: a 0.7 client's traffic has to be lifted into 0.8 before it
+			// reaches the normal message path. That is the "0.7 in -> 0.8 out"
+			// direction, which is TranslateServerChunk (again named for the
+			// reference's inverted roles).
+			if(Packet.m_ClientID >= 0 && Packet.m_ClientID < MAX_CLIENTS && m_NetServer.ClientIsLegacy(Packet.m_ClientID))
+			{
+				const int NumOut = m_aLegacyTranslators[Packet.m_ClientID].TranslateServerChunk(
+					Packet.m_pData, Packet.m_DataSize, m_aLegacyOutChunks, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
+				for(int i = 0; i < NumOut; i++)
+				{
+					m_aLegacyOutChunks[i].m_ClientID = Packet.m_ClientID;
+					ProcessClientPacket(&m_aLegacyOutChunks[i]);
+				}
+			}
+			else
+				ProcessClientPacket(&Packet);
+		}
 	}
 
 	m_ServerBan.Update();
@@ -1543,6 +1588,12 @@ int CServer::Run()
 	}
 
 	InitRegister(Kernel()->RequestInterface<IEngine>(), Config(), Console(), m_NetServer.GetGlobalToken());
+
+	// Legacy peers are told the server's own netversion on NETMSG_INFO; the
+	// translator cannot read game/version.h from the engine layer, so the value
+	// is injected here.
+	for(int i = 0; i < MAX_CLIENTS; i++)
+		m_aLegacyTranslators[i].SetNetVersion(GameServer()->NetVersion());
 
 	m_Econ.Init(Config(), Console(), &m_ServerBan);
 

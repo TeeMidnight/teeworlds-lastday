@@ -1,3 +1,6 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef ENGINE_SHARED_HTTP_REQUEST_H
 #define ENGINE_SHARED_HTTP_REQUEST_H
 
@@ -54,6 +57,9 @@ public:
 	int ResponseCode() const { return m_ResponseCode; }
 	const unsigned char *ReceivedData() const { return m_ReceivedData.base_ptr(); }
 	int ReceivedDataSize() const { return m_ReceivedData.size(); }
+	// The request body queued by PostData/PostJson.
+	const unsigned char *PostData() const { return m_PostData.base_ptr(); }
+	int PostDataSize() const { return m_PostData.size(); }
 };
 
 class CCurlInit

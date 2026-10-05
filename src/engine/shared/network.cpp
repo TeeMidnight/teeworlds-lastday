@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
 #include <base/system.h>
 
@@ -125,6 +127,7 @@ void CNetBase::Init(NETSOCKET Socket, CConfig *pConfig, IConsole *pConsole, IEng
 	m_pConfig = pConfig;
 	m_pEngine = pEngine;
 	m_Huffman.Init();
+	m_Zstd.Init();
 	mem_zero(m_aRequestTokenBuf, sizeof(m_aRequestTokenBuf));
 	if(pEngine)
 		pConsole->Chain("dbg_lognetwork", ConchainDbgLognetwork, this);
@@ -185,22 +188,31 @@ void CNetBase::SendPacket(const NETADDR *pAddr, CNetPacketConstruct *pPacket)
 
 	dbg_assert((pPacket->m_Token & ~NET_TOKEN_MASK) == 0, "token out of range");
 
-	// compress if not ctrl msg
+	// compress if not ctrl msg. The codec is negotiated per connection and
+	// carried in the packet: the legacy Huffman coder, or zstd with the
+	// embedded dictionary when the handshake agreed on it.
+	pPacket->m_Flags &= ~(NET_PACKETFLAG_COMPRESSION | NET_PACKETFLAG_COMPRESSION_ZSTD);
 	if(!(pPacket->m_Flags & NET_PACKETFLAG_CONTROL))
-		CompressedSize = m_Huffman.Compress(pPacket->m_aChunkData, pPacket->m_DataSize, &aBuffer[NET_PACKETHEADERSIZE], NET_MAX_PAYLOAD);
+	{
+		if(pPacket->m_Compression == NET_COMPRESSION_ZSTD)
+			CompressedSize = m_Zstd.Compress(pPacket->m_aChunkData, pPacket->m_DataSize, &aBuffer[NET_PACKETHEADERSIZE], NET_MAX_PAYLOAD);
+		else
+			CompressedSize = m_Huffman.Compress(pPacket->m_aChunkData, pPacket->m_DataSize, &aBuffer[NET_PACKETHEADERSIZE], NET_MAX_PAYLOAD);
+	}
 
 	// check if the compression was enabled, successful and good enough
 	if(CompressedSize > 0 && CompressedSize < pPacket->m_DataSize)
 	{
 		FinalSize = CompressedSize;
 		pPacket->m_Flags |= NET_PACKETFLAG_COMPRESSION;
+		if(pPacket->m_Compression == NET_COMPRESSION_ZSTD)
+			pPacket->m_Flags |= NET_PACKETFLAG_COMPRESSION_ZSTD;
 	}
 	else
 	{
 		// use uncompressed data
 		FinalSize = pPacket->m_DataSize;
 		mem_copy(&aBuffer[NET_PACKETHEADERSIZE], pPacket->m_aChunkData, pPacket->m_DataSize);
-		pPacket->m_Flags &= ~NET_PACKETFLAG_COMPRESSION;
 	}
 
 	// set header and send the packet if all things are good
@@ -307,8 +319,16 @@ int CNetBase::UnpackPacket(NETADDR *pAddr, unsigned char *pBuffer, CNetPacketCon
 		// TTTTTTTT TTTTTTTT TTTTTTTT TTTTTTTT
 		pPacket->m_ResponseToken = NET_TOKEN_NONE;
 
+		// The payload is decoded from the codec flag on the wire, exactly as
+		// the peer set it when sending: zstd-with-dictionary when the
+		// handshake negotiated it, the legacy Huffman coder otherwise.
 		if(pPacket->m_Flags & NET_PACKETFLAG_COMPRESSION)
-			pPacket->m_DataSize = m_Huffman.Decompress(&pBuffer[NET_PACKETHEADERSIZE], pPacket->m_DataSize, pPacket->m_aChunkData, sizeof(pPacket->m_aChunkData));
+		{
+			if(pPacket->m_Flags & NET_PACKETFLAG_COMPRESSION_ZSTD)
+				pPacket->m_DataSize = m_Zstd.Decompress(&pBuffer[NET_PACKETHEADERSIZE], pPacket->m_DataSize, pPacket->m_aChunkData, sizeof(pPacket->m_aChunkData));
+			else
+				pPacket->m_DataSize = m_Huffman.Decompress(&pBuffer[NET_PACKETHEADERSIZE], pPacket->m_DataSize, pPacket->m_aChunkData, sizeof(pPacket->m_aChunkData));
+		}
 		else
 			mem_copy(pPacket->m_aChunkData, &pBuffer[NET_PACKETHEADERSIZE], pPacket->m_DataSize);
 	}
@@ -363,7 +383,26 @@ void CNetBase::SendControlMsg(const NETADDR *pAddr, TOKEN Token, int Ack, int Co
 	SendPacket(pAddr, &Construct);
 }
 
-void CNetBase::SendControlMsgWithToken(const NETADDR *pAddr, TOKEN Token, int Ack, int ControlMsg, TOKEN MyToken, bool Extended)
+bool Net8WriteGenerationMarker(unsigned char *pChunkData, int ChunkDataSize, int Offset)
+{
+	if(Offset < 0 || Offset + NET_GENERATION_MARKER_SIZE > ChunkDataSize)
+		return false;
+	pChunkData[Offset] = NET_GENERATION_MARKER_0;
+	pChunkData[Offset + 1] = NET_GENERATION_MARKER_1;
+	pChunkData[Offset + 2] = NET_GENERATION_MARKER_2;
+	return true;
+}
+
+bool Net8HasGenerationMarker(const unsigned char *pChunkData, int ChunkDataSize, int Offset)
+{
+	if(Offset < 0 || Offset + NET_GENERATION_MARKER_SIZE > ChunkDataSize)
+		return false;
+	return pChunkData[Offset] == NET_GENERATION_MARKER_0 &&
+	       pChunkData[Offset + 1] == NET_GENERATION_MARKER_1 &&
+	       pChunkData[Offset + 2] == NET_GENERATION_MARKER_2;
+}
+
+void CNetBase::SendControlMsgWithToken(const NETADDR *pAddr, TOKEN Token, int Ack, int ControlMsg, TOKEN MyToken, bool Extended, bool GenerationMarker)
 {
 	dbg_assert((Token & ~NET_TOKEN_MASK) == 0, "token out of range");
 	dbg_assert((MyToken & ~NET_TOKEN_MASK) == 0, "resp token out of range");
@@ -372,6 +411,15 @@ void CNetBase::SendControlMsgWithToken(const NETADDR *pAddr, TOKEN Token, int Ac
 	m_aRequestTokenBuf[1] = (MyToken >> 16) & 0xff;
 	m_aRequestTokenBuf[2] = (MyToken >> 8) & 0xff;
 	m_aRequestTokenBuf[3] = (MyToken) & 0xff;
+
+	// Advertise the codec capabilities this build understands. It is only read
+	// out of a NET_CTRLMSG_CONNECT, but keeping it set for the token request as
+	// well is harmless and means the slot is never stale.
+	const int CapabilityOffset = GenerationMarker ? NET_CTRL_REQUEST_CAPABILITY_OFFSET_8 : NET_CTRL_REQUEST_CAPABILITY_OFFSET;
+	m_aRequestTokenBuf[CapabilityOffset] = legacy::Net7BuildClientCapabilities(true);
+	if(GenerationMarker)
+		Net8WriteGenerationMarker(m_aRequestTokenBuf, sizeof(m_aRequestTokenBuf), NET_CTRL_REQUEST_CAPABILITY_OFFSET);
+
 	SendControlMsg(pAddr, Token, 0, ControlMsg, m_aRequestTokenBuf, Extended ? sizeof(m_aRequestTokenBuf) : 4);
 }
 

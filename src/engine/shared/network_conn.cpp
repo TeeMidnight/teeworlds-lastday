@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
 #include <base/system.h>
 #include "config.h"
@@ -18,6 +20,10 @@ void CNetConnection::Reset()
 	m_RemoteClosed = 0;
 
 	m_State = NET_CONNSTATE_OFFLINE;
+	m_Compression = NET_COMPRESSION_HUFFMAN;
+	// every fresh connection opens with the 0.8 handshake; the peer's ACCEPT
+	// switches us to the legacy form when it turns out to be a 0.7 server
+	m_Legacy = false;
 	m_LastSendTime = 0;
 	m_LastRecvTime = 0;
 	m_LastUpdateTime = 0;
@@ -60,6 +66,7 @@ void CNetConnection::Init(CNetBase *pNetBase, bool BlockCloseMsg)
 
 	m_pNetBase = pNetBase;
 	m_BlockCloseMsg = BlockCloseMsg;
+	m_Legacy = false;
 	mem_zero(m_ErrorString, sizeof(m_ErrorString));
 }
 
@@ -92,6 +99,7 @@ int CNetConnection::Flush()
 	// send of the packets
 	m_Construct.m_Ack = m_Ack;
 	m_Construct.m_Token = m_PeerToken;
+	m_Construct.m_Compression = m_Compression;
 	m_pNetBase->SendPacket(&m_PeerAddr, &m_Construct);
 
 	// update send times
@@ -174,7 +182,25 @@ void CNetConnection::SendPacketConnless(const char *pData, int DataSize)
 void CNetConnection::SendControlWithToken(int ControlMsg)
 {
 	m_LastSendTime = time_get();
-	m_pNetBase->SendControlMsgWithToken(&m_PeerAddr, m_PeerToken, 0, ControlMsg, m_Token, true);
+	m_pNetBase->SendControlMsgWithToken(&m_PeerAddr, m_PeerToken, 0, ControlMsg, m_Token, true, !m_Legacy);
+}
+
+// Accept the connection and tell the client which payload codec the server
+// picked. A client that does not know the byte ignores it; zero means Huffman,
+// which is exactly the fallback. The 0.8 form additionally carries the
+// generation marker; the legacy form is the frozen 0.7 layout.
+void CNetConnection::SendAccept()
+{
+	const unsigned char Capabilities = legacy::Net7BuildAcceptCapabilities(m_Compression == NET_COMPRESSION_ZSTD);
+	unsigned char aBuf[NET_GENERATION_MARKER_SIZE + 1];
+	if(m_Legacy)
+	{
+		SendControl(NET_CTRLMSG_ACCEPT, &Capabilities, sizeof(Capabilities));
+		return;
+	}
+	Net8WriteGenerationMarker(aBuf, sizeof(aBuf), 0);
+	aBuf[NET_GENERATION_MARKER_SIZE] = Capabilities;
+	SendControl(NET_CTRLMSG_ACCEPT, aBuf, sizeof(aBuf));
 }
 
 void CNetConnection::ResendChunk(CNetChunkResend *pResend)
@@ -313,6 +339,16 @@ int CNetConnection::Feed(CNetPacketConstruct *pPacket, NETADDR *pAddr)
 				{
 					if(CtrlMsg == NET_CTRLMSG_CONNECT)
 					{
+						// Read what the client advertised before Reset() clears
+						// the connection state. A 0.8 peer puts the marker in
+						// front of the capability byte; a 0.7 peer sends
+						// neither, which is how the legacy stack is selected.
+						// The flag must be derived here rather than carried in
+						// from the caller, because Reset() wipes m_Legacy.
+						const bool Legacy = !Net8HasGenerationMarker(pPacket->m_aChunkData, pPacket->m_DataSize, NET_CTRL_CONNECT_CAPABILITY_OFFSET);
+						const int PeerCapabilities = Legacy ? legacy::Net7ReadConnectCapabilities(pPacket->m_aChunkData, pPacket->m_DataSize) :
+										       (pPacket->m_DataSize > NET_CTRL_CONNECT_CAPABILITY_OFFSET_8 ? pPacket->m_aChunkData[NET_CTRL_CONNECT_CAPABILITY_OFFSET_8] : 0);
+
 						// send response and init connection
 						TOKEN Token = m_Token;
 						Reset();
@@ -324,9 +360,18 @@ int CNetConnection::Feed(CNetPacketConstruct *pPacket, NETADDR *pAddr)
 						m_LastSendTime = Now;
 						m_LastRecvTime = Now;
 						m_LastUpdateTime = Now;
-						SendControl(NET_CTRLMSG_ACCEPT, 0, 0);
+
+						// a 0.7 peer keeps the frozen handshake and the legacy
+						// Huffman coder; only a 0.8 peer may use zstd
+						m_Legacy = Legacy;
+
+						// Net7SelectCompression falls back to Huffman unless the
+						// peer advertised zstd, so an absent byte is handled.
+						m_Compression = legacy::Net7SelectCompression(PeerCapabilities);
+
+						SendAccept();
 						if(Config()->m_Debug)
-							dbg_msg("connection", "got connection, sending accept");
+							dbg_msg("connection", "got connection, sending accept (compression=%s)", m_Compression == NET_COMPRESSION_ZSTD ? "zstd+dict" : "huffman");
 					}
 				}
 				else if(State() == NET_CONNSTATE_CONNECT)
@@ -335,9 +380,25 @@ int CNetConnection::Feed(CNetPacketConstruct *pPacket, NETADDR *pAddr)
 					if(CtrlMsg == NET_CTRLMSG_ACCEPT)
 					{
 						m_LastRecvTime = Now;
+
+						// The server's ACCEPT tells us which generation it
+						// speaks. This build always opens with the 0.8
+						// handshake: a 0.7 server ignores the extra marker
+						// bytes and answers without them, so its reply is what
+						// switches the connection onto the legacy stack.
+						m_Legacy = !Net8HasGenerationMarker(pPacket->m_aChunkData, pPacket->m_DataSize, NET_CTRL_ACCEPT_CAPABILITY_OFFSET);
+
 						m_State = NET_CONNSTATE_ONLINE;
+
+						// A server that sends no byte leaves the connection on
+						// Huffman, which is what Net7SelectCompression returns.
+						const int ServerCapabilities = m_Legacy ?
+										       legacy::Net7ReadAcceptCapabilities(pPacket->m_aChunkData, pPacket->m_DataSize) :
+										       (pPacket->m_DataSize > NET_CTRL_ACCEPT_CAPABILITY_OFFSET_8 ? pPacket->m_aChunkData[NET_CTRL_ACCEPT_CAPABILITY_OFFSET_8] : 0);
+						m_Compression = legacy::Net7SelectCompression(ServerCapabilities);
+
 						if(Config()->m_Debug)
-							dbg_msg("connection", "got accept. connection online");
+							dbg_msg("connection", "got accept. connection online (compression=%s)", m_Compression == NET_COMPRESSION_ZSTD ? "zstd+dict" : "huffman");
 					}
 				}
 			}
@@ -429,7 +490,7 @@ int CNetConnection::Update()
 	else if(State() == NET_CONNSTATE_PENDING)
 	{
 		if(Now - m_LastSendTime > time_freq() / 2) // send a new connect/accept every 500ms
-			SendControl(NET_CTRLMSG_ACCEPT, 0, 0);
+			SendAccept();
 	}
 
 	return 0;

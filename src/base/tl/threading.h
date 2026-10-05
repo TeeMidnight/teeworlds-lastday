@@ -1,9 +1,13 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef BASE_TL_THREADING_H
 #define BASE_TL_THREADING_H
 
-#include <base/system.h>
+#include <base/system/lock.h>
+#include <base/system/debug.h>
+#include <base/system/semaphore.h>
 
 class semaphore
 {

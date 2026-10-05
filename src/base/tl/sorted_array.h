@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef BASE_TL_SORTED_ARRAY_H
 #define BASE_TL_SORTED_ARRAY_H
 
@@ -12,12 +14,12 @@ class sorted_array : public array<T, ALLOCATOR>
 	typedef array<T, ALLOCATOR> parent;
 
 	// insert and size is not allowed
-	int insert(const T &item, typename parent::range r)
+	int insert([[maybe_unused]] const T &item, [[maybe_unused]] typename parent::range r)
 	{
 		dbg_break();
 		return 0;
 	}
-	int set_size(int new_size)
+	int set_size([[maybe_unused]] int new_size)
 	{
 		dbg_break();
 		return 0;

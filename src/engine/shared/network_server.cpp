@@ -1,5 +1,7 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
 #include <base/system.h>
 
@@ -164,6 +166,10 @@ int CNetServer::Recv(CNetChunk *pChunk, TOKEN *pResponseToken)
 			{
 				if(m_RecvUnpacker.m_Data.m_aChunkData[0] == NET_CTRLMSG_CONNECT)
 				{
+					// A 0.7 client sends no 0.8 generation marker; CNetConnection
+					// detects that and puts the slot on the legacy stack.
+					// Accepting it needs no extra bookkeeping here.
+
 					// check if there are free slots
 					if(m_NumClients >= m_MaxClients)
 					{

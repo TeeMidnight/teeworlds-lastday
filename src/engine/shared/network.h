@@ -1,10 +1,14 @@
-/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
-/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+/* (c) Magnus Auvinen. See license.txt in the root of the distribution for more information. */
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef ENGINE_SHARED_NETWORK_H
 #define ENGINE_SHARED_NETWORK_H
 
 #include "huffman.h"
+#include "legacy/network7.h"
 #include "ringbuffer.h"
+#include "zstd_dict.h"
 
 /*
 
@@ -81,6 +85,12 @@ enum
 	NET_PACKETFLAG_RESEND = 2,
 	NET_PACKETFLAG_COMPRESSION = 4,
 	NET_PACKETFLAG_CONNLESS = 8,
+	// Marks the payload as zstd-with-dictionary instead of the legacy Huffman
+	// coder. Only ever set on a connection that negotiated
+	// NET_CTRLFLAG_ZSTD_DICT during the handshake, so peers that did not
+	// negotiate keep exchanging plain NET_PACKETFLAG_COMPRESSION packets.
+	// Bit 4 was unused before the flag got 6 bits, so old peers just ignore it.
+	NET_PACKETFLAG_COMPRESSION_ZSTD = 16,
 
 	NET_MAX_PACKET_CHUNKS = 256,
 
@@ -132,6 +142,59 @@ enum
 	NET_ENUM_TERMINATOR
 };
 
+// Packet payload codec, negotiated per connection during the handshake.
+// The values are frozen in legacy::network7 so that the 0.7 translator and the
+// live engine can never drift apart.
+enum
+{
+	NET_COMPRESSION_HUFFMAN = legacy::NET7_COMPRESSION_HUFFMAN, // legacy coder, always available
+	NET_COMPRESSION_ZSTD = legacy::NET7_COMPRESSION_ZSTD, // zstd with the embedded dictionary
+};
+
+// Capability bits exchanged during the handshake: the client advertises them in
+// NET_CTRLMSG_CONNECT, the server answers with the codec it picked in
+// NET_CTRLMSG_ACCEPT. A zero byte means Huffman, which stays wire compatible
+// with a peer that does not understand the extension.
+enum
+{
+	NET_CTRLFLAG_ZSTD_DICT = legacy::NET7_CTRLFLAG_ZSTD_DICT,
+};
+
+// 0.8 generation marker. The native handshake carries {'T','W','8'} in front of
+// the capability byte so a 0.8 server can tell a 0.8 client from a 0.7 one and
+// reject the latter instead of mis-parsing its traffic. A client always opens
+// with the marker; the legacy (0.7) stack omits it once the peer's ACCEPT
+// reveals that the server is a 0.7 one.
+enum
+{
+	NET_GENERATION_MARKER_SIZE = 3,
+	NET_GENERATION_MARKER_0 = 'T',
+	NET_GENERATION_MARKER_1 = 'W',
+	NET_GENERATION_MARKER_2 = '8',
+};
+
+// Where the capability bits sit in the handshake. Chunk data starts with the
+// control byte, so the extended NET_CTRLMSG_CONNECT request buffer (which
+// begins with the 4 byte token) is shifted by one.
+enum
+{
+	NET_CTRL_REQUEST_CAPABILITY_OFFSET = legacy::NET7_CTRL_REQUEST_CAPABILITY_OFFSET, // inside m_aRequestTokenBuf
+	NET_CTRL_CONNECT_CAPABILITY_OFFSET = legacy::NET7_CTRL_CONNECT_CAPABILITY_OFFSET, // inside m_aChunkData
+	NET_CTRL_ACCEPT_CAPABILITY_OFFSET = legacy::NET7_CTRL_ACCEPT_CAPABILITY_OFFSET, // inside m_aChunkData
+
+	// capability byte positions once the 0.8 generation marker is present
+	NET_CTRL_REQUEST_CAPABILITY_OFFSET_8 = NET_CTRL_REQUEST_CAPABILITY_OFFSET + NET_GENERATION_MARKER_SIZE,
+	NET_CTRL_CONNECT_CAPABILITY_OFFSET_8 = NET_CTRL_CONNECT_CAPABILITY_OFFSET + NET_GENERATION_MARKER_SIZE,
+	NET_CTRL_ACCEPT_CAPABILITY_OFFSET_8 = NET_CTRL_ACCEPT_CAPABILITY_OFFSET + NET_GENERATION_MARKER_SIZE,
+};
+
+// Write the 0.8 generation marker at pChunkData[Offset]. Returns false (and
+// writes nothing) when the buffer is too small.
+bool Net8WriteGenerationMarker(unsigned char *pChunkData, int ChunkDataSize, int Offset);
+
+// Check whether pChunkData[Offset] holds the 0.8 generation marker.
+bool Net8HasGenerationMarker(const unsigned char *pChunkData, int ChunkDataSize, int Offset);
+
 typedef int (*NETFUNC_DELCLIENT)(int ClientID, const char *pReason, void *pUser);
 typedef int (*NETFUNC_NEWCLIENT)(int ClientID, void *pUser);
 
@@ -180,6 +243,10 @@ public:
 	int m_Ack;
 	int m_NumChunks;
 	int m_DataSize;
+	// Codec to use for this packet, set by the connection from its negotiated
+	// state. Zero (NET_COMPRESSION_HUFFMAN) for control packets and for
+	// connections that did not negotiate zstd.
+	int m_Compression;
 	unsigned char m_aChunkData[NET_MAX_PAYLOAD];
 };
 
@@ -202,6 +269,7 @@ class CNetBase
 	IOHANDLE m_DataLogSent;
 	IOHANDLE m_DataLogRecv;
 	CHuffman m_Huffman;
+	CZstdDict m_Zstd;
 	unsigned char m_aRequestTokenBuf[NET_TOKENREQUEST_DATASIZE];
 
 public:
@@ -217,7 +285,7 @@ public:
 	void Wait(int Time);
 
 	void SendControlMsg(const NETADDR *pAddr, TOKEN Token, int Ack, int ControlMsg, const void *pExtra, int ExtraSize);
-	void SendControlMsgWithToken(const NETADDR *pAddr, TOKEN Token, int Ack, int ControlMsg, TOKEN MyToken, bool Extended);
+	void SendControlMsgWithToken(const NETADDR *pAddr, TOKEN Token, int Ack, int ControlMsg, TOKEN MyToken, bool Extended, bool GenerationMarker = true);
 	void SendPacketConnless(const NETADDR *pAddr, TOKEN Token, TOKEN ResponseToken, const void *pData, int DataSize);
 	void SendPacket(const NETADDR *pAddr, CNetPacketConstruct *pPacket);
 	int UnpackPacket(NETADDR *pAddr, unsigned char *pBuffer, CNetPacketConstruct *pPacket);
@@ -327,6 +395,18 @@ private:
 	int m_RemoteClosed;
 	bool m_BlockCloseMsg;
 
+	// Codec this connection negotiated during the handshake. Every packet the
+	// connection sends or receives uses it; NET_COMPRESSION_HUFFMAN unless the
+	// handshake agreed on zstd.
+	int m_Compression;
+
+	// When set, the handshake omits the 0.8 generation marker and speaks the
+	// frozen 0.7 form. A client sets this itself once the peer's ACCEPT
+	// identifies it as a 0.7 server. A server sets it when a CONNECT arrives
+	// without the generation marker, which is how a 0.7 client announces
+	// itself; both peers must agree before any game traffic flows.
+	bool m_Legacy;
+
 	TStaticRingBuffer<CNetChunkResend, NET_CONN_BUFFERSIZE> m_Buffer;
 
 	int64 m_LastUpdateTime;
@@ -353,6 +433,7 @@ private:
 	int QueueChunkEx(int Flags, int DataSize, const void *pData, int Sequence);
 	void SendControl(int ControlMsg, const void *pExtra, int ExtraSize);
 	void SendControlWithToken(int ControlMsg);
+	void SendAccept();
 	void ResendChunk(CNetChunkResend *pResend);
 	void Resend();
 
@@ -364,6 +445,10 @@ public:
 	void Disconnect(const char *pReason);
 
 	void SetToken(TOKEN Token);
+
+	// True when this connection speaks the frozen 0.7 handshake and codec. A
+	// server sets it from the marker-less CONNECT; a client from the ACCEPT.
+	bool IsLegacy() const { return m_Legacy; }
 
 	TOKEN Token() const { return m_Token; }
 	TOKEN PeerToken() const { return m_PeerToken; }
@@ -484,6 +569,9 @@ public:
 	// status requests
 	const NETADDR *ClientAddr(int ClientID) const { return m_aSlots[ClientID].m_Connection.PeerAddress(); }
 	class CNetBan *NetBan() const { return m_pNetBan; }
+
+	// True when this slot negotiated the frozen 0.7 handshake (a 0.7 client).
+	bool ClientIsLegacy(int ClientID) const { return m_aSlots[ClientID].m_Connection.IsLegacy(); }
 
 	//
 	void SetMaxClients(int MaxClients);

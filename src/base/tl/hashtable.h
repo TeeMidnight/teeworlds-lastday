@@ -1,7 +1,12 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef BASE_TL_HASHTABLE_H
 #define BASE_TL_HASHTABLE_H
 
-#include <base/system.h>
+#include <base/system/string.h>
+#include <base/system/debug.h>
+#include <base/system/fs.h>
 #include "array.h"
 
 class basic_table_function
