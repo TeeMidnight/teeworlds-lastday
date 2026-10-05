@@ -1,8 +1,8 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#ifndef GAME_SERVER_ENTITIES_DROPPEDPICKUP_H
-#define GAME_SERVER_ENTITIES_DROPPEDPICKUP_H
+#ifndef GAME_SERVER_ENTITIES_DROPPED_PICKUP_H
+#define GAME_SERVER_ENTITIES_DROPPED_PICKUP_H
 
 #include <game/server/entity.h>
 
@@ -48,4 +48,4 @@ private:
 	bool IsGrounded();
 };
 
-#endif // GAME_SERVER_ENTITIES_DROPPEDPICKUP_H
+#endif // GAME_SERVER_ENTITIES_DROPPED_PICKUP_H

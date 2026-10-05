@@ -1,22 +1,13 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-/* LastDay database abstraction.
- *
- * "players" stores one row per player. Only the identity columns (uuid,
- * username, password) are fixed; every other piece of player state
- * (inventory, forgetting, and any future survival stat) is serialized into a
- * single JSON column ("data") and accessed through json paths. This keeps
- * the schema stable while the survival systems keep evolving.
- *
- * "world_saves" stores one row per world instance (unique map name). The
- * row's "data" is an evolving JSON document that can hold arbitrary world
- * content: an array of dropped items under "drop", and whatever other
- * persistent world state appears later, each under its own field and
- * accessed through the same json path helpers as the player data.
- */
-#ifndef GAME_SERVER_DATABASE_H
-#define GAME_SERVER_DATABASE_H
+#ifndef GAME_SERVER_DATABASE_DATABASE_H
+#define GAME_SERVER_DATABASE_DATABASE_H
+
+// Player state is stored one row per player: only the identity columns (uuid,
+// username, password) are fixed, everything else lives in a JSON "data" column
+// so the schema stays stable as the survival systems evolve. World state is
+// stored the same way, one row per map name.
 
 #include <base/system.h>
 #include <base/uuid.h>

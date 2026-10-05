@@ -1,8 +1,8 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#ifndef GAME_SERVER_DATABASE_SQLITE_H
-#define GAME_SERVER_DATABASE_SQLITE_H
+#ifndef GAME_SERVER_DATABASE_DATABASE_SQLITE_H
+#define GAME_SERVER_DATABASE_DATABASE_SQLITE_H
 
 #include <game/server/database/database.h>
 
@@ -31,4 +31,4 @@ public:
 	virtual bool DeleteWorldSave(const char *pMap) override;
 };
 
-#endif // GAME_SERVER_DATABASE_SQLITE_H
+#endif // GAME_SERVER_DATABASE_DATABASE_SQLITE_H
