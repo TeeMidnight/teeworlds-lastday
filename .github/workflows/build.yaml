@@ -56,12 +56,13 @@ jobs:
           libspng:p
           sqlite3:p
           postgresql:p
+          zstd:p
 
     - name: Prepare Linux
       if: contains(matrix.os, 'ubuntu')
       run: |
         sudo apt-get update -y
-        sudo apt install build-essential cmake git libspng-dev libopus-dev libopusfile-dev python3 libcurl4-openssl-dev -y
+        sudo apt install build-essential cmake git libspng-dev libopus-dev libopusfile-dev python3 libcurl4-openssl-dev libsqlite3-dev libpq-dev libzstd-dev -y
 
     - name: Build in debug mode
       env: ${{ matrix.env }}
