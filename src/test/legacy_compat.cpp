@@ -566,6 +566,32 @@ TEST(LegacyCompat, InboundClientMessagesAreLiftedFrom07)
 		EXPECT_STREQ(pSay->m_pMessage, "hello");
 	}
 
+	// CL_CALLVOTE has four fields, and every one has to be copied over. Dropping
+	// m_Force silently turns a forced vote into a normal one and ships whatever
+	// the uninitialised local held.
+	{
+		protocol7::CNetMsg_Cl_CallVote Vote;
+		Vote.m_Type = "kick";
+		Vote.m_Value = "3";
+		Vote.m_Reason = "idle";
+		Vote.m_Force = 1; // non-zero, so a dropped field cannot alias it
+		CMsgPacker Packer7(protocol7::NETMSGTYPE_CL_CALLVOTE);
+		Vote.Pack(&Packer7);
+
+		CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
+		legacy::CNetworkTranslator Translator;
+		ASSERT_EQ(Translator.TranslateServerChunk(Packer7.Data(), Packer7.Size(), aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 1);
+		CMsgUnpacker Out(aOut[0].m_pData, aOut[0].m_DataSize);
+		ASSERT_FALSE(Out.Error());
+		EXPECT_EQ(Out.Type(), NETMSGTYPE_CL_CALLVOTE);
+		const CNetMsg_Cl_CallVote *pVote = (const CNetMsg_Cl_CallVote *) CNetObjHandler().SecureUnpackMsg(Out.Type(), &Out);
+		ASSERT_NE(pVote, nullptr);
+		EXPECT_STREQ(pVote->m_Type, "kick");
+		EXPECT_STREQ(pVote->m_Value, "3");
+		EXPECT_STREQ(pVote->m_Reason, "idle");
+		EXPECT_EQ(pVote->m_Force, 1);
+	}
+
 	// CL_SETTEAM: 25 in 0.7, 26 in 0.8.
 	{
 		protocol7::CNetMsg_Cl_SetTeam Team;

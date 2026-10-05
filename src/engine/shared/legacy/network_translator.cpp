@@ -1049,6 +1049,7 @@ namespace legacy
 				Out.m_Type = pIn->m_Type;
 				Out.m_Value = pIn->m_Value;
 				Out.m_Reason = pIn->m_Reason;
+				Out.m_Force = pIn->m_Force;
 				CMsgPacker Packer(NETMSGTYPE_CL_CALLVOTE);
 				Out.Pack(&Packer);
 				return FinishMsg(&Packer, pOut, OutSize);
