@@ -594,6 +594,7 @@ set_src(BASE GLOB_RECURSE src/base
   tl/array.h
   tl/hashtable.h
   tl/inplace_array.h
+  tl/partial_array.h
   tl/range.h
   tl/sorted_array.h
   tl/stream.h
@@ -740,6 +741,9 @@ set_src(ENGINE_SERVER GLOB src/engine/server
 )
 set_src(GAME_SERVER GLOB_RECURSE src/game/server
   alloc.h
+  bot.h
+  botmanager.cpp
+  botmanager.h
   database/account.cpp
   database/account.h
   database/database.cpp
@@ -750,6 +754,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   database/database_sqlite.h
   database/database_util.h
   database/jsonpath.h
+  entities/botentity.cpp
+  entities/botentity.h
   entities/character.cpp
   entities/character.h
   entities/dropped_pickup.cpp
@@ -850,6 +856,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     jsonwriter.cpp
     legacy_compat.cpp
     packer.cpp
+    partial_array.cpp
     sorted_array.cpp
     storage.cpp
     str.cpp

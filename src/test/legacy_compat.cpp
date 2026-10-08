@@ -128,70 +128,26 @@ TEST(LegacyCompat, ResetClearsNegotiatedState)
 }
 
 // The entry point names follow the reference's topology (0.8 client, 0.7
-// server), which is inverted for us: TranslateServerChunk lifts 0.7 -> 0.8 and
-// TranslateClientChunk lowers 0.8 -> 0.7. Wiring them the other way round
-// silently drops nearly every packet, so the direction is pinned here.
+// server), which is inverted for us: TranslateServerChunk is the inbound
+// direction, lifting a legacy peer's 0.7 traffic to 0.8. Wiring it to 0.8 input
+// would silently drop nearly every packet, so the direction is pinned here.
 TEST(LegacyCompat, TranslatorEntryPointsAreDirectionPinned)
 {
-	// A genuine 0.7 message: only the 0.7 -> 0.8 entry point may recognise it.
-	{
-		protocol7::CNetMsg_Sv_GameInfo GameInfo7;
-		GameInfo7.m_GameFlags = 1;
-		GameInfo7.m_ScoreLimit = 2;
-		GameInfo7.m_TimeLimit = 3;
-		GameInfo7.m_MatchNum = 4;
-		GameInfo7.m_MatchCurrent = 5;
-		CMsgPacker Packer7(protocol7::NETMSGTYPE_SV_GAMEINFO);
-		GameInfo7.Pack(&Packer7);
-
-		CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
-
-		legacy::CNetworkTranslator Translator;
-		EXPECT_GT(Translator.TranslateServerChunk(Packer7.Data(), Packer7.Size(), aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0)
-			<< "0.7 traffic must be lifted by TranslateServerChunk";
-
-		Translator.Reset();
-		EXPECT_EQ(Translator.TranslateClientChunk(Packer7.Data(), Packer7.Size(), 0, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0)
-			<< "TranslateClientChunk must not accept 0.7 input";
-	}
-
-	// The 0.8 CL_* ids differ from the 0.7 ones (CL_STARTINFO is 33 vs 27), so
-	// each direction keys its switch on the input protocol's numbering. This
-	// checks the outbound direction, which lowers 0.8 -> 0.7.
-	{
-		CNetMsg_Cl_Say Say8;
-		Say8.m_Mode = 0;
-		Say8.m_Target = -1;
-		Say8.m_pMessage = "hi";
-		CMsgPacker Packer8(NETMSGTYPE_CL_SAY);
-		Say8.Pack(&Packer8);
-
-		CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
-
-		legacy::CNetworkTranslator Translator;
-		EXPECT_GT(Translator.TranslateClientChunk(Packer8.Data(), Packer8.Size(), 0, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0)
-			<< "0.8 client messages must be lowered by TranslateClientChunk";
-	}
-}
-
-// TranslateClientChunk only maps CL_* input, so a server-to-client Sv_* message
-// must produce no output rather than garbage.
-TEST(LegacyCompat, OutboundServerMessagesAreNotTranslatedByTheReference)
-{
-	CNetMsg_Sv_GameInfo GameInfo8;
-	GameInfo8.m_GameFlags = 1;
-	GameInfo8.m_ScoreLimit = 2;
-	GameInfo8.m_TimeLimit = 3;
-	GameInfo8.m_MatchNum = 4;
-	GameInfo8.m_MatchCurrent = 5;
-	CMsgPacker Packer8(NETMSGTYPE_SV_GAMEINFO);
-	GameInfo8.Pack(&Packer8);
+	// A genuine 0.7 message: the inbound entry point must recognise it.
+	protocol7::CNetMsg_Sv_GameInfo GameInfo7;
+	GameInfo7.m_GameFlags = 1;
+	GameInfo7.m_ScoreLimit = 2;
+	GameInfo7.m_TimeLimit = 3;
+	GameInfo7.m_MatchNum = 4;
+	GameInfo7.m_MatchCurrent = 5;
+	CMsgPacker Packer7(protocol7::NETMSGTYPE_SV_GAMEINFO);
+	GameInfo7.Pack(&Packer7);
 
 	CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
 
 	legacy::CNetworkTranslator Translator;
-	EXPECT_EQ(Translator.TranslateClientChunk(Packer8.Data(), Packer8.Size(), 0, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0)
-		<< "Sv_* has no 0.8 -> 0.7 mapping in the reference translator";
+	EXPECT_GT(Translator.TranslateServerChunk(Packer7.Data(), Packer7.Size(), aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0)
+		<< "0.7 traffic must be lifted by TranslateServerChunk";
 }
 
 

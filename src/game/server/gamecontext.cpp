@@ -16,6 +16,8 @@
 #include <game/version.h>
 #include <generated/server_data.h>
 
+#include "botmanager.h"
+#include "entities/botentity.h"
 #include "entities/character.h"
 #include "entities/dropped_pickup.h"
 #include "entities/projectile.h"
@@ -621,6 +623,21 @@ void CGameContext::OnClientEnter(int ClientID)
 {
 	// send chat commands
 	SendChatCommands(ClientID);
+
+	// a (re)entering client knows no bot identity yet: forget every bot tee id
+	// this slot was handed before, so it does not inherit the previous
+	// occupant's bots
+	struct SRefreshBots
+	{
+		int m_ClientID;
+	};
+	SRefreshBots Refresh = {ClientID};
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		SRefreshBots *pRefresh = static_cast<SRefreshBots *>(pUser);
+		if(pWorld && pWorld->HasBotManager())
+			pWorld->GetBotManager()->OnClientRefresh(pRefresh->m_ClientID);
+	}, &Refresh);
 
 	m_pController->OnPlayerConnect(m_apPlayers[ClientID]);
 
@@ -1679,6 +1696,11 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 	CGameWorld *pNewWorld = new CGameWorld(this);
 	pNewWorld->m_WorldID = MapID;
 	pNewWorld->InitCollision(Kernel()->RequestInterface<IMap>());
+
+	// only worlds whose game mode wants bots get a manager; BotManager() would
+	// also create one on demand, this just makes the decision explicit
+	if(m_pController->IsUsingBot())
+		pNewWorld->BotManager();
 
 	// remember the canonical map name: it is the persistence key of the
 	// world saves stored in the database

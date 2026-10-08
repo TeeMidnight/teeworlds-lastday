@@ -5,6 +5,7 @@
 #include <engine/shared/config.h>
 
 #include <game/collision.h>
+#include <game/server/botmanager.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/player.h>
@@ -19,12 +20,6 @@
 #include "projectile.h"
 
 // input count
-struct CInputCount
-{
-	int m_Presses;
-	int m_Releases;
-};
-
 CInputCount CountInput(int Prev, int Cur)
 {
 	CInputCount c = {0, 0};
@@ -84,7 +79,7 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_Core.Reset();
 	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
 	m_Core.m_Pos = m_Pos;
-	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = &m_Core;
+	GameWorld()->m_Core.SetCharacter(m_pPlayer->GetCID(), &m_Core);
 
 	m_ReckoningTick = 0;
 	mem_zero(&m_SendCore, sizeof(m_SendCore));
@@ -100,7 +95,7 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 
 void CCharacter::Destroy()
 {
-	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = 0;
+	GameWorld()->m_Core.SetCharacter(m_pPlayer->GetCID(), 0);
 	m_Alive = false;
 }
 
@@ -676,7 +671,7 @@ void CCharacter::Die(int Killer, int Weapon)
 void CCharacter::Remove()
 {
 	GameWorld()->RemoveEntity(this);
-	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = 0;
+	GameWorld()->m_Core.SetCharacter(m_pPlayer->GetCID(), 0);
 }
 
 void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos)
@@ -685,7 +680,7 @@ void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos)
 	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
 	m_Core.m_Pos = Pos;
 	m_Core.m_HookState = HOOK_IDLE;
-	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = &m_Core;
+	GameWorld()->m_Core.SetCharacter(m_pPlayer->GetCID(), &m_Core);
 	GameWorld()->InsertEntity(this);
 }
 
@@ -823,6 +818,12 @@ void CCharacter::Snap(int SnappingClient)
 		pCharacter->m_Tick = m_ReckoningTick;
 		m_SendCore.Write(pCharacter);
 	}
+
+	// The core holds the hook target as a server-internal TeeID, but the client
+	// resolves m_HookedPlayer against the ids it was told. A bot that hooked
+	// this player is shown under a per-client id, so translate it here too.
+	if(GameWorld()->HasBotManager())
+		pCharacter->m_HookedPlayer = GameWorld()->GetBotManager()->TranslateTeeIDForClient(SnappingClient, pCharacter->m_HookedPlayer);
 
 	pCharacter->m_Emote = m_EmoteType;
 

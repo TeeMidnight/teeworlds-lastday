@@ -89,10 +89,35 @@ enum
 	SERVERINFO_VERSION_CURRENT, // add extend player info
 
 	MAX_CLIENTS = 128,
-	// Tee/TeeInfo snapshot item ID space. [0, MAX_CLIENTS) are real clients
-	// (TeeInfoID == ClientID), [MAX_CLIENTS, MAX_TEES) are reserved for bots,
-	// which are owned by the game/mod layer. 0xffff stays an invalid sentinel.
+
+	// Real connection slots the engine can serve. MAX_CLIENTS is kept above it
+	// only because the 0.8 Tee/TeeInfo item id space is wider than the
+	// connection table; it is deliberately NOT widened to hold bots, which are
+	// a game-layer concept and never own a client slot.
+	NET_MAX_CLIENTS_07 = 64,
+
+	// Tee/TeeInfo snapshot item id space: [0, MAX_CLIENTS) are real clients
+	// (TeeInfoID == ClientID), above that belongs to the game/mod layer and
+	// holds its bots. This is a *count* used as an exclusive bound throughout
+	// (the generated protocol checks read MAX_TEES-1), so the largest valid tee
+	// id is MAX_TEES - 1.
 	MAX_TEES = 65535,
+
+	// Bot tee id ranges (see CBotManager). A bot has no client slot; it gets a
+	// display tee id from the range that fits the receiving client's protocol.
+	// 0.7 peers address a tee with 7 bits and their clients occupy
+	// [0, NET_MAX_CLIENTS_07), so their bots start right after that. 0.8 peers
+	// have the full 16 bit space and take everything above the 0.7 range.
+	// The ranges never overlap each other or a real client id.
+	BOT_TEEID_07_MIN = NET_MAX_CLIENTS_07,
+	BOT_TEEID_07_MAX = 127,
+	BOT_TEEID_08_MIN = 128,
+	BOT_TEEID_08_MAX = MAX_TEES - 1,
+	// Ids each range can hold. The 0.7 one is tighter, so it bounds how many
+	// bots a single client can be shown regardless of protocol.
+	MAX_BOTS_07 = BOT_TEEID_07_MAX - BOT_TEEID_07_MIN + 1,
+	MAX_BOTS_08 = BOT_TEEID_08_MAX - BOT_TEEID_08_MIN + 1,
+
 	VANILLA_MAX_PLAYERS = 16,
 
 	MAX_INPUT_SIZE = 128,

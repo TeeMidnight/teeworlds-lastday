@@ -413,6 +413,9 @@ void CGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type) const
 		array<CEntity *> lpEnts;
 		lpEnts.hint_size(8);
 		int Num = pEval->m_pWorld->FindEntities(pEval->m_pWorld->m_alSpawnPoints[Type][i], 64, lpEnts, CGameWorld::ENTTYPE_CHARACTER);
+		// bots occupy a spawn point exactly like a character does, so they must
+		// be part of the occupancy test too
+		Num += pEval->m_pWorld->FindEntities(pEval->m_pWorld->m_alSpawnPoints[Type][i], 64, lpEnts, CGameWorld::ENTTYPE_BOTENTITY);
 		vec2 Positions[5] = {vec2(0.0f, 0.0f), vec2(-32.0f, 0.0f), vec2(0.0f, -32.0f), vec2(32.0f, 0.0f), vec2(0.0f, 32.0f)}; // start, left, up, right, down
 		int Result = -1;
 		for(int Index = 0; Index < 5 && Result == -1; ++Index)
@@ -443,6 +446,11 @@ void CGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type) const
 bool CGameController::GetStartRespawnState() const
 {
 	return false;
+}
+
+bool CGameController::IsUsingBot() const
+{
+	return Config()->m_SvBots > 0;
 }
 
 // team

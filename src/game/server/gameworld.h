@@ -31,6 +31,7 @@ public:
 		ENTTYPE_RIWALL,
 		ENTTYPE_RESOURCE,
 		ENTTYPE_DROPPEDPICKUP,
+		ENTTYPE_BOTENTITY,
 		NUM_ENTTYPES,
 
 		ENTFLAG_HITABLE = 1,
@@ -47,6 +48,10 @@ private:
 	class CConfig *m_pConfig;
 	class IServer *m_pServer;
 
+	// owns this world's bots and their per-client tee id mapping; created on
+	// demand so a world without bots pays nothing
+	class CBotManager *m_pBotManager;
+
 	CLayers m_Layers;
 	CCollision m_Collision;
 
@@ -55,6 +60,14 @@ public:
 	class CConfig *Config() { return m_pConfig; }
 	class IServer *Server() { return m_pServer; }
 	class CCollision *Collision() { return &m_Collision; }
+
+	// the world's bot manager, created lazily; never null while the world is
+	// alive
+	class CBotManager *BotManager();
+	// the manager only if it already exists, for callers that must not
+	// allocate one (snap, teardown, per-world sweeps)
+	class CBotManager *GetBotManager() const { return m_pBotManager; }
+	bool HasBotManager() const { return m_pBotManager != nullptr; }
 
 	CEventHandler m_Events;
 	CWorldCore m_Core;

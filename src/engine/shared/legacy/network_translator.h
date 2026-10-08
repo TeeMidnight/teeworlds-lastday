@@ -36,9 +36,15 @@ namespace legacy
 		{
 			// A 0.7 server never has more than this many clients.
 			MAX_CLIENTS7 = 64,
-			// The outbound identity cache is keyed by 0.7 client id, so it is
-			// bounded by MAX_CLIENTS7 rather than the much larger 0.8 tee space.
-			MAX_TEES8 = MAX_CLIENTS7,
+			// The 0.7 identity objects (PlayerInfo/PlayerInfoRace/De_ClientInfo)
+			// are keyed by a 0.7 tee id, and a 0.7 client can address 128 of
+			// them. That is also the range CBotManager hands to bots shown to a
+			// 0.7 peer, so it is the widest id a translated snapshot can carry.
+			MAX_TEEID7 = BOT_TEEID_07_MAX,
+			// The outbound identity cache is keyed by 0.8 tee id. A translator
+			// only serves a 0.7 peer, which can never be shown above MAX_TEEID7,
+			// so this is bounded by that and not by the full 16 bit 0.8 space.
+			MAX_TEES8 = MAX_TEEID7 + 1,
 			// CTuningParams has this many parameters; the 0.8 Tuning object uses
 			// the same count (guarded by a static_assert in gamecore.cpp).
 			NUM_TUNES = 32,
@@ -152,7 +158,6 @@ namespace legacy
 		// Message-level translation. Returns bytes written to pOut, -1 if the
 		// message is dropped, -2 on error.
 		int TranslateServerMsg(const void *pMsg7, int Size7, void *pOut, int OutSize);
-		int TranslateClientMsg(const void *pMsg8, int Size8, void *pOut, int OutSize);
 		int TranslateServerToClientMsg(const void *pMsg8, int Size8, void *pOut, int OutSize);
 
 	public:
@@ -167,24 +172,12 @@ namespace legacy
 		// an unconfigured translator still behaves sanely in tests.
 		void SetNetVersion(const char *pNetVersion) { m_pNetVersion = pNetVersion ? pNetVersion : LEGACY_NET7_NETVERSION; }
 
-		// --- server/demo -> 0.8 client -------------------------------------
-		// Translate one raw 0.7 chunk (message or snapshot payload, as delivered
-		// by CNetClient::Recv) into 0.8 chunks.
-		//   pInData/pInSize: the 0.7 chunk payload (a packed message starting with
-		//                    its msg id, or a snapshot delta payload).
-		//   pOutChunks:      caller-provided array of at least MaxOutChunks chunks.
-		//   Returns the number of 0.8 chunks written (0 = absorbed/dropped).
+		// --- 0.7 client -> 0.8 server (our topology) -----------------------
+		// Translate one raw 0.7 chunk from a legacy peer into 0.8 chunks. The
+		// name follows the reference implementation, where the translating side
+		// is the client; here it is the server, so this is the inbound
+		// direction.
 		int TranslateServerChunk(const void *pInData, int InSize, CNetChunk *pOutChunks, int MaxOutChunks);
-
-		// --- 0.8 client -> 0.7 server --------------------------------------
-		// Translate one 0.8 chunk produced by the client into 0.7 chunks.
-		//   Flags: the NETSENDFLAG_* the chunk was queued with; they are
-		//          propagated to the output chunks unchanged. Delivery
-		//          semantics must survive translation: NETMSG_INPUT etc. are
-		//          sent non-vital, and forcing them vital would make the net
-		//          layer resend every input reliably.
-		//   Same contract as above otherwise.
-		int TranslateClientChunk(const void *pInData, int InSize, int Flags, CNetChunk *pOutChunks, int MaxOutChunks);
 
 		// --- 0.8 server -> 0.7 client (our topology) -----------------------
 		// Translate one raw 0.8 chunk produced by our server into 0.7 chunks.

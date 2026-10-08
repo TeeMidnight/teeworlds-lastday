@@ -140,6 +140,10 @@ public:
 
 	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }
 
+	// whether this game mode wants bots. The world only allocates a
+	// CBotManager when this holds, so other modes pay nothing for the bot layer.
+	bool IsUsingBot() const;
+
 	void SendSystemChat(int TargetID, const char *pMsg);
 	bool IsCharacterSnapable(int SnappingClient, int ClientID) const { return true; }
 };

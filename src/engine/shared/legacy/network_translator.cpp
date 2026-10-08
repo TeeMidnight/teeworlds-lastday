@@ -319,9 +319,11 @@ namespace legacy
 			const CTeeState8 *pState = &m_aTees8[TeeID];
 			if(!pState->m_Active)
 				continue;
-			// The 0.7 identity objects are keyed by client id, so a tee outside
-			// the 0.7 client range cannot be represented and is skipped.
-			if(TeeID >= MAX_CLIENTS7)
+			// The 0.7 identity objects are keyed by a 0.7 tee id, so a tee
+			// above that range cannot be represented and is skipped. This
+			// includes bots: they are not clients, but the bot manager hands
+			// them ids inside the 0.7 range exactly so they are representable.
+			if(TeeID > MAX_TEEID7)
 				continue;
 
 			protocol7::CNetObj_PlayerInfo *pPlayerInfo = (protocol7::CNetObj_PlayerInfo *) Builder.NewItem(protocol7::NETOBJTYPE_PLAYERINFO, TeeID, sizeof(protocol7::CNetObj_PlayerInfo));
@@ -1117,139 +1119,6 @@ namespace legacy
 		return -1;
 	}
 
-	int CNetworkTranslator::TranslateClientMsg(const void *pMsg8, int Size8, void *pOut, int OutSize)
-	{
-		CMsgUnpacker Unpacker(pMsg8, Size8);
-		if(Unpacker.Error())
-			return -2;
-		const int MsgId8 = Unpacker.Type();
-
-		static CNetObjHandler Handler8;
-		void *pRaw = Handler8.SecureUnpackMsg(MsgId8, &Unpacker);
-		if(!pRaw)
-			return -2;
-
-		switch(MsgId8)
-		{
-			case NETMSGTYPE_CL_SAY:
-			{
-				CNetMsg_Cl_Say *pIn = (CNetMsg_Cl_Say *) pRaw;
-				protocol7::CNetMsg_Cl_Say Out;
-				Out.m_Mode = pIn->m_Mode;
-				Out.m_Target = pIn->m_Target;
-				Out.m_pMessage = pIn->m_pMessage;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_SAY);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_KILL:
-			{
-				protocol7::CNetMsg_Cl_Kill Out;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_KILL);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_SETTEAM:
-			{
-				CNetMsg_Cl_SetTeam *pIn = (CNetMsg_Cl_SetTeam *) pRaw;
-				protocol7::CNetMsg_Cl_SetTeam Out;
-				Out.m_Team = pIn->m_Team;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_SETTEAM);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_SETSPECTATORMODE:
-			{
-				CNetMsg_Cl_SetSpectatorMode *pIn = (CNetMsg_Cl_SetSpectatorMode *) pRaw;
-				protocol7::CNetMsg_Cl_SetSpectatorMode Out;
-				Out.m_SpecMode = pIn->m_SpecMode;
-				Out.m_SpectatorID = pIn->m_SpectatorID;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_SETSPECTATORMODE);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_VOTE:
-			{
-				CNetMsg_Cl_Vote *pIn = (CNetMsg_Cl_Vote *) pRaw;
-				protocol7::CNetMsg_Cl_Vote Out;
-				Out.m_Vote = pIn->m_Vote;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_VOTE);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_CALLVOTE:
-			{
-				CNetMsg_Cl_CallVote *pIn = (CNetMsg_Cl_CallVote *) pRaw;
-				protocol7::CNetMsg_Cl_CallVote Out;
-				Out.m_Type = pIn->m_Type;
-				Out.m_Value = pIn->m_Value;
-				Out.m_Reason = pIn->m_Reason;
-				Out.m_Force = pIn->m_Force;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_CALLVOTE);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_EMOTICON:
-			{
-				CNetMsg_Cl_Emoticon *pIn = (CNetMsg_Cl_Emoticon *) pRaw;
-				protocol7::CNetMsg_Cl_Emoticon Out;
-				Out.m_Emoticon = pIn->m_Emoticon;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_EMOTICON);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_SKINCHANGE:
-			{
-				CNetMsg_Cl_SkinChange *pIn = (CNetMsg_Cl_SkinChange *) pRaw;
-				protocol7::CNetMsg_Cl_SkinChange Out;
-				for(int p = 0; p < NUM_SKINPARTS; p++)
-				{
-					Out.m_apSkinPartNames[p] = pIn->m_apSkinPartNames[p];
-					Out.m_aUseCustomColors[p] = pIn->m_aUseCustomColors[p];
-					Out.m_aSkinPartColors[p] = pIn->m_aSkinPartColors[p];
-				}
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_SKINCHANGE);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_READYCHANGE:
-			{
-				protocol7::CNetMsg_Cl_ReadyChange Out;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_READYCHANGE);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_STARTINFO:
-			{
-				CNetMsg_Cl_StartInfo *pIn = (CNetMsg_Cl_StartInfo *) pRaw;
-				protocol7::CNetMsg_Cl_StartInfo Out;
-				Out.m_pName = pIn->m_pName;
-				Out.m_pClan = pIn->m_pClan;
-				Out.m_Country = pIn->m_Country;
-				for(int p = 0; p < NUM_SKINPARTS; p++)
-				{
-					Out.m_apSkinPartNames[p] = pIn->m_apSkinPartNames[p];
-					Out.m_aUseCustomColors[p] = pIn->m_aUseCustomColors[p];
-					Out.m_aSkinPartColors[p] = pIn->m_aSkinPartColors[p];
-				}
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_STARTINFO);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-			case NETMSGTYPE_CL_COMMAND:
-			{
-				CNetMsg_Cl_Command *pIn = (CNetMsg_Cl_Command *) pRaw;
-				protocol7::CNetMsg_Cl_Command Out;
-				Out.m_Name = pIn->m_Name;
-				Out.m_Arguments = pIn->m_Arguments;
-				CMsgPacker Packer(protocol7::NETMSGTYPE_CL_COMMAND);
-				Out.Pack(&Packer);
-				return FinishMsg(&Packer, pOut, OutSize);
-			}
-		}
-		return -1;
-	}
-
 	int CNetworkTranslator::TranslateServerChunk(const void *pInData, int InSize, CNetChunk *pOutChunks, int MaxOutChunks)
 	{
 		CMsgUnpacker Unpacker(pInData, InSize);
@@ -1506,9 +1375,12 @@ namespace legacy
 				// 0.8 only announces that a tee entered; the identity travels in
 				// the TeeInfo snapshot object. 0.7 has no TeeInfo, so the cached
 				// identity is expanded back into a full Sv_ClientInfo here.
+				// Bots take the same path: the bot manager assigns them ids in
+				// the 0.7 range precisely so they become real tees for a 0.7
+				// client, which has no other way to learn about them.
 				CNetMsg_Sv_ClientEnter *pIn = (CNetMsg_Sv_ClientEnter *) pRaw;
 				const int TeeID = pIn->m_ClientID;
-				if(TeeID < 0 || TeeID >= MAX_CLIENTS7)
+				if(TeeID < 0 || TeeID > MAX_TEEID7)
 					return -1;
 				const CTeeState8 *pState = &m_aTees8[TeeID];
 				if(!pState->m_Active)
@@ -1526,7 +1398,9 @@ namespace legacy
 					Out.m_aUseCustomColors[p] = pState->m_aUseCustomColors[p];
 					Out.m_aSkinPartColors[p] = pState->m_aSkinPartColors[p];
 				}
-				Out.m_Silent = 0;
+				// A bot is not a player joining: it appears quietly, like the
+				// silent entries a 0.7 server used for its own fake clients.
+				Out.m_Silent = (TeeID > MAX_CLIENTS7) ? 1 : 0;
 				CMsgPacker Packer(protocol7::NETMSGTYPE_SV_CLIENTINFO);
 				Out.Pack(&Packer);
 				return FinishMsg(&Packer, pOut, OutSize);
@@ -1641,38 +1515,6 @@ namespace legacy
 
 		m_aClientOut[0].set_size(InSize + 4096);
 		const int Written = TranslateServerToClientMsg(pInData, InSize, m_aClientOut[0].base_ptr(), m_aClientOut[0].size());
-		if(Written < 0)
-			return 0;
-		pOutChunks[0].m_ClientID = 0;
-		pOutChunks[0].m_Flags = Flags;
-		pOutChunks[0].m_DataSize = Written;
-		pOutChunks[0].m_pData = m_aClientOut[0].base_ptr();
-		return 1;
-	}
-
-	int CNetworkTranslator::TranslateClientChunk(const void *pInData, int InSize, int Flags, CNetChunk *pOutChunks, int MaxOutChunks)
-	{
-		if(MaxOutChunks < 1)
-			return 0;
-
-		// system message ids are frozen between 0.7 and 0.8, so NETMSG_READY /
-		// NETMSG_ENTERGAME pass through unchanged
-		CMsgUnpacker Unpacker(pInData, InSize);
-		if(Unpacker.Error())
-			return 0;
-		if(Unpacker.System())
-		{
-			m_aClientOut[0].set_size(InSize);
-			mem_copy(m_aClientOut[0].base_ptr(), pInData, InSize);
-			pOutChunks[0].m_ClientID = 0;
-			pOutChunks[0].m_Flags = Flags;
-			pOutChunks[0].m_DataSize = InSize;
-			pOutChunks[0].m_pData = m_aClientOut[0].base_ptr();
-			return 1;
-		}
-
-		m_aClientOut[0].set_size(InSize + 4096);
-		const int Written = TranslateClientMsg(pInData, InSize, m_aClientOut[0].base_ptr(), m_aClientOut[0].size());
 		if(Written < 0)
 			return 0;
 		pOutChunks[0].m_ClientID = 0;

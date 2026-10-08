@@ -17,6 +17,7 @@ class CDatabase;
 class CGameWorld;
 class CCharacter;
 class CGameContext;
+class IServer;
 
 enum
 {

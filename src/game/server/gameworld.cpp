@@ -13,6 +13,8 @@
 
 #include <climits>
 
+#include "botmanager.h"
+#include "entities/botentity.h"
 #include "entities/character.h"
 #include "entities/dropped_pickup.h"
 #include "entities/resource.h"
@@ -36,6 +38,8 @@ CGameWorld::CGameWorld(CGameContext *pGameServer)
 	m_pServer = m_pGameServer->Server();
 	m_Events.SetGameServer(pGameServer);
 
+	m_pBotManager = nullptr;
+
 	m_aMapName[0] = '\0';
 
 	for(int i = 0; i < NUM_ENTTYPES; i++)
@@ -47,10 +51,22 @@ CGameWorld::CGameWorld(CGameContext *pGameServer)
 
 CGameWorld::~CGameWorld()
 {
+	// the manager goes first: bots are entities, and it keeps per-client tee
+	// id state that must not outlive them
+	delete m_pBotManager;
+	m_pBotManager = nullptr;
+
 	// delete all entities
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 		while(m_alpEntityLists[i].size())
 			delete m_alpEntityLists[i][0];
+}
+
+CBotManager *CGameWorld::BotManager()
+{
+	if(!m_pBotManager)
+		m_pBotManager = new CBotManager(this);
+	return m_pBotManager;
 }
 
 void CGameWorld::InitCollision(IMap *pMap)
@@ -274,6 +290,10 @@ void CGameWorld::Snap(int SnappingClient)
 
 void CGameWorld::PostSnap()
 {
+	// refresh the per-client bot tee id mapping after this tick's snapshots
+	if(m_pBotManager)
+		m_pBotManager->PostSnap();
+
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 		for(auto &pEnt : m_alpEntityLists[i])
 			pEnt->PostSnap();
@@ -296,6 +316,10 @@ void CGameWorld::RemoveEntities()
 
 void CGameWorld::Tick()
 {
+	// bots decide their input and respawn before the entities advance
+	if(m_pBotManager)
+		m_pBotManager->Tick();
+
 	// update all objects
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 		for(auto &pEnt : m_alpEntityLists[i])

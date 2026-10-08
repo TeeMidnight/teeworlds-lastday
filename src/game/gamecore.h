@@ -7,6 +7,7 @@
 
 #include <base/math.h>
 #include <base/system.h>
+#include <base/tl/partial_array.h>
 
 #include <engine/console.h>
 #include <engine/shared/protocol.h>
@@ -139,17 +140,97 @@ enum
 	HOOK_GRABBED,
 };
 
+// Edge detection helper for the bitmask-style input fields (fire, jump, ...):
+// counts how often the mask was pressed and released between two states.
+struct CInputCount
+{
+	int m_Presses;
+	int m_Releases;
+};
+
+CInputCount CountInput(int Prev, int Cur);
+
 class CWorldCore
 {
 public:
-	CWorldCore()
+	// TeeIDs go beyond MAX_CLIENTS (bots have their own ids above it, and
+	// m_HookedPlayer arrives straight from the snapshot), so characters live
+	// in a sparse container covering the whole id space.
+	enum
 	{
-		mem_zero(m_apCharacters, sizeof(m_apCharacters));
-	}
+		CHARACTER_PART_SIZE = 1024,
+		CHARACTER_PARTS = 64,
+	};
+	static_assert(CHARACTER_PARTS * CHARACTER_PART_SIZE >= MAX_TEES, "character storage must cover the whole TeeID space");
 
 	CTuningParams m_Tuning;
-	class CCharacterCore *m_apCharacters[MAX_CLIENTS];
+	// The world only borrows the character cores.
+	partial_array<class CCharacterCore *, CHARACTER_PARTS, CHARACTER_PART_SIZE, allocator_non_owning<class CCharacterCore *>> m_apCharacters;
+
+	// TeeIDs bound in m_apCharacters. The container can tell whether an id is
+	// bound but not which ones are, and walking its whole index space every
+	// tick would cost far more than the dense MAX_CLIENTS scan it replaced.
+	array<int> m_aCharacterIDs;
+
+	// Returns the character core for a TeeID, or 0 when there is none.
+	class CCharacterCore *GetCharacter(int TeeID) const
+	{
+		class CCharacterCore *const *ppChar = m_apCharacters.get(TeeID);
+		return ppChar ? *ppChar : 0;
+	}
+
+	// Binds a character core to a TeeID, or unbinds it when pCharacter is 0.
+	void SetCharacter(int TeeID, class CCharacterCore *pCharacter)
+	{
+		if(TeeID < 0 || TeeID >= MAX_TEES)
+			return;
+
+		const bool WasBound = GetCharacter(TeeID) != 0;
+		if(pCharacter)
+		{
+			m_apCharacters[TeeID] = pCharacter;
+			if(!WasBound)
+				m_aCharacterIDs.add(TeeID);
+		}
+		else
+		{
+			if(WasBound)
+			{
+				// Only the entry is cleared: other ids may share its part.
+				for(int i = 0; i < m_aCharacterIDs.size(); i++)
+				{
+					if(m_aCharacterIDs[i] == TeeID)
+					{
+						m_aCharacterIDs.remove_index(i);
+						break;
+					}
+				}
+				m_apCharacters[TeeID] = 0;
+			}
+		}
+	}
+
+	// Removes every binding, so the world can be reused for a new prediction.
+	void ClearCharacters()
+	{
+		for(int i = 0; i < m_aCharacterIDs.size(); i++)
+			m_apCharacters[m_aCharacterIDs[i]] = 0;
+		m_aCharacterIDs.clear_size();
+	}
 };
+
+/*
+	Function: PickFreeCharacterTeeID
+		Finds a free slot in the bot range for an entity registering a core.
+
+	The id is derived from Seed, which spreads entities across the container's
+	parts and makes the result stable for a given seed, then probed forward.
+
+	Returns:
+		A free TeeID in [BOT_TEEID_07_MIN, BOT_TEEID_08_MAX], or -1 when every
+		id in that range is bound.
+*/
+int PickFreeCharacterTeeID(const CWorldCore *pCore, unsigned Seed);
 
 class CCharacterCore
 {
