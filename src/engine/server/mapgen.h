@@ -126,10 +126,14 @@ struct CInstruction
 		int m_ScaleY;
 		int m_RepeatX; // how many times the texture tiles across the quad
 		int m_RepeatY;
-		// Vertical placement in tiles. AnchorY is measured from the ground line,
-		// so scenery keeps its place whether the floor's surface sits high or
-		// low: negative is above the ground (clouds, mountains), positive below.
-		// SpreadY scatters the copies around that anchor.
+		// Vertical placement in tiles.
+		//
+		// AnchorY is a *screen* offset from where the ground line appears, not a
+		// world height: the renderer places a group at quad - camera *
+		// parallax/100, so a low parallax group is anchored to the screen and a
+		// world height would push it thousands of pixels off. Negative is above
+		// the ground (clouds, mountains), positive below. SpreadY scatters the
+		// copies around that anchor.
 		int m_AnchorY;
 		int m_SpreadY; // vertical scatter range, in tiles
 		int m_ColorTop[4]; // tint at the top edge

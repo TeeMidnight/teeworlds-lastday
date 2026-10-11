@@ -79,7 +79,7 @@
                             255
                         ],
                         "seed_offset": 42000,
-                        "anchor_y": -16
+                        "anchor_y": -7
                     }
                 ]
             },
@@ -97,7 +97,7 @@
                         "count": 8,
                         "scale_x": 9,
                         "scale_y": 7,
-                        "spread_y": 10,
+                        "spread_y": 6,
                         "repeat_x": 1,
                         "repeat_y": 1,
                         "color": [
@@ -107,7 +107,7 @@
                             255
                         ],
                         "seed_offset": 42977,
-                        "anchor_y": -30
+                        "anchor_y": -9
                     }
                 ]
             },

@@ -1135,11 +1135,23 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 				const float Jitter = Slot > 1.0f ? (float) (Hash % 1000u) / 1000.0f * Slot * 0.8f : 0.0f;
 				const float CentreX = (n * Slot + Jitter) * 32.0f;
 
-				// Placed against the ground line, not the top of the world: an
-				// anchor measured from y=0 pins the scenery to the sky. This
-				// keeps mountains at the horizon and clouds above it whatever
-				// the floor's surface height is.
-				float CentreY = (float) (GroundY + Pass.m_AnchorY) * 32.0f;
+				// The y is a *screen* coordinate, not a world one.
+				//
+				// The renderer places a group at quad - camera * parallax/100,
+				// so a group at parallax 100 moves with the world (a quad's y is
+				// a world height) while one at low parallax is anchored to the
+				// screen: at parallax 0 the quad ignores the camera entirely.
+				// Authoring a world height into a parallax 3 group therefore
+				// pushes it thousands of pixels off screen, which is exactly what
+				// happened before.
+				//
+				// The anchor is measured from where the ground line sits on
+				// screen, so scenery keeps its place over the horizon: the gap
+				// between the two shrinks by parallax/100 as the camera moves,
+				// which is the drift that gives the layer its depth.
+				const float Para = (float) maximum(1, Layer.m_ParallaxY);
+				const float ScreenGround = (float) GroundY * 32.0f * (Para / 100.0f);
+				float CentreY = ScreenGround + (float) Pass.m_AnchorY * 32.0f;
 				if(Pass.m_SpreadY != 0)
 					CentreY += ((float) (Hash2 % 1000u) / 1000.0f - 0.5f) * (float) Pass.m_SpreadY * 32.0f;
 
