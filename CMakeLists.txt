@@ -732,12 +732,18 @@ list(APPEND TARGETS_OWN engine-shared game-shared)
 
 # Sources
 set_src(ENGINE_SERVER GLOB src/engine/server
+  automap.cpp
+  automap.h
   mapgen.cpp
   mapgen.h
+  noise.cpp
+  noise.h
   register.cpp
   register.h
   server.cpp
   server.h
+  worldgen.cpp
+  worldgen.h
 )
 set_src(GAME_SERVER GLOB_RECURSE src/game/server
   alloc.h
@@ -863,6 +869,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     test.cpp
     test.h
     thread.cpp
+    world_wrap.cpp
   )
   set(TARGET_TESTRUNNER testrunner)
   add_executable(${TARGET_TESTRUNNER} EXCLUDE_FROM_ALL

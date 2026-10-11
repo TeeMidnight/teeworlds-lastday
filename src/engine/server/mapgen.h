@@ -11,6 +11,237 @@ class CJsonWriter;
 struct _json_value;
 typedef struct _json_value json_value;
 struct CStructEntrance;
+
+// The kind of space a floor represents. The three kinds are generated and
+// traversed in fundamentally different ways, so this is a first class concept
+// rather than a set of optional config fields.
+enum EWorldKind
+{
+	// A normal euclidean world: the terrain is procedurally generated from
+	// noise (heightmap surface, caves, ore veins) and the exits lead out of
+	// the generated surface.
+	WORLDKIND_EUCLID = 0,
+
+	// The hub world (e.g. Connector). A hand authored static map that links
+	// the generated floors together. It is never generated: the server loads
+	// it directly from maps/.
+	WORLDKIND_HUB,
+
+	// A non euclidean world: a hand authored static map whose exits do not
+	// correspond to their entrances, so walking back does not return you where
+	// you came from. Currently disabled at the config level (no floor routes
+	// into it), but the kind is parsed so the world can be re-enabled later
+	// without touching the generator.
+	WORLDKIND_NONEUCLID,
+};
+
+const char *WorldKindName(EWorldKind Kind);
+EWorldKind WorldKindFromString(const char *pName, bool *pValid);
+
+// ---------------------------------------------------------------------------
+// CInstruction: the parsed configuration of one floor
+// ---------------------------------------------------------------------------
+struct CInstruction
+{
+	// -----------------------------------------------------------------
+	// procedural (WORLDKIND_EUCLID) generation settings
+	// -----------------------------------------------------------------
+
+	// the noise parameters of a surface/cave/ore field
+	struct CNoiseConfig
+	{
+		int m_SeedOffset; // keeps the fields of one floor independent
+		int m_Octaves;
+		float m_Frequency;
+		float m_Lacunarity;
+		float m_Persistence;
+		float m_Amplitude; // 0 = derive from the octave count
+	};
+
+	struct CCaveConfig
+	{
+		bool m_Enabled;
+		CNoiseConfig m_Noise;
+		float m_Threshold; // noise above this carves air
+		int m_MinDepth; // never carve closer than this to the surface
+		int m_SurfaceMargin; // keep this many tiles of rock above a cave
+	};
+
+	struct COreConfig
+	{
+		char m_aResId[32]; // resource id spawned at the vein
+		char m_aDisplay[32];
+		char m_aTile[64]; // tileset drawn where the vein is
+		CNoiseConfig m_Noise;
+		float m_Threshold; // noise above this becomes a vein
+		int m_MinDepth; // veins only below this depth
+		int m_Probes; // resource entities rolled per vein tile
+		int m_Proba;
+		int m_HardnessMin;
+		int m_HardnessMax;
+		int m_RespawnTimeMin;
+		int m_RespawnTimeMax;
+	};
+
+	// A surface opening: a visible cave mouth cut into the terrain that carries
+	// the player to another floor.
+	//
+	// It is deliberately built from real tiles rather than being an invisible
+	// coordinate box, because an unseen trigger teleports the player with no
+	// warning. The opening is framed with unhookable stone so it reads as a
+	// structure, and only the lit mouth is an entrance.
+	struct CSurfaceEntranceConfig
+	{
+		bool m_Enabled;
+		int m_Count; // how many surface openings to carve
+
+		// the entrance is one of the exits listed in the floor's "entrances";
+		// the first Count of them are used, in order
+		int m_MinSeparation; // keep openings at least this many tiles apart
+		int m_Width; // inner width of the cave mouth, in tiles
+		int m_Height; // inner height of the cave mouth, in tiles
+		int m_Clearance; // leave this many tiles of rock between the mouth and the roof
+		int m_Frame; // thickness of the unhookable frame around the mouth
+		int m_Margin; // keep openings this far from the map edges
+	};
+
+	// -----------------------------------------------------------------
+	// background
+	//
+	// The backgrounds of the official maps are not tiling images: the sky is a
+	// single huge quad with no texture at all, painted with a flat colour, and
+	// the clouds / mountains / sun are individual sprites placed as quads over
+	// it at their own parallax. A texture like bg_cloud1 or jungle_background is
+	// not a seamless sky, so stretching one across the layer smears it; that is
+	// why this block describes a sky colour plus a list of decorative quads.
+	// -----------------------------------------------------------------
+
+	// One decorative pass of quads: clouds, mountains, a sun, a fog band.
+	// Several of these make up a layer.
+	struct CQuadPassConfig
+	{
+		char m_aImage[64]; // image in mapres/, "" means a plain colour quad
+		int m_Count; // how many quads to scatter
+		int m_ScaleX; // size of one quad, in tiles
+		int m_ScaleY;
+		int m_RepeatX; // how many times the texture tiles across the quad
+		int m_RepeatY;
+		// Vertical placement in tiles. AnchorY is measured from the ground line,
+		// so scenery keeps its place whether the floor's surface sits high or
+		// low: negative is above the ground (clouds, mountains), positive below.
+		// SpreadY scatters the copies around that anchor.
+		int m_AnchorY;
+		int m_SpreadY; // vertical scatter range, in tiles
+		int m_ColorTop[4]; // tint at the top edge
+		int m_ColorBottom[4]; // tint at the bottom edge (gradient)
+		int m_SeedOffset;
+	};
+
+	// What a layer is for. Groups are drawn in file order, so the role decides
+	// where a layer lands: a foreground layer must come after the game layer or
+	// it would be painted underneath the terrain.
+	enum ELayerRole
+	{
+		LAYERROLE_BACKGROUND = 0, // behind the terrain (sky, mountains, clouds)
+		LAYERROLE_FOREGROUND, // in front of the terrain (fog, overhanging leaves)
+	};
+
+	// A generated layer. Terrain layers carry tiles, decoration layers carry
+	// quads, and both are placed at their own parallax so they move at their own
+	// speed like the official maps.
+	struct CLayerConfig
+	{
+		char m_aName[32];
+		ELayerRole m_Role;
+		int m_ParallaxX;
+		int m_ParallaxY;
+		int m_OffsetX; // group offset in tiles
+		int m_OffsetY;
+
+		// a terrain layer is filled from the generated world instead of from
+		// quads; exactly one layer has this set
+		bool m_IsTerrain;
+
+		bool m_Enabled;
+		array<CQuadPassConfig> m_Quads;
+	};
+
+	struct CGeneration
+	{
+		bool m_Enabled;
+		int m_Width;
+		int m_Height;
+		int m_SurfaceLevel; // tile y of the average ground line
+		float m_SurfaceAmplitude; // how far the heightmap swings up and down
+		CNoiseConfig m_Surface;
+		int m_EdgeWall; // thickness of the sealed top and bottom border
+
+		// Columns kept out of the cylindrical wrap at each end of the x axis.
+		//
+		// The automapper samples across the seam, and where the far side is empty
+		// it stamps an outer corner tile onto the border. These columns clamp to
+		// the map instead, so they read their own edge and come out plain. Two is
+		// what a 3x3 rule needs for a stable neighbourhood; 0 restores the plain
+		// edge to edge wrap. The seam is levelled separately, by m_WrapBlend.
+		int m_WrapMargin;
+
+		// How far the ground eases back from the seam to its natural shape.
+		//
+		// Clamping the rules still leaves a corner wherever the real terrain
+		// slopes beside the border. The outer m_WrapMargin columns are pinned to a
+		// shared seam height and the ground eases back over this many columns, so
+		// the seam is flat with no step. A wide window costs terrain variation; a
+		// narrow one leaves a ledge. 0 disables it.
+		int m_WrapBlend;
+
+		// the tileset image the terrain layer draws from, e.g. "grass_main".
+		// It has to match the tileset the automap rule set below was written
+		// for, otherwise the rule indices point at the wrong tiles.
+		char m_aTileset[64];
+		char m_aMainRuleSet[32]; // automap rule set for the terrain layer ("grass", "winter", ...)
+		char m_aCaveRuleSet[32]; // optional rule set for the carved cave interiors
+
+		// The tileset and rule set of the entrance frames. Configured separately
+		// from the terrain because "unhookable" is not a look the rock sheet
+		// carries. Empty reuses the terrain tileset.
+		char m_aUnhookableTileset[64];
+		char m_aUnhookableRuleSet[32];
+
+		// The sky is a quad at parallax 0 with a vertical gradient, like the
+		// official maps: m_SkyColor at the top fading to m_SkyHorizonColor. Sized
+		// to the screen, since parallax 0 already pins it to the camera.
+		int m_SkyColor[4];
+		int m_SkyHorizonColor[4];
+
+		// every layer to emit, in the order they are written out
+		array<CLayerConfig> m_Layers;
+
+		CCaveConfig m_Caves;
+		array<COreConfig> m_Ores;
+		CSurfaceEntranceConfig m_SurfaceEntrances;
+	};
+
+	// -----------------------------------------------------------------
+	// structure pasting (used by the non euclidean worlds)
+	// -----------------------------------------------------------------
+	struct CStruct
+	{
+		char m_aBaseMap[64];
+		int m_GenerateProba;
+		bool m_PasteAir; // whether empty struct tiles overwrite the base (default true)
+		array<char> m_EntrancesJson; // serialized entrances json of this struct (optional)
+		array<char> m_ResourcesJson; // serialized resources json of this struct (optional)
+	};
+
+	char m_aFloorName[64]; // unique floor/map name (the file name)
+	EWorldKind m_Kind;
+	char m_aBaseMap[64]; // the base map file to load (the "base" field)
+	CGeneration m_Generation;
+	array<CStruct> m_Structs;
+	array<char> m_DefaultEntrances;
+	array<char> m_ResourcesJson; // serialized resources json of this base (optional)
+};
+
 class CMapGen
 {
 	class IStorage *m_pStorage;
@@ -19,25 +250,7 @@ class CMapGen
 	class IStorage *Storage() { return m_pStorage; };
 	class IConsole *Console() { return m_pConsole; };
 
-	struct CInstruction
-	{
-		struct CStruct
-		{
-			char m_aBaseMap[64];
-			int m_GenerateProba;
-			bool m_PasteAir; // whether empty struct tiles overwrite the base (default true)
-			array<char> m_EntrancesJson; // serialized entrances json of this struct (optional)
-			array<char> m_ResourcesJson; // serialized resources json of this struct (optional)
-		};
-
-		char m_aFloorName[64]; // unique floor/map name (the file name)
-		char m_aBaseMap[64]; // the base map file to load (the "base" field)
-		array<CStruct> m_Structs;
-		array<char> m_DefaultEntrances;
-		array<char> m_ResourcesJson; // serialized resources json of this base (optional)
-	};
-
-	// keyed by str_quickhash of the base map name
+	// keyed by str_quickhash of the floor name
 	hash_table<unsigned, CInstruction *, 4> m_lInstructions;
 
 	static void FreeInstruction(CInstruction *&pInstruction, void *pUser);
@@ -56,15 +269,23 @@ class CMapGen
 	// appended as well.
 	void WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEntrances, int Seed, const array<CStructEntrance> &lStructEntrances);
 
+	// build a euclidean floor from noise (see worldgen.h)
+	bool GenerateEuclidean(const CInstruction *pInstruction, int Seed);
+
 public:
 	CMapGen(class IStorage *pStorage, class IConsole *pConsole);
 	~CMapGen();
 
 	// Generates a new map for the given floor (the floor name, e.g. the map
 	// name prefix "<FloorName>_<Seed>"). The floor's instruction carries the
-	// actual base map file to load. The result is written to
+	// actual base map file to load and the world kind, which selects the
+	// generation strategy. The result is written to
 	// "generatedmaps/<FloorName>_<Seed>.map". Returns true on success.
 	bool RequestNewMap(const char *pFloorName, int Seed);
+
+	// the kind of a floor, or false when the floor is unknown. Used by the
+	// server to decide whether a map should be generated at all.
+	bool GetFloorKind(const char *pFloorName, EWorldKind *pKind) const;
 };
 
 #endif // ENGINE_SERVER_MAPGEN_H

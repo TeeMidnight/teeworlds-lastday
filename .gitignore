@@ -77,3 +77,6 @@ googletest-src
 install_manifest.txt
 pack_*/
 rules.ninja
+
+# local map-generation probe harness and its scratch output
+/.worldgen_probe/

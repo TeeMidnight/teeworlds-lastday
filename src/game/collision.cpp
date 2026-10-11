@@ -19,6 +19,7 @@ CCollision::CCollision()
 {
 	m_Width = 0;
 	m_Height = 0;
+	m_WrapX = false;
 	m_pLayers = 0;
 }
 
@@ -61,8 +62,25 @@ void CCollision::Init(class CLayers *pLayers)
 
 int CCollision::GetTile(int x, int y) const
 {
-	int Nx = clamp(x / 32, 0, m_Width - 1);
-	int Ny = clamp(y / 32, 0, m_Height - 1);
+	// A cylindrical world reads the opposite edge instead of clamping, so the
+	// seam is ordinary ground in both directions. y always clamps: the world has
+	// a sealed floor and an open sky, never a vertical wrap.
+	//
+	// Floor division, not the usual truncating one: the two disagree for a
+	// negative coordinate inside the first tile (-16 / 32 is 0 truncated but -1
+	// floored), which made the seam solid on one side and clear on the other.
+	const auto FloorDiv = [](int Value, int Divisor) -> int
+	{
+		const int Quotient = Value / Divisor;
+		return (Value % Divisor != 0 && ((Value < 0) != (Divisor < 0))) ? Quotient - 1 : Quotient;
+	};
+
+	int Nx = FloorDiv(x, 32);
+	if(m_WrapX && m_Width > 0)
+		Nx = ((Nx % m_Width) + m_Width) % m_Width;
+	else
+		Nx = clamp(Nx, 0, m_Width - 1);
+	int Ny = clamp(FloorDiv(y, 32), 0, m_Height - 1);
 
 	return m_lTiles[Ny * m_Width + Nx];
 }
@@ -204,6 +222,15 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, float Elas
 		{
 			vec2 NewPos = Pos + Vel * Fraction; // TODO: this row is not nice
 
+			// Fold the *candidate* position back into the world every step, not
+			// only at the end. The collision tests below sample tiles through
+			// GetTile, which wraps, so a position left outside [0, Width) would
+			// be tested against wrapped tiles while the caller ends up holding a
+			// coordinate thousands of pixels away from them. Folding here keeps
+			// the whole step inside the canonical range, so crossing the seam is
+			// a normal one step move and nothing downstream ever sees a jump.
+			NewPos.x = WrapX(NewPos.x);
+
 			// You hit a deathtile, congrats to that :)
 			// Deathtiles are a bit smaller
 			if(pDeath && TestBox(vec2(NewPos.x, NewPos.y), Size * (2.0f / 3.0f), COLFLAG_DEATH))
@@ -243,6 +270,11 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, float Elas
 			Pos = NewPos;
 		}
 	}
+
+	// A cylindrical world has no left or right edge to stop at, so there is no
+	// clamp on the way out either: the position is already in range because
+	// every step folded it.
+	Pos.x = WrapX(Pos.x);
 
 	*pInoutPos = Pos;
 	*pInoutVel = Vel;

@@ -1,0 +1,232 @@
+{
+    "kind": "euclid",
+    "comment": "Procedurally generated floor. It reads no base map: the terrain comes from the noise settings below and the look from tileset/background/ruleset.",
+    "generation": {
+        "width": 400,
+        "height": 200,
+        "surface_level": 118,
+        "surface_amplitude": 30,
+        "edge_wall": 3,
+        "wrap_margin": 2,
+        "wrap_blend": 16,
+        "tileset": "desert_main",
+        "main_ruleset": "desert",
+        "cave_ruleset": "cave",
+        "unhookable_tileset": "generic_unhookable",
+        "unhookable_ruleset": "mine",
+        "sky_color": [
+            128,
+            158,
+            184,
+            255
+        ],
+        "sky_horizon_color": [
+            236,
+            214,
+            178,
+            255
+        ],
+        "layers": [
+            {
+                "name": "Mountains",
+                "role": "background",
+                "parallax_x": 3,
+                "parallax_y": 3,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "desert_mountains",
+                        "count": 2,
+                        "scale_x": 74,
+                        "scale_y": 20,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            246,
+                            226,
+                            196,
+                            255
+                        ],
+                        "seed_offset": 41000,
+                        "anchor_y": 0,
+                        "spread_y": 0
+                    }
+                ]
+            },
+            {
+                "name": "Clouds1",
+                "role": "background",
+                "parallax_x": 6,
+                "parallax_y": 6,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "bg_cloud2",
+                        "count": 8,
+                        "scale_x": 9,
+                        "scale_y": 6,
+                        "spread_y": 10,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            255,
+                            244,
+                            226,
+                            255
+                        ],
+                        "seed_offset": 42000,
+                        "anchor_y": -16
+                    }
+                ]
+            },
+            {
+                "name": "Clouds2",
+                "role": "background",
+                "parallax_x": 5,
+                "parallax_y": 5,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "bg_cloud3",
+                        "count": 8,
+                        "scale_x": 9,
+                        "scale_y": 7,
+                        "spread_y": 10,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            255,
+                            244,
+                            226,
+                            255
+                        ],
+                        "seed_offset": 42977,
+                        "anchor_y": -30
+                    }
+                ]
+            },
+            {
+                "name": "Main",
+                "role": "background",
+                "parallax_x": 100,
+                "parallax_y": 100,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": true,
+                "quads": []
+            },
+            {
+                "name": "Foreground",
+                "role": "foreground",
+                "parallax_x": 9,
+                "parallax_y": 9,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "",
+                        "count": 10,
+                        "scale_x": 40,
+                        "scale_y": 14,
+                        "spread_y": 90,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            236,
+                            214,
+                            178,
+                            35
+                        ],
+                        "color_bottom": [
+                            236,
+                            214,
+                            178,
+                            0
+                        ],
+                        "seed_offset": 43000
+                    }
+                ]
+            }
+        ],
+        "surface_noise": {
+            "seed_offset": 31000,
+            "octaves": 6,
+            "frequency": 0.0065,
+            "lacunarity": 2.0,
+            "persistence": 0.5
+        },
+        "caves": {
+            "enabled": true,
+            "threshold": 0.56,
+            "min_depth": 8,
+            "noise": {
+                "seed_offset": 32000,
+                "octaves": 4,
+                "frequency": 0.042,
+                "lacunarity": 2.0,
+                "persistence": 0.5
+            }
+        },
+        "ores": [
+            {
+                "res_id": "heaven_ore",
+                "display": "armor",
+                "proba": 14,
+                "hardness_min": 5,
+                "hardness_max": 10,
+                "respawntime_min": 120,
+                "respawntime_max": 240,
+                "threshold": 0.8,
+                "min_depth": 20,
+                "probes": 1,
+                "noise": {
+                    "seed_offset": 33000,
+                    "octaves": 3,
+                    "frequency": 0.05
+                }
+            },
+            {
+                "res_id": "stone",
+                "display": "armor",
+                "proba": 24,
+                "hardness_min": 1,
+                "hardness_max": 5,
+                "respawntime_min": 60,
+                "respawntime_max": 120,
+                "threshold": 0.7,
+                "min_depth": 10,
+                "probes": 1,
+                "noise": {
+                    "seed_offset": 33300,
+                    "octaves": 3,
+                    "frequency": 0.05
+                }
+            }
+        ],
+        "surface_entrances": {
+            "enabled": true,
+            "count": 2,
+            "min_separation": 70,
+            "width": 7,
+            "height": 5,
+            "clearance": 2,
+            "frame": 1,
+            "margin": 24
+        }
+    },
+    "entrances": [
+        {
+            "entrance": "Verdant"
+        },
+        {
+            "entrance": "Depths"
+        }
+    ]
+}

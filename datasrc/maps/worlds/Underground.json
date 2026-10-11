@@ -13,7 +13,7 @@
                             "tiles_end_y": 2
                         }
                     ],
-                    "entrance": "Grasswalk"
+                    "entrance": "Verdant"
                 }
             ],
             "proba": 50
@@ -30,7 +30,7 @@
                             "tiles_end_y": 2
                         }
                     ],
-                    "entrance": "Heaven"
+                    "entrance": "Highlands"
                 }
             ],
             "proba": 50,

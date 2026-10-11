@@ -119,6 +119,27 @@ void CGameWorld::InitCollision(IMap *pMap)
 			ParseEntrances(pJsonData);
 	}
 
+	// generated worlds declare their world geometry as a third json item (id 2);
+	// the wrap only changes how tile lookups read, so setting it after Init()
+	// is enough
+	CMapItemJson *pWorldItem = (CMapItemJson *) pMap->FindItem(MAPITEMTYPE_JSON, 2);
+	if(pWorldItem && pWorldItem->m_Version == CMapItemJson::CURRENT_VERSION && pWorldItem->m_Data > -1)
+	{
+		const char *pJsonData = (const char *) pMap->GetData(pWorldItem->m_Data);
+		if(pJsonData)
+		{
+			CJsonParser Parser;
+			json_value *pJson = Parser.ParseString(pJsonData, "world");
+			if(pJson && pJson->type == json_object)
+			{
+				const json_value &rWrap = (*pJson)["wrap_x"];
+				const bool Wrap = rWrap.type == json_integer && rWrap.u.integer != 0;
+				m_Collision.SetWrapX(Wrap);
+				dbg_msg("game", "world wrap_x = %d", Wrap ? 1 : 0);
+			}
+		}
+	}
+
 	// generated worlds carry their resource placement as a second json
 	// item (id 1); spawn a resource entity for every entry
 	CMapItemJson *pResourceItem = (CMapItemJson *) pMap->FindItem(MAPITEMTYPE_JSON, 1);

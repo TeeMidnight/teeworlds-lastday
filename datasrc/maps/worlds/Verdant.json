@@ -1,0 +1,243 @@
+{
+    "kind": "euclid",
+    "comment": "Procedurally generated floor. It reads no base map: the terrain comes from the noise settings below and the look from tileset/background/ruleset.",
+    "generation": {
+        "width": 450,
+        "height": 200,
+        "surface_level": 96,
+        "surface_amplitude": 40,
+        "edge_wall": 3,
+        "wrap_margin": 2,
+        "wrap_blend": 16,
+        "tileset": "grass_main",
+        "main_ruleset": "grass",
+        "cave_ruleset": "cave",
+        "unhookable_tileset": "generic_unhookable",
+        "unhookable_ruleset": "mine",
+        "sky_color": [
+            94,
+            132,
+            174,
+            255
+        ],
+        "sky_horizon_color": [
+            204,
+            232,
+            255,
+            255
+        ],
+        "layers": [
+            {
+                "name": "Mountains",
+                "role": "background",
+                "parallax_x": 3,
+                "parallax_y": 3,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "mountains",
+                        "count": 2,
+                        "scale_x": 74,
+                        "scale_y": 20,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            235,
+                            240,
+                            250,
+                            255
+                        ],
+                        "seed_offset": 41000,
+                        "anchor_y": 0,
+                        "spread_y": 0
+                    }
+                ]
+            },
+            {
+                "name": "Clouds1",
+                "role": "background",
+                "parallax_x": 6,
+                "parallax_y": 6,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "bg_cloud1",
+                        "count": 9,
+                        "scale_x": 9,
+                        "scale_y": 6,
+                        "spread_y": 10,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            255,
+                            255,
+                            255,
+                            255
+                        ],
+                        "seed_offset": 42000,
+                        "anchor_y": -18
+                    }
+                ]
+            },
+            {
+                "name": "Clouds2",
+                "role": "background",
+                "parallax_x": 5,
+                "parallax_y": 5,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "bg_cloud2",
+                        "count": 9,
+                        "scale_x": 9,
+                        "scale_y": 7,
+                        "spread_y": 10,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            255,
+                            255,
+                            255,
+                            255
+                        ],
+                        "seed_offset": 42977,
+                        "anchor_y": -30
+                    }
+                ]
+            },
+            {
+                "name": "Main",
+                "role": "background",
+                "parallax_x": 100,
+                "parallax_y": 100,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": true,
+                "quads": []
+            },
+            {
+                "name": "Foreground",
+                "role": "foreground",
+                "parallax_x": 9,
+                "parallax_y": 9,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "",
+                        "count": 11,
+                        "scale_x": 40,
+                        "scale_y": 14,
+                        "spread_y": 90,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            210,
+                            225,
+                            245,
+                            40
+                        ],
+                        "color_bottom": [
+                            210,
+                            225,
+                            245,
+                            0
+                        ],
+                        "seed_offset": 43000
+                    }
+                ]
+            }
+        ],
+        "surface_noise": {
+            "seed_offset": 0,
+            "octaves": 5,
+            "frequency": 0.008,
+            "lacunarity": 2.0,
+            "persistence": 0.5
+        },
+        "caves": {
+            "enabled": true,
+            "threshold": 0.58,
+            "min_depth": 7,
+            "noise": {
+                "seed_offset": 2000,
+                "octaves": 3,
+                "frequency": 0.045,
+                "lacunarity": 2.0,
+                "persistence": 0.5
+            }
+        },
+        "ores": [
+            {
+                "res_id": "stone",
+                "display": "armor",
+                "proba": 22,
+                "hardness_min": 1,
+                "hardness_max": 5,
+                "respawntime_min": 60,
+                "respawntime_max": 120,
+                "threshold": 0.72,
+                "min_depth": 10,
+                "probes": 1,
+                "noise": {
+                    "seed_offset": 3000,
+                    "octaves": 3,
+                    "frequency": 0.05
+                }
+            },
+            {
+                "res_id": "heaven_ore",
+                "display": "armor",
+                "proba": 8,
+                "hardness_min": 5,
+                "hardness_max": 10,
+                "respawntime_min": 120,
+                "respawntime_max": 240,
+                "threshold": 0.86,
+                "min_depth": 40,
+                "probes": 1,
+                "noise": {
+                    "seed_offset": 3300,
+                    "octaves": 3,
+                    "frequency": 0.05
+                }
+            }
+        ],
+        "surface_entrances": {
+            "enabled": true,
+            "count": 2,
+            "min_separation": 70,
+            "width": 7,
+            "height": 5,
+            "clearance": 2,
+            "frame": 1,
+            "margin": 24
+        }
+    },
+    "entrances": [
+        {
+            "entrance": "Connector"
+        },
+        {
+            "entrance": "Highlands"
+        }
+    ],
+    "resources": [
+        {
+            "res_id": "grass",
+            "display": "health",
+            "proba": 30,
+            "hardness_min": 1,
+            "hardness_max": 1,
+            "respawntime_min": 60,
+            "respawntime_max": 120
+        }
+    ]
+}

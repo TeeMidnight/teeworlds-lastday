@@ -555,11 +555,29 @@ bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 
 		};
 
 		int EntranceIndex = -1;
-		const float Distance = distance(NewPos, LastPos);
+
+		// On a cylinder LastPos and NewPos can be the same place on opposite
+		// sides of the seam, so the straight line between them would be the
+		// length of the world and sweep through every entrance in it. The delta
+		// is therefore taken the short way round.
+		vec2 Delta = NewPos - LastPos;
+		if(pWorld->Collision()->WrapsX())
+		{
+			const float W = (float) pWorld->Collision()->GetWidth() * 32.0f;
+			if(W > 0.0f)
+			{
+				while(Delta.x > W * 0.5f)
+					Delta.x -= W;
+				while(Delta.x < -W * 0.5f)
+					Delta.x += W;
+			}
+		}
+
+		const float Distance = length(Delta);
 		const int Steps = maximum(1, (int) Distance);
 		// sample the whole path from LastPos to NewPos (every step is less
 		// than one tile, so no tile of the path can be skipped)
-		const vec2 Step = (NewPos - LastPos) / (float) Steps;
+		const vec2 Step = Delta / (float) Steps;
 		for(int i = 0; i <= Steps; i++)
 		{
 			if(FindEntrance(&EntranceIndex))
