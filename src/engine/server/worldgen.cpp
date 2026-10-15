@@ -399,7 +399,45 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 				}
 			}
 		}
-		dbg_msg("worldgen", "ore '%s': %d vein tile(s)", Ore.m_aResId, VeinCount);
+
+		// Surface deposits: a small share of the ore stands in the open air on
+		// the ground line, visible and reachable without digging. The deep vein
+		// pass above is untouched; this only scatters a few nodes on the
+		// surface. m_SurfaceProba is the chance, in percent, for one eligible
+		// column to carry a node.
+		int SurfaceCount = 0;
+		if(Ore.m_SurfaceProba > 0)
+		{
+			for(int x = 0; x < Width; x++)
+			{
+				if(x >= pWorld->m_Surface.size())
+					continue;
+				// the open tile just above the ground, like a spawn point
+				const int StandY = pWorld->m_Surface[x] - 1;
+				if(StandY <= rGen.m_EdgeWall || StandY >= Height - rGen.m_EdgeWall)
+					continue;
+				// the tile it stands on and the one in front of it must be
+				// clear, so the node is on open ground and not inside a hill
+				if(pMain->m_pTiles[StandY * Width + x].m_Index != TILE_AIR)
+					continue;
+				if(pMain->m_pTiles[(StandY - 1) * Width + x].m_Index != TILE_AIR)
+					continue;
+
+				const unsigned Hash = TileHash(Seed + o * 104729 + 17, x, StandY);
+				if((int) (Hash % 100u) >= Ore.m_SurfaceProba)
+					continue;
+
+				CGeneratedWorld::CResource &Resource = pWorld->m_lResources.emplace();
+				str_copy(Resource.m_aResId, Ore.m_aResId, sizeof(Resource.m_aResId));
+				str_copy(Resource.m_aDisplay, Ore.m_aDisplay, sizeof(Resource.m_aDisplay));
+				Resource.m_X = x;
+				Resource.m_Y = StandY;
+				Resource.m_Hardness = RollRange(Hash >> 8, Ore.m_HardnessMin, Ore.m_HardnessMax);
+				Resource.m_RespawnTime = RollRange(Hash >> 16, Ore.m_RespawnTimeMin, Ore.m_RespawnTimeMax);
+				SurfaceCount++;
+			}
+		}
+		dbg_msg("worldgen", "ore '%s': %d vein tile(s), %d surface node(s)", Ore.m_aResId, VeinCount, SurfaceCount);
 	}
 }
 

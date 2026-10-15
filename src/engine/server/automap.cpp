@@ -30,6 +30,59 @@ const CAutoMapper::CRuleSet *CAutoMapper::FindRuleSet(const char *pName) const
 	return 0;
 }
 
+const CAutoMapper::CDoodadSet *CAutoMapper::FindDoodadSet(const char *pName) const
+{
+	for(int i = 0; i < m_lDoodadSets.size(); i++)
+	{
+		if(str_comp(m_lDoodadSets[i].m_aName, pName) == 0)
+			return &m_lDoodadSets[i];
+	}
+	return 0;
+}
+
+// "location" is spelled both ways in the shipped doodad files, so the lookup is
+// case insensitive; an unknown value falls back to the floor
+static int ParseDoodadLocation(const json_value &rRule)
+{
+	const json_value &rLocation = rRule["location"].type == json_string ? rRule["location"] : rRule["Location"];
+	if(rLocation.type != json_string)
+		return CAutoMapper::CDoodad::LOCATION_FLOOR;
+	if(str_comp_nocase(rLocation.u.string.ptr, "ceiling") == 0)
+		return CAutoMapper::CDoodad::LOCATION_CEILING;
+	if(str_comp_nocase(rLocation.u.string.ptr, "walls") == 0 || str_comp_nocase(rLocation.u.string.ptr, "wall") == 0)
+		return CAutoMapper::CDoodad::LOCATION_WALL;
+	return CAutoMapper::CDoodad::LOCATION_FLOOR;
+}
+
+// reads one "rules" array into a doodad set
+static void ParseDoodads(const json_value &rRules, CAutoMapper::CDoodadSet &DoodadSet)
+{
+	for(unsigned j = 0; j < rRules.u.array.length; j++)
+	{
+		const json_value &rRuleNode = rRules[j];
+		if(rRuleNode.type != json_object)
+			continue;
+
+		CAutoMapper::CDoodad &Doodad = DoodadSet.m_aDoodads.emplace();
+
+		const json_value &rStart = rRuleNode["startid"];
+		Doodad.m_StartId = rStart.type == json_integer ? clamp((int) rStart.u.integer, 0, 255) : 0;
+		const json_value &rEnd = rRuleNode["endid"];
+		Doodad.m_EndId = rEnd.type == json_integer ? clamp((int) rEnd.u.integer, 0, 255) : Doodad.m_StartId;
+
+		const json_value &rRx = rRuleNode["rx"];
+		Doodad.m_Rx = rRx.type == json_integer ? clamp((int) rRx.u.integer, -64, 64) : 0;
+		const json_value &rRy = rRuleNode["ry"];
+		Doodad.m_Ry = rRy.type == json_integer ? clamp((int) rRy.u.integer, -64, 64) : 0;
+
+		Doodad.m_Location = ParseDoodadLocation(rRuleNode);
+
+		// "random" is a 1 in N chance; 0 and 1 both mean "always"
+		const json_value &rRandom = rRuleNode["random"];
+		Doodad.m_Random = rRandom.type == json_integer ? clamp((int) rRandom.u.integer, 0, 99999) : 0;
+	}
+}
+
 // reads one "rules" array into the rule set
 static void ParseRules(const json_value &rRules, CAutoMapper::CRuleSet &RuleSet)
 {
@@ -94,11 +147,47 @@ bool CAutoMapper::LoadFile(IStorage *pStorage, const char *pPath)
 		return false;
 	}
 
+	// a file may hold tile rule sets, doodad sets, or both
+	// the file's base name without ".json", used as the set's source tileset
+	char aSource[64];
+	{
+		const char *pBase = pPath;
+		for(const char *p = pPath; *p; p++)
+			if(*p == '/' || *p == '\\')
+				pBase = p + 1;
+		str_copy(aSource, pBase, sizeof(aSource));
+		const int Len = str_length(aSource);
+		if(Len > 5 && str_comp(aSource + Len - 5, ".json") == 0)
+			aSource[Len - 5] = '\0';
+	}
+
+	const json_value &rDoodads = (*pJson)["doodads"];
+	if(rDoodads.type == json_array)
+	{
+		for(unsigned i = 0; i < rDoodads.u.array.length; i++)
+		{
+			const json_value &rEntry = rDoodads[i];
+			if(rEntry.type != json_object || rEntry.u.object.length != 1)
+				continue;
+
+			const char *pName = rEntry.u.object.values[0].name;
+			const json_value &rBody = *rEntry.u.object.values[0].value;
+			if(rBody.type != json_object)
+				continue;
+
+			CDoodadSet &DoodadSet = m_lDoodadSets.emplace();
+			str_copy(DoodadSet.m_aName, pName, sizeof(DoodadSet.m_aName));
+			str_copy(DoodadSet.m_aSource, aSource, sizeof(DoodadSet.m_aSource));
+			ParseDoodads(rBody["rules"], DoodadSet);
+			dbg_msg("automap", "loaded doodad set '%s' (%d rule(s))", DoodadSet.m_aName, DoodadSet.m_aDoodads.size());
+		}
+	}
+
 	const json_value &rTileset = (*pJson)["tileset"];
 	if(rTileset.type != json_array)
 	{
-		// doodad rule sets are not part of the tile automapper
-		return false;
+		// only a doodad file after all
+		return rDoodads.type == json_array;
 	}
 
 	for(unsigned i = 0; i < rTileset.u.array.length; i++)
@@ -115,6 +204,7 @@ bool CAutoMapper::LoadFile(IStorage *pStorage, const char *pPath)
 
 		CRuleSet &RuleSet = m_lRuleSets.emplace();
 		str_copy(RuleSet.m_aName, pName, sizeof(RuleSet.m_aName));
+		str_copy(RuleSet.m_aSource, aSource, sizeof(RuleSet.m_aSource));
 
 		const json_value &rBaseTile = rBody["basetile"];
 		RuleSet.m_BaseTile = rBaseTile.type == json_integer ? clamp((int) rBaseTile.u.integer, 0, 255) : 1;
@@ -146,9 +236,9 @@ int CAutoMapper::LoadAll(IStorage *pStorage, IConsole *pConsole)
 	m_pStorage = pStorage;
 	m_pConsole = pConsole;
 
-	const int Before = m_lRuleSets.size();
+	const int Before = m_lRuleSets.size() + m_lDoodadSets.size();
 	pStorage->ListDirectory(IStorage::TYPE_ALL, "automap", ListFilesCallback, this);
-	return m_lRuleSets.size() - Before;
+	return (m_lRuleSets.size() + m_lDoodadSets.size()) - Before;
 }
 
 // Deterministic 1-in-N roll. The editor uses random_float(); the generator must

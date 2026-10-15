@@ -742,6 +742,9 @@ set_src(ENGINE_SERVER GLOB src/engine/server
   automap.h
   mapgen.cpp
   mapgen.h
+  mapgen_euclid.cpp
+  mapgen_internal.h
+  mapgen_noneuclid.cpp
   noise.cpp
   noise.h
   register.cpp
@@ -855,6 +858,30 @@ if(TARGET_OS AND TARGET_OS STREQUAL "mac")
   list(APPEND TARGETS_OWN ${TARGET_SERVER_LAUNCHER})
   list(APPEND TARGETS_LINK ${TARGET_SERVER_LAUNCHER})
 endif()
+########################################################################
+# MAPGEN TOOL
+########################################################################
+
+# Runs the real world generator against the real data directory, so a floor can
+# be generated and rendered without launching the server. It links the same
+# translation units the server compiles (mapgen and its helpers), through the
+# shared engine/game objects, and is otherwise just mapgentool.cpp.
+set(TARGET_MAPGEN mapgentool)
+add_executable(${TARGET_MAPGEN} EXCLUDE_FROM_ALL
+  src/tools/mapgentool.cpp
+  src/engine/server/automap.cpp
+  src/engine/server/mapgen.cpp
+  src/engine/server/mapgen_euclid.cpp
+  src/engine/server/mapgen_noneuclid.cpp
+  src/engine/server/noise.cpp
+  src/engine/server/worldgen.cpp
+  ${DEPS}
+  $<TARGET_OBJECTS:engine-shared>
+  $<TARGET_OBJECTS:game-shared>
+)
+target_link_libraries(${TARGET_MAPGEN} ${LIBS})
+list(APPEND TARGETS_OWN ${TARGET_MAPGEN})
+list(APPEND TARGETS_LINK ${TARGET_MAPGEN})
 
 ########################################################################
 # TESTS

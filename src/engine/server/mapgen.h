@@ -81,6 +81,12 @@ struct CInstruction
 		int m_HardnessMax;
 		int m_RespawnTimeMin;
 		int m_RespawnTimeMax;
+
+		// Surface nodes: a few resources stand in the open air on the ground
+		// line so a player can see and reach them. m_SurfaceProba is the chance
+		// in percent for one eligible column; 0 disables the pass. The deep
+		// veins above are always generated.
+		int m_SurfaceProba;
 	};
 
 	// A surface opening: a visible cave mouth cut into the terrain that carries
@@ -205,6 +211,14 @@ struct CInstruction
 		char m_aMainRuleSet[32]; // automap rule set for the terrain layer ("grass", "winter", ...)
 		char m_aCaveRuleSet[32]; // optional rule set for the carved cave interiors
 
+		// The vegetation doodads: a decorative tile layer drawn in front of the
+		// terrain. m_aDoodadsTileset names the doodads sheet in mapres/ and
+		// m_aDoodadsRuleset the "doodads" set in automap/*.json that scatters it.
+		// Both default to the terrain's own set ("grass_main" -> "grass_doodads"),
+		// and an empty value disables the layer.
+		char m_aDoodadsTileset[64];
+		char m_aDoodadsRuleset[32];
+
 		// The tileset and rule set of the entrance frames. Configured separately
 		// from the terrain because "unhookable" is not a look the rock sheet
 		// carries. Empty reuses the terrain tileset.
@@ -216,6 +230,9 @@ struct CInstruction
 		// to the screen, since parallax 0 already pins it to the camera.
 		int m_SkyColor[4];
 		int m_SkyHorizonColor[4];
+
+		// The sun (or moon) drawn over the sky. Empty disables it.
+		char m_aSunImage[64];
 
 		// every layer to emit, in the order they are written out
 		array<CLayerConfig> m_Layers;
@@ -275,6 +292,9 @@ class CMapGen
 
 	// build a euclidean floor from noise (see worldgen.h)
 	bool GenerateEuclidean(const CInstruction *pInstruction, int Seed);
+
+	// paste the structs of a non euclidean floor onto its base map
+	bool GenerateNoneuclid(const CInstruction *pInstruction, int Seed);
 
 public:
 	CMapGen(class IStorage *pStorage, class IConsole *pConsole);

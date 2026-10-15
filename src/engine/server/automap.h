@@ -50,8 +50,39 @@ public:
 	struct CRuleSet
 	{
 		char m_aName[32];
+		// the automap file the set came from, so a caller can tell whether its
+		// tile indices belong to a given tileset before applying it
+		char m_aSource[64];
 		int m_BaseTile;
 		array<CRule> m_aRules;
+	};
+
+	// A doodad is a rectangular stamp taken from a doodads sheet: m_StartId is
+	// its top-left tile, m_EndId its bottom-right, both as 16-wide sheet indices
+	// (the map format's own layout). The rule's m_Ry is the offset of that
+	// top-left from the anchor, and m_Location says where the anchor is found.
+	struct CDoodad
+	{
+		enum
+		{
+			LOCATION_FLOOR = 0,
+			LOCATION_CEILING,
+			LOCATION_WALL,
+		};
+
+		int m_StartId;
+		int m_EndId;
+		int m_Rx;
+		int m_Ry;
+		int m_Location;
+		int m_Random; // 0 or 1 = always, otherwise a 1 in N chance
+	};
+
+	struct CDoodadSet
+	{
+		char m_aName[32];
+		char m_aSource[64];
+		array<CDoodad> m_aDoodads;
 	};
 
 	CAutoMapper();
@@ -91,11 +122,18 @@ public:
 	int NumRuleSets() const { return m_lRuleSets.size(); }
 	const CRuleSet *RuleSet(int Index) const { return Index >= 0 && Index < m_lRuleSets.size() ? &m_lRuleSets[Index] : 0; }
 
+	// the doodad sets of the "doodads" arrays in automap/*.json, kept apart from
+	// the tile rule sets because placement, not per-tile scanning, drives them
+	const CDoodadSet *FindDoodadSet(const char *pName) const;
+	int NumDoodadSets() const { return m_lDoodadSets.size(); }
+	const CDoodadSet *DoodadSet(int Index) const { return Index >= 0 && Index < m_lDoodadSets.size() ? &m_lDoodadSets[Index] : 0; }
+
 private:
 	class IStorage *m_pStorage;
 	class IConsole *m_pConsole;
 
 	array<CRuleSet> m_lRuleSets;
+	array<CDoodadSet> m_lDoodadSets;
 
 	static int ListFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 };

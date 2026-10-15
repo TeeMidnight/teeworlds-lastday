@@ -30,6 +30,7 @@ packetgen*
 !teeworlds.rc
 ArchiveServer*
 testrunner
+/mapgentool*
 versionsrv*
 
 !map_version.cpp
