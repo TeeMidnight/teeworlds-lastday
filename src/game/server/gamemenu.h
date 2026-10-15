@@ -165,6 +165,15 @@ private:
 	};
 	STradeDraft m_aTradeDraft[MAX_CLIENTS];
 
+	// The trade provider a player has expanded on the shop page ("" = none).
+	// The key is "N<defindex>" for an NPC shelf or "P<clientid>" for a player's
+	// listings. Only the provider named here is drawn expanded, so the shop
+	// stays one page and clicking a name folds the list in place.
+	char m_aTradeOpen[MAX_CLIENTS][16];
+	// The crafting recipe a player has expanded on the craft page ("" = none);
+	// the recipe's materials and its "Craft" action only show while it is open.
+	char m_aCraftOpen[MAX_CLIENTS][32];
+
 	hash_table<unsigned, CMenuPage, 8> m_MenuPages;
 
 	class CPlayerData

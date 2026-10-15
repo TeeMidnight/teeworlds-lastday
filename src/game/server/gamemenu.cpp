@@ -81,6 +81,8 @@ void CGameMenu::Init(CGameContext *pGameServer)
 		m_aLoadoutSlot[i] = -1;
 		m_aItemViewId[i] = CItemID();
 		m_aTradeDraft[i] = STradeDraft();
+		m_aTradeOpen[i][0] = '\0';
+		m_aCraftOpen[i][0] = '\0';
 	}
 
 	Register("MAIN", "Main Menu", MenuMain, nullptr); // Localize("Main Menu", "MAIN")
@@ -117,6 +119,8 @@ void CGameMenu::OnClientEntered(int ClientID)
 {
 	m_aPlayerData[ClientID].Reset(true);
 	m_aTradeDraft[ClientID] = STradeDraft();
+	m_aTradeOpen[ClientID][0] = '\0';
+	m_aCraftOpen[ClientID][0] = '\0';
 	SetPlayerPage(ClientID, "MAIN");
 	// the voter set changed
 	m_VoteUpdate = true;
@@ -578,9 +582,11 @@ struct CCraftMenuData
 	int m_ClientID;
 	int m_Forgetting;
 	int m_Index;
+	const char *m_pOpen; // the recipe id currently expanded ("" = none)
 };
 
-// renders one recipe as a block of menu rows (also used only from MenuCraft)
+// renders one recipe as a menu row; its materials, byproducts and the "Craft"
+// action only appear while the recipe is the expanded one
 static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 {
 	CCraftMenuData *pData = static_cast<CCraftMenuData *>(pUser);
@@ -592,17 +598,31 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 		return;
 
 	pData->m_Index++;
-	// one row per output; a recipe may have more than one
-	for(int g = 0; g < Craft.m_NumGives; g++)
+	const bool Open = pData->m_pOpen[0] && str_comp(pData->m_pOpen, Craft.m_aCraftId) == 0;
+
+	// the header names the recipe by its main output; the click toggles the
+	// recipe open instead of crafting it right away. CItemID formats straight
+	// to its (already localized) display name, so no GetName/Localize pair.
+	std::string Head;
+	if(Craft.m_NumGives > 0)
+		Head = std::format("{}. {} x{}", pData->m_Index, Craft.m_aGives[0].m_Id, Craft.m_aGives[0].m_Count);
+	else
+		Head = std::format("{}. {}", pData->m_Index, Craft.m_aCraftId);
+	char aExpand[64];
+	str_format(aExpand, sizeof(aExpand), "CRAFTEXPAND %s", Craft.m_aCraftId);
+	pMenu->AddOption(Head.c_str(), aExpand, Open ? "▾" : "▸");
+
+	if(!Open)
+		return;
+
+	// byproducts: the first output is the header, the rest are listed here
+	for(int g = 1; g < Craft.m_NumGives; g++)
 	{
 		const CItemSystem::SResult &Give = Craft.m_aGives[g];
-		const char *pResultName = pData->m_pItem->GetName(Give.m_Id);
-		if(g == 0)
-			pMenu->AddOption(std::format("{}. {} x{}", pData->m_Index, Localize(pResultName, "Item Name"), Give.m_Count).c_str(), Craft.m_aCraftId, "→");
-		else
-			pMenu->AddOption(LocalizeFormat("Menu Craft", "   + {} x{}", Localize(pResultName, "Item Name"), Give.m_Count).c_str(), "DISPLAY", "-");
+		pMenu->AddOption(LocalizeFormat("Menu Craft", "   + {} x{}", Give.m_Id, Give.m_Count).c_str(), "DISPLAY", "-");
 	}
 
+	// the materials the recipe consumes / the tools it only needs to have
 	for(int i = 0; i < Craft.m_NumNeeded; i++)
 	{
 		const CItemSystem::SIngredient &Need = Craft.m_aNeeded[i];
@@ -616,16 +636,21 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 			if(Need.m_MatchByType)
 				pMenu->AddOption(LocalizeFormat("Menu Craft", "   [tool] any {} {}", Localize(Need.m_aType, "Item Type"), pMark).c_str(), "DISPLAY", "-");
 			else
-				pMenu->AddOption(LocalizeFormat("Menu Craft", "   [tool] {} {}", Localize(pData->m_pItem->GetName(Need.m_Id), "Item Name"), pMark).c_str(), "DISPLAY", "-");
+				pMenu->AddOption(LocalizeFormat("Menu Craft", "   [tool] {} {}", Need.m_Id, pMark).c_str(), "DISPLAY", "-");
 		}
 		else
 		{
 			if(Need.m_MatchByType)
 				pMenu->AddOption(LocalizeFormat("Menu Craft", "   any {} {}/{}", Localize(Need.m_aType, "Item Type"), Have, Need.m_Count).c_str(), "DISPLAY", "-");
 			else
-				pMenu->AddOption(std::format("   {} {}/{}", Localize(pData->m_pItem->GetName(Need.m_Id), "Item Name"), Have, Need.m_Count).c_str(), "DISPLAY", "-");
+				pMenu->AddOption(std::format("   {} {}/{}", Need.m_Id, Have, Need.m_Count).c_str(), "DISPLAY", "-");
 		}
 	}
+
+	// the action itself lives inside the expanded recipe only
+	char aCraft[64];
+	str_format(aCraft, sizeof(aCraft), "CRAFTNOW %s", Craft.m_aCraftId);
+	pMenu->AddOption(Localize("Craft", "Menu Craft"), aCraft, "★");
 }
 
 bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
@@ -633,17 +658,28 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 	(void) pUserData;
 	CItemSystem *pItem = pMenu->GameServer()->Item();
 
-	// if the player clicked a recipe, try to craft it
-	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_comp(VoteStatus.m_aCmd, "NONE") != 0)
+	// clicking a recipe folds its materials and its "Craft" action open or shut
+	if(str_startswith(VoteStatus.m_aCmd, "CRAFTEXPAND "))
 	{
-		const CItemSystem::ECraftResult Result = pItem->Craft(ClientID, VoteStatus.m_aCmd);
+		const char *pCraftId = VoteStatus.m_aCmd + str_length("CRAFTEXPAND ");
+		if(str_comp(pMenu->m_aCraftOpen[ClientID], pCraftId) == 0)
+			pMenu->m_aCraftOpen[ClientID][0] = '\0';
+		else
+			str_copy(pMenu->m_aCraftOpen[ClientID], pCraftId, sizeof(pMenu->m_aCraftOpen[ClientID]));
+		// fall through and redraw the page with the new expansion
+	}
+	// the "Craft" action only exists inside an expanded recipe
+	else if(str_startswith(VoteStatus.m_aCmd, "CRAFTNOW "))
+	{
+		const char *pCraftId = VoteStatus.m_aCmd + str_length("CRAFTNOW ");
+		const CItemSystem::ECraftResult Result = pItem->Craft(ClientID, pCraftId);
 		if(Result == CItemSystem::CRAFT_OK)
 		{
-			const CItemSystem::SCraftDef *pCraft = pItem->GetCraft(VoteStatus.m_aCmd);
-			if(pCraft)
+			const CItemSystem::SCraftDef *pCraft = pItem->GetCraft(pCraftId);
+			if(pCraft && pCraft->m_NumGives > 0)
 			{
 				const std::string Msg = LocalizeFormat("Menu Craft", "Crafted: {} x{}",
-					Localize(pItem->GetName(pCraft->m_aGives[0].m_Id), "Item Name"), pCraft->m_aGives[0].m_Count);
+					pCraft->m_aGives[0].m_Id, pCraft->m_aGives[0].m_Count);
 				pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
 			}
 		}
@@ -657,6 +693,7 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID,
 				Localize("Not enough inventory space.", "Menu Craft"));
 		}
+		// fall through and redraw with the updated ingredient counts
 	}
 
 	pMenu->ClearOptions(ClientID);
@@ -668,12 +705,20 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 		return true;
 	}
 
-	pMenu->AddOption(Localize("Click a recipe to craft it. Tools are not consumed.", "Menu Craft"), "DISPLAY", "-");
-	pMenu->AddHorizontalRule();
-
 	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
 	const int Forgetting = pPlayer ? pPlayer->m_Status.m_Forgetting : 0;
-	CCraftMenuData Data = {pItem, pMenu, ClientID, Forgetting, 0};
+
+	// drop an expansion whose recipe no longer exists or has been forgotten
+	if(pMenu->m_aCraftOpen[ClientID][0])
+	{
+		if(!pItem->GetCraft(pMenu->m_aCraftOpen[ClientID]) || pItem->IsRecipeForgotten(Forgetting, pMenu->m_aCraftOpen[ClientID]))
+			pMenu->m_aCraftOpen[ClientID][0] = '\0';
+	}
+
+	pMenu->AddOption(Localize("Click a recipe to see how to craft it. Tools are not consumed.", "Menu Craft"), "DISPLAY", "-");
+	pMenu->AddHorizontalRule();
+
+	CCraftMenuData Data = {pItem, pMenu, ClientID, Forgetting, 0, pMenu->m_aCraftOpen[ClientID]};
 	pItem->ForEachCraft(CraftListCallback, &Data);
 	if(Data.m_Index == 0)
 		pMenu->AddOption(Localize("You can't remember any crafting recipes.", "Menu Craft"), "DISPLAY", "-");
@@ -854,6 +899,16 @@ bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class 
 	return true;
 }
 
+// A shop provider's stable key for the "TRADEOPEN" command. Listings of one
+// seller share a key; offline sellers fall into one "(offline)" group.
+static void TradeProviderKey(int Seller, char *pBuf, int Size)
+{
+	if(Seller >= 0)
+		str_format(pBuf, Size, "P%d", Seller);
+	else
+		str_copy(pBuf, "POFF", Size);
+}
+
 bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
 {
 	(void) pUserData;
@@ -874,8 +929,18 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			pMenu->SetPlayerPage(ClientID, "TRADE_MINE");
 			return false;
 		}
+		// clicking a provider folds its goods open or shut (same page)
+		if(str_startswith(VoteStatus.m_aCmd, "TRADEOPEN "))
+		{
+			const char *pKey = VoteStatus.m_aCmd + str_length("TRADEOPEN ");
+			if(str_comp(pMenu->m_aTradeOpen[ClientID], pKey) == 0)
+				pMenu->m_aTradeOpen[ClientID][0] = '\0';
+			else
+				str_copy(pMenu->m_aTradeOpen[ClientID], pKey, sizeof(pMenu->m_aTradeOpen[ClientID]));
+			// fall through and redraw the page with the new expansion
+		}
 		// clicking a listing buys it. The command is "BUY <id>".
-		if(str_startswith(VoteStatus.m_aCmd, "BUY "))
+		else if(str_startswith(VoteStatus.m_aCmd, "BUY "))
 		{
 			const int ListingId = str_toint(VoteStatus.m_aCmd + 4);
 			pMenu->GameServer()->Trade()->Buy(ClientID, ListingId);
@@ -883,7 +948,7 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			return false;
 		}
 		// clicking an NPC shelf entry buys it: "BUYNPC <def> <sell>".
-		if(str_startswith(VoteStatus.m_aCmd, "BUYNPC "))
+		else if(str_startswith(VoteStatus.m_aCmd, "BUYNPC "))
 		{
 			int DefIndex = 0;
 			int SellIndex = 0;
@@ -899,10 +964,16 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 	pMenu->AddOption(Localize("Sell Goods", "Menu Trade"), "PAGE TRADE_SELL", "★");
 	pMenu->AddOption(Localize("My Listings", "Menu Trade"), "PAGE TRADE_MINE", "★");
 	pMenu->AddHorizontalRule();
-	pMenu->AddOption(Localize("Click a listing to buy it.", "Menu Trade"), "DISPLAY", "-");
+	pMenu->AddOption(Localize("Click a merchant to see their goods.", "Menu Trade"), "DISPLAY", "-");
 
+	const char *pOpen = pMenu->m_aTradeOpen[ClientID];
+	const bool OpenRequested = pOpen[0] != '\0';
 	bool Any = false;
+	bool OpenFound = false;
+	int ProviderIndex = 0;
 
+	// player listings, grouped by seller: one row per provider, its goods only
+	// when that provider is expanded
 	CTradeSystem *pTrade = pMenu->GameServer()->Trade();
 	if(pTrade)
 	{
@@ -911,18 +982,57 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			const CTradeSystem::SListing *pListing = pTrade->ListingAt(i);
 			if(!pListing)
 				continue;
+			// skip when an earlier listing already introduced this seller
+			bool Seen = false;
+			for(int k = 0; k < i && !Seen; k++)
+			{
+				const CTradeSystem::SListing *pPrev = pTrade->ListingAt(k);
+				Seen = pPrev && pPrev->m_Seller == pListing->m_Seller;
+			}
+			if(Seen)
+				continue;
+
+			char aKey[16];
+			TradeProviderKey(pListing->m_Seller, aKey, sizeof(aKey));
+			const bool Open = str_comp(pOpen, aKey) == 0;
+
+			// count the offers so the header can show the merchant's size
+			int Offered = 0;
+			for(int k = 0; k < pTrade->NumListings(); k++)
+			{
+				const CTradeSystem::SListing *pOther = pTrade->ListingAt(k);
+				if(pOther && pOther->m_Seller == pListing->m_Seller)
+					Offered++;
+			}
+
 			const char *pSeller = pListing->m_Seller >= 0 ? pMenu->Server()->ClientName(pListing->m_Seller) : Localize("(offline)", "Menu Trade");
-			const std::string Desc = LocalizeFormat("Menu Trade", "#{} {}: {} x{} for {} x{}",
-				pListing->m_Id, pSeller,
-				pListing->m_OfferItem, pListing->m_OfferCount, pListing->m_PriceItem, pListing->m_PriceCount);
+			// the ordinal keeps every header unique: the client looks an option
+			// up by its displayed text, so duplicate names must not collide
+			const std::string Head = LocalizeFormat("Menu Trade", "{}. {} ({})", ++ProviderIndex, pSeller, Offered);
+			OpenFound = OpenFound || Open;
 			char aCmd[32];
-			str_format(aCmd, sizeof(aCmd), "BUY %d", pListing->m_Id);
-			pMenu->AddOption(Desc.c_str(), aCmd, "$");
+			str_format(aCmd, sizeof(aCmd), "TRADEOPEN %s", aKey);
+			pMenu->AddOption(Head.c_str(), aCmd, Open ? "▾" : "▸");
 			Any = true;
+
+			if(!Open)
+				continue;
+			for(int k = 0; k < pTrade->NumListings(); k++)
+			{
+				const CTradeSystem::SListing *pOther = pTrade->ListingAt(k);
+				if(!pOther || pOther->m_Seller != pListing->m_Seller)
+					continue;
+				const std::string Desc = LocalizeFormat("Menu Trade", "   #{}: {} x{} for {} x{}",
+					pOther->m_Id, pOther->m_OfferItem, pOther->m_OfferCount, pOther->m_PriceItem, pOther->m_PriceCount);
+				char aBuy[32];
+				str_format(aBuy, sizeof(aBuy), "BUY %d", pOther->m_Id);
+				pMenu->AddOption(Desc.c_str(), aBuy, "$");
+			}
 		}
 	}
 
-	// a configured NPC's shelf is part of the same shop
+	// a configured NPC's shelf is part of the same shop; its stock and the next
+	// restock ("refresh") time only show inside the expanded submenu
 	CNpcSystem *pNpcs = pMenu->GameServer()->Npcs();
 	if(pNpcs)
 	{
@@ -930,21 +1040,40 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 		{
 			const SNpcDef *pDef = pNpcs->DefAt(d);
 			// only a nearby NPC's shelf can be traded with
-			if(!pDef || !pMenu->GameServer()->NpcInRange(ClientID, d))
+			if(!pDef || !pMenu->GameServer()->NpcInRange(ClientID, d) || pDef->m_lSells.size() == 0)
+				continue;
+
+			char aKey[16];
+			str_format(aKey, sizeof(aKey), "N%d", d);
+			const bool Open = str_comp(pOpen, aKey) == 0;
+			const std::string Head = LocalizeFormat("Menu Trade", "{}. {} ({})", ++ProviderIndex, NpcIDDisplayName(pDef->m_Id), pDef->m_lSells.size());
+			OpenFound = OpenFound || Open;
+			char aCmd[32];
+			str_format(aCmd, sizeof(aCmd), "TRADEOPEN %s", aKey);
+			pMenu->AddOption(Head.c_str(), aCmd, Open ? "▾" : "▸");
+			Any = true;
+
+			if(!Open)
 				continue;
 			for(int s = 0; s < pDef->m_lSells.size(); s++)
 			{
 				const SNpcSell &Sell = pDef->m_lSells[s];
+				const std::string Desc = LocalizeFormat("Menu Trade", "   {} x{} for {} x{}",
+					Sell.m_Item, Sell.m_Count, Sell.m_PriceItem, Sell.m_PriceCount);
+				char aBuy[32];
+				str_format(aBuy, sizeof(aBuy), "BUYNPC %d %d", d, s);
+				pMenu->AddOption(Desc.c_str(), aBuy, "$");
+				// the shelf's stock and next restock live on their own row so the
+				// long item ids cannot push the countdown out of the option text
 				const int RestockIn = Sell.m_RestockSeconds > 0 ? maximum(0, Sell.m_RestockAt - time_timestamp()) : 0;
-				const std::string Desc = LocalizeFormat("Menu Trade", "{}: {} x{} for {} x{} (stock {}, restock {}s)",
-					NpcIDDisplayName(pDef->m_Id), Sell.m_Item, Sell.m_Count, Sell.m_PriceItem, Sell.m_PriceCount, Sell.m_Stock, RestockIn);
-				char aCmd[32];
-				str_format(aCmd, sizeof(aCmd), "BUYNPC %d %d", d, s);
-				pMenu->AddOption(Desc.c_str(), aCmd, "$");
-				Any = true;
+				pMenu->AddOption(LocalizeFormat("Menu Trade", "      stock {}, restock {}s", Sell.m_Stock, RestockIn).c_str(), "DISPLAY", "-");
 			}
 		}
 	}
+
+	// drop an expansion whose provider is gone (sold out / walked away)
+	if(OpenRequested && !OpenFound)
+		pMenu->m_aTradeOpen[ClientID][0] = '\0';
 
 	if(!Any)
 		pMenu->AddOption(Localize("No goods are for sale.", "Menu Trade"), "DISPLAY", "-");

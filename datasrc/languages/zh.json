@@ -426,8 +426,8 @@
 		},
 		{
 			"context": "Menu Craft",
-			"or": "Click a recipe to craft it. Tools are not consumed.",
-			"tr": "点击一个合成表去合成。工具不会被消耗。"
+			"or": "Click a recipe to see how to craft it. Tools are not consumed.",
+			"tr": "点击合成表查看制作方法。工具不会被消耗。"
 		},
 		{
 			"context": "Menu Craft",
@@ -676,8 +676,8 @@
 		},
 		{
 			"context": "Menu Trade",
-			"or": "Click a listing to buy it.",
-			"tr": "点击挂单进行购买。"
+			"or": "Click a merchant to see their goods.",
+			"tr": "点击商人查看商品。"
 		},
 		{
 			"context": "Menu Trade",
@@ -691,8 +691,13 @@
 		},
 		{
 			"context": "Menu Trade",
-			"or": "{}: {} x{} for {} x{} (stock {}, restock {}s)",
-			"tr": "{}：{} x{} 换 {} x{}（库存 {}，{}秒后补货）"
+			"or": "   {} x{} for {} x{}",
+			"tr": "   {} x{} 换 {} x{}"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "      stock {}, restock {}s",
+			"tr": "      库存 {}，{}秒后补货"
 		},
 		{
 			"context": "Menu Main",
@@ -813,6 +818,16 @@
 			"context": "Trade",
 			"or": "Invalid listing.",
 			"tr": "无效的挂单。"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "Craft",
+			"tr": "制作"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "{}. {} ({})",
+			"tr": "{}. {}（{}）"
 		}
 	]
 }
