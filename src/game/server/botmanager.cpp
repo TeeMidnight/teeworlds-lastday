@@ -7,6 +7,7 @@
 #include <game/server/entities/botentity.h>
 #include <game/server/entities/character.h>
 #include <game/server/entities/npcentity.h>
+#include <game/server/npcdata.h>
 
 #include "botmanager.h"
 #include "gamecontext.h"
@@ -111,6 +112,7 @@ void CBotManager::ClearBots()
 		delete pBot;
 	}
 	m_lBotOrder.clear();
+	m_lDefinedNpcs.clear();
 	ClearPlayerMap(-1);
 }
 
@@ -360,6 +362,29 @@ IBotEntity *CBotManager::CreateBot(Uuid BotID, vec2 Pos)
 	return pBot;
 }
 
+IBotEntity *CBotManager::SpawnNpc(const SNpcDef *pDef)
+{
+	if(!pDef)
+		return nullptr;
+	// the definition carries a fixed identity, so a second copy of the same npc
+	// (or the same world reloaded) never spawns twice
+	if(BotByID(pDef->m_BotId))
+		return nullptr;
+
+	IBotEntity *pBot = new CNpcEntity(m_pGameWorld, pDef, TEAM_BLUE);
+	m_Bots.set(pDef->m_BotId, pBot);
+	m_lBotOrder.add(pDef->m_BotId);
+	if(pBot->TeeID() != -1)
+		m_BotsByTeeID.set(pBot->TeeID(), pBot);
+
+	bool Known = false;
+	for(int i = 0; i < m_lDefinedNpcs.size() && !Known; i++)
+		Known = m_lDefinedNpcs[i] == pDef;
+	if(!Known)
+		m_lDefinedNpcs.add(pDef);
+	return pBot;
+}
+
 int CBotManager::DesiredBotCount() const
 {
 	// sv_bots capped by what one client can be shown: it resolves at most
@@ -372,6 +397,11 @@ int CBotManager::DesiredBotCount() const
 
 void CBotManager::Tick()
 {
+	// a world that owns configured NPCs respawns those instead of rolling
+	// random bots, so the population is exactly the definitions
+	if(m_lDefinedNpcs.size())
+		return;
+
 	// respawn up to the desired population
 	int Guard = 0;
 	while(m_lBotOrder.size() < DesiredBotCount() && Guard++ < MAX_BOTS_07)

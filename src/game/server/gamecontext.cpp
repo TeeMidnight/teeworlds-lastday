@@ -1310,10 +1310,29 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 	// non-euclidean space stays empty, and the hub spawns peaceful NPCs only
 	// (never hostile bots). An unknown kind is treated as non-euclidean.
 	const int WorldKind = Server()->GetMapWorldKind(MapID);
-	if(Config()->m_SvBots > 0 && (WorldKind == WORLDKIND_EUCLID || WorldKind == WORLDKIND_HUB))
+	const bool BotWorld = Config()->m_SvBots > 0 && (WorldKind == WORLDKIND_EUCLID || WorldKind == WORLDKIND_HUB);
+
+	// Configured NPCs are content, not the random bot population, so they spawn
+	// even with sv_bots 0. A world that owns them never rolls random bots.
+	const char *pMapName = Server()->GetMapName(MapID);
+	array<const SNpcDef *> lpNpcs;
+	if(m_pNpcSystem)
+	{
+		for(int i = 0; i < m_pNpcSystem->NumDefs(); i++)
+		{
+			const SNpcDef *pDef = m_pNpcSystem->DefAt(i);
+			if(pDef && str_comp(pDef->m_aWorld, pMapName) == 0)
+				lpNpcs.add(pDef);
+		}
+	}
+
+	if(BotWorld || lpNpcs.size())
 	{
 		CBotManager *pBots = pNewWorld->BotManager();
-		pBots->SetBotRole(WorldKind == WORLDKIND_HUB ? CBotManager::BOTROLE_NPC : CBotManager::BOTROLE_HOSTILE);
+		const bool Peaceful = WorldKind == WORLDKIND_HUB || lpNpcs.size();
+		pBots->SetBotRole(Peaceful ? CBotManager::BOTROLE_NPC : CBotManager::BOTROLE_HOSTILE);
+		for(int i = 0; i < lpNpcs.size(); i++)
+			pBots->SpawnNpc(lpNpcs[i]);
 	}
 
 	// remember the canonical map name: it is the persistence key of the

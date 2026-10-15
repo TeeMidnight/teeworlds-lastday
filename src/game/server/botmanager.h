@@ -21,6 +21,7 @@ class CGameWorld;
 class CBotEntity;
 class IBotEntity;
 struct CBotTeeInfo;
+struct SNpcDef;
 
 /*
 	Class: CBotManager
@@ -82,6 +83,10 @@ private:
 	// hostile or peaceful (set from the world kind by the game context)
 	EBotRole m_Role;
 
+	// the definitions this world spawned. A non-empty list makes the manager a
+	// content world: it respawns these and never rolls random bots.
+	array<const SNpcDef *> m_lDefinedNpcs;
+
 	// How many bots this world wants to keep alive.
 	int DesiredBotCount() const;
 
@@ -118,6 +123,12 @@ public:
 	IBotEntity *CreateBot();
 	// Spawns one bot with an explicit BotID and position.
 	IBotEntity *CreateBot(Uuid BotID, vec2 Pos);
+	// Spawns one configured NPC from its definition, at its own position and
+	// with its own fixed identity. A world that owns defined NPCs does not top
+	// up with random bots.
+	IBotEntity *SpawnNpc(const SNpcDef *pDef);
+	// Puts a defined NPC back into the world after its death sequence.
+	IBotEntity *RespawnNpc(const SNpcDef *pDef) { return SpawnNpc(pDef); }
 	// Removes every bot (world reset / shutdown).
 	void ClearBots();
 

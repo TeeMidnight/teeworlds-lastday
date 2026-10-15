@@ -4,6 +4,7 @@
 /* Bot layer ported from teeworlds-carbon (c) TeeMidnight, zlib license.                     */
 #include <game/server/entities/character.h>
 #include <game/server/gamecontext.h>
+#include <game/server/npcdata.h>
 #include <game/server/player.h>
 
 #include "npcentity.h"
@@ -13,14 +14,64 @@
 static const int NPC_ROAM_RADIUS_TILES = 5;
 static const float NPC_ROAM_RADIUS = NPC_ROAM_RADIUS_TILES * 32.0f;
 
+// The identity the client is shown, taken straight from the definition.
+static CBotTeeInfo NpcTeeInfoFromDef(const SNpcDef *pDef)
+{
+	CBotTeeInfo Info;
+	mem_zero(&Info, sizeof(Info));
+	Info.m_Skin = pDef->m_Skin;
+	str_copy(Info.m_aName, pDef->m_aName, sizeof(Info.m_aName));
+	return Info;
+}
+
 CNpcEntity::CNpcEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team) :
 	CBotEntity(pWorld, Pos, BotID, TeeInfo, Team)
 {
+	m_pDef = nullptr;
+	m_HealthRegen = 0;
+	m_RegenCounter = 0;
 	m_SpawnPos = Pos;
 	m_WanderDir = random_int() % 2 ? 1 : -1;
 	m_CursorTarget = vec2(100.0f * m_WanderDir, 0.0f);
 	// start walking right away instead of waiting for the first random turn
 	m_Input.m_Direction = m_WanderDir;
+}
+
+CNpcEntity::CNpcEntity(CGameWorld *pWorld, const SNpcDef *pDef, int Team) :
+	CBotEntity(pWorld, pDef->m_Pos, pDef->m_BotId, NpcTeeInfoFromDef(pDef), Team)
+{
+	m_pDef = pDef;
+	m_MaxHealth = pDef->m_Health;
+	m_Health = m_MaxHealth;
+	m_HealthRegen = pDef->m_HealthRegen;
+	m_RegenCounter = 0;
+
+	m_SpawnPos = pDef->m_Pos;
+	m_WanderDir = random_int() % 2 ? 1 : -1;
+	m_CursorTarget = vec2(100.0f * m_WanderDir, 0.0f);
+	m_Input.m_Direction = m_WanderDir;
+}
+
+void CNpcEntity::Tick()
+{
+	CBotEntity::Tick();
+
+	// health regenerates over time; the rate is hit points per second, which is
+	// accumulated so a fractional amount per tick still adds up exactly
+	if(!m_Alive || m_HealthRegen <= 0)
+	{
+		m_RegenCounter = 0;
+		return;
+	}
+
+	m_RegenCounter += m_HealthRegen;
+	const int PerSecond = Server()->TickSpeed();
+	while(m_RegenCounter >= PerSecond)
+	{
+		m_RegenCounter -= PerSecond;
+		if(!IncreaseHealth(1))
+			break;
+	}
 }
 
 bool CNpcEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
