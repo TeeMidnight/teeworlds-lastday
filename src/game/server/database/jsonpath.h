@@ -16,9 +16,13 @@ class CJsonPath
 
 	void Append(const char *pSegment)
 	{
+		const int Len = str_length(pSegment);
+		// reserve one byte for the separator and one for the terminator; a
+		// segment that does not fit is dropped rather than overflowing the path
+		if(m_Length + (m_Length > 0 ? 1 : 0) + Len + 1 > (int) sizeof(m_aPath))
+			return;
 		if(m_Length > 0)
 			m_aPath[m_Length++] = '.';
-		const int Len = str_length(pSegment);
 		mem_copy(m_aPath + m_Length, pSegment, Len);
 		m_Length += Len;
 		m_aPath[m_Length] = '\0';

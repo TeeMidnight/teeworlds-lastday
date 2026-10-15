@@ -21,6 +21,7 @@
 #include "entities/botentity.h"
 #include "entities/character.h"
 #include "entities/dropped_pickup.h"
+#include "entities/laser.h"
 #include "entities/projectile.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
@@ -47,6 +48,10 @@ void CGameContext::Construct(int Resetting)
 		m_apPlayers[i] = 0;
 
 	m_pController = 0;
+	m_pDatabase = 0;
+	m_pEngine = 0;
+	m_pItemSystem = 0;
+	m_MainWorldID = 0;
 	m_VoteCloseTime = 0;
 	m_VoteCancelTime = 0;
 	m_pVoteOptionFirst = 0;
@@ -98,7 +103,15 @@ void CGameContext::Clear()
 	CTuningParams Tuning = m_Tuning;
 	CGameMenu *pGameMenu = m_pGameMenu;
 	CDatabase *pDatabase = m_pDatabase;
+	IEngine *pEngine = m_pEngine;
 	CItemSystem *pItemSystem = m_pItemSystem;
+	// Deep-copy the world table, then release the original storage before the
+	// object is zeroed: mem_zero alone would forget its allocations and leak
+	// every world. The copy shares the CGameWorld pointers, which is exactly
+	// the state that should survive a clear.
+	hash_table<unsigned, CGameWorld *, 4> Worlds = m_pWorlds;
+	unsigned MainWorldID = m_MainWorldID;
+	m_pWorlds.clear();
 
 	m_Resetting = true;
 	this->~CGameContext();
@@ -112,7 +125,10 @@ void CGameContext::Clear()
 	m_Tuning = Tuning;
 	m_pGameMenu = pGameMenu;
 	m_pDatabase = pDatabase;
+	m_pEngine = pEngine;
 	m_pItemSystem = pItemSystem;
+	m_pWorlds = Worlds;
+	m_MainWorldID = MainWorldID;
 }
 
 class CCharacter *CGameContext::GetPlayerChar(int ClientID)
@@ -460,7 +476,7 @@ void CGameContext::SendReadyToEnter(CPlayer *pPlayer)
 
 void CGameContext::SendSoundTarget(int ClientID, int SoundID)
 {
-	if(ClientID < 0 || ClientID > 0)
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
 		return;
 	if(!m_apPlayers[ClientID])
 		return;
@@ -747,6 +763,15 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 	for(CGameWorld::TypeRange r = m_apPlayers[ClientID]->GameWorld()->DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
 		CProjectile *p = static_cast<CProjectile *>(r.front());
+		if(p->GetOwner() == ClientID)
+			p->LoseOwner();
+	}
+
+	// a laser keeps a client id, not the character pointer; clear it so a slot
+	// reused by the next player is not mistaken for the departed owner
+	for(CGameWorld::TypeRange r = m_apPlayers[ClientID]->GameWorld()->DoTypeRange(CGameWorld::ENTTYPE_LASER); !r.empty(); r.pop_front())
+	{
+		CLaser *p = static_cast<CLaser *>(r.front());
 		if(p->GetOwner() == ClientID)
 			p->LoseOwner();
 	}
@@ -1785,7 +1810,10 @@ int CGameContext::GetMaxPlayerSlots() { return Config()->m_SvMaxClients; }
 
 void CGameContext::RequestLoadWorld(unsigned MapID)
 {
-	dbg_assert(m_pWorlds[MapID] == nullptr, "the world does exists");
+	// Loading is idempotent: a duplicate request (a delayed map load callback,
+	// a reload) must not create a second world for the same map or trap.
+	if(m_pWorlds.get(MapID) != nullptr)
+		return;
 	if(!m_pWorlds.size())
 		m_MainWorldID = MapID;
 

@@ -199,11 +199,14 @@ static void GenerateHeightmap(const CInstruction::CGeneration &rGen, int Seed, a
 
 static void FillTerrain(const CInstruction::CGeneration &rGen, int Seed, CGeneratedWorld *pWorld)
 {
-	CGeneratedWorld::CLayer *pMain = pWorld->AddLayer("Main", rGen.m_Width, rGen.m_Height, false);
-	CGeneratedWorld::CLayer *pGame = pWorld->AddLayer("Game", rGen.m_Width, rGen.m_Height, true);
+	// Add every layer before taking a pointer: m_lLayers grows between the calls
+	// and may move its storage, so a pointer captured earlier would dangle.
+	pWorld->AddLayer("Main", rGen.m_Width, rGen.m_Height, false);
+	pWorld->AddLayer("Game", rGen.m_Width, rGen.m_Height, true);
 	// the entrance frames live on their own layer; see LAYER_UNHOOKABLE. It is
 	// added here so every later step can address it by index.
-	CGeneratedWorld::CLayer *pUnhookable = pWorld->AddLayer("Unhookable", rGen.m_Width, rGen.m_Height, false);
+	pWorld->AddLayer("Unhookable", rGen.m_Width, rGen.m_Height, false);
+	CGeneratedWorld::CLayer *pMain = &pWorld->m_lLayers[CGeneratedWorld::LAYER_TERRAIN];
 
 	const int Width = rGen.m_Width;
 	const int Height = rGen.m_Height;
@@ -218,9 +221,8 @@ static void FillTerrain(const CInstruction::CGeneration &rGen, int Seed, CGenera
 		for(int y = SurfaceY; y < Height; y++)
 			SetSolid(&pMain->m_pTiles[y * Width + x]);
 
-		// the game layer stays empty; entities are added by the features below
-		(void) pGame;
-		(void) pUnhookable;
+		// the game layer and the unhookable frame stay empty here; entities and
+		// entrances are added by the later steps
 	}
 }
 
@@ -778,7 +780,11 @@ CGeneratedWorld *GenerateEuclideanWorld(const CInstruction *pInstruction, int Se
 		dbg_msg("worldgen", "floor '%s' has no generation settings", pInstruction->m_aFloorName);
 		return 0;
 	}
-	if(Gen.m_Width <= 0 || Gen.m_Height <= 0)
+	// Each tile layer is a flat Width*Height CTile array allocated with int
+	// arithmetic. Reject a size whose product would overflow that before any
+	// allocation is attempted.
+	const int64 Area = (int64) Gen.m_Width * (int64) Gen.m_Height;
+	if(Gen.m_Width <= 0 || Gen.m_Height <= 0 || Area > (int64) 0x7fffffff)
 	{
 		dbg_msg("worldgen", "floor '%s' has an invalid size %dx%d", pInstruction->m_aFloorName, Gen.m_Width, Gen.m_Height);
 		return 0;

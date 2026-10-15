@@ -62,8 +62,11 @@ int CItemSystem::ListItemsCallback(const char *pFilename, int IsDir, int Storage
 	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
 		return 0;
 
-	// the res_id is the file name without the ".json" suffix
+	// the res_id is the file name without the ".json" suffix; reject a name
+	// that does not fit instead of writing past the end of the buffer
 	char aResId[64];
+	if(Len - 5 >= (int) sizeof(aResId))
+		return 0;
 	str_copy(aResId, pFilename, sizeof(aResId));
 	aResId[Len - 5] = '\0';
 
@@ -456,8 +459,11 @@ int CItemSystem::ListCraftsCallback(const char *pFilename, int IsDir, int Storag
 	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
 		return 0;
 
-	// the craft_id is the file name without the ".json" suffix
+	// the craft_id is the file name without the ".json" suffix; reject a name
+	// that does not fit instead of writing past the end of the buffer
 	char aCraftId[64];
+	if(Len - 5 >= (int) sizeof(aCraftId))
+		return 0;
 	str_copy(aCraftId, pFilename, sizeof(aCraftId));
 	aCraftId[Len - 5] = '\0';
 

@@ -35,7 +35,9 @@ int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage)
 	const int Num = pWorld->FindFlagEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 	for(int i = 0; i < Num; ++i)
 	{
-		CCharacter *pTarget = static_cast<CCharacter *>(lpEnts[i]);
+		// every ENTFLAG_HITABLE entity is a CHitableEntity, not necessarily a
+		// CCharacter: a bot is hittable too, so cast to the common base
+		CHitableEntity *pTarget = static_cast<CHitableEntity *>(lpEnts[i]);
 
 		if((pTarget == pChr) || pWorld->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos(), NULL, NULL))
 			continue;

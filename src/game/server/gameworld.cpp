@@ -341,14 +341,19 @@ void CGameWorld::Tick()
 	if(m_pBotManager)
 		m_pBotManager->Tick();
 
-	// update all objects
+	// update all objects by index, not with a range: an entity may insert
+	// another one into the same list while it ticks (a laser refracts, a
+	// projectile fragments). array::add reallocates and invalidates a captured
+	// range, while operator[] re-reads the base pointer on every step. Removal
+	// uses remove_fast, which swaps the last element down; the index walk may
+	// skip that element for one frame but never visits it twice.
 	for(int i = 0; i < NUM_ENTTYPES; i++)
-		for(auto &pEnt : m_alpEntityLists[i])
-			pEnt->Tick();
+		for(int j = 0; j < m_alpEntityLists[i].size(); j++)
+			m_alpEntityLists[i][j]->Tick();
 
 	for(int i = 0; i < NUM_ENTTYPES; i++)
-		for(auto &pEnt : m_alpEntityLists[i])
-			pEnt->TickDefered();
+		for(int j = 0; j < m_alpEntityLists[i].size(); j++)
+			m_alpEntityLists[i][j]->TickDefered();
 
 	RemoveEntities();
 }

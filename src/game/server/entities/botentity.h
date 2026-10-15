@@ -99,6 +99,7 @@ public:
 
 	// --- CHitableEntity ---
 	bool TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon) override;
+	int GetHitAttacker() override;
 
 	// --- IBotEntity ---
 	Uuid GetBotID() const override { return m_BotID; }

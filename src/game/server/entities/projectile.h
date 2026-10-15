@@ -7,11 +7,8 @@
 
 #include <game/server/entity.h>
 
-enum
-{
-	PLAYER_TEAM_BLUE = -2,
-	PLAYER_TEAM_RED = -1
-};
+// PLAYER_TEAM_BLUE / PLAYER_TEAM_RED live in entity.h: an entity without a
+// client slot (a projectile, a bot) reports its team through them.
 
 class CProjectile : public CChildEntity
 {

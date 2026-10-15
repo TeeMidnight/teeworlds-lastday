@@ -17,6 +17,10 @@ public:
 	virtual void TickPaused();
 	virtual void Snap(int SnappingClient);
 
+	// the owning client left; drop the reference so HitCharacter no longer
+	// skips a tee that reused the slot
+	void LoseOwner() { m_Owner = -1; }
+
 protected:
 	bool HitCharacter(vec2 From, vec2 To);
 	void DoBounce();

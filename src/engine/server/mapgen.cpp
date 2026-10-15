@@ -280,7 +280,7 @@ void WriteJsonValue(CJsonWriter *pWriter, const json_value &rValue)
 		case json_object: WriteJsonObject(pWriter, rValue); break;
 		case json_array: WriteJsonArray(pWriter, rValue); break;
 		case json_integer: pWriter->WriteInt64Value((int64) rValue.u.integer); break;
-		case json_double: break;
+		case json_double: pWriter->WriteDoubleValue(rValue.u.dbl); break;
 		case json_string: pWriter->WriteStrValue(rValue.u.string.ptr); break;
 		case json_boolean: pWriter->WriteBoolValue(rValue.u.boolean); break;
 		default: break;
@@ -699,8 +699,14 @@ int CMapGen::ListWorldsCallback(const char *pFilename, int IsDir, int StorageTyp
 	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
 		return 0;
 
-	// the floor name is the file name without the ".json" suffix
+	// the floor name is the file name without the ".json" suffix; reject a
+	// name that does not fit instead of writing past the end of the buffer
 	char aFloorName[64];
+	if(Len - 5 >= (int) sizeof(aFloorName))
+	{
+		dbg_msg("mapgen", "floor file name too long: '%s'", pFilename);
+		return 0;
+	}
 	str_copy(aFloorName, pFilename, sizeof(aFloorName));
 	aFloorName[Len - 5] = '\0';
 
@@ -1688,6 +1694,21 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 				lPlacementsPerStruct[s], Struct.m_aBaseMap, Struct.m_GenerateProba,
 				Struct.m_PasteAir ? "true" : "false");
 		}
+	}
+
+	// The plan appended placements anchor by anchor, but the merge walks one
+	// contiguous run per struct type. Stable-sort them by struct index (keeping
+	// the anchor order inside a run) so the counts above line up with the runs.
+	for(int i = 1; i < lStructPlacements.size(); i++)
+	{
+		const CStructPlacement Key = lStructPlacements[i];
+		int j = i - 1;
+		while(j >= 0 && lStructPlacements[j].m_StructIndex > Key.m_StructIndex)
+		{
+			lStructPlacements[j + 1] = lStructPlacements[j];
+			j--;
+		}
+		lStructPlacements[j + 1] = Key;
 	}
 
 	// ---------------------------------------------------------------

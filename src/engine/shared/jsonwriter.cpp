@@ -103,6 +103,17 @@ void CJsonWriter::WriteInt64Value(int64 Value)
 	CompleteDataType();
 }
 
+void CJsonWriter::WriteDoubleValue(double Value)
+{
+	dbg_assert(CanWriteDatatype(), "Cannot write value at this position");
+	WriteIndent(false);
+	char aBuf[64];
+	// %.17g round-trips an IEEE double without trailing noise
+	str_format(aBuf, sizeof(aBuf), "%.17g", Value);
+	WriteInternal(aBuf);
+	CompleteDataType();
+}
+
 void CJsonWriter::WriteBoolValue(bool Value)
 {
 	dbg_assert(CanWriteDatatype(), "Cannot write value at this position");

@@ -442,6 +442,10 @@ void CPlayer::SwitchWorld(CGameWorld *pWorld)
 	if(m_pCharacter)
 	{
 		m_pCharacter->Remove();
+		// The character is reused when the new map finishes loading (MoveTo in
+		// OnClientConnected), but it must not keep the old world around: that
+		// one may be unloaded while the player is already in the new one.
+		m_pCharacter->RebindWorld(pWorld);
 	}
 	m_pWorld = pWorld;
 	m_IsReadyToEnter = false;

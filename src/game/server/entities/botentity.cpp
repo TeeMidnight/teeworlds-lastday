@@ -427,6 +427,14 @@ bool CBotEntity::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int W
 	return TakeDamage(Force, Source, Dmg, pFrom, Weapon);
 }
 
+int CBotEntity::GetHitAttacker()
+{
+	// Bots have no client slot, so a hit they land is attributed to their team.
+	// Without this a bot always counted as red, and a blue bot damaged its own
+	// teammates without triggering the friendly fire check.
+	return m_Team == TEAM_BLUE ? PLAYER_TEAM_BLUE : PLAYER_TEAM_RED;
+}
+
 bool CBotEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
 {
 	if(!m_Alive)

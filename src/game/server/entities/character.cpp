@@ -317,13 +317,11 @@ unsigned CCharacter::GetUsableWeapon()
 	const unsigned SlotItem = WeaponAtSlot(m_ActiveWeapon);
 	if(SlotItem != 0)
 	{
-		// the item must still exist in the inventory
+		// The item must still exist in the inventory. Do not clear the slot
+		// here: this runs from Snap(), and a read path must not mutate the
+		// character. UnequipMissingWeapons() clears it on the menu/tick path.
 		if(!GameServer()->Item()->HasItemHash(GetCID(), SlotItem))
-		{
-			// the item is gone: auto-unequip this slot
-			m_aWeapons[m_ActiveWeapon] = 0;
 			return WeaponID("hand");
-		}
 
 		IWeaponInterface *pWeapon = WeaponManager()->GetWeapon(SlotItem);
 		if(pWeapon)
@@ -674,6 +672,17 @@ void CCharacter::Remove()
 	GameWorld()->m_Core.SetCharacter(m_pPlayer->GetCID(), 0);
 }
 
+void CCharacter::RebindWorld(CGameWorld *pWorld)
+{
+	// Repoint a detached character at the world it is about to enter. It is not
+	// inserted here (MoveTo does that once the client finished loading), but it
+	// must not keep a pointer to the old world: that world can be unloaded as
+	// soon as this player no longer references it, and destroying the character
+	// in the meantime would then remove it from freed memory.
+	SetGameWorld(pWorld);
+	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
+}
+
 void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos)
 {
 	SetGameWorld(pWorld);
@@ -775,15 +784,23 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 	return true;
 }
 
+int CCharacter::GetHitAttacker()
+{
+	return GetCID();
+}
+
 bool CCharacter::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
 {
 	int From = -1;
 	if(pFrom)
 	{
-		if(pFrom->ObjType() == CGameWorld::ENTTYPE_CHARACTER)
-			From = static_cast<CCharacter *>(pFrom)->GetCID();
+		// a carrier (projectile, explosion) reports the client that fired it;
+		// every other hittable reports itself, which is a client id for a real
+		// character and a PLAYER_TEAM_* sentinel for a bot
 		if(pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD)
 			From = static_cast<CChildEntity *>(pFrom)->GetOwner();
+		else
+			From = pFrom->GetHitAttacker();
 	}
 	return TakeDamage(Force, Source, Dmg, From, Weapon);
 }

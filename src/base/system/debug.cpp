@@ -59,11 +59,21 @@ void dbg_logger(DBG_LOGGER logger, DBG_LOGGER_FINISH finish, void *user)
 
 void dbg_assert_imp(const char *filename, int line, int test, const char *msg)
 {
+#ifdef CONF_DEBUG
 	if(!test)
 	{
 		dbg_msg("assert", "%s(%d): %s", filename, line, msg);
 		dbg_break();
 	}
+#else
+	// A release server must never take itself down on an invariant: the
+	// message would only be useful to a developer and the crash costs every
+	// player on the server.
+	(void) filename;
+	(void) line;
+	(void) test;
+	(void) msg;
+#endif
 }
 
 void dbg_break()

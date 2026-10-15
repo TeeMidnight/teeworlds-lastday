@@ -60,9 +60,11 @@ public:
 
 	void Die(int Killer, int Weapon);
 	void Remove();
+	void RebindWorld(CGameWorld *pWorld);
 	void MoveTo(CGameWorld *pWorld, vec2 Pos);
 	bool TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon);
 	virtual bool TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon);
+	int GetHitAttacker() override;
 
 	bool Spawn(class CPlayer *pPlayer, vec2 Pos);
 
@@ -112,8 +114,10 @@ private:
 
 	bool m_Alive;
 
-	// weapon info
-	array<CEntity *> m_lpHitObjects;
+	// weapon info: entities already hit during the current ninja swing, by
+	// their unique server id rather than a raw pointer so a destroyed entity
+	// cannot be resurrected by an address reuse
+	array<int> m_lpHitObjects;
 
 	// loadout: NUM_WEAPONS fixed slots, each holds the hash of the item placed
 	// on it (weapon items: hash == weapon id). slot order matches the client's

@@ -74,7 +74,7 @@ public:
 			bool AlreadyHit = false;
 			for(int j = 0; j < pChr->m_lpHitObjects.size(); j++)
 			{
-				if(pChr->m_lpHitObjects[j] == lpEnts[i])
+				if(pChr->m_lpHitObjects[j] == lpEnts[i]->GetID())
 				{
 					AlreadyHit = true;
 					break;
@@ -89,7 +89,7 @@ public:
 
 			// hit a player, give him damage and stuffs...
 			pChr->GameWorld()->CreateSound(lpEnts[i]->GetPos(), SOUND_NINJA_HIT);
-			pChr->m_lpHitObjects.add(lpEnts[i]);
+			pChr->m_lpHitObjects.add(lpEnts[i]->GetID());
 
 			// set his velocity to fast upward (for now)
 			static_cast<CHitableEntity *>(lpEnts[i])->TakeHit(vec2(0, -10.0f), pChr->m_Ninja.m_ActivationDir * -1, g_pData->m_Weapons.m_Ninja.m_pBase->m_Damage, pChr, WEAPON_NINJA);

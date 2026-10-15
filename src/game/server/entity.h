@@ -10,6 +10,15 @@
 #include "alloc.h"
 #include "gameworld.h"
 
+// Damage source of an entity without a client slot. The value carries the team
+// so friendly fire still resolves; CCharacter::TakeDamage already reads these
+// negative values out of its From argument.
+enum
+{
+	PLAYER_TEAM_BLUE = -2,
+	PLAYER_TEAM_RED = -1
+};
+
 /*
 	Class: Entity
 		Basic entity class.
@@ -50,9 +59,6 @@ protected:
 	*/
 	vec2 m_Pos;
 
-	/* Getters */
-	int GetID() const { return m_ID; }
-
 public:
 	/* Constructor */
 	CEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0);
@@ -72,7 +78,13 @@ public:
 	int ObjFlag() const { return m_ObjFlag; }
 
 	/* Getters */
+	int GetID() const { return m_ID; }
 	const vec2 &GetPos() const { return m_Pos; }
+
+	// The client id to credit for a hit this entity lands, or a negative
+	// PLAYER_TEAM_* sentinel when it has no client slot (a bot). -1 keeps the
+	// historical "no attacker / world" meaning.
+	virtual int GetHitAttacker() { return -1; }
 	float GetProximityRadius() const { return m_ProximityRadius; }
 	bool IsMarkedForDestroy() const { return m_MarkedForDestroy; }
 

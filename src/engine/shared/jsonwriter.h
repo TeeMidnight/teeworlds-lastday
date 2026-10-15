@@ -80,6 +80,7 @@ public:
 	void WriteStrValue(const char *pValue);
 	void WriteIntValue(int Value);
 	void WriteInt64Value(int64 Value);
+	void WriteDoubleValue(double Value);
 	void WriteBoolValue(bool Value);
 	void WriteNullValue();
 };

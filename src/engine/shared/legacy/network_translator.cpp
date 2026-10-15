@@ -374,6 +374,10 @@ namespace legacy
 			mem_copy(pTune->m_aTuneParams, m_aTuneParams8, sizeof(pTune->m_aTuneParams));
 		}
 
+		// sizes of the frozen 0.7 objects, so a generically copied item is
+		// emitted at the size the 0.7 client will parse it with
+		static protocol7::CNetObjHandler Handler7;
+
 		for(int i = 0; i < NumItems; i++)
 		{
 			const CSnapshotItem *pItem = pSnap8->GetItem(i);
@@ -447,10 +451,18 @@ namespace legacy
 				continue;
 			}
 
-			void *pOut = Builder.NewItem(Type7, ID, Size);
+			// Emit the item at the 0.7 object size, not the 0.8 one. The two
+			// protocols agree on every type that reaches here today, but a future
+			// field added to a 0.8 object would otherwise be copied into a 0.7
+			// item and shift whatever the 0.7 client reads after it.
+			const int Size7 = Handler7.GetObjSize(Type7);
+			if(Size7 <= 0)
+				continue;
+			void *pOut = Builder.NewItem(Type7, ID, Size7);
 			if(!pOut)
 				return -1;
-			mem_copy(pOut, pItem->Data(), Size);
+			mem_zero(pOut, Size7);
+			mem_copy(pOut, pItem->Data(), Size < Size7 ? Size : Size7);
 		}
 
 		m_Snap7Out.set_size(Builder.RequiredSize());
