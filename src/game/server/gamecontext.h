@@ -119,35 +119,11 @@ public:
 
 	int m_LockTeams;
 
-	// voting
-	void StartVote(const char *pDesc, const char *pCommand, const char *pReason);
-	void EndVote(int Type, bool Force);
-	void AbortVoteOnDisconnect(int ClientID);
-	void AbortVoteOnTeamChange(int ClientID);
-
-	int m_VoteCreator;
-	int m_VoteType;
-	int64 m_VoteCloseTime;
-	int64 m_VoteCancelTime;
-	bool m_VoteUpdate;
-	int m_VotePos;
-	char m_aVoteDescription[VOTE_DESC_LENGTH];
-	char m_aVoteCommand[VOTE_CMD_LENGTH];
-	char m_aVoteReason[VOTE_REASON_LENGTH];
-	int m_VoteClientID;
-	int m_NumVoteOptions;
-	int m_VoteEnforce;
 	enum
 	{
-		VOTE_TIME = 25,
-		VOTE_CANCEL_TIME = 10,
-
 		MIN_SKINCHANGE_CLIENTVERSION = 0x0703,
 		MIN_RACE_CLIENTVERSION = 0x0704,
 	};
-	class CHeap *m_pVoteOptionHeap;
-	CVoteOptionServer *m_pVoteOptionFirst;
-	CVoteOptionServer *m_pVoteOptionLast;
 
 	// ----- send functions -----
 	void SendChat(int ChatterClientID, int Mode, int To, const char *pText);
@@ -168,11 +144,6 @@ public:
 	void SendChatCommand(const CCommandManager::CCommand *pCommand, int ClientID);
 	void SendChatCommands(int ClientID);
 	void SendRemoveChatCommand(const CCommandManager::CCommand *pCommand, int ClientID);
-
-	void SendForceVote(int Type, const char *pDescription, const char *pReason);
-	void SendVoteSet(int Type, int ToClientID);
-	void SendVoteStatus(int ClientID, int Total, int Yes, int No);
-	void SendVoteClearOptions(int ClientID);
 
 	//
 	void SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID);
@@ -221,8 +192,6 @@ public:
 
 protected:
 	virtual void OnGameMenuInit();
-
-	static bool MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUser);
 };
 
 inline int64 CmaskAll() { return -1; }

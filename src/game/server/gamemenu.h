@@ -11,6 +11,10 @@
 
 #include <game/voting.h>
 
+class CHeap;
+class CNetMsg_Cl_CallVote;
+class CNetMsg_Cl_Vote;
+
 #define MENU_MAIN_PAGE_ID str_quickhash("MAIN")
 #define MENU_OPTIONS_NUM 12
 
@@ -43,9 +47,9 @@ class CGameMenu
 	class IServer *Server() const;
 
 public:
-	CGameMenu() : m_pGameServer(nullptr) {}
+	CGameMenu() : m_pGameServer(nullptr), m_pServerVoteOptionHeap(nullptr) {}
 	CGameMenu(CGameContext *pGameServer);
-	~CGameMenu() = default;
+	~CGameMenu();
 
 	// registers the menu pages; must be called once the game server is set
 	void Init(CGameContext *pGameServer);
@@ -55,6 +59,26 @@ public:
 	void OnClientEntered(int ClientID);
 	void OnMenuVote(int ClientID, CCallVoteStatus &VoteStatus, bool Sound = false);
 	void SendMenuChat(int ClientID, const char *pChat);
+
+	// ----- server vote -----
+	// The menu is carried over the vote protocol, so the vote state lives here
+	// too: the active vote, its tally and the server vote option list.
+	void TickVote();
+	void SendActiveVote(int ClientID);
+	void AbortVoteOnDisconnect(int ClientID);
+	void AbortVoteOnTeamChange(int ClientID);
+	void OnCallVote(int ClientID, class CNetMsg_Cl_CallVote *pMsg);
+	void OnVote(int ClientID, class CNetMsg_Cl_Vote *pMsg);
+	// a client arriving or switching team changes who may vote
+	void SetVoteUpdate() { m_VoteUpdate = true; }
+
+	// console command bodies (the command callbacks forward to these)
+	void AddVoteOption(const char *pDescription, const char *pCommand);
+	void RemoveVoteOption(const char *pDescription);
+	void ClearVoteOptions();
+	void ForceVote(const char *pChoice);
+	// send the message that clears the client's vote/menu option list
+	void SendVoteClearOptions(int ClientID);
 
 	void ClearOptions(int ClientID);
 	void RefreshMenu(int ClientID);
@@ -78,10 +102,42 @@ private:
 	static bool MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// shows one item: description + actions ("use", ...)
 	static bool MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// the "Server Vote" page
+	static bool MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// loadout (weapon equipment) menu
 	static bool MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+
+	// ----- server vote state -----
+	enum
+	{
+		VOTE_TIME = 25,
+		VOTE_CANCEL_TIME = 10,
+	};
+	int m_VoteCreator;
+	int m_VoteType;
+	int64 m_VoteCloseTime;
+	int64 m_VoteCancelTime;
+	bool m_VoteUpdate;
+	int m_VotePos;
+	char m_aVoteDescription[VOTE_DESC_LENGTH];
+	char m_aVoteCommand[VOTE_CMD_LENGTH];
+	char m_aVoteReason[VOTE_REASON_LENGTH];
+	int m_VoteClientID;
+	int m_VoteEnforce;
+
+	// global server vote option list; per-client menu options live in CPlayerData
+	class CHeap *m_pServerVoteOptionHeap;
+	CVoteOptionServer *m_pServerVoteOptionFirst;
+	CVoteOptionServer *m_pServerVoteOptionLast;
+	int m_NumServerVoteOptions;
+
+	void StartVote(const char *pDesc, const char *pCommand, const char *pReason);
+	void EndVote(int Type, bool Force);
+	void SendForceVote(int Type, const char *pDescription, const char *pReason);
+	void SendVoteSet(int Type, int ToClientID);
+	void SendVoteStatus(int ClientID, int Total, int Yes, int No);
 
 	// slot the player picked in MenuLoadout, before picking the weapon in
 	// MenuWeaponPick; -1 = none
