@@ -863,6 +863,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     git_revision.cpp
     hash.cpp
     http_request.cpp
+    item_id.cpp
     io.cpp
     jsonparser.cpp
     jsonwriter.cpp
