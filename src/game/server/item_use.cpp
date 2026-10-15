@@ -42,8 +42,14 @@ int CItemSystem::UseItem(int ClientID, const char *pResId, int Count)
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || Count <= 0)
 		return 0;
 
-	if(GetItemCount(ClientID, pResId) <= 0)
+	const int Owned = GetItemCount(ClientID, pResId);
+	if(Owned <= 0)
 		return 0;
+	// never apply more effects than there are items to pay for them; without
+	// this the whole batch is applied and RemoveItem then refuses to consume
+	// because the player does not own enough
+	if(Count > Owned)
+		Count = Owned;
 
 	const SUse Use = GetUse(pResId);
 	if(!Use.m_HasUse)
@@ -79,15 +85,15 @@ int CItemSystem::UseItem(int ClientID, const char *pResId, int Count)
 		if(!Applied)
 			break; // nothing to restore, keep the remaining items
 
+		// consume before counting it: an effect must never be applied without
+		// paying for it, even if the inventory changed underneath us
+		if(!RemoveItem(ClientID, pResId, 1))
+			break;
 		Used++;
 	}
 
 	if(Used == 0)
 		return 0;
-
-	// consume what was actually used; RemoveItem drops the stack completely
-	// once it reaches zero
-	RemoveItem(ClientID, pResId, Used);
 
 	// the used-up status should be persisted on the next save
 	pGameServer->SavePlayerData(pPlayer);

@@ -173,6 +173,12 @@ bool CItemSystem::AddItem(int ClientID, const char *pResId, int Count, bool Sile
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
 		return false;
 
+	// never insert an empty, unknown or negative stack: the res_id can come
+	// from map data or a database row, and an unknown id is unrenderable and
+	// unmatchable
+	if(!pResId || !pResId[0] || Count <= 0 || !IsKnownItem(pResId))
+		return false;
+
 	CInventory &Inventory = m_aInventories[ClientID];
 	int Index = Inventory.Find(pResId);
 	if(Index < 0)

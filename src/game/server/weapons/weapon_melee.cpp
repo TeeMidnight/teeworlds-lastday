@@ -75,24 +75,21 @@ int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage)
 			if(pWorld->Collision()->IntersectLine(ProjStartPos, pRes->GetPos(), NULL, NULL))
 				continue;
 
-			// remember the resource id before the hit: the entity is
-			// destroyed when it gets depleted
+			// The last hit destroys the node, so bank the drop first: when the
+			// inventory is full the node keeps its final hardness instead of
+			// being consumed for an item that no one gets.
 			const bool Depleted = pRes->RemainingHardness() <= 1;
-			char aResId[32];
-			if(Depleted)
-				str_copy(aResId, pRes->ResId(), sizeof(aResId));
-
-			pRes->TakeHit(1);
-
 			if(Depleted)
 			{
 				CPlayer *pPlayer = pChr->GetPlayer();
-				if(pPlayer && !pChr->GameServer()->Item()->AddItem(pPlayer->GetCID(), aResId, 1))
+				if(!pPlayer || !pChr->GameServer()->Item()->AddItem(pPlayer->GetCID(), pRes->ResId(), 1))
 					continue;
+				pRes->TakeHit(1);
 				pWorld->CreateSound(pRes->GetPos(), SOUND_PICKUP_ARMOR);
 			}
 			else
 			{
+				pRes->TakeHit(1);
 				pWorld->CreateHammerHit(pRes->GetPos());
 			}
 			Hits++;

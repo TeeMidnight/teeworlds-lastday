@@ -688,11 +688,27 @@ void CGameContext::OnClientEnter(int ClientID)
 
 void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 {
-	dbg_assert(!m_apPlayers[ClientID] || m_apPlayers[ClientID]->m_MapLoading, "non-free player slot");
-	dbg_assert(m_pWorlds.get(Server()->GetClientMapID(ClientID)) != nullptr, "the world does not exist");
+	// The slot must be free, or belong to a player that is still loading its
+	// new map. A stale or duplicated callback is ignored instead of trapping.
+	if(m_apPlayers[ClientID] && !m_apPlayers[ClientID]->m_MapLoading)
+	{
+		dbg_msg("game", "client %d connected on a busy slot, ignoring", ClientID);
+		return;
+	}
+	CGameWorld **ppWorld = m_pWorlds.get(Server()->GetClientMapID(ClientID));
+	if(!ppWorld || !*ppWorld)
+	{
+		dbg_msg("game", "client %d connected to a missing world, ignoring", ClientID);
+		return;
+	}
+	CGameWorld *pWorld = *ppWorld;
 
 	if(!m_apPlayers[ClientID])
-		m_apPlayers[ClientID] = new(ClientID) CPlayer(*m_pWorlds[Server()->GetClientMapID(ClientID)], ClientID, Dummy, AsSpec);
+	{
+		// a recycled slot must not inherit the previous occupant's inventory
+		Item()->GetInventory(ClientID).Reset();
+		m_apPlayers[ClientID] = new(ClientID) CPlayer(pWorld, ClientID, Dummy, AsSpec);
+	}
 	else if(GetPlayerChar(ClientID))
 	{
 		vec2 SpawnPos;

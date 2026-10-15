@@ -133,6 +133,9 @@ public:
 		SItem m_aItems[MAX_ITEMS];
 
 		CInventory();
+		// drop everything: used when a client slot is recycled so the new
+		// occupant never sees the previous player's inventory
+		void Reset() { mem_zero(m_aItems, sizeof(m_aItems)); }
 		// index of the item with the given res_id, or -1
 		int Find(const char *pResId) const;
 		// index of the first empty slot, or -1 when the inventory is full

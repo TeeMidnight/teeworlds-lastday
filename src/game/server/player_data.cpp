@@ -122,9 +122,13 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), &m_Status.m_Level);
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), &m_Status.m_HideTip);
 
-	// character infos
-	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("health"), &m_pCharacter->m_Health);
-	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("armor"), &m_pCharacter->m_Armor);
+	// character infos: a player may log in while dead or spectating, when
+	// there is no character to write the saved health back into
+	if(m_pCharacter)
+	{
+		GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("health"), &m_pCharacter->m_Health);
+		GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("armor"), &m_pCharacter->m_Armor);
+	}
 
 	// loadout slot layout (res_id per slot, "" = empty)
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("loadout_set"), &m_Status.m_LoadoutSet);
@@ -147,6 +151,17 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 				continue;
 			int Count = 0;
 			GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), &Count);
+			if(Count <= 0 || !GameServer()->Item()->IsKnownItem(aResId))
+				continue;
+			// merge into an existing stack first: a legacy or hand-edited row can
+			// list the same res_id twice, and a second slot would be invisible to
+			// Find/AddItem and could never be used up
+			const int Existing = Inventory.Find(aResId);
+			if(Existing >= 0)
+			{
+				Inventory.m_aItems[Existing].m_Count += Count;
+				continue;
+			}
 			const int Slot = Inventory.FindEmpty();
 			if(Slot < 0)
 				break; // inventory full
