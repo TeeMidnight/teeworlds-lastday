@@ -4,6 +4,8 @@
 #include <engine/shared/config.h>
 #include <engine/shared/memheap.h>
 
+#include <game/localization_format.h>
+
 #include "entities/character.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
@@ -18,6 +20,20 @@
 
 CConfig *CGameMenu::Config() const { return GameServer()->Config(); }
 IServer *CGameMenu::Server() const { return GameServer()->Server(); }
+
+// A menu option command has to be a stable string; the namespaced source name is
+// readable in logs, the canonical uuid is the fallback for uuid-only items.
+static const char *ItemCommand(const CItemID &Id, char *pBuf, int Size)
+{
+	const char *pSource = Id.SourceName();
+	if(pSource && pSource[0])
+	{
+		str_copy(pBuf, pSource, Size);
+		return pBuf;
+	}
+	Id.FormatUuid(pBuf, Size);
+	return pBuf;
+}
 
 CGameMenu::CGameMenu(CGameContext *pGameServer) :
 	m_pGameServer(pGameServer)
@@ -61,7 +77,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		m_aLoadoutSlot[i] = -1;
-		m_aItemViewId[i][0] = '\0';
+		m_aItemViewId[i] = CItemID();
 	}
 
 	Register("MAIN", "Main Menu", MenuMain, nullptr); // Localize("Main Menu", "MAIN")
@@ -310,9 +326,11 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_comp(VoteStatus.m_aCmd, "NONE") != 0)
 	{
 		CItemSystem *pItem = pMenu->GameServer()->Item();
-		if(pItem->GetItemCount(ClientID, VoteStatus.m_aCmd) > 0)
+		CItemID Clicked;
+		if(CItemID::Parse(VoteStatus.m_aCmd, &Clicked) && !Clicked.IsZero() &&
+			pItem->GetItemCount(ClientID, Clicked) > 0)
 		{
-			str_copy(pMenu->m_aItemViewId[ClientID], VoteStatus.m_aCmd, sizeof(pMenu->m_aItemViewId[ClientID]));
+			pMenu->m_aItemViewId[ClientID] = Clicked;
 			pMenu->SetPlayerPage(ClientID, "ITEMVIEW");
 			return false;
 		}
@@ -321,19 +339,23 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 	pMenu->ClearOptions(ClientID);
 	pMenu->AddPageTitle();
 
-	const CItemSystem::CInventory &Inventory = pMenu->GameServer()->Item()->GetInventory(ClientID);
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+	const CItemSystem::CInventory &Inventory = pItem->GetInventory(ClientID);
 	for(int i = 0; i < CItemSystem::CInventory::MAX_ITEMS; i++)
 	{
 		if(!Inventory.IsEmpty(i))
 		{
-			const char *pResId = Inventory.m_aItems[i].m_aResId;
+			const CItemID &Id = Inventory.m_aItems[i].m_Id;
 			// amnesia: with high forgetting the player no longer remembers
 			// what this item is (name hidden, count still shown)
-			const char *pName = pMenu->GameServer()->Item()->GetName(pResId);
-			if(pMenu->GameServer()->Item()->IsItemForgotten(pPlayer->m_Status.m_Forgetting, pResId))
+			const char *pName = pItem->GetName(Id);
+			if(pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, Id))
 				pName = "???";
-			pMenu->AddOptionFormat("%d. %s: %d", pResId, "-",
-				i + 1, Localize(pName, "Item Name"), Inventory.m_aItems[i].m_Count);
+			char aCmd[UUID_MAXSTRSIZE];
+			ItemCommand(Id, aCmd, sizeof(aCmd));
+			const std::string Desc = LocalizeFormat("Menu Inventory", "{}. {}: {}",
+				i + 1, pName, Inventory.m_aItems[i].m_Count);
+			pMenu->AddOption(Desc.c_str(), aCmd, "-");
 		}
 		else
 		{
@@ -408,18 +430,18 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		return true;
 
 	CItemSystem *pItem = pMenu->GameServer()->Item();
-	const char *pResId = pMenu->m_aItemViewId[ClientID];
-	if(!pResId[0] || pItem->GetItemCount(ClientID, pResId) <= 0)
+	const CItemID Id = pMenu->m_aItemViewId[ClientID];
+	if(Id.IsZero() || pItem->GetItemCount(ClientID, Id) <= 0)
 	{
 		// the item is gone (used up / removed): go back to the inventory
 		pMenu->SetPlayerPage(ClientID, "INVENTORY");
 		return false;
 	}
 
-	const int Count = pItem->GetItemCount(ClientID, pResId);
-	// amnesia: a forgotten item is only shown as "???" (the res_id itself is
-	// never hidden, so the detail page still works)
-	const char *pName = pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, pResId) ? "???" : pItem->GetName(pResId);
+	const int Count = pItem->GetItemCount(ClientID, Id);
+	// amnesia: a forgotten item is only shown as "???"
+	const bool Forgotten = pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, Id);
+	const char *pName = Forgotten ? "???" : pItem->GetName(Id);
 	const char *pLocalizedName = Localize(pName, "Item Name");
 
 	// "use" the item; the vote reason box can carry how many to use
@@ -432,12 +454,11 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 			if(UseCount < 1)
 				UseCount = 1;
 		}
-		const int Used = pItem->UseItem(ClientID, pResId, UseCount);
+		const int Used = pItem->UseItem(ClientID, Id, UseCount);
 		if(Used > 0)
 		{
-			char aMsg[128];
-			str_format(aMsg, sizeof(aMsg), Localize("Used: %s x%d", "Menu Inventory"), pLocalizedName, Used);
-			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, aMsg);
+			const std::string Msg = LocalizeFormat("Menu Inventory", "Used: {} x{}", pLocalizedName, Used);
+			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
 		}
 		else
 		{
@@ -466,7 +487,9 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		CCharacter *pChr = pPlayer->GetCharacter();
 		if(pChr)
 			Direction = pChr->AimDirection() * 12.0f;
-		pMenu->GameServer()->DropItem(ClientID, pResId, DropCount, Direction);
+		char aCmd[UUID_MAXSTRSIZE];
+		ItemCommand(Id, aCmd, sizeof(aCmd));
+		pMenu->GameServer()->DropItem(ClientID, aCmd, DropCount, Direction);
 
 		// refresh: back to the list, or keep viewing if still owned
 		pMenu->SetPlayerPage(ClientID, "INVENTORY");
@@ -482,13 +505,13 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 
 	// description (localized), wrapped over several rows. a forgotten item
 	// (high forgetting) shows no description: the player can't recall it
-	if(pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, pResId))
+	if(Forgotten)
 	{
 		pMenu->AddWrappedLinesOption(Localize("You can't remember what this is.", "Menu Inventory"));
 	}
 	else
 	{
-		const char *pDesc = pItem->GetDesc(pResId);
+		const char *pDesc = pItem->GetDesc(Id);
 		if(pDesc && pDesc[0])
 		{
 			char aCtx[128];
@@ -499,7 +522,7 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 
 	// item types (e.g. "weapon"), localized, listed below the description
 	SItemTypeLineData TypeLine = {{'\0'}, 0, 0};
-	pItem->ForEachItemType(pResId, ItemTypeLineCallback, &TypeLine);
+	pItem->ForEachItemType(Id, ItemTypeLineCallback, &TypeLine);
 	if(TypeLine.m_Count > 0)
 	{
 		char aTypeRow[VOTE_DESC_LENGTH * 4];
@@ -513,7 +536,7 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	pMenu->AddHorizontalRule();
 
 	// actions
-	if(pItem->IsUsable(pResId))
+	if(pItem->IsUsable(Id))
 	{
 		pMenu->AddOption(Localize("Use", "Menu Inventory"), "USE", "★");
 		pMenu->AddOption(Localize("Use a number as the vote reason to use that many.", "Menu Inventory"), "DISPLAY", "-");
@@ -547,10 +570,19 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 	if(pData->m_pItem->IsRecipeForgotten(pData->m_Forgetting, Craft.m_aCraftId))
 		return;
 
-	const char *pResultName = pData->m_pItem->GetName(Craft.m_aResultItemId);
 	pData->m_Index++;
-	pMenu->AddOptionFormat("%d. %s x%d", Craft.m_aCraftId, "→",
-		pData->m_Index, Localize(pResultName, "Item Name"), Craft.m_ResultCount);
+	// one row per output; a recipe may have more than one
+	for(int g = 0; g < Craft.m_NumGives; g++)
+	{
+		const CItemSystem::SResult &Give = Craft.m_aGives[g];
+		const char *pResultName = pData->m_pItem->GetName(Give.m_Id);
+		if(g == 0)
+			pMenu->AddOptionFormat("%d. %s x%d", Craft.m_aCraftId, "→",
+				pData->m_Index, Localize(pResultName, "Item Name"), Give.m_Count);
+		else
+			pMenu->AddOptionFormat(Localize("   + %s x%d", "Menu Craft"), "DISPLAY", "-",
+				Localize(pResultName, "Item Name"), Give.m_Count);
+	}
 
 	for(int i = 0; i < Craft.m_NumNeeded; i++)
 	{
@@ -567,7 +599,7 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 					Localize(Need.m_aType, "Item Type"), pMark);
 			else
 				pMenu->AddOptionFormat(Localize("   [tool] %s %s", "Menu Craft"), "DISPLAY", "-",
-					Localize(pData->m_pItem->GetName(Need.m_aItemId), "Item Name"), pMark);
+					Localize(pData->m_pItem->GetName(Need.m_Id), "Item Name"), pMark);
 		}
 		else
 		{
@@ -576,7 +608,7 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 					Localize(Need.m_aType, "Item Type"), Have, Need.m_Count);
 			else
 				pMenu->AddOptionFormat("   %s %d/%d", "DISPLAY", "-",
-					Localize(pData->m_pItem->GetName(Need.m_aItemId), "Item Name"), Have, Need.m_Count);
+					Localize(pData->m_pItem->GetName(Need.m_Id), "Item Name"), Have, Need.m_Count);
 		}
 	}
 }
@@ -597,7 +629,7 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			{
 				char aMsg[128];
 				str_format(aMsg, sizeof(aMsg), Localize("Crafted: %s x%d", "Menu Craft"),
-					Localize(pItem->GetName(pCraft->m_aResultItemId), "Item Name"), pCraft->m_ResultCount);
+					Localize(pItem->GetName(pCraft->m_aGives[0].m_Id), "Item Name"), pCraft->m_aGives[0].m_Count);
 				pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, aMsg);
 			}
 		}
@@ -738,13 +770,12 @@ bool CGameMenu::MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGa
 	CItemSystem *pItem = pMenu->GameServer()->Item();
 	for(int i = 0; i < NUM_WEAPONS; i++)
 	{
-		const unsigned Item = pChr ? pChr->WeaponAtSlot(i) : 0;
-		const IWeaponInterface *pWeapon = Item ? WeaponManager()->GetWeapon(Item) : nullptr;
+		const CItemID Item = pChr ? pChr->WeaponAtSlot(i) : CItemID();
+		const char *pWeaponName = Item.IsZero() ? "" : pItem->GetWeaponName(Item);
+		const IWeaponInterface *pWeapon = pWeaponName[0] ? WeaponManager()->GetWeaponByName(pWeaponName) : nullptr;
 
-		// resolve the display name through the item system (translated), the
-		// weapon class name is only a res_id fallback
-		const char *pResId = Item ? pItem->GetResIdByHash(ClientID, Item) : nullptr;
-		const char *pRawName = pResId ? pItem->GetName(pResId) : (pWeapon ? pWeapon->Name() : nullptr);
+		// resolve the display name through the item system (translated)
+		const char *pRawName = !Item.IsZero() ? pItem->GetName(Item) : (pWeapon ? pWeapon->Name() : nullptr);
 
 		char aDesc[VOTE_DESC_LENGTH];
 		if(pRawName && pRawName[0])
@@ -757,7 +788,7 @@ bool CGameMenu::MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGa
 				// falls back to the hand
 				str_format(aDesc, sizeof(aDesc), Localize("%d. %s (hand)", "Menu Loadout"), i + 1, pName);
 		}
-		else if(Item != 0)
+		else if(!Item.IsZero())
 			str_format(aDesc, sizeof(aDesc), Localize("%d. (hand)", "Menu Loadout"), i + 1);
 		else
 			str_format(aDesc, sizeof(aDesc), Localize("%d. (empty)", "Menu Loadout"), i + 1);
@@ -783,7 +814,9 @@ bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class 
 	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "NONE") != 0 && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0)
 	{
 		CCharacter *pChr = pMenu->GameServer()->GetPlayerChar(ClientID);
-		if(pChr && Slot >= 0 && Slot < NUM_WEAPONS && pChr->EquipWeaponSlot(Slot, str_quickhash(VoteStatus.m_aCmd)))
+		CItemID Id;
+		if(pChr && Slot >= 0 && Slot < NUM_WEAPONS && CItemID::Parse(VoteStatus.m_aCmd, &Id) &&
+			pChr->EquipWeaponSlot(Slot, Id))
 		{
 			// persist the new slot layout for the next spawn
 			pPlayer->CaptureLoadout();
@@ -807,11 +840,11 @@ bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class 
 	{
 		if(Inventory.IsEmpty(i))
 			continue;
-		const char *pResId = Inventory.m_aItems[i].m_aResId;
-		const char *pName = pItem->GetName(pResId);
-		if(!pName[0])
-			pName = pResId;
-		pMenu->AddOption(Localize(pName, "Item Name"), pResId);
+		const CItemID &Id = Inventory.m_aItems[i].m_Id;
+		const char *pName = pItem->GetName(Id);
+		char aCmd[UUID_MAXSTRSIZE];
+		ItemCommand(Id, aCmd, sizeof(aCmd));
+		pMenu->AddOption(Localize(pName, "Item Name"), aCmd);
 	}
 
 	return true;

@@ -319,18 +319,19 @@ bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 D
 		return false;
 	}
 
-	if(!pItemId[0])
+	CItemID Id;
+	if(!CItemID::Parse(pItemId, &Id) || Id.IsZero())
 		return false;
 	if(Count <= 0)
 		Count = 1;
 
 	CItemSystem *pItems = Item();
-	if(!pItems->IsKnownItem(pItemId))
+	if(!pItems->IsKnownItem(Id))
 	{
 		SendChat(-1, CHAT_WHISPER, ClientID, Localize("Unknown item.", "Item Drop"));
 		return false;
 	}
-	const int Owned = pItems->GetItemCount(ClientID, pItemId);
+	const int Owned = pItems->GetItemCount(ClientID, Id);
 	if(Owned <= 0)
 	{
 		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You do not have this item.", "Item Drop"));
@@ -339,15 +340,15 @@ bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 D
 	if(Owned < Count)
 		Count = Owned;
 
-	if(!pItems->RemoveItem(ClientID, pItemId, Count))
+	if(!pItems->RemoveItem(ClientID, Id, Count))
 		return false;
 
 	CGameWorld *pWorld = pChr->GameWorld();
 	// no database write here: the world's drops are persisted when the
 	// world is unloaded or the server shuts down
-	new CDroppedPickup(pWorld, pChr->GetPos(), Direction, pItemId, Count);
+	new CDroppedPickup(pWorld, pChr->GetPos(), Direction, Id, Count);
 
-	const char *pName = pItems->GetName(pItemId);
+	const char *pName = pItems->GetName(Id);
 	char aMsg[128];
 	str_format(aMsg, sizeof(aMsg), Localize("You dropped: %s x%d", "Item Drop"), Localize(pName, "Item Name"), Count);
 	SendChat(-1, CHAT_WHISPER, ClientID, aMsg);

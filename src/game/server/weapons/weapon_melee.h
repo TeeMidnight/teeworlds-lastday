@@ -33,7 +33,7 @@ public:
 	// sword); the invisible bare hand does not
 	virtual bool SwingHitEffect() const { return true; }
 
-	int OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage) override;
+	int OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Ammo) override;
 };
 
 #endif // GAME_SERVER_WEAPONS_WEAPON_MELEE_H

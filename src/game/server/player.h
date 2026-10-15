@@ -143,7 +143,7 @@ public:
 		// setting: the character copies it on spawn and the menu edits it
 		// through the character.
 		bool m_LoadoutSet; // true once the player customized the loadout
-		char m_aLoadout[NUM_WEAPONS][32];
+		CItemID m_aLoadout[NUM_WEAPONS];
 	} m_Status;
 
 	// account (bound on login / register)

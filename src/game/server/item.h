@@ -9,14 +9,22 @@
 
 #include <engine/shared/protocol.h>
 
+#include <game/item_id.h>
+#include <game/server/ammo.h>
+
 class CGameContext;
 class IStorage;
 
-// the item system: owns the item definitions (datasrc/items/*.json) and every
-// player's inventory
+// the item system: owns the item definitions (data/items/*.json) and every
+// player's inventory. Items are identified by a namespaced CItemID (a UUID),
+// never by a bare hash of a file name.
 class CItemSystem
 {
 public:
+	// forward declaration: the inventory type is defined in the public section
+	// below, but the private craft helpers need to name it
+	struct CInventory;
+
 	// use effects applied when the player "uses" the item from the inventory
 	// menu (consumes one). defined through the optional "use" json object.
 	struct SUse
@@ -44,11 +52,14 @@ private:
 		enum
 		{
 			MAX_TYPES = 4,
-			MAX_AMMO_FOR = 4,
+			MAX_AMMO_FOR = 8,
 		};
-		char m_aResId[32];
+		CItemID m_Id;
+		char m_aIdString[64]; // normalized namespaced source ("lastday:stone")
 		char m_aName[64];
 		char m_aDesc[256];
+		// the weapon this item equips as, or "" when it is not a weapon
+		char m_aWeapon[32];
 		// an item can belong to several types (e.g. an ore is both "ore" and
 		// "stone"); used to match crafting ingredients by type
 		char m_aTypes[MAX_TYPES][32];
@@ -58,20 +69,37 @@ private:
 		// the player's inventory when firing.
 		char m_aAmmoFor[MAX_AMMO_FOR][32];
 		int m_NumAmmoFor;
-		// damage dealt when this item is used as ammo (0 = use the weapon's
-		// default damage)
-		int m_Damage;
+		// the ammo's effect (see SAmmoEffect); free form tags a weapon may use
+		SAmmoEffect m_AmmoEffect;
 		SUse m_Use;
 	};
-	hash_table<unsigned, SItemDef, 16> m_Items; // keyed by str_quickhash(res_id)
+	hash_table<Uuid, SItemDef, 16, uuid_table_function> m_Items;
 
 	static int ListItemsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
-	void LoadItem(const char *pResId, const char *pFilePath);
+	void LoadItem(const char *pDefaultId, const char *pFilePath);
 
 	// scans every item definition for one usable as ammo for a weapon
 	static void AmmoScanCallback(SItemDef &Item, void *pUser);
-	// finds the first ammo item definition usable by a weapon
+	// find the ammo definition a weapon should consume next (first owned one)
+	struct SAmmoFindData
+	{
+		const CItemSystem *m_pItem;
+		int m_ClientID;
+		const char *m_pWeaponName;
+		const SItemDef *m_pFound;
+	};
+	static void AmmoFindCallback(SItemDef &Item, void *pUser);
+
+	struct SAmmoAddData
+	{
+		const char *m_pWeaponName;
+		CItemID m_Id;
+		bool m_Found;
+	};
 	static void AmmoAddCallback(SItemDef &Item, void *pUser);
+
+	// add to an inventory without any chat / logging, used by craft simulation
+	static bool AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef);
 
 	static int ListCraftsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	void LoadCraft(const char *pCraftId, const char *pFilePath);
@@ -83,20 +111,33 @@ public:
 	// or by its item_type (m_MatchByType == true)
 	struct SIngredient
 	{
-		char m_aItemId[32]; // exact item id, used when m_MatchByType == false
+		CItemID m_Id; // exact item id, used when m_MatchByType == false
 		char m_aType[32]; // item_type, used when m_MatchByType == true
 		bool m_MatchByType;
 		int m_Count;
 		bool m_IsTool;
 	};
 
-	// a crafting recipe, loaded from datasrc/craft/*.json
+	// one output of a recipe
+	struct SResult
+	{
+		CItemID m_Id;
+		int m_Count;
+	};
+
+	// a crafting recipe, loaded from data/craft/*.json. A recipe may have more
+	// than one output (byproducts) and more than one input.
 	struct SCraftDef
 	{
+		enum
+		{
+			MAX_NEEDED = 8,
+			MAX_GIVES = 8,
+		};
 		char m_aCraftId[32];
-		char m_aResultItemId[32];
-		int m_ResultCount;
-		SIngredient m_aNeeded[8];
+		SResult m_aGives[MAX_GIVES];
+		int m_NumGives;
+		SIngredient m_aNeeded[MAX_NEEDED];
 		int m_NumNeeded;
 	};
 
@@ -113,8 +154,9 @@ public:
 	// callback used to enumerate all loaded recipes
 	typedef void (*FCraftCallback)(SCraftDef &Craft, void *pUser);
 	void ForEachCraft(FCraftCallback pfnFunc, void *pUser);
-	// a player's inventory: a fixed number of slots. an empty slot has an
-	// empty res_id. slots never move: removing an item that reaches zero
+
+	// a player's inventory: a fixed number of slots. an empty slot has a
+	// zeroed item id. slots never move: removing an item that reaches zero
 	// simply clears the slot, and adding a new item goes into the first
 	// empty slot.
 	struct CInventory
@@ -126,7 +168,7 @@ public:
 
 		struct SItem
 		{
-			char m_aResId[32];
+			CItemID m_Id;
 			int m_Count;
 		};
 
@@ -136,14 +178,14 @@ public:
 		// drop everything: used when a client slot is recycled so the new
 		// occupant never sees the previous player's inventory
 		void Reset() { mem_zero(m_aItems, sizeof(m_aItems)); }
-		// index of the item with the given res_id, or -1
-		int Find(const char *pResId) const;
+		// index of the item with the given id, or -1
+		int Find(const CItemID &Id) const;
 		// index of the first empty slot, or -1 when the inventory is full
 		int FindEmpty() const;
 		// current count of the item, or 0
-		int Get(const char *pResId) const;
+		int Get(const CItemID &Id) const;
 		// whether the slot is empty
-		bool IsEmpty(int Index) const { return Index < 0 || Index >= MAX_ITEMS || m_aItems[Index].m_aResId[0] == '\0'; }
+		bool IsEmpty(int Index) const { return Index < 0 || Index >= MAX_ITEMS || m_aItems[Index].m_Id.IsZero(); }
 		// clear the slot (used when its count reaches zero)
 		void ClearSlot(int Index);
 	};
@@ -151,7 +193,6 @@ public:
 	// one inventory per client
 	CInventory m_aInventories[MAX_CLIENTS];
 
-	// set the game server and storage, and load the item definitions
 	void Init(class CGameContext *pGameServer, class IStorage *pStorage);
 	void Load(class IStorage *pStorage);
 
@@ -159,90 +200,71 @@ public:
 
 	// add an item to a player's inventory and broadcast the pickup in chat.
 	// returns false (and does not insert) when the inventory is full.
-	// when SilentFail is false a "no space" message is broadcast, when true it is not.
-	bool AddItem(int ClientID, const char *pResId, int Count, bool SilentFail = false);
+	bool AddItem(int ClientID, const CItemID &Id, int Count, bool SilentFail = false);
+	// convenience overload for content / map data that carries a name
+	bool AddItem(int ClientID, const char *pId, int Count, bool SilentFail = false);
 
-	// display name of the item, or the res_id when unknown
-	const char *GetName(const char *pResId) const;
+	// display name of the item (localized), or the source/id fallback
+	const char *GetName(const CItemID &Id) const;
 	// description of the item, or "" when unknown
-	const char *GetDesc(const char *pResId) const;
-	// whether an item definition exists for this res_id
-	bool IsKnownItem(const char *pResId) const { return m_Items.get(str_quickhash(pResId)) != 0; }
+	const char *GetDesc(const CItemID &Id) const;
+	// whether an item definition exists for this id
+	bool IsKnownItem(const CItemID &Id) const { return m_Items.get(Id.Value()) != 0; }
+	bool IsKnownItem(const char *pId) const { return IsKnownItem(CItemID::FromName(pId)); }
 	// whether the item definition declares a "use" effect (see UseItem)
-	bool IsUsable(const char *pResId) const;
+	bool IsUsable(const CItemID &Id) const;
 	// the item's declared use effects; m_HasUse false when none
-	SUse GetUse(const char *pResId) const;
+	SUse GetUse(const CItemID &Id) const;
+	// the weapon name this item equips as, or "" when it is not a weapon
+	const char *GetWeaponName(const CItemID &Id) const;
 
 	// consume up to Count items and apply their "use" effects to the player
-	// (health / forgetting). stops early once nothing is left to restore
-	// (full health / forgetting at 0) or the player runs out of the item.
-	// returns how many items were actually consumed.
-	int UseItem(int ClientID, const char *pResId, int Count = 1);
-	// optional item_type of the item: whether the item carries the given type
-	bool HasItemType(const char *pResId, const char *pType) const;
+	int UseItem(int ClientID, const CItemID &Id, int Count = 1);
+	// optional item_type of the item
+	bool HasItemType(const CItemID &Id, const char *pType) const;
 	// callback used to enumerate the type tags of a single item
 	typedef void (*FItemTypeCallback)(const char *pType, void *pUser);
-	// calls pfnFunc for every type tag of the item (e.g. "weapon", "ore").
-	// pfnFunc is not called when the item is unknown or declares no types.
-	void ForEachItemType(const char *pResId, FItemTypeCallback pfnFunc, void *pUser) const;
+	void ForEachItemType(const CItemID &Id, FItemTypeCallback pfnFunc, void *pUser) const;
 
-	// mercury chapter amnesia. whether knowledge is lost at a given
-	// forgetting level (0 = clear mind, 100 = total amnesia). both rules are
-	// deterministic (hash based) and gradual: more and more entries fade as
-	// the meter rises. any system can ask the same question the menus use.
-	// whether the player would have forgotten this item (name/description).
-	// from 75 forgetting upward items start to fade; at 100 nothing is
-	// remembered. the caller decides how to present a forgotten item.
-	bool IsItemForgotten(int Forgetting, const char *pResId) const;
-	// whether this crafting recipe is forgotten (not craftable anymore).
-	// recipes fade between 50 and 100 forgetting (50: all remembered,
-	// 100: none).
+	// mercury chapter amnesia (deterministic, hash based)
+	bool IsItemForgotten(int Forgetting, const CItemID &Id) const;
 	bool IsRecipeForgotten(int Forgetting, const char *pCraftId) const;
 
-	// total quantity the player owns that matches this ingredient (by id or by type)
+	// total quantity the player owns that matches this ingredient
 	int GetIngredientCount(int ClientID, const SIngredient &Need) const;
 
-	// whether the player owns at least one item whose res_id hash equals Hash
-	bool HasItemHash(int ClientID, unsigned Hash) const;
-	// res_id of the first owned item whose hash equals Hash, or nullptr
-	const char *GetResIdByHash(int ClientID, unsigned Hash) const;
-
 	// whether the player owns at least one of the given item
-	bool HasItem(int ClientID, const char *pResId) const;
+	bool HasItem(int ClientID, const CItemID &Id) const;
+	bool HasItem(int ClientID, const char *pId) const { return HasItem(ClientID, CItemID::FromName(pId)); }
 	// current count of the given item in the player's inventory, or 0
-	int GetItemCount(int ClientID, const char *pResId) const;
-	// remove up to Count of the given item from the player's inventory.
-	// returns false (and removes nothing) when the player does not own enough.
-	bool RemoveItem(int ClientID, const char *pResId, int Count);
+	int GetItemCount(int ClientID, const CItemID &Id) const;
+	// remove up to Count of the given item. returns false (removes nothing)
+	// when the player does not own enough.
+	bool RemoveItem(int ClientID, const CItemID &Id, int Count);
 
 	// whether any item definition is usable as ammo for the given weapon
-	// (i.e. the weapon needs ammo; otherwise it is unlimited, e.g. hammer)
 	bool WeaponNeedsAmmo(const char *pWeaponName);
 	// total ammo the player has that is usable by the given weapon
 	int GetAmmoCountForWeapon(int ClientID, const char *pWeaponName) const;
-	// consume one ammo item usable by the given weapon from the player's
-	// inventory. returns the damage of the consumed ammo, or 0 when the
-	// player had no ammo for the weapon.
-	int ConsumeAmmoForWeapon(int ClientID, const char *pWeaponName);
-	// add Count ammo usable by the given weapon to the player's inventory
-	// (adds to the first ammo item that matches the weapon)
+	// consume one ammo item usable by the given weapon and fill its effect.
+	// returns false (and leaves pOut untouched) when the player had no ammo.
+	bool ConsumeAmmoForWeapon(int ClientID, const char *pWeaponName, SAmmoEffect *pOut);
+	// add Count ammo usable by the given weapon
 	void AddAmmoForWeapon(int ClientID, const char *pWeaponName, int Count);
 
 	// the recipe with the given craft_id, or nullptr
 	const SCraftDef *GetCraft(const char *pCraftId) const;
-	// whether the player owns every needed item (including tools, in the
-	// required quantity for non-tool ingredients)
+	// whether the player owns every needed item (including tools)
 	bool HasIngredients(int ClientID, const SCraftDef *pCraft) const;
 
-	// result of attempting a craft
 	enum ECraftResult
 	{
 		CRAFT_OK = 0,
-		CRAFT_NO_MATERIALS = 1, // the player lacks one or more ingredients
-		CRAFT_NO_SPACE = 2, // no inventory slot for the result
+		CRAFT_NO_MATERIALS = 1,
+		CRAFT_NO_SPACE = 2,
 	};
 
-	// perform the craft: consume every non-tool needed item and give the
+	// perform the craft: consume every non-tool needed item and give every
 	// result. tools are kept. returns one of the ECraftResult values
 	ECraftResult Craft(int ClientID, const char *pCraftId);
 };

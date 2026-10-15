@@ -32,7 +32,7 @@ static int DisplayToPickupType(const char *pDisplay)
 CResourceEntity::CResourceEntity(CGameWorld *pGameWorld, vec2 Pos, const char *pResId, const char *pDisplay, int Hardness, int RespawnTime) :
 	CEntity(pGameWorld, CGameWorld::ENTTYPE_RESOURCE, 0, Pos, ResourcePhysSize)
 {
-	str_copy(m_aResId, pResId, sizeof(m_aResId));
+	m_Id = CItemID::FromName(pResId);
 	str_copy(m_aDisplay, pDisplay, sizeof(m_aDisplay));
 	m_Hardness = Hardness;
 	m_MaxHardness = Hardness;

@@ -22,9 +22,9 @@ public:
 	int DefaultAmmo() const override { return -1; } // no ammo needed
 	int MaxAmmo() const override { return 10; }
 
-	int OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage) override
+	int OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Ammo) override
 	{
-		(void) AmmoDamage;
+		(void) Ammo;
 		// start a new swing/dash
 		pChr->m_lpHitObjects.clear();
 		pChr->m_lpHitObjects.hint_size(4);

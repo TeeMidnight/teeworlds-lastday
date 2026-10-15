@@ -20,14 +20,15 @@ public:
 	int DefaultAmmo() const override { return 10; }
 	int MaxAmmo() const override { return 10; }
 
-	int OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage) override
+	int OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Ammo) override
 	{
 		CGameWorld *pWorld = pChr->GameWorld();
 		const int ClientID = pChr->GetCID();
 		const vec2 ChrPos = pChr->GetPos();
-		const int Damage = AmmoDamage ? AmmoDamage : g_pData->m_Weapons.m_aId[SnapStyle()].m_Damage;
+		const int Damage = Ammo.m_Damage ? Ammo.m_Damage : g_pData->m_Weapons.m_aId[SnapStyle()].m_Damage;
+		const float Reach = pChr->GameServer()->Tuning()->m_LaserReach * Ammo.m_Speed;
 
-		new CLaser(pWorld, ChrPos, Direction, pChr->GameServer()->Tuning()->m_LaserReach, ClientID, Damage);
+		new CLaser(pWorld, ChrPos, Direction, Reach, ClientID, Damage);
 		pWorld->CreateSound(ChrPos, SOUND_LASER_FIRE);
 		return 0;
 	}

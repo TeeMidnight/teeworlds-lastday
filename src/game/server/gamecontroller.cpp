@@ -177,17 +177,17 @@ void CGameController::OnCharacterSpawn(CCharacter *pChr)
 			{
 				IWeaponInterface *pWeapon = WeaponManager()->GetWeaponByIndex(i);
 				if(pWeapon && GameServer()->Item()->HasItem(pChr->GetCID(), pWeapon->Name()))
-					pChr->EquipWeaponSlot(Slot++, pWeapon->ID());
+					pChr->EquipWeaponSlot(Slot++, CItemID::FromName(pWeapon->Name()));
 			}
 		}
 	}
 
 	// make sure the active slot actually holds a weapon
-	if(pChr->GetActiveWeapon() == 0)
+	if(pChr->GetActiveWeapon().IsZero())
 	{
 		for(int i = 0; i < NUM_WEAPONS; i++)
 		{
-			if(pChr->WeaponAtSlot(i) != 0)
+			if(!pChr->WeaponAtSlot(i).IsZero())
 			{
 				pChr->SetWeapon(i);
 				break;

@@ -86,13 +86,13 @@ bool CWeaponManager::IsFullAuto(unsigned WeaponID)
 	return pWeapon ? pWeapon->FullAuto() : false;
 }
 
-int CWeaponManager::FireWeapon(CCharacter *pChr, vec2 Direction, unsigned WeaponID, int AmmoDamage)
+int CWeaponManager::FireWeapon(CCharacter *pChr, vec2 Direction, unsigned WeaponID, const SAmmoEffect &Ammo)
 {
 	IWeaponInterface *pWeapon = GetWeapon(WeaponID);
 	if(!pWeapon)
 		return 0;
 
-	int ReloadTicks = pWeapon->OnFire(pChr, Direction, AmmoDamage);
+	int ReloadTicks = pWeapon->OnFire(pChr, Direction, Ammo);
 	if(ReloadTicks == 0)
 		ReloadTicks = pWeapon->FireDelay() * pChr->Server()->TickSpeed() / 1000;
 	return ReloadTicks;

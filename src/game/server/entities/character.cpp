@@ -71,7 +71,7 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	// the loadout is (re)filled by the game controller from the weapons the
 	// player owns as items; clear any stale state from a previous life
 	for(int i = 0; i < NUM_WEAPONS; i++)
-		m_aWeapons[i] = 0;
+		m_aWeapons[i] = CItemID();
 
 	m_pPlayer = pPlayer;
 	m_Pos = Pos;
@@ -200,9 +200,11 @@ void CCharacter::FireWeapon()
 		return;
 
 	// ammo comes from the player's inventory (item system). a weapon that has
-	// no ammo item defined (e.g. hammer, hand) is unlimited.
+	// no ammo item defined (e.g. hammer, hand) is unlimited. several different
+	// ammo items may feed one weapon, each with its own effect.
 	const char *pWeaponName = pWeapon->Name();
-	if(GameServer()->Item()->WeaponNeedsAmmo(pWeaponName) &&
+	const bool NeedsAmmo = GameServer()->Item()->WeaponNeedsAmmo(pWeaponName);
+	if(NeedsAmmo &&
 		GameServer()->Item()->GetAmmoCountForWeapon(GetCID(), pWeaponName) <= 0)
 	{
 		// 125ms is a magical limit of how fast a human can click
@@ -224,12 +226,12 @@ void CCharacter::FireWeapon()
 
 	m_AttackTick = Server()->Tick();
 
-	// consume one ammo item from the inventory and use its damage
-	int AmmoDamage = 0;
-	if(GameServer()->Item()->WeaponNeedsAmmo(pWeaponName))
-		AmmoDamage = GameServer()->Item()->ConsumeAmmoForWeapon(GetCID(), pWeaponName);
+	// consume one ammo item from the inventory and use its effect
+	SAmmoEffect Ammo;
+	if(NeedsAmmo)
+		GameServer()->Item()->ConsumeAmmoForWeapon(GetCID(), pWeaponName, &Ammo);
 
-	m_ReloadTimer = WeaponManager()->FireWeapon(this, Direction, ActiveWeaponID, AmmoDamage);
+	m_ReloadTimer = WeaponManager()->FireWeapon(this, Direction, ActiveWeaponID, Ammo);
 }
 
 void CCharacter::HandleWeapons()
@@ -262,31 +264,31 @@ int CCharacter::GetCID()
 // the slot holds an item (hash of its res_id); for weapon items the hash
 // equals the weapon id. any owned item can be placed: only weapon items
 // actually fire, everything else resolves to the hand fallback.
-bool CCharacter::EquipWeaponSlot(int Slot, unsigned ItemHash)
+bool CCharacter::EquipWeaponSlot(int Slot, const CItemID &Id)
 {
 	if(Slot < 0 || Slot >= NUM_WEAPONS)
 		return false;
-	if(ItemHash != 0)
+	if(!Id.IsZero())
 	{
 		// the item must exist in the player's inventory
-		if(!GameServer()->Item()->HasItemHash(GetCID(), ItemHash))
+		if(!GameServer()->Item()->HasItem(GetCID(), Id))
 			return false;
 	}
 
 	// remove the item from its previous slot so it is not duplicated
 	for(int i = 0; i < NUM_WEAPONS; i++)
-		if(i != Slot && m_aWeapons[i] == ItemHash)
-			m_aWeapons[i] = 0;
+		if(i != Slot && m_aWeapons[i] == Id)
+			m_aWeapons[i] = CItemID();
 
-	m_aWeapons[Slot] = ItemHash;
+	m_aWeapons[Slot] = Id;
 
 	// if the active slot became empty (its weapon was removed), switch to
 	// another equipped weapon
-	if(m_aWeapons[m_ActiveWeapon] == 0)
+	if(m_aWeapons[m_ActiveWeapon].IsZero())
 	{
 		for(int i = 0; i < NUM_WEAPONS; i++)
 		{
-			if(m_aWeapons[i] != 0)
+			if(!m_aWeapons[i].IsZero())
 			{
 				m_ActiveWeapon = i;
 				break;
@@ -296,10 +298,10 @@ bool CCharacter::EquipWeaponSlot(int Slot, unsigned ItemHash)
 	return true;
 }
 
-unsigned CCharacter::WeaponAtSlot(int Slot) const
+CItemID CCharacter::WeaponAtSlot(int Slot) const
 {
 	if(Slot < 0 || Slot >= NUM_WEAPONS)
-		return 0;
+		return CItemID();
 	return m_aWeapons[Slot];
 }
 
@@ -307,25 +309,26 @@ int CCharacter::NumWeaponsHeld() const
 {
 	int Count = 0;
 	for(int i = 0; i < NUM_WEAPONS; i++)
-		if(m_aWeapons[i] != 0)
+		if(!m_aWeapons[i].IsZero())
 			Count++;
 	return Count;
 }
 
 unsigned CCharacter::GetUsableWeapon()
 {
-	const unsigned SlotItem = WeaponAtSlot(m_ActiveWeapon);
-	if(SlotItem != 0)
+	const CItemID SlotItem = WeaponAtSlot(m_ActiveWeapon);
+	if(!SlotItem.IsZero())
 	{
 		// The item must still exist in the inventory. Do not clear the slot
 		// here: this runs from Snap(), and a read path must not mutate the
 		// character. UnequipMissingWeapons() clears it on the menu/tick path.
-		if(!GameServer()->Item()->HasItemHash(GetCID(), SlotItem))
+		if(!GameServer()->Item()->HasItem(GetCID(), SlotItem))
 			return WeaponID("hand");
 
-		IWeaponInterface *pWeapon = WeaponManager()->GetWeapon(SlotItem);
-		if(pWeapon)
-			return SlotItem;
+		// map the item to the weapon it equips as (by name)
+		const char *pWeaponName = GameServer()->Item()->GetWeaponName(SlotItem);
+		if(pWeaponName[0] && WeaponManager()->GetWeaponByName(pWeaponName))
+			return WeaponID(pWeaponName);
 		// else: an item without a corresponding weapon (e.g. a resource)
 		// stays equipped but falls back to the hand
 	}
@@ -338,23 +341,23 @@ bool CCharacter::UnequipMissingWeapons()
 	bool Changed = false;
 	for(int i = 0; i < NUM_WEAPONS; i++)
 	{
-		const unsigned SlotItem = m_aWeapons[i];
-		if(SlotItem == 0)
+		const CItemID &SlotItem = m_aWeapons[i];
+		if(SlotItem.IsZero())
 			continue;
 		// the slot holds an item that no longer exists: clear it
-		if(!GameServer()->Item()->HasItemHash(GetCID(), SlotItem))
+		if(!GameServer()->Item()->HasItem(GetCID(), SlotItem))
 		{
-			m_aWeapons[i] = 0;
+			m_aWeapons[i] = CItemID();
 			Changed = true;
 		}
 	}
 
 	// if the active slot was cleared, switch to another occupied slot
-	if(m_aWeapons[m_ActiveWeapon] == 0)
+	if(m_aWeapons[m_ActiveWeapon].IsZero())
 	{
 		for(int i = 0; i < NUM_WEAPONS; i++)
 		{
-			if(m_aWeapons[i] != 0)
+			if(!m_aWeapons[i].IsZero())
 			{
 				m_ActiveWeapon = i;
 				break;

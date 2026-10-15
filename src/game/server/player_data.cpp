@@ -21,7 +21,9 @@ void CPlayer::CaptureStatus(CDbJob &Job)
 		DbSet(Job, CJsonPath().Key("character").Key("health"), m_pCharacter->m_Health);
 		DbSet(Job, CJsonPath().Key("character").Key("armor"), m_pCharacter->m_Armor);
 	}
-	// clear the previous inventory, then store each item as an array element
+	// clear the previous inventory, then store each item as an array element.
+	// An item is stored as its canonical UUID string plus its namespaced source
+	// name (the name is only a human readable fallback).
 	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
 	DbDel(Job, CJsonPath().Key("inventory"));
 	int i = 0;
@@ -30,16 +32,24 @@ void CPlayer::CaptureStatus(CDbJob &Job)
 		if(Inventory.IsEmpty(Slot))
 			continue;
 		const CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Slot];
-		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("res_id"), Item.m_aResId);
+		char aUuid[UUID_MAXSTRSIZE];
+		Item.m_Id.FormatUuid(aUuid, sizeof(aUuid));
+		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("id"), aUuid);
+		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("name"), Item.m_Id.SourceName());
 		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("count"), Item.m_Count);
 		i++;
 	}
 
-	// store the loadout slot layout (res_id per slot, "" for empty)
+	// store the loadout slot layout (uuid per slot, "" for empty)
 	DbSet(Job, CJsonPath().Key("loadout_set"), m_Status.m_LoadoutSet);
 	DbDel(Job, CJsonPath().Key("loadout"));
 	for(int i = 0; i < NUM_WEAPONS; i++)
-		DbSet(Job, CJsonPath().Key("loadout").Index(i), m_Status.m_aLoadout[i]);
+	{
+		char aUuid[UUID_MAXSTRSIZE] = "";
+		if(!m_Status.m_aLoadout[i].IsZero())
+			m_Status.m_aLoadout[i].FormatUuid(aUuid, sizeof(aUuid));
+		DbSet(Job, CJsonPath().Key("loadout").Index(i), aUuid);
+	}
 }
 
 void CPlayer::SaveStatus(CDatabase *pDB)
@@ -64,17 +74,7 @@ void CPlayer::CaptureLoadout()
 		return;
 
 	for(int i = 0; i < NUM_WEAPONS; i++)
-	{
-		m_Status.m_aLoadout[i][0] = '\0';
-		const unsigned ItemHash = m_pCharacter->WeaponAtSlot(i);
-		if(ItemHash != 0)
-		{
-			// translate the slot hash back to the item res_id
-			const char *pResId = GameServer()->Item()->GetResIdByHash(GetCID(), ItemHash);
-			if(pResId)
-				str_copy(m_Status.m_aLoadout[i], pResId, sizeof(m_Status.m_aLoadout[i]));
-		}
-	}
+		m_Status.m_aLoadout[i] = m_pCharacter->WeaponAtSlot(i);
 	// the layout was customized by the player, keep it from now on
 	m_Status.m_LoadoutSet = true;
 }
@@ -85,14 +85,13 @@ void CPlayer::ApplyLoadout()
 		return;
 	// (re)build the layout from scratch
 	for(int i = 0; i < NUM_WEAPONS; i++)
-		m_pCharacter->EquipWeaponSlot(i, 0);
+		m_pCharacter->EquipWeaponSlot(i, CItemID());
 
 	for(int i = 0; i < NUM_WEAPONS; i++)
 	{
-		const char *pResId = m_Status.m_aLoadout[i];
-		if(!pResId[0])
+		if(m_Status.m_aLoadout[i].IsZero())
 			continue;
-		m_pCharacter->EquipWeaponSlot(i, str_quickhash(pResId));
+		m_pCharacter->EquipWeaponSlot(i, m_Status.m_aLoadout[i]);
 	}
 }
 
@@ -106,7 +105,7 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 	m_Status.m_Level = 0;
 	m_Status.m_LoadoutSet = false;
 	for(int i = 0; i < NUM_WEAPONS; i++)
-		m_Status.m_aLoadout[i][0] = '\0';
+		m_Status.m_aLoadout[i] = CItemID();
 	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
 	mem_zero(Inventory.m_aItems, sizeof(Inventory.m_aItems));
 
@@ -130,13 +129,21 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 		GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("armor"), &m_pCharacter->m_Armor);
 	}
 
-	// loadout slot layout (res_id per slot, "" = empty)
+	// loadout slot layout (uuid per slot, "" = empty). Old profiles stored the
+	// bare item name, so parsing accepts both.
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("loadout_set"), &m_Status.m_LoadoutSet);
 	int NumSlots = 0;
 	if(pDB->GetJsonLength(m_AccountUuid, CJsonPath().Key("loadout"), &NumSlots))
 	{
+		char aSlot[UUID_MAXSTRSIZE];
 		for(int i = 0; i < NumSlots && i < NUM_WEAPONS; i++)
-			GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("loadout").Index(i), m_Status.m_aLoadout[i], sizeof(m_Status.m_aLoadout[i]));
+		{
+			if(!GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("loadout").Index(i), aSlot, sizeof(aSlot)))
+				continue;
+			CItemID Id;
+			if(CItemID::Parse(aSlot, &Id))
+				m_Status.m_aLoadout[i] = Id;
+		}
 	}
 
 	// read the inventory item by item (no whole-json read); items are stored
@@ -146,17 +153,25 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 	{
 		for(int i = 0; i < NumItems; i++)
 		{
-			char aResId[32];
-			if(!GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), aResId, sizeof(aResId)))
+			// new profiles store the canonical uuid under "id"; old ones stored
+			// the bare res_id under "res_id"
+			char aId[64] = "";
+			if(!GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("id"), aId, sizeof(aId)))
+			{
+				if(!GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), aId, sizeof(aId)))
+					continue;
+			}
+			CItemID Id;
+			if(!CItemID::Parse(aId, &Id) || Id.IsZero())
 				continue;
 			int Count = 0;
 			GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), &Count);
-			if(Count <= 0 || !GameServer()->Item()->IsKnownItem(aResId))
+			if(Count <= 0 || !GameServer()->Item()->IsKnownItem(Id))
 				continue;
 			// merge into an existing stack first: a legacy or hand-edited row can
-			// list the same res_id twice, and a second slot would be invisible to
+			// list the same id twice, and a second slot would be invisible to
 			// Find/AddItem and could never be used up
-			const int Existing = Inventory.Find(aResId);
+			const int Existing = Inventory.Find(Id);
 			if(Existing >= 0)
 			{
 				Inventory.m_aItems[Existing].m_Count += Count;
@@ -166,7 +181,7 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 			if(Slot < 0)
 				break; // inventory full
 			CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Slot];
-			str_copy(Item.m_aResId, aResId, sizeof(Item.m_aResId));
+			Item.m_Id = Id;
 			Item.m_Count = Count;
 		}
 	}

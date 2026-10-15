@@ -13,9 +13,9 @@
 // hit every hittable entity in front of the character once and, when
 // CanPickResource() returns true, harvest every resource in reach. The reload
 // wait depends on whether the swing connected anything.
-int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage)
+int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Ammo)
 {
-	(void) AmmoDamage;
+	(void) Ammo;
 	CGameWorld *pWorld = pChr->GameWorld();
 	const vec2 ChrPos = pChr->GetPos();
 	const vec2 ProjStartPos = ChrPos + Direction * pChr->GetProximityRadius() * 0.75f;
@@ -82,7 +82,7 @@ int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage)
 			if(Depleted)
 			{
 				CPlayer *pPlayer = pChr->GetPlayer();
-				if(!pPlayer || !pChr->GameServer()->Item()->AddItem(pPlayer->GetCID(), pRes->ResId(), 1))
+				if(!pPlayer || !pChr->GameServer()->Item()->AddItem(pPlayer->GetCID(), pRes->Item(), 1))
 					continue;
 				pRes->TakeHit(1);
 				pWorld->CreateSound(pRes->GetPos(), SOUND_PICKUP_ARMOR);

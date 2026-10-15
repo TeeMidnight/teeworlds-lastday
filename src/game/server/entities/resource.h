@@ -4,6 +4,7 @@
 #ifndef GAME_SERVER_ENTITIES_RESOURCE_H
 #define GAME_SERVER_ENTITIES_RESOURCE_H
 
+#include <game/item_id.h>
 #include <game/server/entity.h>
 
 // a resource point placed on a red team spawn point by the map generator.
@@ -22,12 +23,12 @@ public:
 	// resource is depleted (it starts its respawn countdown)
 	bool TakeHit(int Hardness);
 
-	const char *ResId() const { return m_aResId; }
+	const CItemID &Item() const { return m_Id; }
 	int RemainingHardness() const { return m_Hardness; }
 	bool IsRespawning() const { return m_RespawnTick > 0; }
 
 private:
-	char m_aResId[32];
+	CItemID m_Id;
 	char m_aDisplay[32];
 	int m_Hardness;
 	int m_MaxHardness;

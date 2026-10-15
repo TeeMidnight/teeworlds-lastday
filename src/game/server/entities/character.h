@@ -77,16 +77,15 @@ public:
 	class CPlayer *GetPlayer() { return m_pPlayer; }
 	int GetCID();
 
-	// the item hash (str_quickhash of the item res_id) in the active loadout
-	// slot, or 0 when the slot is empty. for weapon items this equals the
-	// weapon id; for non-weapon items it matches no registered weapon.
-	unsigned GetActiveWeapon() const { return WeaponAtSlot(m_ActiveWeapon); }
+	// the item id in the active loadout slot (a zeroed id when the slot is
+	// empty). Use GetUsableWeapon() to resolve the weapon it equips as.
+	CItemID GetActiveWeapon() const { return WeaponAtSlot(m_ActiveWeapon); }
 
 	// loadout (equipment menu) helpers; Slot is 0-based (0..NUM_WEAPONS-1),
 	// matching the client weapon key minus one. the slot holds an item: any
 	// owned item can be placed, only weapon items actually fire.
-	bool EquipWeaponSlot(int Slot, unsigned ItemHash);
-	unsigned WeaponAtSlot(int Slot) const; // item hash, 0 = empty
+	bool EquipWeaponSlot(int Slot, const CItemID &Id);
+	CItemID WeaponAtSlot(int Slot) const; // zeroed id = empty
 	int NumWeaponsHeld() const;
 
 	// the weapon the player may actually fire in the active slot: the slot's
@@ -119,10 +118,9 @@ private:
 	// cannot be resurrected by an address reuse
 	array<int> m_lpHitObjects;
 
-	// loadout: NUM_WEAPONS fixed slots, each holds the hash of the item placed
-	// on it (weapon items: hash == weapon id). slot order matches the client's
-	// weapon selection keys (1..NUM_WEAPONS).
-	unsigned m_aWeapons[NUM_WEAPONS]; // str_quickhash(item res_id), 0 = empty
+	// loadout: NUM_WEAPONS fixed slots, each holds the item placed on it.
+	// slot order matches the client's weapon selection keys (1..NUM_WEAPONS).
+	CItemID m_aWeapons[NUM_WEAPONS]; // zeroed id = empty
 
 	int m_ActiveWeapon; // slot index of the currently held weapon (0..NUM_WEAPONS-1)
 	int m_QueuedWeapon; // slot index to switch to, or -1

@@ -17,41 +17,35 @@
 //	"use": { "health": 5, "forgetting": -5 }
 //
 // using the item consumes one copy and applies the declared effects to the
-// player. the use effects are parsed in CItemSystem::LoadItem (main file),
-// the runtime behaviour lives here. "forgetting" is a delta on the mercury
-// chapter meter: negative values recall (lower the forgetting), positive
-// values make the player forget more.
+// player. "forgetting" is a delta on the mercury chapter meter.
 // ---------------------------------------------------------------
 
-bool CItemSystem::IsUsable(const char *pResId) const
+bool CItemSystem::IsUsable(const CItemID &Id) const
 {
-	const SItemDef *pItem = m_Items.get(str_quickhash(pResId));
+	const SItemDef *pItem = m_Items.get(Id.Value());
 	return pItem && pItem->m_Use.m_HasUse;
 }
 
-CItemSystem::SUse CItemSystem::GetUse(const char *pResId) const
+CItemSystem::SUse CItemSystem::GetUse(const CItemID &Id) const
 {
-	const SItemDef *pItem = m_Items.get(str_quickhash(pResId));
+	const SItemDef *pItem = m_Items.get(Id.Value());
 	if(!pItem)
 		return SUse();
 	return pItem->m_Use;
 }
 
-int CItemSystem::UseItem(int ClientID, const char *pResId, int Count)
+int CItemSystem::UseItem(int ClientID, const CItemID &Id, int Count)
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || Count <= 0)
 		return 0;
 
-	const int Owned = GetItemCount(ClientID, pResId);
+	const int Owned = GetItemCount(ClientID, Id);
 	if(Owned <= 0)
 		return 0;
-	// never apply more effects than there are items to pay for them; without
-	// this the whole batch is applied and RemoveItem then refuses to consume
-	// because the player does not own enough
 	if(Count > Owned)
 		Count = Owned;
 
-	const SUse Use = GetUse(pResId);
+	const SUse Use = GetUse(Id);
 	if(!Use.m_HasUse)
 		return 0;
 
@@ -60,8 +54,6 @@ int CItemSystem::UseItem(int ClientID, const char *pResId, int Count)
 	if(!pPlayer)
 		return 0;
 
-	// apply the effect repeatedly until the requested amount is used up or
-	// nothing is left to restore (full health / forgetting at 0)
 	int Used = 0;
 	while(Used < Count)
 	{
@@ -83,11 +75,9 @@ int CItemSystem::UseItem(int ClientID, const char *pResId, int Count)
 		}
 
 		if(!Applied)
-			break; // nothing to restore, keep the remaining items
+			break;
 
-		// consume before counting it: an effect must never be applied without
-		// paying for it, even if the inventory changed underneath us
-		if(!RemoveItem(ClientID, pResId, 1))
+		if(!RemoveItem(ClientID, Id, 1))
 			break;
 		Used++;
 	}
@@ -95,7 +85,6 @@ int CItemSystem::UseItem(int ClientID, const char *pResId, int Count)
 	if(Used == 0)
 		return 0;
 
-	// the used-up status should be persisted on the next save
 	pGameServer->SavePlayerData(pPlayer);
 	return Used;
 }

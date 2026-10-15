@@ -8,6 +8,8 @@
 #include <base/tl/hashtable.h>
 #include <base/vmath.h>
 
+#include <game/server/ammo.h>
+
 class CCharacter;
 class IWeaponInterface;
 
@@ -45,9 +47,9 @@ public:
 	int SnapStyle(unsigned WeaponID);
 	bool IsFullAuto(unsigned WeaponID);
 
-	// fire: returns the reload wait in ticks. AmmoDamage is the damage of the
-	// ammo item consumed from the player's inventory (0 = weapon default).
-	int FireWeapon(CCharacter *pChr, vec2 Direction, unsigned WeaponID, int AmmoDamage);
+	// fire: returns the reload wait in ticks. Ammo carries the effect of the
+	// ammo item consumed from the player's inventory.
+	int FireWeapon(CCharacter *pChr, vec2 Direction, unsigned WeaponID, const SAmmoEffect &Ammo);
 	// every tick: calls OnTick of the currently held weapon
 	void TickWeapon(CCharacter *pChr);
 	// weapon switch: calls OnWeaponSwitch of the currently held weapon

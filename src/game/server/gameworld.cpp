@@ -603,8 +603,10 @@ void CGameWorld::SaveToDatabase()
 	{
 		const CDroppedPickup *pPickup = lDrops[i];
 		JsonWriter.BeginObject();
-		JsonWriter.WriteAttribute("item");
-		JsonWriter.WriteStrValue(pPickup->ItemId());
+		char aUuid[UUID_MAXSTRSIZE];
+			pPickup->ItemId().FormatUuid(aUuid, sizeof(aUuid));
+			JsonWriter.WriteAttribute("item");
+		JsonWriter.WriteStrValue(aUuid);
 		JsonWriter.WriteAttribute("count");
 		JsonWriter.WriteIntValue(pPickup->Count());
 		JsonWriter.WriteAttribute("x");
@@ -663,8 +665,12 @@ void CGameWorld::RestoreFromDatabase()
 		const json_value &rY = rDrop["y"];
 		if(rItem.type != json_string || rCount.type != json_integer || rX.type != json_integer || rY.type != json_integer)
 			continue;
-		// the item definitions may have changed while the world was unloaded
-		if(!pItems->IsKnownItem(rItem.u.string.ptr))
+		// the item definitions may have changed while the world was unloaded.
+		// The stored value is the canonical uuid; old saves stored the res_id.
+		CItemID DropId;
+		if(!CItemID::Parse(rItem.u.string.ptr, &DropId) || DropId.IsZero())
+			continue;
+		if(!pItems->IsKnownItem(DropId))
 			continue;
 
 		const int Count = maximum(1, (int) (json_int_t) rCount);
@@ -688,6 +694,6 @@ void CGameWorld::RestoreFromDatabase()
 		if(Stuck)
 			continue;
 
-		new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f), rItem.u.string.ptr, Count);
+		new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f), DropId, Count);
 	}
 }

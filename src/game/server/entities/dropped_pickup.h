@@ -4,6 +4,7 @@
 #ifndef GAME_SERVER_ENTITIES_DROPPED_PICKUP_H
 #define GAME_SERVER_ENTITIES_DROPPED_PICKUP_H
 
+#include <game/item_id.h>
 #include <game/server/entity.h>
 
 // A player-dropped item lying (or flying) in a world. It is rendered as a
@@ -19,13 +20,13 @@
 class CDroppedPickup : public CEntity
 {
 public:
-	CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const char *pItemId, int Count);
+	CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const CItemID &ItemId, int Count);
 
 	virtual void Tick();
 	virtual void Snap(int SnappingClient);
 
-	// the dropped item's res_id / stack size
-	const char *ItemId() const { return m_aItemId; }
+	// the dropped item's id / stack size
+	const CItemID &ItemId() const { return m_ItemId; }
 	int Count() const { return m_Count; }
 
 	enum
@@ -38,7 +39,7 @@ public:
 	};
 
 private:
-	char m_aItemId[32];
+	CItemID m_ItemId;
 	int m_Count;
 	vec2 m_Vel;
 	// ticks to wait before the item can be picked up again (gives a thrown

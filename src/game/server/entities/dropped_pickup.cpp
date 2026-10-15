@@ -17,10 +17,10 @@ static const float s_DropGroundFriction = 0.9f; // sliding friction (low)
 static const float s_DropAirDrag = 0.97f; // air drag (very low)
 static const float s_DropMaxSpeed = 40.0f; // terminal velocity guard
 
-CDroppedPickup::CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const char *pItemId, int Count) :
+CDroppedPickup::CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const CItemID &ItemId, int Count) :
 	CEntity(pGameWorld, CGameWorld::ENTTYPE_DROPPEDPICKUP, 0, Pos, DROP_PHYS_SIZE)
 {
-	str_copy(m_aItemId, pItemId, sizeof(m_aItemId));
+	m_ItemId = ItemId;
 	m_Count = Count;
 	m_Vel = Direction;
 	// a short grace period so a just thrown item does not get instantly
@@ -49,7 +49,7 @@ void CDroppedPickup::Tick()
 		{
 			// only collected when the player has inventory space; otherwise
 			// it stays on the ground for someone else
-			if(GameServer()->Item()->AddItem(pChr->GetCID(), m_aItemId, m_Count))
+			if(GameServer()->Item()->AddItem(pChr->GetCID(), m_ItemId, m_Count))
 			{
 				// no write here: the world's drops are persisted only when
 				// the world is unloaded or the server shuts down

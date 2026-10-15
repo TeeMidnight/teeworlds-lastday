@@ -9,6 +9,7 @@
 
 #include <engine/shared/protocol.h>
 
+#include <game/item_id.h>
 #include <game/voting.h>
 
 class CHeap;
@@ -142,8 +143,8 @@ private:
 	// slot the player picked in MenuLoadout, before picking the weapon in
 	// MenuWeaponPick; -1 = none
 	int m_aLoadoutSlot[MAX_CLIENTS];
-	// item (res_id) the player is currently inspecting in MenuItemView
-	char m_aItemViewId[MAX_CLIENTS][32];
+	// item the player is currently inspecting in MenuItemView
+	CItemID m_aItemViewId[MAX_CLIENTS];
 
 	hash_table<unsigned, CMenuPage, 8> m_MenuPages;
 

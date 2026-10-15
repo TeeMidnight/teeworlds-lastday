@@ -20,16 +20,16 @@ public:
 	int DefaultAmmo() const override { return 10; }
 	int MaxAmmo() const override { return 10; }
 
-	int OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage) override
+	int OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Ammo) override
 	{
 		CGameWorld *pWorld = pChr->GameWorld();
 		const int ClientID = pChr->GetCID();
 		const vec2 ProjStartPos = pChr->GetPos() + Direction * pChr->GetProximityRadius() * 0.75f;
-		const int Damage = AmmoDamage ? AmmoDamage : g_pData->m_Weapons.m_aId[SnapStyle()].m_Damage;
+		const int Damage = Ammo.m_Damage ? Ammo.m_Damage : g_pData->m_Weapons.m_aId[SnapStyle()].m_Damage;
+		const int Span = (int) (pChr->Server()->TickSpeed() * pChr->GameServer()->Tuning()->m_GrenadeLifetime * Ammo.m_Lifetime);
 
-		new CProjectile(pWorld, SnapStyle(), ClientID, ProjStartPos, Direction,
-			(int) (pChr->Server()->TickSpeed() * pChr->GameServer()->Tuning()->m_GrenadeLifetime),
-			Damage, true, 0, SOUND_GRENADE_EXPLODE, SnapStyle());
+		new CProjectile(pWorld, SnapStyle(), ClientID, ProjStartPos, Direction * Ammo.m_Speed,
+			Span, Damage, true, 0, SOUND_GRENADE_EXPLODE, SnapStyle());
 
 		pWorld->CreateSound(pChr->GetPos(), SOUND_GRENADE_FIRE);
 		return 0;

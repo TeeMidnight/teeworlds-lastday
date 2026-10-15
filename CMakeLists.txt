@@ -58,7 +58,7 @@ endif()
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 option(DOWNLOAD_DEPENDENCIES "Download dependencies (only available on Windows)" ${AUTO_DEPENDENCIES_DEFAULT})
@@ -695,10 +695,13 @@ set_src(GAME_SHARED GLOB src/game
   commands.h
   gamecore.cpp
   gamecore.h
+  item_id.cpp
+  item_id.h
   layers.cpp
   layers.h
   localization.cpp
   localization.h
+  localization_format.h
   mapitems.h
   tuning.h
   variables.h

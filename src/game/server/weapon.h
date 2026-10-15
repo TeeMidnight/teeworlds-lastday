@@ -7,6 +7,8 @@
 #include <base/system.h>
 #include <base/vmath.h>
 
+#include <game/server/ammo.h>
+
 class CCharacter;
 
 // Weapon ID: str_quickhash() of the (lower-case) weapon name, an unsigned value.
@@ -31,16 +33,15 @@ public:
 	// weapon (WEAPON_GUN etc.)
 	virtual int SnapStyle() const = 0;
 
-	// fire behaviour: pChr is the shooter. AmmoDamage is the damage of the
-	// ammo item that was consumed from the player's inventory (0 when the
-	// weapon needs no ammo, or when the ammo carries no damage of its own).
-	// returns the reload wait in ticks (0 = use FireDelay())
-	virtual int OnFire(CCharacter *pChr, vec2 Direction, int AmmoDamage) = 0;
+	// fire behaviour: pChr is the shooter. Ammo carries the effect of the ammo
+	// item that was consumed from the player's inventory (its default values
+	// mean "use the weapon's own defaults"). Because every ammo item declares
+	// its own effect, one weapon can be fed several different ammo types.
+	// returns the reload wait in ticks (0 = use FireDelay()).
+	virtual int OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Ammo) = 0;
 
 	// called on every game tick for every character holding this weapon
-	// (persistent state, cooldowns, ...)
 	virtual void OnTick(CCharacter *pChr) {}
-
 	// called when the weapon is switched to
 	virtual void OnWeaponSwitch(CCharacter *pChr) {}
 

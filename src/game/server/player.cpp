@@ -41,7 +41,7 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_Status.m_Level = 0;
 	m_Status.m_LoadoutSet = false;
 	for(int i = 0; i < NUM_WEAPONS; i++)
-		m_Status.m_aLoadout[i][0] = '\0';
+		m_Status.m_aLoadout[i] = CItemID();
 
 	m_AccountUuid = UUID_ZEROED;
 	m_LoggedIn = false;
