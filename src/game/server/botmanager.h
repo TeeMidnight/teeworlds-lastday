@@ -52,6 +52,9 @@ private:
 	// this keeps the per-client id assignment (and demo tee ids) deterministic
 	// rather than dependent on bucket layout.
 	array<Uuid> m_lBotOrder;
+	// The same bots by their fixed internal tee id, so translating a snapshot
+	// tee id does not scan every bot for every item of every client.
+	hash_table<int, IBotEntity *, 8> m_BotsByTeeID;
 
 	// Per receiving client, the bot in each of that client's bot slots. Index
 	// 0 is BOT_TEEID_07_MIN, or BOT_TEEID_08_MIN for a 0.8 client, so one

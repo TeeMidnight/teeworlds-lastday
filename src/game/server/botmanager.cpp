@@ -84,6 +84,8 @@ void CBotManager::ClearBots()
 		IBotEntity *pBot = BotByID(m_lBotOrder[i]);
 		// forget the bot before deleting it: its destructor may run through
 		// game world code that looks the bot up again
+		if(pBot && pBot->TeeID() != -1)
+			m_BotsByTeeID.remove(pBot->TeeID());
 		m_Bots.remove(m_lBotOrder[i]);
 		delete pBot;
 	}
@@ -136,18 +138,12 @@ int CBotManager::TranslateTeeIDForClient(int SnappingClient, int TeeID) const
 	if(TeeID < BOT_TEEID_07_MIN)
 		return TeeID;
 
-	// Find the bot holding this internal id. It keeps that id for life, so the
-	// id alone identifies it, whatever client we are snapping for.
+	// The bot holding this internal id. It keeps that id for life, so the id
+	// alone identifies it, whatever client we are snapping for.
 	IBotEntity *pBot = 0;
-	for(int i = 0; i < m_lBotOrder.size(); i++)
-	{
-		IBotEntity *pCandidate = BotByID(m_lBotOrder[i]);
-		if(pCandidate && pCandidate->TeeID() == TeeID)
-		{
-			pBot = pCandidate;
-			break;
-		}
-	}
+	IBotEntity *const *ppBot = m_BotsByTeeID.get(TeeID);
+	if(ppBot)
+		pBot = *ppBot;
 
 	// A vanished bot, or a stray id in the bot range with nothing behind it,
 	// cannot be named to the client.
@@ -338,6 +334,8 @@ IBotEntity *CBotManager::CreateBot(Uuid BotID, vec2 Pos)
 
 	m_Bots.set(BotID, pBot);
 	m_lBotOrder.add(BotID);
+	if(pBot->TeeID() != -1)
+		m_BotsByTeeID.set(pBot->TeeID(), pBot);
 	return pBot;
 }
 
@@ -364,9 +362,14 @@ void CBotManager::Tick()
 
 void CBotManager::PostSnap()
 {
+	// A bot manager belongs to one world, so only a client currently inside it
+	// needs a refresh; a client in another world gets one when it enters (see
+	// OnClientRefresh). Updating every client for every world was the bulk of
+	// the per-snapshot cost.
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(Server()->ClientIngame(i) && GameServer()->m_apPlayers[i])
+		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+		if(pPlayer && pPlayer->GameWorld() == GameWorld() && Server()->ClientIngame(i))
 			UpdatePlayerMap(i);
 	}
 }
@@ -406,8 +409,13 @@ void CBotManager::OnBotDeath(Uuid BotID)
 	// Unlink right away. The world deletes the entity in RemoveEntities, long
 	// before PostSnap, so keeping the pointer would leave a dangling entry that
 	// any lookup in between (snap, damage events) would follow.
+	IBotEntity *pBot = BotByID(BotID);
+	if(pBot && pBot->TeeID() != -1)
+		m_BotsByTeeID.remove(pBot->TeeID());
 	m_Bots.remove(BotID);
-	m_lBotOrder.remove_fast(BotID);
+	// remove, not remove_fast: the order is what makes the per-client slot
+	// assignment (and the demo tee ids) deterministic
+	m_lBotOrder.remove(BotID);
 }
 
 void CBotManager::OnClientRefresh(int ClientID)
