@@ -430,6 +430,10 @@ void CCharacter::ResetInput()
 
 void CCharacter::Tick()
 {
+	// the scoreboard is the player's silent-step toggle: while it is open the
+	// character creeps at a quarter speed and its jumps make no sound
+	m_Core.m_SilentStep = (m_pPlayer->m_PlayerFlags & TEEFLAG_SCOREBOARD) != 0;
+
 	m_Core.m_Input = m_Input;
 	m_Core.Tick(true, true);
 
@@ -856,7 +860,11 @@ void CCharacter::Snap(int SnappingClient)
 	// IncreaseHealth/IncreaseArmor), so that is the value the HUD has to use.
 	pCharacter->m_MaxHealth = MAX_HEALTH;
 	pCharacter->m_MaxArmor = MAX_ARMOR;
-	pCharacter->m_TriggeredEvents = m_TriggeredEvents;
+	// a silent step leaves no trace: its jumps are not announced to anyone
+	int TriggeredEvents = m_TriggeredEvents;
+	if(m_Core.m_SilentStep)
+		TriggeredEvents &= ~(COREEVENTFLAG_GROUND_JUMP | COREEVENTFLAG_AIR_JUMP);
+	pCharacter->m_TriggeredEvents = TriggeredEvents;
 
 	// snap the weapon the player may actually use: an empty slot or an unowned
 	// weapon snaps as the hand (-1, no weapon shown)

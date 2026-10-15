@@ -84,6 +84,7 @@ void CCharacterCore::Reset()
 	m_HookedPlayer = -1;
 	m_Jumped = 0;
 	m_TriggeredEvents = 0;
+	m_SilentStep = false;
 	m_Death = false;
 }
 
@@ -106,8 +107,13 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 	// water is a thicker medium: gravity pulls only at half strength
 	m_Vel.y += m_pWorld->m_Tuning.m_Gravity * (InWater ? WaterFrictionY : 1.0f);
 
-	float MaxSpeed = (Grounded ? m_pWorld->m_Tuning.m_GroundControlSpeed : m_pWorld->m_Tuning.m_AirControlSpeed) * (InWater ? WaterFrictionX : 1.0f);
-	float Accel = (Grounded ? m_pWorld->m_Tuning.m_GroundControlAccel : m_pWorld->m_Tuning.m_AirControlAccel) * (InWater ? WaterFrictionX : 1.0f);
+	// silent step creeps at half the normal speed: both the cap and the
+	// acceleration are scaled, so control keeps the same feel, only slower.
+	// It is a LastDay-only rule: the dead-reckoning / legacy prediction path
+	// passes LastDay false, so it keeps the vanilla speed and stays in sync.
+	const float SilentStepScale = (m_SilentStep && LastDay) ? 0.5f : 1.0f;
+	float MaxSpeed = (Grounded ? m_pWorld->m_Tuning.m_GroundControlSpeed : m_pWorld->m_Tuning.m_AirControlSpeed) * SilentStepScale * (InWater ? WaterFrictionX : 1.0f);
+	float Accel = (Grounded ? m_pWorld->m_Tuning.m_GroundControlAccel : m_pWorld->m_Tuning.m_AirControlAccel) * SilentStepScale * (InWater ? WaterFrictionX : 1.0f);
 	float Friction = (Grounded ? m_pWorld->m_Tuning.m_GroundFriction : m_pWorld->m_Tuning.m_AirFriction) * (InWater ? WaterFrictionX : 1.0f);
 	
 	// handle input

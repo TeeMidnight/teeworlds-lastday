@@ -221,7 +221,15 @@ void CNpcEntity::Chase(int ClientID)
 	if(!pChr || !pChr->IsAlive())
 		return;
 
-	const vec2 Target = pChr->GetPos();
+	ChaseEntity(pChr);
+}
+
+void CNpcEntity::ChaseEntity(CEntity *pTarget)
+{
+	if(!pTarget)
+		return;
+
+	const vec2 Target = pTarget->GetPos();
 
 	// never pursue past the chase radius: turn back instead
 	if(distance(m_Pos, m_SpawnPos) > NPC_CHASE_RADIUS)
@@ -245,6 +253,42 @@ void CNpcEntity::Chase(int ClientID)
 	m_CursorTarget = Target - m_Pos;
 	if(distance(Target, m_Pos) < 48.0f)
 		m_Input.m_Fire = 1;
+}
+
+CEntity *CNpcEntity::FindHostileBot()
+{
+	// An NPC fights hostile bots on its own: any live bot that is not a fellow
+	// NPC of its team is a target, out to the normal chase radius. A different
+	// team counts even for another NPC.
+	float BestDist = NPC_CHASE_RADIUS;
+	CEntity *pBest = nullptr;
+
+	array<CEntity *> lpEnts;
+	lpEnts.hint_size(8);
+	const int Num = GameWorld()->FindFlagEntities(m_Pos, NPC_CHASE_RADIUS, lpEnts, CGameWorld::ENTFLAG_HITABLE);
+	for(int i = 0; i < Num; i++)
+	{
+		CEntity *pEnt = lpEnts[i];
+		if(pEnt == this || pEnt->ObjType() != CGameWorld::ENTTYPE_BOTENTITY)
+			continue;
+
+		IBotEntity *pBot = static_cast<IBotEntity *>(pEnt);
+		if(!pBot->IsAlive())
+			continue;
+		if(pBot->GetBotTeam() == m_Team && str_comp(pBot->BotTypeName(), "npc") == 0)
+			continue;
+		// only a bot the NPC could actually reach and see is a target
+		if(GameWorld()->Collision()->IntersectLine(m_Pos, pEnt->GetPos(), NULL, NULL))
+			continue;
+
+		const float Dist = distance(pEnt->GetPos(), m_SpawnPos);
+		if(Dist > BestDist)
+			continue;
+
+		BestDist = Dist;
+		pBest = pEnt;
+	}
+	return pBest;
 }
 
 bool CNpcEntity::OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
@@ -454,6 +498,10 @@ void CNpcEntity::TickInteract()
 
 void CNpcEntity::OnAction()
 {
+	// A quiet NPC is the rule, not the exception: it creeps while it wanders
+	// or watches, and only drops the silent step to run down a target.
+	m_Core.m_SilentStep = true;
+
 	// the AI is suspended while the NPC is teleporting home
 	if(m_State != NPCSTATE_ALIVE)
 	{
@@ -467,7 +515,19 @@ void CNpcEntity::OnAction()
 	const int Hated = FindHatedPlayer();
 	if(Hated >= 0)
 	{
+		m_Core.m_SilentStep = false;
 		Chase(Hated);
+		AimCursor();
+		return;
+	}
+
+	// Hostile bots are attacked on sight: the NPC drops its silent step to
+	// charge them just like it does for a hated player.
+	CEntity *pHostile = FindHostileBot();
+	if(pHostile)
+	{
+		m_Core.m_SilentStep = false;
+		ChaseEntity(pHostile);
 		AimCursor();
 		return;
 	}

@@ -261,6 +261,10 @@ public:
 
 	int m_TriggeredEvents;
 
+	// silent step: while set, self-propelled horizontal movement runs at
+	// half speed and jumps are snapped without their sound events
+	bool m_SilentStep;
+
 	void Init(CWorldCore *pWorld, CCollision *pCollision);
 	void Reset();
 	void Tick(bool UseInput, bool LastDay);

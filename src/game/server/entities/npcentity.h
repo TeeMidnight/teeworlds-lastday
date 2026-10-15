@@ -45,7 +45,8 @@ public:
 
 protected:
 	void OnAction() override;
-	// a peaceful NPC never acquires a target
+	// the NPC drives its own action (see OnAction); the default chase hook is
+	// left unused so the base behaviour can never take over
 	CEntity *FindTarget() override { return nullptr; }
 
 private:
@@ -60,6 +61,11 @@ private:
 	int FindHatedPlayer();
 	// move towards a hated player, but never past the chase radius
 	void Chase(int ClientID);
+	// the closest hostile bot (a fighter, or any bot on another team) within
+	// the chase radius, or null
+	CEntity *FindHostileBot();
+	// steer and swing at a live target entity, never past the chase radius
+	void ChaseEntity(CEntity *pTarget);
 	// the aggro of one client, cached from the ledger for a short while
 	int CachedAggro(int ClientID);
 	// keep the cache in step with a delta that was just written

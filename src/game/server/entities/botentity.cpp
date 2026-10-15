@@ -276,7 +276,7 @@ void CBotEntity::TickDefered()
 	{
 		CWorldCore TempWorld;
 		m_ReckoningCore.Init(&TempWorld, GameWorld()->Collision());
-		m_ReckoningCore.Tick(false, true);
+		m_ReckoningCore.Tick(false, false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
 	}
@@ -395,7 +395,11 @@ void CBotEntity::Snap(int SnappingClient)
 	pCharacter->m_Armor = 0;
 	pCharacter->m_MaxHealth = MAX_HEALTH;
 	pCharacter->m_MaxArmor = MAX_ARMOR;
-	pCharacter->m_TriggeredEvents = m_TriggeredEvents;
+	// an NPC creeping silently does not give its jumps away to the clients
+	int TriggeredEvents = m_TriggeredEvents;
+	if(m_Core.m_SilentStep)
+		TriggeredEvents &= ~(COREEVENTFLAG_GROUND_JUMP | COREEVENTFLAG_AIR_JUMP);
+	pCharacter->m_TriggeredEvents = TriggeredEvents;
 	pCharacter->m_Weapon = m_WeaponSlot;
 	pCharacter->m_AttackTick = m_AttackTick;
 	pCharacter->m_Direction = m_Input.m_Direction;

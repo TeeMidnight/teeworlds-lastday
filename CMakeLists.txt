@@ -876,6 +876,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     legacy_compat.cpp
     packer.cpp
     partial_array.cpp
+    silent_step.cpp
     sorted_array.cpp
     storage.cpp
     str.cpp
