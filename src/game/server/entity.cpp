@@ -70,10 +70,11 @@ int CEntity::NetworkClippedLine(int SnappingClient, vec2 From, vec2 To)
 
 bool CEntity::GameLayerClipped(vec2 CheckPos)
 {
-	return false;
-	/*
-	int rx = round_to_int(CheckPos.x) / 32;
-	int ry = round_to_int(CheckPos.y) / 32;
-	return (rx < -200 || rx >= GameWorld()->Collision()->GetWidth() + 200) || (ry < -200 || ry >= GameWorld()->Collision()->GetHeight() + 200);
-	*/
+	// A generous margin: an entity briefly nudged past the edge can still be
+	// pulled back, but past this it has left the map for good. The x wrap of a
+	// cylindrical world keeps entities inside the range before this matters.
+	const int rx = round_to_int(CheckPos.x) / 32;
+	const int ry = round_to_int(CheckPos.y) / 32;
+	return (rx < -200 || rx >= GameWorld()->Collision()->GetWidth() + 200) ||
+		(ry < -200 || ry >= GameWorld()->Collision()->GetHeight() + 200);
 }
