@@ -668,7 +668,7 @@ namespace legacy
 			m_CurrentSentTick8 = GameTick;
 		}
 
-		const int BufSize = CSnapshot::MAX_PARTS * MAX_SNAPSHOT_PACKSIZE;
+		const int BufSize = (int) CSnapshot::MAX_PARTS * MAX_SNAPSHOT_PACKSIZE;
 		if(m_Incoming8Data.size() < BufSize)
 			m_Incoming8Data.set_size(BufSize);
 		if(pData)
