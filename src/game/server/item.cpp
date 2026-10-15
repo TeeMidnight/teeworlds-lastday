@@ -149,7 +149,16 @@ void CItemSystem::LoadItem(const char *pResId, const char *pFilePath)
 			Item.m_Use.m_Forgetting = (int) (json_int_t) Forgetting;
 	}
 
-	m_Items.set(str_quickhash(pResId), Item);
+	// str_quickhash is the identity used everywhere else; a collision would make
+	// two distinct items indistinguishable, so keep the first and say so.
+	const unsigned Hash = str_quickhash(pResId);
+	const SItemDef *pExisting = m_Items.get(Hash);
+	if(pExisting && str_comp(pExisting->m_aResId, pResId) != 0)
+	{
+		dbg_msg("items", "hash collision: '%s' collides with '%s', keeping the first", pResId, pExisting->m_aResId);
+		return;
+	}
+	m_Items.set(Hash, Item);
 	dbg_msg("items", "loaded item '%s' ('%s')", pResId, Item.m_aName);
 }
 
@@ -524,7 +533,16 @@ void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath)
 		Craft.m_NumNeeded++;
 	}
 
-	m_Crafts.set(str_quickhash(pCraftId), Craft);
+	// same guard as the item loader: a hash collision must not silently replace
+	// an unrelated recipe
+	const unsigned CraftHash = str_quickhash(pCraftId);
+	const SCraftDef *pExistingCraft = m_Crafts.get(CraftHash);
+	if(pExistingCraft && str_comp(pExistingCraft->m_aCraftId, pCraftId) != 0)
+	{
+		dbg_msg("craft", "hash collision: '%s' collides with '%s', keeping the first", pCraftId, pExistingCraft->m_aCraftId);
+		return;
+	}
+	m_Crafts.set(CraftHash, Craft);
 	dbg_msg("craft", "loaded craft '%s' -> %s x%d (%d ingredient(s))",
 		pCraftId, Craft.m_aResultItemId, Craft.m_ResultCount, Craft.m_NumNeeded);
 }
