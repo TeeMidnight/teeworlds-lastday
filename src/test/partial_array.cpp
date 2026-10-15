@@ -590,7 +590,9 @@ TEST(TeeIDSpace, DisplayIDsAreUniqueWithinAProtocol)
 		ASSERT_NE(ID8, -1);
 		// the 0.8 range is large; spot check that it never repeats an earlier slot
 		if(Slot > 0)
+		{
 			EXPECT_NE(ID8, BotTeeIdForVersion(0x0800, Slot - 1));
+		}
 	}
 
 	// The 0.7 range is a prefix of the space the server's private ids come
