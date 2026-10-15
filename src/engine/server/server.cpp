@@ -1431,6 +1431,8 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	char aBuf[IO_MAX_PATH_LENGTH];
 	str_format(aBuf, sizeof(aBuf), "maps/%s.map", pInfo->m_aName);
 	bool IsGenerated = false;
+	// the base floor name of a generated "<base>_<seed>" map, "" otherwise
+	char aBaseMap[64] = "";
 
 	// a requested map may be a generated "<base>_<seed>" map: split at the
 	// last underscore and parse the numeric seed
@@ -1445,7 +1447,6 @@ int CServer::LoadMap(CMapInfo *pInfo)
 		const int BaseLen = (int) (pUnderscore - pInfo->m_aName);
 		if(BaseLen > 0 && BaseLen < 64)
 		{
-			char aBaseMap[64];
 			str_copy(aBaseMap, pInfo->m_aName, BaseLen + 1);
 			const int Seed = str_toint(pUnderscore + 1);
 
@@ -1470,16 +1471,19 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	}
 
 	// remember the kind of space this map is, so the game layer can decide
-	// whether bots are allowed here and whether they are hostile. Generated
-	// floors are euclidean; static floors are looked up in the mapgen config.
+	// whether bots are allowed here and whether they are hostile. The kind is
+	// looked up by the floor name: a generated "<floor>_<seed>" instance can be
+	// a pasted hand authored floor and is then just as non euclidean as the
+	// floor it was built from, so the name suffix alone must not mean euclid.
 	{
 		EWorldKind Kind = WORLDKIND_NONEUCLID;
-		if(IsGenerated)
-			Kind = WORLDKIND_EUCLID;
-		else if(m_pMapGen && m_pMapGen->GetFloorKind(pInfo->m_aName, &Kind))
+		const char *pKindName = IsGenerated && aBaseMap[0] ? aBaseMap : pInfo->m_aName;
+		if(m_pMapGen && m_pMapGen->GetFloorKind(pKindName, &Kind))
 		{
 			// found in the floor config
 		}
+		else if(IsGenerated)
+			Kind = WORLDKIND_EUCLID; // an unknown generated instance: assume euclidean
 		else
 			Kind = str_comp(pInfo->m_aName, "Connector") == 0 ? WORLDKIND_HUB : WORLDKIND_NONEUCLID;
 		pInfo->m_WorldKind = (int) Kind;
