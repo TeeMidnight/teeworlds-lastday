@@ -143,8 +143,15 @@ bool CTradeSystem::Buy(int Buyer, int ListingId)
 		pItems->RemoveItem(Buyer, Listing.m_OfferItem, Listing.m_OfferCount);
 		return false;
 	}
-	// pay the seller; if their inventory is full the items are queued silently
-	pItems->AddItem(Listing.m_Seller, Listing.m_PriceItem, Listing.m_PriceCount, true);
+	// pay the seller. If their inventory is full the purchase is rolled back
+	// rather than losing the payment, and the listing stays up.
+	if(!pItems->AddItem(Listing.m_Seller, Listing.m_PriceItem, Listing.m_PriceCount, true))
+	{
+		pItems->RemoveItem(Buyer, Listing.m_OfferItem, Listing.m_OfferCount);
+		pItems->AddItem(Buyer, Listing.m_PriceItem, Listing.m_PriceCount, true);
+		m_pGameServer->SendChat(-1, CHAT_WHISPER, Buyer, Localize("The seller has no inventory space.", "Trade"));
+		return false;
+	}
 
 	m_lListings.remove_index(Index);
 
