@@ -1412,7 +1412,7 @@ namespace legacy
 				}
 				// A bot is not a player joining: it appears quietly, like the
 				// silent entries a 0.7 server used for its own fake clients.
-				Out.m_Silent = (TeeID > MAX_CLIENTS7) ? 1 : 0;
+				Out.m_Silent = (TeeID >= MAX_CLIENTS7) ? 1 : 0;
 				CMsgPacker Packer(protocol7::NETMSGTYPE_SV_CLIENTINFO);
 				Out.Pack(&Packer);
 				return FinishMsg(&Packer, pOut, OutSize);
