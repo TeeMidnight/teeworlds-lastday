@@ -111,9 +111,26 @@ bool CDatabasePostgres::Init()
 		dbg_msg("database", "failed to create world_saves schema: %s", PQresultErrorMessage(pRes));
 	PQclear(pRes);
 
-	if(Ok && SavesOk)
+	// the npc aggro ledger: one dated signed delta per row, summed on read. The
+	// identity columns use PostgreSQL's native UUID type.
+	const char *pCreateAggro =
+		"CREATE TABLE IF NOT EXISTS npc_aggro ("
+		" id SERIAL PRIMARY KEY,"
+		" npc_id UUID NOT NULL,"
+		" userid UUID NOT NULL,"
+		" delta INTEGER NOT NULL,"
+		" created_at BIGINT NOT NULL);"
+		"CREATE INDEX IF NOT EXISTS npc_aggro_pair ON npc_aggro(npc_id, userid);";
+
+	pRes = PQexec(m_pConn, pCreateAggro);
+	const bool AggroOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!AggroOk)
+		dbg_msg("database", "failed to create npc_aggro schema: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+
+	if(Ok && SavesOk && AggroOk)
 		dbg_msg("database", "postgres database ready");
-	return Ok && SavesOk;
+	return Ok && SavesOk && AggroOk;
 }
 
 bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
@@ -306,6 +323,85 @@ bool CDatabasePostgres::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, i
 		*pLength = str_toint(PQgetvalue(pRes, 0, 0));
 	PQclear(pRes);
 	return Found;
+}
+
+bool CDatabasePostgres::GetNpcAggro(const Uuid &Npc, const Uuid &User, int *pOut)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aUser[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	format_uuid(User, aUser, sizeof(aUser));
+
+	const char *apParams[2] = {aNpc, aUser};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"SELECT COALESCE(SUM(delta), 0) FROM npc_aggro WHERE npc_id = $1::uuid AND userid = $2::uuid;",
+		2, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+
+	if(PQntuples(pRes) > 0 && !PQgetisnull(pRes, 0, 0))
+		*pOut = str_toint(PQgetvalue(pRes, 0, 0));
+	PQclear(pRes);
+	return true;
+}
+
+bool CDatabasePostgres::AddNpcAggro(const Uuid &Npc, const Uuid &User, int Delta)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aUser[UUID_MAXSTRSIZE];
+	char aDelta[32];
+	char aCreated[32];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	format_uuid(User, aUser, sizeof(aUser));
+	str_format(aDelta, sizeof(aDelta), "%d", Delta);
+	str_format(aCreated, sizeof(aCreated), "%d", time_timestamp());
+
+	const char *apParams[4] = {aNpc, aUser, aDelta, aCreated};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO npc_aggro (npc_id, userid, delta, created_at) VALUES ($1::uuid, $2::uuid, $3::int, $4::bigint);",
+		4, 0, apParams, 0, 0, 0);
+	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to add npc aggro '%s'/'%s': %s", aNpc, aUser, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::EnsureNpcAggro(const Uuid &Npc, const Uuid &User)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aUser[UUID_MAXSTRSIZE];
+	char aCreated[32];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	format_uuid(User, aUser, sizeof(aUser));
+	str_format(aCreated, sizeof(aCreated), "%d", time_timestamp());
+
+	const char *apParams[3] = {aNpc, aUser, aCreated};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO npc_aggro (npc_id, userid, delta, created_at) "
+		"SELECT $1::uuid, $2::uuid, 0, $3::bigint WHERE NOT EXISTS "
+		"(SELECT 1 FROM npc_aggro WHERE npc_id = $1::uuid AND userid = $2::uuid);",
+		3, 0, apParams, 0, 0, 0);
+	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to ensure npc aggro '%s'/'%s': %s", aNpc, aUser, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
 }
 
 bool CDatabasePostgres::SaveWorldSave(const char *pMap, const char *pJsonData)

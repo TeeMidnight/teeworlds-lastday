@@ -26,6 +26,9 @@ public:
 	virtual bool SetJson(const Uuid &Uuid, const CJsonPath &Path, const char *pValue) override;
 	virtual bool DelJson(const Uuid &Uuid, const CJsonPath &Path) override;
 	virtual bool GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int *pLength) override;
+	virtual bool GetNpcAggro(const Uuid &Npc, const Uuid &User, int *pOut) override;
+	virtual bool AddNpcAggro(const Uuid &Npc, const Uuid &User, int Delta) override;
+	virtual bool EnsureNpcAggro(const Uuid &Npc, const Uuid &User) override;
 	virtual bool SaveWorldSave(const char *pMap, const char *pJsonData) override;
 	virtual bool GetWorldSaveSize(const char *pMap, int *pSize) override;
 	virtual bool GetWorldSaveData(const char *pMap, char *pOut, int Size) override;

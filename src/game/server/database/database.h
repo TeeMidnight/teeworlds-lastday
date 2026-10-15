@@ -100,6 +100,18 @@ public:
 	// false when the field does not exist or is not an array.
 	virtual bool GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int *pLength) = 0;
 
+	// -------- npc aggro ledger --------
+	// Aggro is kept as a dated ledger of signed deltas, so it can be audited
+	// and reconstructed by summing. A pair with no rows sums to 0.
+	// Sum every ledger row of one (npc, user) pair into *pOut. Returns false
+	// only on a database failure.
+	virtual bool GetNpcAggro(const Uuid &Npc, const Uuid &User, int *pOut) = 0;
+	// Append one dated delta (positive adds aggro, negative decays it).
+	virtual bool AddNpcAggro(const Uuid &Npc, const Uuid &User, int Delta) = 0;
+	// Give the pair a 0 baseline row when it has none, so a freshly joined
+	// player is recorded with the default 0 aggro.
+	virtual bool EnsureNpcAggro(const Uuid &Npc, const Uuid &User) = 0;
+
 	// -------- world saves (world persistence) --------
 	// one row per world instance (one map name, e.g. "<floor>_<seed>" for
 	// generated worlds or the plain name for static maps), so a world's

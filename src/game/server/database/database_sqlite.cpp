@@ -104,7 +104,15 @@ bool CDatabaseSQLite::Init()
 		"CREATE TABLE IF NOT EXISTS world_saves ("
 		" \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,"
 		" map TEXT NOT NULL UNIQUE,"
-		" data JSON NOT NULL DEFAULT '{}');";
+		" data JSON NOT NULL DEFAULT '{}');"
+		// the npc aggro ledger: one dated signed delta per row, summed on read
+		"CREATE TABLE IF NOT EXISTS npc_aggro ("
+		" \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,"
+		" npc_id TEXT NOT NULL,"
+		" userid TEXT NOT NULL,"
+		" delta INTEGER NOT NULL,"
+		" created_at INTEGER NOT NULL);"
+		"CREATE INDEX IF NOT EXISTS npc_aggro_pair ON npc_aggro(npc_id, userid);";
 
 	char *pErr = 0;
 	if(sqlite3_exec(m_pDB, pCreate, 0, 0, &pErr) != SQLITE_OK)
@@ -323,6 +331,92 @@ bool CDatabaseSQLite::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int
 	}
 	sqlite3_finalize(pStmt);
 	return Found;
+}
+
+bool CDatabaseSQLite::GetNpcAggro(const Uuid &Npc, const Uuid &User, int *pOut)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aUser[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	format_uuid(User, aUser, sizeof(aUser));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT COALESCE(SUM(delta), 0) FROM npc_aggro WHERE npc_id = ?1 AND userid = ?2;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, aUser, -1, SQLITE_TRANSIENT);
+
+	bool Ok = false;
+	if(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		*pOut = sqlite3_column_int(pStmt, 0);
+		Ok = true;
+	}
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::AddNpcAggro(const Uuid &Npc, const Uuid &User, int Delta)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aUser[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	format_uuid(User, aUser, sizeof(aUser));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT INTO npc_aggro (npc_id, userid, delta, created_at) VALUES (?1, ?2, ?3, ?4);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, aUser, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 3, Delta);
+	sqlite3_bind_int64(pStmt, 4, (sqlite3_int64) time_timestamp());
+
+	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to add npc aggro '%s'/'%s': %s", aNpc, aUser, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::EnsureNpcAggro(const Uuid &Npc, const Uuid &User)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aUser[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	format_uuid(User, aUser, sizeof(aUser));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT INTO npc_aggro (npc_id, userid, delta, created_at) "
+		   "SELECT ?1, ?2, 0, ?3 WHERE NOT EXISTS "
+		   "(SELECT 1 FROM npc_aggro WHERE npc_id = ?1 AND userid = ?2);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, aUser, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 3, (sqlite3_int64) time_timestamp());
+
+	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to ensure npc aggro '%s'/'%s': %s", aNpc, aUser, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
 }
 
 bool CDatabaseSQLite::SaveWorldSave(const char *pMap, const char *pJsonData)
