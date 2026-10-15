@@ -65,6 +65,13 @@ private:
 	// keep the cache in step with a delta that was just written
 	void UpdateAggroCache(const Uuid &Account, int Delta);
 
+	// begin the scripted respawn: teleport to the main world, emote, come back
+	void StartRespawn();
+	// advance the scripted respawn once it has started
+	void TickRespawn();
+	// hand the bot over to another world's bot manager and re-bind its core
+	void MoveToWorld(CGameWorld *pNewWorld, vec2 Pos);
+
 	// the closest live player within the roam radius, or null
 	CEntity *ClosestPlayer();
 	// random walk, kept inside the spawn radius
@@ -79,6 +86,20 @@ private:
 		int m_RefreshTick;
 	};
 	array<SNpcAggroEntry> m_lAggro;
+
+	// the scripted respawn. While teleporting the NPC is invincible and its AI
+	// is suspended; it is moved to the main world, emotes, then comes home.
+	enum ENpcState
+	{
+		NPCSTATE_ALIVE = 0,
+		NPCSTATE_TELEPORTING,
+	};
+	int m_State = NPCSTATE_ALIVE;
+	int m_StateTick = 0;
+	bool m_Emoted = false;
+	bool m_Invincible = false;
+	unsigned m_HomeWorldID = 0;
+	vec2 m_HomePos = vec2(0.0f, 0.0f);
 
 	// the configuration this NPC was built from (null for a random one)
 	const SNpcDef *m_pDef;

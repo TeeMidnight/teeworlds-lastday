@@ -200,6 +200,56 @@ int CBotManager::NumVisibleBots(int ClientID) const
 	return Count;
 }
 
+void CBotManager::ReleaseBot(Uuid BotID)
+{
+	IBotEntity *pBot = BotByID(BotID);
+	if(!pBot)
+		return;
+
+	if(pBot->TeeID() != -1)
+		m_BotsByTeeID.remove(pBot->TeeID());
+	m_Bots.remove(BotID);
+	m_lBotOrder.remove(BotID);
+
+	// the bot is not in this world anymore; forget every client slot pointing
+	// at it so a recycled tee id is not resolved to it
+	for(int c = 0; c < MAX_CLIENTS; c++)
+		for(int i = 0; i < BOT_MAX_PER_CLIENT; i++)
+			if(m_aaBotIDMaps[c][i] == BotID)
+				m_aaBotIDMaps[c][i] = UUID_ZEROED;
+}
+
+void CBotManager::AdoptBot(IBotEntity *pBot)
+{
+	if(!pBot)
+		return;
+	const Uuid BotID = pBot->GetBotID();
+	if(BotID == UUID_ZEROED || BotByID(BotID))
+		return;
+
+	m_Bots.set(BotID, pBot);
+	m_lBotOrder.add(BotID);
+	if(pBot->TeeID() != -1)
+		m_BotsByTeeID.set(pBot->TeeID(), pBot);
+}
+
+void CBotManager::SendBotEmoticon(Uuid BotID, int Emoticon)
+{
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(!GameServer()->m_apPlayers[i])
+			continue;
+		const int TeeID = FindClientID(i, BotID);
+		if(TeeID == -1)
+			continue;
+
+		CNetMsg_Sv_Emoticon Msg;
+		Msg.m_ClientID = TeeID;
+		Msg.m_Emoticon = Emoticon;
+		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, i);
+	}
+}
+
 bool CBotManager::ClientIsLegacy(int ClientID) const
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)

@@ -2,8 +2,10 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* Bot layer ported from teeworlds-carbon (c) TeeMidnight, zlib license.                     */
+#include <game/server/botmanager.h>
 #include <game/server/entities/character.h>
 #include <game/server/gamecontext.h>
+#include <game/server/gamecontroller.h>
 #include <game/server/npcdata.h>
 #include <game/server/player.h>
 
@@ -60,6 +62,10 @@ CNpcEntity::CNpcEntity(CGameWorld *pWorld, const SNpcDef *pDef, int Team) :
 void CNpcEntity::Tick()
 {
 	CBotEntity::Tick();
+
+	// the scripted respawn drives itself once started
+	if(m_State == NPCSTATE_TELEPORTING)
+		TickRespawn();
 
 	// health regenerates over time; the rate is hit points per second, which is
 	// accumulated so a fractional amount per tick still adds up exactly
@@ -248,7 +254,7 @@ void CNpcEntity::OnBotHit(CEntity *pTarget, bool Killed)
 
 void CNpcEntity::Die(CEntity *pKiller, int Weapon)
 {
-	if(!m_Alive)
+	if(!m_Alive || m_Invincible)
 		return;
 
 	// a player that lands the killing blow gains per-kill aggro and sees the
@@ -261,11 +267,16 @@ void CNpcEntity::Die(CEntity *pKiller, int Weapon)
 			AddAggro(ClientID, m_pDef->m_Aggro.m_PerKill);
 	}
 
-	CBotEntity::Die(pKiller, Weapon);
+	// configured NPCs do not simply vanish: they respawn through the main world
+	StartRespawn();
 }
 
 bool CNpcEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
 {
+	// during the scripted respawn the NPC cannot be damaged at all
+	if(m_Invincible)
+		return false;
+
 	// NPCs are immovable: a hit lands and damages, but its knockback impulse is
 	// dropped so a player cannot shove the NPC around.
 	(void) Force;
@@ -295,8 +306,118 @@ CEntity *CNpcEntity::ClosestPlayer()
 	return pClosest;
 }
 
+
+void CNpcEntity::StartRespawn()
+{
+	// the NPC is not gone: it keeps its identity, gets its health back and is
+	// untouchable for the duration of the teleport
+	m_Alive = true;
+	m_Health = m_MaxHealth;
+	m_Invincible = true;
+	m_State = NPCSTATE_TELEPORTING;
+	m_StateTick = Server()->Tick();
+	m_Emoted = false;
+	m_HomeWorldID = GameWorld()->WorldID();
+	m_HomePos = m_SpawnPos;
+
+	// respawn in the main world (Connector), like a player does
+	CGameWorld *pMain = GameServer()->MainWorld();
+	if(!pMain)
+		return;
+
+	vec2 SpawnPos = m_Pos;
+	if(!GameServer()->m_pController->CanSpawn(pMain, TEAM_BLUE, &SpawnPos))
+		SpawnPos = m_Pos;
+
+	if(pMain == GameWorld())
+	{
+		// already in the main world: a plain teleport to a spawn point
+		m_Core.m_Pos = SpawnPos;
+		m_Core.m_Vel = vec2(0.0f, 0.0f);
+		m_Pos = SpawnPos;
+		GameWorld()->CreatePlayerSpawn(SpawnPos);
+	}
+	else
+		MoveToWorld(pMain, SpawnPos);
+}
+
+void CNpcEntity::TickRespawn()
+{
+	const int HalfSecond = maximum(1, Server()->TickSpeed() / 2);
+	const int Elapsed = Server()->Tick() - m_StateTick;
+
+	// 0.5s after the death: an angry emoticon
+	if(!m_Emoted && Elapsed >= HalfSecond)
+	{
+		m_Emoted = true;
+		m_Emote = EMOTE_ANGRY;
+		if(GameWorld()->HasBotManager())
+			GameWorld()->GetBotManager()->SendBotEmoticon(m_BotID, EMOTE_ANGRY);
+	}
+
+	// another 0.5s: spawn smoke at both ends of the teleport and go home
+	if(Elapsed >= 2 * HalfSecond)
+	{
+		GameWorld()->CreatePlayerSpawn(m_Pos);
+
+		CGameWorld *pHome = GameServer()->WorldByID(m_HomeWorldID);
+		if(pHome)
+		{
+			if(pHome != GameWorld())
+				MoveToWorld(pHome, m_HomePos);
+			else
+			{
+				m_Core.m_Pos = m_HomePos;
+				m_Core.m_Vel = vec2(0.0f, 0.0f);
+				m_Pos = m_HomePos;
+			}
+			pHome->CreatePlayerSpawn(m_HomePos);
+		}
+
+		m_Invincible = false;
+		m_State = NPCSTATE_ALIVE;
+		m_Emote = EMOTE_NORMAL;
+	}
+}
+
+void CNpcEntity::MoveToWorld(CGameWorld *pNewWorld, vec2 Pos)
+{
+	if(!pNewWorld || pNewWorld == GameWorld())
+		return;
+
+	CGameWorld *pOldWorld = GameWorld();
+
+	// release from the old world: manager maps, core binding, entity list
+	if(pOldWorld->HasBotManager())
+		pOldWorld->GetBotManager()->ReleaseBot(m_BotID);
+	if(m_TeeID != -1)
+		pOldWorld->m_Core.SetCharacter(m_TeeID, 0);
+	pOldWorld->RemoveEntity(this);
+
+	// reparent and bind to the new world's core under a fresh tee id
+	SetGameWorld(pNewWorld);
+	m_TeeID = PickTeeID(pNewWorld, m_BotID);
+	m_Core.Init(&pNewWorld->m_Core, pNewWorld->Collision());
+	m_Core.m_Pos = Pos;
+	m_Core.m_Vel = vec2(0.0f, 0.0f);
+	m_Pos = Pos;
+	if(m_TeeID != -1)
+		pNewWorld->m_Core.SetCharacter(m_TeeID, &m_Core);
+
+	pNewWorld->InsertEntity(this);
+	pNewWorld->BotManager()->AdoptBot(this);
+}
+
 void CNpcEntity::OnAction()
 {
+	// the AI is suspended while the NPC is teleporting home
+	if(m_State != NPCSTATE_ALIVE)
+	{
+		m_Input.m_Direction = 0;
+		m_Input.m_Jump = 0;
+		return;
+	}
+
 	// A player over the aggro threshold is the top priority: the NPC chases and
 	// attacks them, out to the chase radius.
 	const int Hated = FindHatedPlayer();

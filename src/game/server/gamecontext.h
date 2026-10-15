@@ -110,6 +110,10 @@ public:
 	CTradeSystem *Trade() const { return m_pTradeSystem; }
 	CNpcSystem *Npcs() const { return m_pNpcSystem; }
 
+	// the always-loaded main world (Connector) and a lookup by map id
+	CGameWorld *MainWorld();
+	CGameWorld *WorldByID(unsigned MapID);
+
 	// apply a signed aggro delta to the (npc, account) ledger
 	void NpcAddAggro(const Uuid &Npc, const Uuid &User, int Delta);
 	// sum the ledger of one (npc, account) pair; 0 when absent or no database

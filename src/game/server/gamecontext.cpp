@@ -1358,6 +1358,18 @@ void CGameContext::OnUpdatePlayerServerInfo(CJsonWriter *pJsonWriter, int Client
 
 int CGameContext::GetMaxPlayerSlots() { return Config()->m_SvMaxClients; }
 
+CGameWorld *CGameContext::MainWorld()
+{
+	CGameWorld **ppWorld = m_pWorlds[m_MainWorldID];
+	return ppWorld ? *ppWorld : nullptr;
+}
+
+CGameWorld *CGameContext::WorldByID(unsigned MapID)
+{
+	CGameWorld **ppWorld = m_pWorlds[MapID];
+	return ppWorld ? *ppWorld : nullptr;
+}
+
 void CGameContext::RequestLoadWorld(unsigned MapID)
 {
 	// Loading is idempotent: a duplicate request (a delayed map load callback,

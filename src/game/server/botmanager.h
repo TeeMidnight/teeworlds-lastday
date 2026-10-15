@@ -138,6 +138,15 @@ public:
 	void SetBotTypeCreator(const char *pTypeName, FBotCreator pfnCreator, void *pUser = nullptr);
 	const char *BotTypeName() const { return m_aBotType; }
 
+	// --- world handover ---------------------------------------------------
+	// Detach a live bot from this manager without destroying it, so another
+	// world's manager can adopt it (the NPC respawn teleport).
+	void ReleaseBot(Uuid BotID);
+	// Register a live bot that was released from another world.
+	void AdoptBot(IBotEntity *pBot);
+	// Emit an Sv_Emoticon for a bot to every client that can see it.
+	void SendBotEmoticon(Uuid BotID, int Emoticon);
+
 	// --- lookup -----------------------------------------------------------
 	// The tee id the given client sees this bot as, or -1 when it is not
 	// being shown the bot at all.
