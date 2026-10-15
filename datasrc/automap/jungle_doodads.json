@@ -1,0 +1,98 @@
+{
+    "doodads": [
+        {
+            "vegetation": {
+                "rules": [
+                    {
+                        "startid": 53,
+                        "endid": 87,
+                        "ry": -3,
+                        "location": "floor",
+                        "random": 30,
+                        "comment": "broad jungle bush (3x3)"
+                    },
+                    {
+                        "startid": 0,
+                        "endid": 65,
+                        "ry": -5,
+                        "location": "floor",
+                        "random": 22,
+                        "comment": "tall grass tuft (2x5)"
+                    },
+                    {
+                        "startid": 2,
+                        "endid": 67,
+                        "ry": -5,
+                        "location": "floor",
+                        "random": 22,
+                        "comment": "tall grass tuft (2x5)"
+                    },
+                    {
+                        "startid": 20,
+                        "endid": 69,
+                        "ry": -4,
+                        "location": "floor",
+                        "random": 18,
+                        "comment": "grass tuft (2x4)"
+                    },
+                    {
+                        "startid": 80,
+                        "endid": 97,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 26,
+                        "comment": "curling fern (2x2)"
+                    },
+                    {
+                        "startid": 82,
+                        "endid": 99,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 26,
+                        "comment": "curling fern (2x2)"
+                    },
+                    {
+                        "startid": 84,
+                        "endid": 100,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 30,
+                        "comment": "small fern (1x2)"
+                    },
+                    {
+                        "startid": 112,
+                        "endid": 114,
+                        "ry": -1,
+                        "location": "floor",
+                        "random": 18,
+                        "comment": "low grass strip (3x1)"
+                    },
+                    {
+                        "startid": 144,
+                        "endid": 161,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 20,
+                        "comment": "grass tuft (2x2)"
+                    },
+                    {
+                        "startid": 148,
+                        "endid": 164,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 26,
+                        "comment": "grass tuft (1x2)"
+                    },
+                    {
+                        "startid": 231,
+                        "endid": 250,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 520,
+                        "comment": "wooden treasure chest (4x2)"
+                    }
+                ]
+            }
+        }
+    ]
+}

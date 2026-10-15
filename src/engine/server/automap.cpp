@@ -30,12 +30,17 @@ const CAutoMapper::CRuleSet *CAutoMapper::FindRuleSet(const char *pName) const
 	return 0;
 }
 
-const CAutoMapper::CDoodadSet *CAutoMapper::FindDoodadSet(const char *pName) const
+const CAutoMapper::CDoodadSet *CAutoMapper::FindDoodadSet(const char *pName, const char *pSource) const
 {
 	for(int i = 0; i < m_lDoodadSets.size(); i++)
 	{
-		if(str_comp(m_lDoodadSets[i].m_aName, pName) == 0)
-			return &m_lDoodadSets[i];
+		if(str_comp(m_lDoodadSets[i].m_aName, pName) != 0)
+			continue;
+		// when a source sheet is given it has to match too, otherwise the set
+		// belongs to another tileset that happens to reuse the set name
+		if(pSource && pSource[0] && str_comp(m_lDoodadSets[i].m_aSource, pSource) != 0)
+			continue;
+		return &m_lDoodadSets[i];
 	}
 	return 0;
 }

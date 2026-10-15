@@ -1,0 +1,66 @@
+{
+    "doodads": [
+        {
+            "vegetation": {
+                "rules": [
+                    {
+                        "startid": 157,
+                        "endid": 191,
+                        "ry": -3,
+                        "location": "floor",
+                        "random": 70,
+                        "comment": "saguaro cactus (3x3)"
+                    },
+                    {
+                        "startid": 139,
+                        "endid": 188,
+                        "ry": -4,
+                        "location": "floor",
+                        "random": 85,
+                        "comment": "tall thin cactus (2x4)"
+                    },
+                    {
+                        "startid": 149,
+                        "endid": 182,
+                        "ry": -3,
+                        "location": "floor",
+                        "random": 60,
+                        "comment": "round cactus (2x3)"
+                    },
+                    {
+                        "startid": 167,
+                        "endid": 184,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 45,
+                        "comment": "small round cactus (2x2)"
+                    },
+                    {
+                        "startid": 169,
+                        "endid": 185,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 50,
+                        "comment": "round cactus (1x2)"
+                    },
+                    {
+                        "startid": 170,
+                        "endid": 186,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 50,
+                        "comment": "small cactus (1x2)"
+                    },
+                    {
+                        "startid": 48,
+                        "endid": 66,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 520,
+                        "comment": "cow skull on the sand (3x2)"
+                    }
+                ]
+            }
+        }
+    ]
+}

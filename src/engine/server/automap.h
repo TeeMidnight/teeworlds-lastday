@@ -123,8 +123,12 @@ public:
 	const CRuleSet *RuleSet(int Index) const { return Index >= 0 && Index < m_lRuleSets.size() ? &m_lRuleSets[Index] : 0; }
 
 	// the doodad sets of the "doodads" arrays in automap/*.json, kept apart from
-	// the tile rule sets because placement, not per-tile scanning, drives them
-	const CDoodadSet *FindDoodadSet(const char *pName) const;
+	// the tile rule sets because placement, not per-tile scanning, drives them.
+	// Every doodads file names its set after what it decorates ("vegetation"),
+	// so the lookup also has to pin the source sheet: without it the first
+	// "vegetation" of any file would win and the other floors would scatter the
+	// wrong sprites. An empty pSource keeps the old name-only behaviour.
+	const CDoodadSet *FindDoodadSet(const char *pName, const char *pSource = 0) const;
 	int NumDoodadSets() const { return m_lDoodadSets.size(); }
 	const CDoodadSet *DoodadSet(int Index) const { return Index >= 0 && Index < m_lDoodadSets.size() ? &m_lDoodadSets[Index] : 0; }
 

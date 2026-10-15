@@ -1,0 +1,130 @@
+{
+    "doodads": [
+        {
+            "vegetation": {
+                "rules": [
+                    {
+                        "startid": 0,
+                        "endid": 82,
+                        "ry": -6,
+                        "location": "floor",
+                        "random": 110,
+                        "comment": "snow fir with a star (3x6)"
+                    },
+                    {
+                        "startid": 6,
+                        "endid": 88,
+                        "ry": -6,
+                        "location": "floor",
+                        "random": 110,
+                        "comment": "round snowy tree with a long trunk (3x6)"
+                    },
+                    {
+                        "startid": 9,
+                        "endid": 75,
+                        "ry": -5,
+                        "location": "floor",
+                        "random": 80,
+                        "comment": "round snowy tree (3x5)"
+                    },
+                    {
+                        "startid": 12,
+                        "endid": 78,
+                        "ry": -5,
+                        "location": "floor",
+                        "random": 80,
+                        "comment": "round snowy tree (3x5)"
+                    },
+                    {
+                        "startid": 19,
+                        "endid": 85,
+                        "ry": -5,
+                        "location": "floor",
+                        "random": 80,
+                        "comment": "small snow fir (3x5)"
+                    },
+                    {
+                        "startid": 102,
+                        "endid": 152,
+                        "ry": -4,
+                        "location": "floor",
+                        "random": 170,
+                        "comment": "snowman with a hat and a broom (3x4)"
+                    },
+                    {
+                        "startid": 121,
+                        "endid": 138,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 140,
+                        "comment": "small snowman (2x2)"
+                    },
+                    {
+                        "startid": 123,
+                        "endid": 140,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 140,
+                        "comment": "small snowman (2x2)"
+                    },
+                    {
+                        "startid": 89,
+                        "endid": 107,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 190,
+                        "comment": "sled with presents (3x2)"
+                    },
+                    {
+                        "startid": 92,
+                        "endid": 110,
+                        "ry": -2,
+                        "location": "floor",
+                        "random": 190,
+                        "comment": "sled with presents (3x2)"
+                    },
+                    {
+                        "startid": 168,
+                        "endid": 200,
+                        "ry": -3,
+                        "location": "floor",
+                        "random": 210,
+                        "comment": "birdhouse on a post (1x3)"
+                    },
+                    {
+                        "startid": 216,
+                        "endid": 248,
+                        "ry": -3,
+                        "location": "floor",
+                        "random": 210,
+                        "comment": "snowy birdhouse on a post (1x3)"
+                    },
+                    {
+                        "startid": 206,
+                        "endid": 255,
+                        "ry": -4,
+                        "location": "floor",
+                        "random": 220,
+                        "comment": "street lamp (2x4)"
+                    },
+                    {
+                        "startid": 153,
+                        "endid": 253,
+                        "ry": -7,
+                        "location": "floor",
+                        "random": 420,
+                        "comment": "snowman statue with a sword (5x7)"
+                    },
+                    {
+                        "startid": 96,
+                        "endid": 149,
+                        "ry": -4,
+                        "location": "floor",
+                        "random": 520,
+                        "comment": "igloo (6x4)"
+                    }
+                ]
+            }
+        }
+    ]
+}

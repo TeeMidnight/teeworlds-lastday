@@ -319,7 +319,8 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 	// matches the floor when it is the one the rule set was authored for, which
 	// the set records as its source file name.
 	// -----------------------------------------------------------------
-	const CAutoMapper::CDoodadSet *pDoodadSet = Gen.m_aDoodadsRuleset[0] ? Mapper.FindDoodadSet(Gen.m_aDoodadsRuleset) : nullptr;
+	const CAutoMapper::CDoodadSet *pDoodadSet = Gen.m_aDoodadsRuleset[0] ?
+		Mapper.FindDoodadSet(Gen.m_aDoodadsRuleset, Gen.m_aDoodadsTileset) : nullptr;
 	CCreatorImage *pDoodadsImage = FindCreatorImage(Gen.m_aDoodadsTileset);
 	const bool DoodadsMatch = pDoodadSet && pDoodadsImage && SubWidth > 0 &&
 		str_comp(pDoodadSet->m_aSource, Gen.m_aDoodadsTileset) == 0;
