@@ -62,8 +62,9 @@ public:
 	void SendMenuChat(int ClientID, const char *pChat);
 
 	// ----- server vote -----
-	// The menu is carried over the vote protocol, so the vote state lives here
-	// too: the active vote, its tally and the server vote option list.
+	// The menu is carried over the vote protocol, so the vote state lives on this
+	// class too: the active vote, its tally and the server vote option list.
+	// Implemented in menus/vote_menu.cpp.
 	void TickVote();
 	void SendActiveVote(int ClientID);
 	void AbortVoteOnDisconnect(int ClientID);
@@ -101,17 +102,19 @@ public:
 private:
 	int m_CurrentClientID;
 	static bool MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// item menus: inventory, item view and crafting (implemented in menus/item_menu.cpp)
 	static bool MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// shows one item: description + actions ("use", ...)
 	static bool MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
-	// the "Server Vote" page
-	static bool MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
-	// loadout (weapon equipment) menu
+	// the "Server Vote" page (implemented in menus/vote_menu.cpp)
+	static bool MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// loadout (weapon equipment) menu (implemented in menus/loadout_menu.cpp)
 	static bool MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// player owned shops (listing / buying goods). The whole flow is driven
 	// from the vote menu so no chat command is needed.
+	// Implemented in menus/trade_menu.cpp.
 	static bool MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuTradeSell(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuTradeSellCount(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
@@ -119,7 +122,7 @@ private:
 	static bool MenuTradeSellPriceCount(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuTradeMine(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 
-	// ----- server vote state -----
+	// ----- server vote state (implemented in menus/vote_menu.cpp) -----
 	enum
 	{
 		VOTE_TIME = 25,

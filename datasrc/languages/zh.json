@@ -696,6 +696,21 @@
 		},
 		{
 			"context": "Menu Trade",
+			"or": "   Buy: {} x{}",
+			"tr": "   收购: {} x{}"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "   #{} Give: {} x{}",
+			"tr": "   #{} 给予: {} x{}"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "   Give: {} x{}",
+			"tr": "   给予: {} x{}"
+		},
+		{
+			"context": "Menu Trade",
 			"or": "      stock {}, restock {}s",
 			"tr": "      库存 {}，{}秒后补货"
 		},

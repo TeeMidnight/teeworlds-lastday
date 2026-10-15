@@ -802,6 +802,11 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   item.h
   item_craft.cpp
   item_use.cpp
+  menus/item_menu.cpp
+  menus/item_menu.h
+  menus/loadout_menu.cpp
+  menus/trade_menu.cpp
+  menus/vote_menu.cpp
   npcdata.cpp
   npcdata.h
   player.cpp
