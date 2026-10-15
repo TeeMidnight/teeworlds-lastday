@@ -788,6 +788,11 @@
 			"context": "TRADE_MINE",
 			"or": "My Listings",
 			"tr": "我的挂单"
+		},
+		{
+			"context": "Trade",
+			"or": "Invalid listing.",
+			"tr": "无效的挂单。"
 		}
 	]
 }

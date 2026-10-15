@@ -40,7 +40,7 @@ int CTradeSystem::AddListing(int Seller, const CItemID &OfferItem, int OfferCoun
 		return -1;
 	if(OfferItem.IsZero() || PriceItem.IsZero() || OfferCount <= 0 || PriceCount <= 0)
 	{
-		m_pGameServer->SendChat(-1, CHAT_WHISPER, Seller, Localize("Usage: /sell <item> <count> <price item> <price count>", "Trade"));
+		m_pGameServer->SendChat(-1, CHAT_WHISPER, Seller, Localize("Invalid listing.", "Trade"));
 		return -1;
 	}
 
