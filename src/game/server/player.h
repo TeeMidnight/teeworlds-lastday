@@ -154,6 +154,9 @@ public:
 	// database; each field is accessed individually through its json
 	// path
 	void SaveStatus(class CDatabase *pDB);
+	// fill a queued database job with a snapshot of everything SaveStatus
+	// writes, so the actual queries can run on the thread pool
+	void CaptureStatus(struct CDbJob &Job);
 	void LoadStatus(class CDatabase *pDB);
 
 	// capture the current character's slot layout into m_Status.m_aLoadout

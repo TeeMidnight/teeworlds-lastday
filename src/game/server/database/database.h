@@ -16,6 +16,12 @@
 
 class CDatabase
 {
+protected:
+	// Every backend keeps one connection and none of them is thread safe. All
+	// public entry points take this lock, so a job running on the thread pool
+	// can use the database while the game thread does too.
+	LOCK m_Lock;
+
 public:
 	enum
 	{
@@ -41,8 +47,8 @@ public:
 		const char *m_pConnString; // postgres connection string
 	};
 
-	CDatabase() {}
-	virtual ~CDatabase() {}
+	CDatabase() { m_Lock = lock_create(); }
+	virtual ~CDatabase() { lock_destroy(m_Lock); }
 
 	// open the connection and create the schema if it does not exist yet.
 	// returns true when the database is ready to use.
@@ -92,11 +98,24 @@ public:
 	// write the whole world document of the map in one go (inserts the row,
 	// or replaces the data of an existing one); pJsonData must be valid json
 	virtual bool SaveWorldSave(const char *pMap, const char *pJsonData) = 0;
+	// size in bytes of the map's json document; returns false when the row does
+	// not exist. Used to size the read buffer instead of guessing a maximum.
+	virtual bool GetWorldSaveSize(const char *pMap, int *pSize) = 0;
 	// read the whole "data" json of the row of the map; returns false when
 	// the row does not exist
 	virtual bool GetWorldSaveData(const char *pMap, char *pOut, int Size) = 0;
 	// remove the whole row of the map; a no-op when it does not exist
 	virtual bool DeleteWorldSave(const char *pMap) = 0;
+};
+
+// scoped lock for the database; backends hold it for the duration of a call
+class CDatabaseLock
+{
+	LOCK m_Lock;
+
+public:
+	explicit CDatabaseLock(LOCK Lock) : m_Lock(Lock) { lock_wait(m_Lock); }
+	~CDatabaseLock() { lock_unlock(m_Lock); }
 };
 
 // create the backend selected by `config`; returns nullptr when the backend

@@ -68,6 +68,7 @@ CDatabaseSQLite::~CDatabaseSQLite()
 
 bool CDatabaseSQLite::Init()
 {
+	CDatabaseLock Guard(m_Lock);
 	// make sure the parent directory of the database file exists
 	char aDir[256];
 	str_copy(aDir, m_aPath, sizeof(aDir));
@@ -119,6 +120,7 @@ bool CDatabaseSQLite::Init()
 
 bool CDatabaseSQLite::FindByName(const char *pUsername, SPlayerData &out)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
 		return false;
 
@@ -149,6 +151,7 @@ bool CDatabaseSQLite::FindByName(const char *pUsername, SPlayerData &out)
 
 bool CDatabaseSQLite::InsertPlayer(const SPlayerData &Player)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
 		return false;
 
@@ -173,6 +176,7 @@ bool CDatabaseSQLite::InsertPlayer(const SPlayerData &Player)
 
 bool CDatabaseSQLite::LoadByUuid(const Uuid &Uuid, SPlayerData &out)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
 		return false;
 
@@ -204,6 +208,7 @@ bool CDatabaseSQLite::LoadByUuid(const Uuid &Uuid, SPlayerData &out)
 
 bool CDatabaseSQLite::GetJson(const Uuid &Uuid, const CJsonPath &Path, char *pOut, int Size)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
 		return false;
 
@@ -234,6 +239,7 @@ bool CDatabaseSQLite::GetJson(const Uuid &Uuid, const CJsonPath &Path, char *pOu
 
 bool CDatabaseSQLite::SetJson(const Uuid &Uuid, const CJsonPath &Path, const char *pValue)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
 		return false;
 
@@ -262,6 +268,7 @@ bool CDatabaseSQLite::SetJson(const Uuid &Uuid, const CJsonPath &Path, const cha
 
 bool CDatabaseSQLite::DelJson(const Uuid &Uuid, const CJsonPath &Path)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
 		return false;
 
@@ -289,6 +296,7 @@ bool CDatabaseSQLite::DelJson(const Uuid &Uuid, const CJsonPath &Path)
 
 bool CDatabaseSQLite::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int *pLength)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
 		return false;
 
@@ -319,6 +327,7 @@ bool CDatabaseSQLite::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int
 
 bool CDatabaseSQLite::SaveWorldSave(const char *pMap, const char *pJsonData)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB || !pMap || !pJsonData)
 		return false;
 
@@ -337,8 +346,32 @@ bool CDatabaseSQLite::SaveWorldSave(const char *pMap, const char *pJsonData)
 	return Ok;
 }
 
+bool CDatabaseSQLite::GetWorldSaveSize(const char *pMap, int *pSize)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || !pMap || !pSize)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT length(data) FROM world_saves WHERE map = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, pMap, -1, SQLITE_TRANSIENT);
+
+	bool Found = false;
+	if(sqlite3_step(pStmt) == SQLITE_ROW && sqlite3_column_type(pStmt, 0) != SQLITE_NULL)
+	{
+		Found = true;
+		*pSize = sqlite3_column_int(pStmt, 0);
+	}
+	sqlite3_finalize(pStmt);
+	return Found;
+}
+
 bool CDatabaseSQLite::GetWorldSaveData(const char *pMap, char *pOut, int Size)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB || !pMap || !pOut)
 		return false;
 
@@ -361,6 +394,7 @@ bool CDatabaseSQLite::GetWorldSaveData(const char *pMap, char *pOut, int Size)
 
 bool CDatabaseSQLite::DeleteWorldSave(const char *pMap)
 {
+	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB || !pMap)
 		return false;
 

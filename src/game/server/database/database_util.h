@@ -4,6 +4,10 @@
 #ifndef GAME_SERVER_DATABASE_DATABASE_UTIL_H
 #define GAME_SERVER_DATABASE_DATABASE_UTIL_H
 
+#include <base/tl/array.h>
+
+#include <engine/shared/jobs.h>
+
 #include <game/server/database/database.h>
 #include <game/server/database/jsonpath.h>
 
@@ -83,6 +87,97 @@ bool GetJsonField(CDatabase *pDB, const Uuid &uuid, const CJsonPath &path, T *pV
 inline bool GetJsonFieldRaw(CDatabase *pDB, const Uuid &uuid, const CJsonPath &path, char *pOut, int Size)
 {
 	return pDB->GetJson(uuid, path, pOut, Size);
+}
+
+// ---------------------------------------------------------------
+// asynchronous writes
+//
+// The game thread fills a CDbJob with an immutable snapshot of what should be
+// written, then hands it to the thread pool. The job never touches live game
+// state, so a world or player can change (or be destroyed) while its write is
+// still queued. Reads stay synchronous: their result is needed before the
+// caller can continue.
+// ---------------------------------------------------------------
+struct CDbField
+{
+	CJsonPath m_Path;
+	char m_aValue[128];
+};
+
+struct CDbJob
+{
+	enum
+	{
+		TYPE_PLAYER,
+		TYPE_WORLD,
+	};
+
+	CJob m_Job;
+	bool m_Dispatched;
+	int m_Type;
+	CDatabase *m_pDB;
+	Uuid m_Uuid;
+
+	// player writes: fields to set, then fields to remove
+	array<CDbField> m_lSet;
+	array<CDbField> m_lDel;
+
+	// world write: the whole row is replaced
+	char m_aMapName[64];
+	array<char> m_Json;
+	bool m_HasJson;
+
+	CDbJob() :
+		m_Dispatched(false),
+		m_Type(TYPE_PLAYER),
+		m_pDB(0),
+		m_HasJson(false)
+	{
+		m_Uuid = UUID_ZEROED;
+		m_aMapName[0] = '\0';
+	}
+};
+
+template<typename T>
+inline void DbSet(CDbJob &Job, const CJsonPath &Path, const T &Value)
+{
+	CDbField Field;
+	Field.m_Path = Path;
+	JsonValueToString(Field.m_aValue, sizeof(Field.m_aValue), Value);
+	Job.m_lSet.add(Field);
+}
+
+inline void DbDel(CDbJob &Job, const CJsonPath &Path)
+{
+	CDbField Field;
+	Field.m_Path = Path;
+	Field.m_aValue[0] = '\0';
+	Job.m_lDel.add(Field);
+}
+
+// Executes a queued write; a free function so it can be given to the pool.
+inline int RunDbJob(void *pData)
+{
+	CDbJob *pJob = static_cast<CDbJob *>(pData);
+	if(!pJob->m_pDB)
+		return 0;
+
+	if(pJob->m_Type == CDbJob::TYPE_WORLD)
+	{
+		// Saving replaces the whole document, so only an empty world needs a
+		// delete; doing both would open a crash window with no row at all.
+		if(pJob->m_HasJson)
+			pJob->m_pDB->SaveWorldSave(pJob->m_aMapName, pJob->m_Json.base_ptr());
+		else
+			pJob->m_pDB->DeleteWorldSave(pJob->m_aMapName);
+		return 0;
+	}
+
+	for(int i = 0; i < pJob->m_lDel.size(); i++)
+		pJob->m_pDB->DelJson(pJob->m_Uuid, pJob->m_lDel[i].m_Path);
+	for(int i = 0; i < pJob->m_lSet.size(); i++)
+		pJob->m_pDB->SetJson(pJob->m_Uuid, pJob->m_lSet[i].m_Path, pJob->m_lSet[i].m_aValue);
+	return 0;
 }
 
 #endif

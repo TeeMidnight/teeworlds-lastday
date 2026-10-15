@@ -19,6 +19,8 @@
 
 class CDatabase;
 class CItemSystem;
+class IEngine;
+struct CDbJob;
 
 /*
 	Tick
@@ -71,6 +73,17 @@ class CGameContext : public IGameServer
 	CGameContext(int Resetting);
 	void Construct(int Resetting);
 
+	// ----- queued database writes -----
+	// the pool runs RunDbJob on a snapshot the game thread prepared; the game
+	// thread keeps the job alive and reaps it once the pool reports it done
+	void SubmitDbJob(struct CDbJob *pJob);
+	// dispatch the front job unless one is already in flight: the pool works on
+	// the queue in submission order, so writes for one player never interleave
+	void DispatchDbJob();
+	void ReapDbJobs();
+	// block until every queued write finished; false when they did not in time
+	bool DrainDbJobs();
+
 	bool m_Resetting;
 
 public:
@@ -95,6 +108,10 @@ public:
 
 	CDatabase *m_pDatabase;
 
+	// the engine that owns the shared job pool; writes are dispatched there
+	IEngine *m_pEngine;
+	array<struct CDbJob *> m_lDbJobs;
+
 	CItemSystem *m_pItemSystem;
 
 	CGameMenu *GameMenu() const { return m_pGameMenu; }
@@ -102,8 +119,11 @@ public:
 	CItemSystem *Item() const { return m_pItemSystem; }
 
 	// persist a player's status to the database (only when the player is
-	// logged in to an account)
+	// logged in to an account); the write runs on the job pool
 	void SavePlayerData(class CPlayer *pPlayer);
+
+	// persist a world document to the database; the write runs on the job pool
+	void QueueWorldSave(const char *pMap, const char *pJson, bool HasJson);
 
 	// remove Count copies of pItemId from the player's inventory and spawn
 	// a CDroppedPickup at the player, thrown with the given initial velocity

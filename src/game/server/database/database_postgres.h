@@ -14,6 +14,10 @@ class CDatabasePostgres : public CDatabase
 	PGconn *m_pConn;
 	char m_aConnString[512];
 
+	// reconnect a lost connection (PQreset reuses the handle); false when the
+	// database is unreachable. Called under m_Lock by every accessor.
+	bool EnsureConnected();
+
 public:
 	explicit CDatabasePostgres(const SConfig &Config);
 	virtual ~CDatabasePostgres();
@@ -27,6 +31,7 @@ public:
 	virtual bool DelJson(const Uuid &Uuid, const CJsonPath &Path) override;
 	virtual bool GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int *pLength) override;
 	virtual bool SaveWorldSave(const char *pMap, const char *pJsonData) override;
+	virtual bool GetWorldSaveSize(const char *pMap, int *pSize) override;
 	virtual bool GetWorldSaveData(const char *pMap, char *pOut, int Size) override;
 	virtual bool DeleteWorldSave(const char *pMap) override;
 };

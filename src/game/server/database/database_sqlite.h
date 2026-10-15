@@ -27,6 +27,7 @@ public:
 	virtual bool DelJson(const Uuid &Uuid, const CJsonPath &Path) override;
 	virtual bool GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int *pLength) override;
 	virtual bool SaveWorldSave(const char *pMap, const char *pJsonData) override;
+	virtual bool GetWorldSaveSize(const char *pMap, int *pSize) override;
 	virtual bool GetWorldSaveData(const char *pMap, char *pOut, int Size) override;
 	virtual bool DeleteWorldSave(const char *pMap) override;
 };

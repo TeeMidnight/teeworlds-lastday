@@ -613,14 +613,11 @@ void CGameWorld::SaveToDatabase()
 	JsonWriter.EndObject();
 	lJson.add(0);
 
-	// write the row from scratch: the old row is deleted first so that no
-	// stale field from a previous session survives, then the whole fresh
-	// document is inserted
-	pDB->DeleteWorldSave(m_aMapName);
-	if(lDrops.size() == 0)
-		return; // nothing to persist: the row stays deleted
-
-	pDB->SaveWorldSave(m_aMapName, lJson.base_ptr());
+	// Hand the write to the job pool. The map name and the whole json document
+	// were snapshotted above, so the job never touches the live world and the
+	// world may be unloaded right after this returns. An empty world still
+	// queues a job: it deletes the row.
+	GameServer()->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0);
 }
 
 void CGameWorld::RestoreFromDatabase()
@@ -630,13 +627,18 @@ void CGameWorld::RestoreFromDatabase()
 		return;
 
 	// read the whole world state and recreate the dropped items from the
-	// "drop" array (read only, no writes)
-	char aData[65536];
-	if(!pDB->GetWorldSaveData(m_aMapName, aData, sizeof(aData)))
+	// "drop" array (read only, no writes). The size is queried first so a large
+	// document is never silently truncated.
+	int DataSize = 0;
+	if(!pDB->GetWorldSaveSize(m_aMapName, &DataSize) || DataSize <= 0)
+		return;
+	array<char> aData;
+	aData.set_size(DataSize + 1);
+	if(!pDB->GetWorldSaveData(m_aMapName, aData.base_ptr(), aData.size()))
 		return;
 
 	CJsonParser Parser;
-	json_value *pJson = Parser.ParseString(aData, "world save");
+	json_value *pJson = Parser.ParseString(aData.base_ptr(), "world save");
 	if(!pJson || pJson->type != json_object)
 		return;
 

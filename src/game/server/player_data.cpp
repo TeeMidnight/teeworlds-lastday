@@ -9,40 +9,53 @@
 #include <game/server/database/database.h>
 #include <game/server/database/database_util.h>
 
-void CPlayer::SaveStatus(CDatabase *pDB)
+void CPlayer::CaptureStatus(CDbJob &Job)
 {
-	if(!pDB || m_AccountUuid == UUID_ZEROED)
-		return;
-
-	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("forgetting"), m_Status.m_Forgetting);
-	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), m_Status.m_Level);
-	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), m_Status.m_HideTip);
+	DbSet(Job, CJsonPath().Key("forgetting"), m_Status.m_Forgetting);
+	DbSet(Job, CJsonPath().Key("level"), m_Status.m_Level);
+	DbSet(Job, CJsonPath().Key("hide_tip"), m_Status.m_HideTip);
 
 	// characters
 	if(m_pCharacter)
 	{
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("health"), m_pCharacter->m_Health);
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("character").Key("armor"), m_pCharacter->m_Armor);
+		DbSet(Job, CJsonPath().Key("character").Key("health"), m_pCharacter->m_Health);
+		DbSet(Job, CJsonPath().Key("character").Key("armor"), m_pCharacter->m_Armor);
 	}
 	// clear the previous inventory, then store each item as an array element
 	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
-	pDB->DelJson(m_AccountUuid, CJsonPath().Key("inventory"));
+	DbDel(Job, CJsonPath().Key("inventory"));
 	int i = 0;
 	for(int Slot = 0; Slot < CItemSystem::CInventory::MAX_ITEMS; Slot++)
 	{
 		if(Inventory.IsEmpty(Slot))
 			continue;
 		const CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Slot];
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("res_id"), Item.m_aResId);
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), Item.m_Count);
+		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("res_id"), Item.m_aResId);
+		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("count"), Item.m_Count);
 		i++;
 	}
 
 	// store the loadout slot layout (res_id per slot, "" for empty)
-	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("loadout_set"), m_Status.m_LoadoutSet);
-	pDB->DelJson(m_AccountUuid, CJsonPath().Key("loadout"));
+	DbSet(Job, CJsonPath().Key("loadout_set"), m_Status.m_LoadoutSet);
+	DbDel(Job, CJsonPath().Key("loadout"));
 	for(int i = 0; i < NUM_WEAPONS; i++)
-		SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("loadout").Index(i), m_Status.m_aLoadout[i]);
+		DbSet(Job, CJsonPath().Key("loadout").Index(i), m_Status.m_aLoadout[i]);
+}
+
+void CPlayer::SaveStatus(CDatabase *pDB)
+{
+	if(!pDB || m_AccountUuid == UUID_ZEROED)
+		return;
+
+	// login/register need the write to have happened before they continue, so
+	// they run the same snapshot synchronously; everything else goes through
+	// CGameContext::SavePlayerData and the thread pool
+	CDbJob Job;
+	Job.m_Type = CDbJob::TYPE_PLAYER;
+	Job.m_pDB = pDB;
+	Job.m_Uuid = m_AccountUuid;
+	CaptureStatus(Job);
+	RunDbJob(&Job);
 }
 
 void CPlayer::CaptureLoadout()

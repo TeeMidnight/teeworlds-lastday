@@ -54,8 +54,26 @@ CDatabasePostgres::~CDatabasePostgres()
 		PQfinish(m_pConn);
 }
 
+bool CDatabasePostgres::EnsureConnected()
+{
+	if(!m_pConn)
+		return false;
+	if(PQstatus(m_pConn) == CONNECTION_OK)
+		return true;
+
+	dbg_msg("database", "postgres connection lost, reconnecting: %s", PQerrorMessage(m_pConn));
+	PQreset(m_pConn);
+	if(PQstatus(m_pConn) != CONNECTION_OK)
+	{
+		dbg_msg("database", "postgres reconnect failed: %s", PQerrorMessage(m_pConn));
+		return false;
+	}
+	return true;
+}
+
 bool CDatabasePostgres::Init()
 {
+	CDatabaseLock Guard(m_Lock);
 	m_pConn = PQconnectdb(m_aConnString);
 	if(PQstatus(m_pConn) != CONNECTION_OK)
 	{
@@ -100,7 +118,8 @@ bool CDatabasePostgres::Init()
 
 bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
 {
-	if(!m_pConn)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
 		return false;
 
 	const char *apParams[1] = {pUsername};
@@ -130,7 +149,8 @@ bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
 
 bool CDatabasePostgres::InsertPlayer(const SPlayerData &Player)
 {
-	if(!m_pConn)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
 		return false;
 
 	char aUuid[UUID_MAXSTRSIZE];
@@ -149,7 +169,8 @@ bool CDatabasePostgres::InsertPlayer(const SPlayerData &Player)
 
 bool CDatabasePostgres::LoadByUuid(const Uuid &Uuid, SPlayerData &out)
 {
-	if(!m_pConn)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
 		return false;
 
 	char aUuid[UUID_MAXSTRSIZE];
@@ -181,7 +202,8 @@ bool CDatabasePostgres::LoadByUuid(const Uuid &Uuid, SPlayerData &out)
 
 bool CDatabasePostgres::GetJson(const Uuid &Uuid, const CJsonPath &Path, char *pOut, int Size)
 {
-	if(!m_pConn)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
 		return false;
 
 	char aJsonPath[128];
@@ -210,7 +232,8 @@ bool CDatabasePostgres::GetJson(const Uuid &Uuid, const CJsonPath &Path, char *p
 
 bool CDatabasePostgres::SetJson(const Uuid &Uuid, const CJsonPath &Path, const char *pValue)
 {
-	if(!m_pConn)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
 		return false;
 
 	char aJsonPath[128];
@@ -233,7 +256,8 @@ bool CDatabasePostgres::SetJson(const Uuid &Uuid, const CJsonPath &Path, const c
 
 bool CDatabasePostgres::DelJson(const Uuid &Uuid, const CJsonPath &Path)
 {
-	if(!m_pConn)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
 		return false;
 
 	char aJsonPath[128];
@@ -256,7 +280,8 @@ bool CDatabasePostgres::DelJson(const Uuid &Uuid, const CJsonPath &Path)
 
 bool CDatabasePostgres::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, int *pLength)
 {
-	if(!m_pConn)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
 		return false;
 
 	char aJsonPath[128];
@@ -285,7 +310,8 @@ bool CDatabasePostgres::GetJsonLength(const Uuid &Uuid, const CJsonPath &Path, i
 
 bool CDatabasePostgres::SaveWorldSave(const char *pMap, const char *pJsonData)
 {
-	if(!m_pConn || !pMap || !pJsonData)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || !pMap || !pJsonData)
 		return false;
 
 	const char *apParams[2] = {pMap, pJsonData};
@@ -300,9 +326,33 @@ bool CDatabasePostgres::SaveWorldSave(const char *pMap, const char *pJsonData)
 	return Ok;
 }
 
+bool CDatabasePostgres::GetWorldSaveSize(const char *pMap, int *pSize)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || !pMap || !pSize)
+		return false;
+
+	const char *apParams[1] = {pMap};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"SELECT length(data::text) FROM world_saves WHERE map = $1;",
+		1, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+
+	const bool Found = PQntuples(pRes) > 0 && !PQgetisnull(pRes, 0, 0);
+	if(Found)
+		*pSize = str_toint(PQgetvalue(pRes, 0, 0));
+	PQclear(pRes);
+	return Found;
+}
+
 bool CDatabasePostgres::GetWorldSaveData(const char *pMap, char *pOut, int Size)
 {
-	if(!m_pConn || !pMap || !pOut)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || !pMap || !pOut)
 		return false;
 
 	const char *apParams[1] = {pMap};
@@ -324,7 +374,8 @@ bool CDatabasePostgres::GetWorldSaveData(const char *pMap, char *pOut, int Size)
 
 bool CDatabasePostgres::DeleteWorldSave(const char *pMap)
 {
-	if(!m_pConn || !pMap)
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || !pMap)
 		return false;
 
 	const char *apParams[1] = {pMap};
