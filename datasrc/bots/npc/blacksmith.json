@@ -2,8 +2,8 @@
     "npc_id": "blacksmith",
     "name": "Blacksmith",
     "world": "Connector",
-    "x": 30,
-    "y": 20,
+    "x": 28,
+    "y": 41,
     "health": 20,
     "health_regen": 1,
     "skin": {

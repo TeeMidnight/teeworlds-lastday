@@ -173,7 +173,7 @@ int CNpcEntity::FindHatedPlayer()
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-		if(!pPlayer || !pPlayer->m_LoggedIn)
+		if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->GameWorld() != GameWorld())
 			continue;
 		CCharacter *pChr = pPlayer->GetCharacter();
 		if(!pChr || !pChr->IsAlive())
@@ -290,7 +290,7 @@ CEntity *CNpcEntity::ClosestPlayer()
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-		if(!pPlayer)
+		if(!pPlayer || pPlayer->GameWorld() != GameWorld())
 			continue;
 		CCharacter *pChr = pPlayer->GetCharacter();
 		if(!pChr || !pChr->IsAlive())
