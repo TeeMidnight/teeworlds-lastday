@@ -676,13 +676,13 @@
 		},
 		{
 			"context": "Menu Main",
-			"or": "Player Shops",
-			"tr": "玩家商店"
+			"or": "Shop",
+			"tr": "商店"
 		},
 		{
 			"context": "TRADE",
-			"or": "Player Shops",
-			"tr": "玩家商店"
+			"or": "Shop",
+			"tr": "商店"
 		},
 		{
 			"context": "Menu Inventory",

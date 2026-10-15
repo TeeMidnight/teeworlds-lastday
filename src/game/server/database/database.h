@@ -53,6 +53,19 @@ public:
 		char m_aPasswordHash[PASSWORD_SIZE];
 	};
 
+	// one persisted shop listing. The seller is an account uuid, so a listing
+	// outlives the session that posted it, and the item ids are stored by their
+	// source name ("lastday:stone") so they survive an id rehash.
+	struct SShopListing
+	{
+		int m_Id;
+		Uuid m_Seller;
+		char m_aOfferItem[64];
+		int m_OfferCount;
+		char m_aPriceItem[64];
+		int m_PriceCount;
+	};
+
 	// configuration selected at startup from the sv_db_* cvars
 	struct SConfig
 	{
@@ -111,6 +124,14 @@ public:
 	// Give the pair a 0 baseline row when it has none, so a freshly joined
 	// player is recorded with the default 0 aggro.
 	virtual bool EnsureNpcAggro(const Uuid &Npc, const Uuid &User) = 0;
+
+	// -------- shop listings --------
+	// The player listings of the unified shop survive a restart: the escrowed
+	// goods were already taken out of the seller's inventory when the listing
+	// was posted, so the row has to outlive the session too.
+	virtual bool LoadShopListings(array<SShopListing> &out) = 0;
+	virtual bool SaveShopListing(const SShopListing &Listing) = 0;
+	virtual bool DeleteShopListing(int Id) = 0;
 
 	// -------- world saves (world persistence) --------
 	// one row per world instance (one map name, e.g. "<floor>_<seed>" for

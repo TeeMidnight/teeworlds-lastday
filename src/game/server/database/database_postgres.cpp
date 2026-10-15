@@ -128,9 +128,26 @@ bool CDatabasePostgres::Init()
 		dbg_msg("database", "failed to create npc_aggro schema: %s", PQresultErrorMessage(pRes));
 	PQclear(pRes);
 
-	if(Ok && SavesOk && AggroOk)
+	// persisted shop listings; the seller is an account, so the escrowed goods
+	// outlive the session that posted them
+	const char *pCreateShop =
+		"CREATE TABLE IF NOT EXISTS shop_listings ("
+		" id INTEGER PRIMARY KEY,"
+		" seller UUID NOT NULL,"
+		" offer_item TEXT NOT NULL,"
+		" offer_count INTEGER NOT NULL,"
+		" price_item TEXT NOT NULL,"
+		" price_count INTEGER NOT NULL);";
+
+	pRes = PQexec(m_pConn, pCreateShop);
+	const bool ShopOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!ShopOk)
+		dbg_msg("database", "failed to create shop_listings schema: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+
+	if(Ok && SavesOk && AggroOk && ShopOk)
 		dbg_msg("database", "postgres database ready");
-	return Ok && SavesOk && AggroOk;
+	return Ok && SavesOk && AggroOk && ShopOk;
 }
 
 bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
@@ -400,6 +417,79 @@ bool CDatabasePostgres::EnsureNpcAggro(const Uuid &Npc, const Uuid &User)
 	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
 		dbg_msg("database", "failed to ensure npc aggro '%s'/'%s': %s", aNpc, aUser, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::LoadShopListings(array<SShopListing> &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	PGresult *pRes = PQexec(m_pConn,
+		"SELECT id, seller, offer_item, offer_count, price_item, price_count FROM shop_listings ORDER BY id;");
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+
+	for(int i = 0; i < PQntuples(pRes); i++)
+	{
+		SShopListing &Listing = out.emplace();
+		Listing.m_Id = str_toint(PQgetvalue(pRes, i, 0));
+		Listing.m_Seller = UUID_ZEROED;
+		parse_uuid(&Listing.m_Seller, PQgetvalue(pRes, i, 1));
+		str_copy(Listing.m_aOfferItem, PQgetvalue(pRes, i, 2), sizeof(Listing.m_aOfferItem));
+		Listing.m_OfferCount = str_toint(PQgetvalue(pRes, i, 3));
+		str_copy(Listing.m_aPriceItem, PQgetvalue(pRes, i, 4), sizeof(Listing.m_aPriceItem));
+		Listing.m_PriceCount = str_toint(PQgetvalue(pRes, i, 5));
+	}
+	PQclear(pRes);
+	return true;
+}
+
+bool CDatabasePostgres::SaveShopListing(const SShopListing &Listing)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aSeller[UUID_MAXSTRSIZE];
+	char aId[32];
+	char aOfferCount[32];
+	char aPriceCount[32];
+	format_uuid(Listing.m_Seller, aSeller, sizeof(aSeller));
+	str_format(aId, sizeof(aId), "%d", Listing.m_Id);
+	str_format(aOfferCount, sizeof(aOfferCount), "%d", Listing.m_OfferCount);
+	str_format(aPriceCount, sizeof(aPriceCount), "%d", Listing.m_PriceCount);
+
+	const char *apParams[6] = {aId, aSeller, Listing.m_aOfferItem, aOfferCount, Listing.m_aPriceItem, aPriceCount};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO shop_listings (id, seller, offer_item, offer_count, price_item, price_count) "
+		"VALUES ($1::int, $2::uuid, $3::text, $4::int, $5::text, $6::int) "
+		"ON CONFLICT (id) DO UPDATE SET seller = EXCLUDED.seller, offer_item = EXCLUDED.offer_item, "
+		"offer_count = EXCLUDED.offer_count, price_item = EXCLUDED.price_item, price_count = EXCLUDED.price_count;",
+		6, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to save shop listing #%d: %s", Listing.m_Id, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::DeleteShopListing(int Id)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aId[32];
+	str_format(aId, sizeof(aId), "%d", Id);
+	const char *apParams[1] = {aId};
+	PGresult *pRes = PQexecParams(m_pConn, "DELETE FROM shop_listings WHERE id = $1::int;", 1, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	PQclear(pRes);
 	return Ok;
 }

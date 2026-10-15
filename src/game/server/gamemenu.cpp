@@ -11,6 +11,7 @@
 #include "gamecontroller.h"
 #include "gamemenu.h"
 #include "item.h"
+#include "npcdata.h"
 #include "player.h"
 #include "trade.h"
 #include "weapon.h"
@@ -88,7 +89,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	Register("CRAFT", "Craft", MenuCraft, nullptr); // Localize("Craft", "CRAFT")
 	Register("LOADOUT", "Loadout", MenuLoadout, nullptr); // Localize("Loadout", "LOADOUT")
 	Register("WEAPONPICK", "Choose Weapon", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Weapon", "WEAPONPICK")
-	Register("TRADE", "Player Shops", MenuTrade, nullptr); // Localize("Player Shops", "TRADE")
+	Register("TRADE", "Shop", MenuTrade, nullptr); // Localize("Shop", "TRADE")
 	Register("TRADE_SELL", "Sell Goods", MenuTradeSell, nullptr, "TRADE"); // Localize("Sell Goods", "TRADE_SELL")
 	Register("TRADE_SELL_COUNT", "Amount", MenuTradeSellCount, nullptr, "TRADE_SELL"); // Localize("Amount", "TRADE_SELL_COUNT")
 	Register("TRADE_SELL_PRICE", "Price", MenuTradeSellPrice, nullptr, "TRADE_SELL_COUNT"); // Localize("Price", "TRADE_SELL_PRICE")
@@ -317,7 +318,7 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		pMenu->AddOption(Localize("Inventory", "Menu Main"), "PAGE INVENTORY", "★");
 		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
-		pMenu->AddOption(Localize("Player Shops", "Menu Main"), "PAGE TRADE", "★");
+		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
 	}
 
@@ -893,6 +894,16 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			pMenu->SetPlayerPage(ClientID, "TRADE");
 			return false;
 		}
+		// clicking an NPC shelf entry buys it: "BUYNPC <def> <sell>".
+		if(str_startswith(VoteStatus.m_aCmd, "BUYNPC "))
+		{
+			int DefIndex = 0;
+			int SellIndex = 0;
+			if(sscanf(VoteStatus.m_aCmd + 7, "%d %d", &DefIndex, &SellIndex) == 2)
+				pMenu->GameServer()->BuyFromNpc(ClientID, DefIndex, SellIndex);
+			pMenu->SetPlayerPage(ClientID, "TRADE");
+			return false;
+		}
 	}
 
 	pMenu->ClearOptions(ClientID);
@@ -902,25 +913,51 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 	pMenu->AddHorizontalRule();
 	pMenu->AddOption(Localize("Click a listing to buy it.", "Menu Trade"), "DISPLAY", "-");
 
+	bool Any = false;
+
 	CTradeSystem *pTrade = pMenu->GameServer()->Trade();
-	if(!pTrade || pTrade->NumListings() == 0)
+	if(pTrade)
 	{
-		pMenu->AddOption(Localize("No goods are for sale.", "Menu Trade"), "DISPLAY", "-");
-		return true;
+		for(int i = 0; i < pTrade->NumListings(); i++)
+		{
+			const CTradeSystem::SListing *pListing = pTrade->ListingAt(i);
+			if(!pListing)
+				continue;
+			const char *pSeller = pListing->m_Seller >= 0 ? pMenu->Server()->ClientName(pListing->m_Seller) : Localize("(offline)", "Menu Trade");
+			const std::string Desc = LocalizeFormat("Menu Trade", "#{} {}: {} x{} for {} x{}",
+				pListing->m_Id, pSeller,
+				pListing->m_OfferItem, pListing->m_OfferCount, pListing->m_PriceItem, pListing->m_PriceCount);
+			char aCmd[32];
+			str_format(aCmd, sizeof(aCmd), "BUY %d", pListing->m_Id);
+			pMenu->AddOption(Desc.c_str(), aCmd, "$");
+			Any = true;
+		}
 	}
 
-	for(int i = 0; i < pTrade->NumListings(); i++)
+	// a configured NPC's shelf is part of the same shop
+	CNpcSystem *pNpcs = pMenu->GameServer()->Npcs();
+	if(pNpcs)
 	{
-		const CTradeSystem::SListing *pListing = pTrade->ListingAt(i);
-		if(!pListing)
-			continue;
-		const std::string Desc = LocalizeFormat("Menu Trade", "#{} {}: {} x{} for {} x{}",
-			pListing->m_Id, pMenu->Server()->ClientName(pListing->m_Seller),
-			pListing->m_OfferItem, pListing->m_OfferCount, pListing->m_PriceItem, pListing->m_PriceCount);
-		char aCmd[32];
-		str_format(aCmd, sizeof(aCmd), "BUY %d", pListing->m_Id);
-		pMenu->AddOption(Desc.c_str(), aCmd, "$");
+		for(int d = 0; d < pNpcs->NumDefs(); d++)
+		{
+			const SNpcDef *pDef = pNpcs->DefAt(d);
+			if(!pDef)
+				continue;
+			for(int s = 0; s < pDef->m_lSells.size(); s++)
+			{
+				const SNpcSell &Sell = pDef->m_lSells[s];
+				const std::string Desc = LocalizeFormat("Menu Trade", "{}: {} x{} for {} x{}",
+					pDef->m_aName, Sell.m_Item, Sell.m_Count, Sell.m_PriceItem, Sell.m_PriceCount);
+				char aCmd[32];
+				str_format(aCmd, sizeof(aCmd), "BUYNPC %d %d", d, s);
+				pMenu->AddOption(Desc.c_str(), aCmd, "$");
+				Any = true;
+			}
+		}
 	}
+
+	if(!Any)
+		pMenu->AddOption(Localize("No goods are for sale.", "Menu Trade"), "DISPLAY", "-");
 
 	return true;
 }

@@ -596,9 +596,9 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 	if(!m_apPlayers[ClientID])
 		return;
 
-	// return any escrowed trade goods to this player before the slot is
-	// recycled, then persist the resulting inventory
-	m_pTradeSystem->RemoveListingsOf(ClientID);
+	// the player's shop listings persist with their escrowed goods, so only the
+	// client slot is detached; the goods come back when the account logs in
+	m_pTradeSystem->DetachSeller(ClientID);
 
 	// persist the player's status before dropping
 	SavePlayerData(m_apPlayers[ClientID]);
@@ -1160,6 +1160,44 @@ void CGameContext::EnsureNpcAggroFor(CPlayer *pPlayer)
 		if(pDef)
 			m_pDatabase->EnsureNpcAggro(pDef->m_BotId, pPlayer->m_AccountUuid);
 	}
+}
+
+bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
+{
+	if(!m_pNpcSystem || ClientID < 0 || ClientID >= MAX_CLIENTS || !m_apPlayers[ClientID])
+		return false;
+	const SNpcDef *pDef = m_pNpcSystem->DefAt(DefIndex);
+	if(!pDef || SellIndex < 0 || SellIndex >= pDef->m_lSells.size())
+		return false;
+
+	const SNpcSell &Sell = pDef->m_lSells[SellIndex];
+	CItemSystem *pItems = Item();
+	if(!pItems->IsKnownItem(Sell.m_Item))
+		return false;
+
+	const bool HasPrice = Sell.m_PriceCount > 0 && !Sell.m_PriceItem.IsZero();
+	if(HasPrice && pItems->GetItemCount(ClientID, Sell.m_PriceItem) < Sell.m_PriceCount)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You cannot afford this.", "Trade"));
+		return false;
+	}
+
+	// hand over the goods first: if the buyer has no room nothing has changed
+	if(!pItems->AddItem(ClientID, Sell.m_Item, Sell.m_Count))
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You have no inventory space.", "Trade"));
+		return false;
+	}
+	if(HasPrice && !pItems->RemoveItem(ClientID, Sell.m_PriceItem, Sell.m_PriceCount))
+	{
+		pItems->RemoveItem(ClientID, Sell.m_Item, Sell.m_Count);
+		return false;
+	}
+
+	char aBuf[192];
+	str_format(aBuf, sizeof(aBuf), "Bought %s x%d from %s", pItems->GetName(Sell.m_Item), Sell.m_Count, pDef->m_aName);
+	SendChat(-1, CHAT_WHISPER, ClientID, aBuf);
+	return true;
 }
 
 void CGameContext::OnShutdown()

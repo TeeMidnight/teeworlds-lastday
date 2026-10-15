@@ -5,6 +5,7 @@
 #define GAME_SERVER_TRADE_H
 
 #include <base/tl/array.h>
+#include <base/uuid.h>
 
 #include <game/item_id.h>
 
@@ -20,7 +21,8 @@ public:
 	struct SListing
 	{
 		int m_Id;
-		int m_Seller; // ClientID
+		int m_Seller; // ClientID, or -1 while the seller is offline
+		Uuid m_SellerAccount; // the account the listing belongs to, used to persist it
 		CItemID m_OfferItem;
 		int m_OfferCount;
 		CItemID m_PriceItem;
@@ -33,6 +35,11 @@ private:
 	int m_NextId;
 
 	int FindIndex(int ListingId) const;
+
+	// restore the persisted listings and keep the table in step with the list
+	void LoadFromDatabase();
+	void Persist(const SListing &Listing);
+	void Unpersist(int ListingId);
 
 public:
 	CTradeSystem();
@@ -48,6 +55,12 @@ public:
 	bool RemoveListing(int ListingId, int ByClient, bool Force);
 	// Called on disconnect: every listing of that player is returned to them.
 	void RemoveListingsOf(int ClientID);
+	// Re-bind the persisted listings of an account to the client slot that just
+	// logged in, so an offline listing becomes buyable again.
+	void RebindSeller(int ClientID, const Uuid &Account);
+	// Forget the client slot of a disconnecting seller: the listing and its
+	// escrowed goods stay (they persist), but the slot must not stay attached.
+	void DetachSeller(int ClientID);
 	// Transfer the escrowed goods to the buyer and the payment to the seller.
 	bool Buy(int Buyer, int ListingId);
 

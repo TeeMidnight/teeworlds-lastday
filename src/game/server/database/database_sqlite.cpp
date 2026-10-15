@@ -112,7 +112,15 @@ bool CDatabaseSQLite::Init()
 		" userid TEXT NOT NULL,"
 		" delta INTEGER NOT NULL,"
 		" created_at INTEGER NOT NULL);"
-		"CREATE INDEX IF NOT EXISTS npc_aggro_pair ON npc_aggro(npc_id, userid);";
+		"CREATE INDEX IF NOT EXISTS npc_aggro_pair ON npc_aggro(npc_id, userid);"
+		// persisted shop listings: the escrowed goods outlive the session
+		"CREATE TABLE IF NOT EXISTS shop_listings ("
+		" id INTEGER PRIMARY KEY,"
+		" seller TEXT NOT NULL,"
+		" offer_item TEXT NOT NULL,"
+		" offer_count INTEGER NOT NULL,"
+		" price_item TEXT NOT NULL,"
+		" price_count INTEGER NOT NULL);";
 
 	char *pErr = 0;
 	if(sqlite3_exec(m_pDB, pCreate, 0, 0, &pErr) != SQLITE_OK)
@@ -415,6 +423,83 @@ bool CDatabaseSQLite::EnsureNpcAggro(const Uuid &Npc, const Uuid &User)
 	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
 		dbg_msg("database", "failed to ensure npc aggro '%s'/'%s': %s", aNpc, aUser, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::LoadShopListings(array<SShopListing> &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT id, seller, offer_item, offer_count, price_item, price_count FROM shop_listings ORDER BY id;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+
+	const unsigned char *p;
+	while(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		SShopListing &Listing = out.emplace();
+		Listing.m_Id = sqlite3_column_int(pStmt, 0);
+		Listing.m_Seller = UUID_ZEROED;
+		p = sqlite3_column_text(pStmt, 1);
+		if(p)
+			parse_uuid(&Listing.m_Seller, (const char *) p);
+		p = sqlite3_column_text(pStmt, 2);
+		str_copy(Listing.m_aOfferItem, p ? (const char *) p : "", sizeof(Listing.m_aOfferItem));
+		Listing.m_OfferCount = sqlite3_column_int(pStmt, 3);
+		p = sqlite3_column_text(pStmt, 4);
+		str_copy(Listing.m_aPriceItem, p ? (const char *) p : "", sizeof(Listing.m_aPriceItem));
+		Listing.m_PriceCount = sqlite3_column_int(pStmt, 5);
+	}
+	sqlite3_finalize(pStmt);
+	return true;
+}
+
+bool CDatabaseSQLite::SaveShopListing(const SShopListing &Listing)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aSeller[UUID_MAXSTRSIZE];
+	format_uuid(Listing.m_Seller, aSeller, sizeof(aSeller));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT OR REPLACE INTO shop_listings (id, seller, offer_item, offer_count, price_item, price_count) "
+		   "VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_int(pStmt, 1, Listing.m_Id);
+	sqlite3_bind_text(pStmt, 2, aSeller, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 3, Listing.m_aOfferItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 4, Listing.m_OfferCount);
+	sqlite3_bind_text(pStmt, 5, Listing.m_aPriceItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 6, Listing.m_PriceCount);
+
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to save shop listing #%d: %s", Listing.m_Id, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::DeleteShopListing(int Id)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB, "DELETE FROM shop_listings WHERE id = ?1;", -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_int(pStmt, 1, Id);
+
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	sqlite3_finalize(pStmt);
 	return Ok;
 }

@@ -4,6 +4,7 @@
 #include <game/server/trade.h>
 
 #include <game/localization_format.h>
+#include <game/server/database/database.h>
 #include <game/server/gamecontext.h>
 #include <game/server/item.h>
 #include <game/server/player.h>
@@ -18,6 +19,7 @@ void CTradeSystem::Init(CGameContext *pGameServer)
 {
 	m_pGameServer = pGameServer;
 	m_lListings.clear();
+	LoadFromDatabase();
 }
 
 int CTradeSystem::FindIndex(int ListingId) const
@@ -62,11 +64,14 @@ int CTradeSystem::AddListing(int Seller, const CItemID &OfferItem, int OfferCoun
 	SListing Listing;
 	Listing.m_Id = m_NextId++;
 	Listing.m_Seller = Seller;
+	CPlayer *pSeller = m_pGameServer->m_apPlayers[Seller];
+	Listing.m_SellerAccount = pSeller ? pSeller->m_AccountUuid : UUID_ZEROED;
 	Listing.m_OfferItem = OfferItem;
 	Listing.m_OfferCount = OfferCount;
 	Listing.m_PriceItem = PriceItem;
 	Listing.m_PriceCount = PriceCount;
 	m_lListings.add(Listing);
+	Persist(Listing);
 
 	const std::string Msg = LocalizeFormat("Trade", "Listed #{}: {} x{} for {} x{}",
 		Listing.m_Id, OfferItem, OfferCount, PriceItem, PriceCount);
@@ -93,6 +98,7 @@ bool CTradeSystem::RemoveListing(int ListingId, int ByClient, bool Force)
 		return false;
 
 	m_lListings.remove_index(Index);
+	Unpersist(Listing.m_Id);
 	if(!Force)
 		m_pGameServer->SendChat(-1, CHAT_WHISPER, ByClient, Localize("Listing removed.", "Trade"));
 	return true;
@@ -126,6 +132,11 @@ bool CTradeSystem::Buy(int Buyer, int ListingId)
 		m_pGameServer->SendChat(-1, CHAT_WHISPER, Buyer, Localize("You cannot buy your own listing.", "Trade"));
 		return false;
 	}
+	if(Listing.m_Seller < 0)
+	{
+		m_pGameServer->SendChat(-1, CHAT_WHISPER, Buyer, Localize("The seller is offline.", "Trade"));
+		return false;
+	}
 
 	CItemSystem *pItems = m_pGameServer->Item();
 	if(pItems->GetItemCount(Buyer, Listing.m_PriceItem) < Listing.m_PriceCount)
@@ -154,6 +165,7 @@ bool CTradeSystem::Buy(int Buyer, int ListingId)
 	}
 
 	m_lListings.remove_index(Index);
+	Unpersist(ListingId);
 
 	const std::string ToBuyer = LocalizeFormat("Trade", "Bought #{}: {} x{}", ListingId, Listing.m_OfferItem, Listing.m_OfferCount);
 	m_pGameServer->SendChat(-1, CHAT_WHISPER, Buyer, ToBuyer.c_str());
@@ -162,3 +174,76 @@ bool CTradeSystem::Buy(int Buyer, int ListingId)
 	m_pGameServer->SendChat(-1, CHAT_WHISPER, Listing.m_Seller, ToSeller.c_str());
 	return true;
 }
+
+void CTradeSystem::LoadFromDatabase()
+{
+	CDatabase *pDB = m_pGameServer ? m_pGameServer->Database() : nullptr;
+	if(!pDB)
+		return;
+
+	array<CDatabase::SShopListing> lRows;
+	if(!pDB->LoadShopListings(lRows))
+		return;
+
+	for(int i = 0; i < lRows.size(); i++)
+	{
+		const CDatabase::SShopListing &Row = lRows[i];
+		SListing Listing;
+		Listing.m_Id = Row.m_Id;
+		// the seller is not connected yet; the listing is re-bound when the
+		// account logs in again
+		Listing.m_Seller = -1;
+		Listing.m_SellerAccount = Row.m_Seller;
+		CItemID::Parse(Row.m_aOfferItem, &Listing.m_OfferItem);
+		Listing.m_OfferCount = Row.m_OfferCount;
+		CItemID::Parse(Row.m_aPriceItem, &Listing.m_PriceItem);
+		Listing.m_PriceCount = Row.m_PriceCount;
+		m_lListings.add(Listing);
+		if(Listing.m_Id >= m_NextId)
+			m_NextId = Listing.m_Id + 1;
+	}
+
+	if(lRows.size())
+		dbg_msg("trade", "restored %d shop listing(s)", lRows.size());
+}
+
+void CTradeSystem::Persist(const SListing &Listing)
+{
+	CDatabase *pDB = m_pGameServer ? m_pGameServer->Database() : nullptr;
+	if(!pDB || Listing.m_SellerAccount == UUID_ZEROED)
+		return;
+
+	CDatabase::SShopListing Row;
+	mem_zero(&Row, sizeof(Row));
+	Row.m_Id = Listing.m_Id;
+	Row.m_Seller = Listing.m_SellerAccount;
+	str_copy(Row.m_aOfferItem, Listing.m_OfferItem.SourceName(), sizeof(Row.m_aOfferItem));
+	Row.m_OfferCount = Listing.m_OfferCount;
+	str_copy(Row.m_aPriceItem, Listing.m_PriceItem.SourceName(), sizeof(Row.m_aPriceItem));
+	Row.m_PriceCount = Listing.m_PriceCount;
+	pDB->SaveShopListing(Row);
+}
+
+void CTradeSystem::Unpersist(int ListingId)
+{
+	CDatabase *pDB = m_pGameServer ? m_pGameServer->Database() : nullptr;
+	if(pDB)
+		pDB->DeleteShopListing(ListingId);
+}
+
+void CTradeSystem::RebindSeller(int ClientID, const Uuid &Account)
+{
+	if(Account == UUID_ZEROED)
+		return;
+	for(int i = 0; i < m_lListings.size(); i++)
+		if(m_lListings[i].m_SellerAccount == Account)
+			m_lListings[i].m_Seller = ClientID;
+}
+
+void CTradeSystem::DetachSeller(int ClientID)
+{
+	for(int i = 0; i < m_lListings.size(); i++)
+		if(m_lListings[i].m_Seller == ClientID)
+			m_lListings[i].m_Seller = -1;
+}
+

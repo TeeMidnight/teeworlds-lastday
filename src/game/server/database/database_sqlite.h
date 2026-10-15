@@ -29,6 +29,9 @@ public:
 	virtual bool GetNpcAggro(const Uuid &Npc, const Uuid &User, int *pOut) override;
 	virtual bool AddNpcAggro(const Uuid &Npc, const Uuid &User, int Delta) override;
 	virtual bool EnsureNpcAggro(const Uuid &Npc, const Uuid &User) override;
+	virtual bool LoadShopListings(array<SShopListing> &out) override;
+	virtual bool SaveShopListing(const SShopListing &Listing) override;
+	virtual bool DeleteShopListing(int Id) override;
 	virtual bool SaveWorldSave(const char *pMap, const char *pJsonData) override;
 	virtual bool GetWorldSaveSize(const char *pMap, int *pSize) override;
 	virtual bool GetWorldSaveData(const char *pMap, char *pOut, int Size) override;

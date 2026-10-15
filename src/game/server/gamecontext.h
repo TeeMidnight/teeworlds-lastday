@@ -117,6 +117,10 @@ public:
 	// record the default 0 aggro of one player with every configured NPC
 	void EnsureNpcAggroFor(class CPlayer *pPlayer);
 
+	// buy one entry of a configured NPC's shelf for a client (the NPC shop is
+	// part of the same menu as the player listings)
+	bool BuyFromNpc(int ClientID, int DefIndex, int SellIndex);
+
 	// persist a player's status to the database (only when the player is
 	// logged in to an account); the write is queued on the database job pool
 	void SavePlayerData(class CPlayer *pPlayer);
