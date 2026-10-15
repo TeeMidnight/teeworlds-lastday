@@ -95,6 +95,14 @@ void CGameContext::Clear()
 	CGameMenu *pGameMenu = m_pGameMenu;
 	CDatabase *pDatabase = m_pDatabase;
 	CItemSystem *pItemSystem = m_pItemSystem;
+	CTradeSystem *pTradeSystem = m_pTradeSystem;
+	// the engine services (IServer & co) outlive the game context, so preserve
+	// them: the world teardown in OnShutdown and a following OnInit on a forced
+	// reload both rely on Server() being valid.
+	IServer *pServer = m_pServer;
+	CConfig *pConfig = m_pConfig;
+	IConsole *pConsole = m_pConsole;
+	IStorage *pStorage = m_pStorage;
 	// Deep-copy the world table, then release the original storage before the
 	// object is zeroed: mem_zero alone would forget its allocations and leak
 	// every world. The copy shares the CGameWorld pointers, which is exactly
@@ -112,6 +120,11 @@ void CGameContext::Clear()
 	m_pGameMenu = pGameMenu;
 	m_pDatabase = pDatabase;
 	m_pItemSystem = pItemSystem;
+	m_pTradeSystem = pTradeSystem;
+	m_pServer = pServer;
+	m_pConfig = pConfig;
+	m_pConsole = pConsole;
+	m_pStorage = pStorage;
 	m_pWorlds = Worlds;
 	m_MainWorldID = MainWorldID;
 }
@@ -1139,6 +1152,27 @@ void CGameContext::OnShutdown()
 			delete m_pDatabase;
 		m_pDatabase = 0;
 	}
+
+	// Destroy players before the worlds: a player owns its character entity,
+	// so the world must not delete it first.
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		delete m_apPlayers[i];
+		m_apPlayers[i] = 0;
+	}
+
+	// Destroy the worlds here, while the engine server (whose snap id pool
+	// CEntity::~CEntity uses) is still alive. The final destructor runs after
+	// the engine has already freed IServer, so no entity may outlive this
+	// point: otherwise the teardown dereferences a freed server.
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		(void) pUser;
+		delete pWorld;
+		pWorld = nullptr;
+	}, nullptr);
+	m_pWorlds.clear();
+	m_MainWorldID = 0;
 
 	delete m_pItemSystem;
 	m_pItemSystem = 0;
