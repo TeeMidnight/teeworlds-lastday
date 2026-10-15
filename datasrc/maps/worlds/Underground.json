@@ -69,6 +69,15 @@
             "hardness_max": 5,
             "respawntime_min": 60,
             "respawntime_max": 120
+        },
+        {
+            "res_id": "lastday:iron_ore",
+            "display": "armor",
+            "proba": 20,
+            "hardness_min": 2,
+            "hardness_max": 6,
+            "respawntime_min": 90,
+            "respawntime_max": 180
         }
     ]
 }

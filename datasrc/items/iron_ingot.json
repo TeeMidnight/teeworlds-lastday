@@ -1,0 +1,5 @@
+{
+    "name": "Iron Ingot",
+    "desc": "Smelted iron, ready to be worked.",
+    "item_type": ["ingot", "metal"]
+}

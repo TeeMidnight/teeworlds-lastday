@@ -750,6 +750,7 @@ set_src(ENGINE_SERVER GLOB src/engine/server
 )
 set_src(GAME_SERVER GLOB_RECURSE src/game/server
   alloc.h
+  ammo.h
   bot.h
   botmanager.cpp
   botmanager.h

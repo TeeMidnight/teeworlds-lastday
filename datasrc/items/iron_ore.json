@@ -1,0 +1,6 @@
+{
+    "id": "lastday:iron_ore",
+    "name": "Iron Ore",
+    "desc": "A dull grey rock flecked with iron.",
+    "item_type": ["ore", "stone"]
+}

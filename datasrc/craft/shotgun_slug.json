@@ -1,0 +1,17 @@
+{
+    "craft_id": "shotgun_slug",
+    "needed": [
+        {
+            "item_id": "iron_ingot",
+            "count": 1
+        },
+        {
+            "item_id": "shotgun_shell",
+            "count": 2
+        }
+    ],
+    "result": {
+        "item_id": "shotgun_slug",
+        "count": 6
+    }
+}

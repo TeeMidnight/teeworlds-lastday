@@ -1,0 +1,6 @@
+{
+    "id": "addon:steel_ingot",
+    "name": "Steel Ingot",
+    "desc": "An addon-namespaced alloy, proving that two content packs can coexist.",
+    "item_type": ["ingot", "metal"]
+}

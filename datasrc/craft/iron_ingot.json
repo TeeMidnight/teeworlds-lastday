@@ -1,0 +1,19 @@
+{
+    "craft_id": "iron_ingot",
+    "needed": [
+        {
+            "item_id": "lastday:iron_ore",
+            "count": 2
+        }
+    ],
+    "gives": [
+        {
+            "item_id": "iron_ingot",
+            "count": 1
+        },
+        {
+            "item_id": "stone",
+            "count": 1
+        }
+    ]
+}

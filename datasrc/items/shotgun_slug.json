@@ -1,0 +1,9 @@
+{
+    "name": "Shotgun Slug",
+    "desc": "A single heavy slug instead of a spread of pellets.",
+    "item_type": ["ammo"],
+    "ammo_for": ["shotgun"],
+    "damage": 5,
+    "projectiles": 1,
+    "speed": 1.2
+}

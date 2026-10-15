@@ -1,0 +1,13 @@
+{
+    "craft_id": "steel_ingot",
+    "needed": [
+        {
+            "item_id": "iron_ingot",
+            "count": 2
+        }
+    ],
+    "result": {
+        "item_id": "addon:steel_ingot",
+        "count": 1
+    }
+}

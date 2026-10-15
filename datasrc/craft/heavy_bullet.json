@@ -1,0 +1,17 @@
+{
+    "craft_id": "heavy_bullet",
+    "needed": [
+        {
+            "item_id": "iron_ingot",
+            "count": 1
+        },
+        {
+            "item_id": "pistol_bullet",
+            "count": 5
+        }
+    ],
+    "result": {
+        "item_id": "heavy_bullet",
+        "count": 10
+    }
+}

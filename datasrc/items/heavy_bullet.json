@@ -1,0 +1,8 @@
+{
+    "name": "Heavy Bullet",
+    "desc": "A dense round. Hits harder, but travels slower.",
+    "item_type": ["ammo"],
+    "ammo_for": ["gun"],
+    "damage": 8,
+    "speed": 0.8
+}

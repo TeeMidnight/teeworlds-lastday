@@ -206,6 +206,66 @@
 			"context": "Item Type",
 			"or": "weapon",
 			"tr": "武器"
+		},
+		{
+			"context": "Item Name",
+			"or": "Iron Ore",
+			"tr": "铁矿石"
+		},
+		{
+			"context": "Item Name",
+			"or": "Iron Ingot",
+			"tr": "铁锭"
+		},
+		{
+			"context": "Item Name",
+			"or": "Steel Ingot",
+			"tr": "钢锭"
+		},
+		{
+			"context": "Item Name",
+			"or": "Heavy Bullet",
+			"tr": "重弹"
+		},
+		{
+			"context": "Item Name",
+			"or": "Shotgun Slug",
+			"tr": "霰弹独头弹"
+		},
+		{
+			"context": "Item Desc: Iron Ore",
+			"or": "A dull grey rock flecked with iron.",
+			"tr": "一块带有铁斑的灰色石头。"
+		},
+		{
+			"context": "Item Desc: Iron Ingot",
+			"or": "Smelted iron, ready to be worked.",
+			"tr": "冶炼好的铁，可以加工了。"
+		},
+		{
+			"context": "Item Desc: Steel Ingot",
+			"or": "An addon-namespaced alloy, proving that two content packs can coexist.",
+			"tr": "附加包命名空间的合金，证明两个内容包可以共存。"
+		},
+		{
+			"context": "Item Desc: Heavy Bullet",
+			"or": "A dense round. Hits harder, but travels slower.",
+			"tr": "沉重的弹头。威力更大，但速度更慢。"
+		},
+		{
+			"context": "Item Desc: Shotgun Slug",
+			"or": "A single heavy slug instead of a spread of pellets.",
+			"tr": "单发重弹头，取代一片散弹。"
+		},
+		{
+			"context": "Item Type",
+			"or": "ingot",
+			"tr": "锭"
+		},
+		{
+			"context": "Item Type",
+			"or": "metal",
+			"tr": "金属"
 		}
 	],
 	"server strings": [
@@ -538,6 +598,126 @@
 			"context": "WEAPONPICK",
 			"or": "Choose Weapon",
 			"tr": "选择武器"
+		},
+		{
+			"context": "Trade",
+			"or": "Usage: /sell <item> <count> <price item> <price count>",
+			"tr": "用法：/sell <物品> <数量> <价格物品> <价格数量>"
+		},
+		{
+			"context": "Trade",
+			"or": "Unknown item.",
+			"tr": "未知物品。"
+		},
+		{
+			"context": "Trade",
+			"or": "You do not have that many.",
+			"tr": "你没有那么多。"
+		},
+		{
+			"context": "Trade",
+			"or": "Listed #{}: {} x{} for {} x{}",
+			"tr": "已上架 #{}：{} x{} 换 {} x{}"
+		},
+		{
+			"context": "Trade",
+			"or": "That is not your listing.",
+			"tr": "那不是你的挂单。"
+		},
+		{
+			"context": "Trade",
+			"or": "Listing removed.",
+			"tr": "已下架。"
+		},
+		{
+			"context": "Trade",
+			"or": "No such listing.",
+			"tr": "没有这个挂单。"
+		},
+		{
+			"context": "Trade",
+			"or": "You cannot buy your own listing.",
+			"tr": "你不能购买自己的挂单。"
+		},
+		{
+			"context": "Trade",
+			"or": "You cannot afford this.",
+			"tr": "你买不起。"
+		},
+		{
+			"context": "Trade",
+			"or": "Bought #{}: {} x{}",
+			"tr": "已购买 #{}：{} x{}"
+		},
+		{
+			"context": "Trade",
+			"or": "Sold #{}: {} x{} for {} x{}",
+			"tr": "已售出 #{}：{} x{} 换 {} x{}"
+		},
+		{
+			"context": "Trade",
+			"or": "The seller has no inventory space.",
+			"tr": "卖家背包空间不足。"
+		},
+		{
+			"context": "Trade",
+			"or": "No goods are for sale.",
+			"tr": "没有商品在售。"
+		},
+		{
+			"context": "Trade",
+			"or": "Usage: /unlist <id>",
+			"tr": "用法：/unlist <编号>"
+		},
+		{
+			"context": "Trade",
+			"or": "Usage: /buy <id>",
+			"tr": "用法：/buy <编号>"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Click a listing to buy it.",
+			"tr": "点击挂单进行购买。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "List your own goods with: /sell <item> <count> <price item> <price count>",
+			"tr": "用 /sell <物品> <数量> <价格物品> <价格数量> 上架你的物品。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "No goods are for sale.",
+			"tr": "没有商品在售。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "#{} {}: {} x{} for {} x{}",
+			"tr": "#{} {}：{} x{} 换 {} x{}"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Player Shops",
+			"tr": "玩家商店"
+		},
+		{
+			"context": "TRADE",
+			"or": "Player Shops",
+			"tr": "玩家商店"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "{}. {}: {}",
+			"tr": "{}. {}：{}"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Used: {} x{}",
+			"tr": "已使用：{} x{}"
+		},
+		{
+			"context": "Menu Craft",
+			"or": "   + %s x%d",
+			"tr": "   + %s x%d"
 		}
 	]
 }
