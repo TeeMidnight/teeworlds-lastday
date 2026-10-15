@@ -49,7 +49,6 @@ void CGameContext::Construct(int Resetting)
 
 	m_pController = 0;
 	m_pDatabase = 0;
-	m_pEngine = 0;
 	m_pItemSystem = 0;
 	m_MainWorldID = 0;
 	m_VoteCloseTime = 0;
@@ -103,7 +102,6 @@ void CGameContext::Clear()
 	CTuningParams Tuning = m_Tuning;
 	CGameMenu *pGameMenu = m_pGameMenu;
 	CDatabase *pDatabase = m_pDatabase;
-	IEngine *pEngine = m_pEngine;
 	CItemSystem *pItemSystem = m_pItemSystem;
 	// Deep-copy the world table, then release the original storage before the
 	// object is zeroed: mem_zero alone would forget its allocations and leak
@@ -125,7 +123,6 @@ void CGameContext::Clear()
 	m_Tuning = Tuning;
 	m_pGameMenu = pGameMenu;
 	m_pDatabase = pDatabase;
-	m_pEngine = pEngine;
 	m_pItemSystem = pItemSystem;
 	m_pWorlds = Worlds;
 	m_MainWorldID = MainWorldID;
@@ -498,7 +495,8 @@ void CGameContext::AbortVoteOnTeamChange(int ClientID)
 void CGameContext::OnTick()
 {
 	// free the queued database writes that finished since the last tick
-	ReapDbJobs();
+	if(m_pDatabase)
+		m_pDatabase->ReapJobs();
 
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
@@ -1552,8 +1550,6 @@ void CGameContext::OnInit()
 	m_pConfig = Kernel()->RequestInterface<IConfigManager>()->Values();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
-	// the shared thread pool used for queued database writes
-	m_pEngine = Kernel()->RequestInterface<IEngine>();
 	m_CommandManager.Init(m_pConsole, this, NewCommandHook, RemoveCommandHook);
 
 	g_Localization.Load(Config()->m_SvLanguagefile, Storage(), Console(), true);
@@ -1585,6 +1581,9 @@ void CGameContext::OnInit()
 			delete m_pDatabase;
 			m_pDatabase = 0;
 		}
+		// the shared thread pool runs the queued writes
+		if(m_pDatabase)
+			m_pDatabase->SetJobPool(Kernel()->RequestInterface<IEngine>());
 	}
 
 	// initialize the item system (loads datasrc/items/*.json)
@@ -1601,84 +1600,6 @@ void CGameContext::OnInit()
 	Console()->Chain("sv_languagefile", ConchainLanguageUpdate, this);
 }
 
-void CGameContext::SubmitDbJob(CDbJob *pJob)
-{
-	if(!m_pEngine)
-	{
-		// no pool available (e.g. a test harness): stay correct, just blocking
-		RunDbJob(pJob);
-		delete pJob;
-		return;
-	}
-
-	m_lDbJobs.add(pJob);
-	DispatchDbJob();
-}
-
-void CGameContext::DispatchDbJob()
-{
-	if(m_lDbJobs.size() == 0)
-		return;
-
-	// only the front job may run; the rest wait for it, which keeps the writes
-	// of one player (and of a world and its shutdown flush) in submission order
-	CDbJob *pJob = m_lDbJobs[0];
-	if(pJob->m_Dispatched)
-		return;
-	pJob->m_Dispatched = true;
-	m_pEngine->AddJob(&pJob->m_Job, RunDbJob, pJob);
-}
-
-void CGameContext::ReapDbJobs()
-{
-	// the queue is FIFO: once the front job finished, free it and start the next
-	while(m_lDbJobs.size() && m_lDbJobs[0]->m_Dispatched && m_lDbJobs[0]->m_Job.Status() == CJob::STATE_DONE)
-	{
-		delete m_lDbJobs[0];
-		m_lDbJobs.remove_index(0);
-		DispatchDbJob();
-	}
-}
-
-bool CGameContext::DrainDbJobs()
-{
-	// Wait for every queued write before the database is torn down; a job that
-	// is still running would otherwise use a freed connection.
-	const int64 Start = time_get();
-	while(m_lDbJobs.size())
-	{
-		ReapDbJobs();
-		if(!m_lDbJobs.size())
-			break;
-		if(time_get() - Start > (int64) time_freq() * 5)
-		{
-			dbg_msg("database", "%d database job(s) still running, leaving the connection open", m_lDbJobs.size());
-			return false;
-		}
-		thread_sleep(1);
-	}
-	return true;
-}
-
-void CGameContext::QueueWorldSave(const char *pMap, const char *pJson, bool HasJson)
-{
-	if(!m_pDatabase || !pMap || !pMap[0])
-		return;
-
-	CDbJob *pJob = new CDbJob();
-	pJob->m_Type = CDbJob::TYPE_WORLD;
-	pJob->m_pDB = m_pDatabase;
-	str_copy(pJob->m_aMapName, pMap, sizeof(pJob->m_aMapName));
-	pJob->m_HasJson = HasJson;
-	if(HasJson && pJson)
-	{
-		const int Len = str_length(pJson);
-		pJob->m_Json.set_size(Len + 1);
-		mem_copy(pJob->m_Json.base_ptr(), pJson, Len + 1);
-	}
-	SubmitDbJob(pJob);
-}
-
 void CGameContext::SavePlayerData(CPlayer *pPlayer)
 {
 	if(!m_pDatabase || !pPlayer || pPlayer->IsDummy() || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
@@ -1690,7 +1611,7 @@ void CGameContext::SavePlayerData(CPlayer *pPlayer)
 	pJob->m_pDB = m_pDatabase;
 	pJob->m_Uuid = pPlayer->m_AccountUuid;
 	pPlayer->CaptureStatus(*pJob);
-	SubmitDbJob(pJob);
+	m_pDatabase->QueueJob(pJob);
 }
 
 void CGameContext::OnShutdown()
@@ -1714,7 +1635,7 @@ void CGameContext::OnShutdown()
 		// the writes are queued on the pool; let them finish before the
 		// connection goes away. On a timeout the connection object is left
 		// alive (jobs still point at it) but forgotten, not freed under them.
-		if(DrainDbJobs())
+		if(m_pDatabase->DrainJobs())
 			delete m_pDatabase;
 		m_pDatabase = 0;
 	}

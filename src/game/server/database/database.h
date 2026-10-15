@@ -10,9 +10,13 @@
 // stored the same way, one row per map name.
 
 #include <base/system.h>
+#include <base/tl/array.h>
 #include <base/uuid.h>
 
 #include <game/server/database/jsonpath.h>
+
+class IEngine;
+struct CDbJob;
 
 class CDatabase
 {
@@ -21,6 +25,16 @@ protected:
 	// public entry points take this lock, so a job running on the thread pool
 	// can use the database while the game thread does too.
 	LOCK m_Lock;
+
+	// Queued writes run on the engine's job pool, one at a time in submission
+	// order: a tick never blocks on the database, and two saves for the same
+	// player cannot interleave. Reads stay synchronous because their result is
+	// needed immediately.
+	class IEngine *m_pEngine;
+	array<struct CDbJob *> m_lDbJobs;
+
+	// dispatch the front job unless one is already in flight
+	void DispatchJob();
 
 public:
 	enum
@@ -47,8 +61,12 @@ public:
 		const char *m_pConnString; // postgres connection string
 	};
 
-	CDatabase() { m_Lock = lock_create(); }
-	virtual ~CDatabase() { lock_destroy(m_Lock); }
+	CDatabase()
+	{
+		m_Lock = lock_create();
+		m_pEngine = 0;
+	}
+	virtual ~CDatabase();
 
 	// open the connection and create the schema if it does not exist yet.
 	// returns true when the database is ready to use.
@@ -106,6 +124,19 @@ public:
 	virtual bool GetWorldSaveData(const char *pMap, char *pOut, int Size) = 0;
 	// remove the whole row of the map; a no-op when it does not exist
 	virtual bool DeleteWorldSave(const char *pMap) = 0;
+
+	// ----- queued writes -----
+	// hand the engine's job pool to the database; without one the writes run
+	// synchronously, which keeps a test harness correct
+	void SetJobPool(class IEngine *pEngine) { m_pEngine = pEngine; }
+	// take ownership of a prepared job and dispatch it when its turn comes
+	void QueueJob(struct CDbJob *pJob);
+	// snapshot a whole-world write and queue it
+	void QueueWorldSave(const char *pMap, const char *pJson, bool HasJson);
+	// free the queued jobs that finished; call once per tick
+	void ReapJobs();
+	// block until every queued job finished; false when they did not in time
+	bool DrainJobs();
 };
 
 // scoped lock for the database; backends hold it for the duration of a call

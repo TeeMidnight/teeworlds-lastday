@@ -622,7 +622,7 @@ void CGameWorld::SaveToDatabase()
 	// were snapshotted above, so the job never touches the live world and the
 	// world may be unloaded right after this returns. An empty world still
 	// queues a job: it deletes the row.
-	GameServer()->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0);
+	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0);
 }
 
 void CGameWorld::RestoreFromDatabase()
