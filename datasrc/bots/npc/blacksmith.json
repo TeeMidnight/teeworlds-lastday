@@ -1,0 +1,27 @@
+{
+    "npc_id": "blacksmith",
+    "name": "Blacksmith",
+    "world": "Connector",
+    "x": 30,
+    "y": 20,
+    "health": 20,
+    "health_regen": 1,
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true,  "hue": 27,  "sat": 111, "lgt": 116},
+        "marking":    {"name": "standard", "custom_color": false},
+        "decoration": {"name": "",         "custom_color": false},
+        "hands":      {"name": "standard", "custom_color": true,  "hue": 27,  "sat": 111, "lgt": 116},
+        "feet":       {"name": "standard", "custom_color": true,  "hue": 27,  "sat": 111, "lgt": 116},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "sells": [
+        {"item": "lastday:stone", "count": 5, "price_item": "lastday:iron_ingot", "price_count": 1},
+        {"item": "lastday:hammer", "count": 1, "price_item": "lastday:stone_bricks", "price_count": 3}
+    ],
+    "aggro": {
+        "threshold": 10,
+        "per_kill": 5,
+        "per_hit": 0,
+        "kill_decay": 10
+    }
+}

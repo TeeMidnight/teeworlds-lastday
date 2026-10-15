@@ -19,6 +19,7 @@
 
 class CDatabase;
 class CItemSystem;
+class CNpcSystem;
 class CTradeSystem;
 
 /*
@@ -100,10 +101,13 @@ public:
 
 	CTradeSystem *m_pTradeSystem;
 
+	CNpcSystem *m_pNpcSystem;
+
 	CGameMenu *GameMenu() const { return m_pGameMenu; }
 	CDatabase *Database() const { return m_pDatabase; }
 	CItemSystem *Item() const { return m_pItemSystem; }
 	CTradeSystem *Trade() const { return m_pTradeSystem; }
+	CNpcSystem *Npcs() const { return m_pNpcSystem; }
 
 	// persist a player's status to the database (only when the player is
 	// logged in to an account); the write is queued on the database job pool

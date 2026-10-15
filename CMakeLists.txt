@@ -796,6 +796,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   item.h
   item_craft.cpp
   item_use.cpp
+  npcdata.cpp
+  npcdata.h
   player.cpp
   player.h
   player_data.cpp

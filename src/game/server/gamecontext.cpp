@@ -27,6 +27,7 @@
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "item.h"
+#include "npcdata.h"
 #include "player.h"
 #include "trade.h"
 #include "weapon.h"
@@ -53,6 +54,7 @@ void CGameContext::Construct(int Resetting)
 	m_pDatabase = 0;
 	m_pItemSystem = 0;
 	m_pTradeSystem = 0;
+	m_pNpcSystem = 0;
 	m_MainWorldID = 0;
 	m_LockTeams = 0;
 
@@ -96,6 +98,7 @@ void CGameContext::Clear()
 	CDatabase *pDatabase = m_pDatabase;
 	CItemSystem *pItemSystem = m_pItemSystem;
 	CTradeSystem *pTradeSystem = m_pTradeSystem;
+	CNpcSystem *pNpcSystem = m_pNpcSystem;
 	// the engine services (IServer & co) outlive the game context, so preserve
 	// them: the world teardown in OnShutdown and a following OnInit on a forced
 	// reload both rely on Server() being valid.
@@ -121,6 +124,7 @@ void CGameContext::Clear()
 	m_pDatabase = pDatabase;
 	m_pItemSystem = pItemSystem;
 	m_pTradeSystem = pTradeSystem;
+	m_pNpcSystem = pNpcSystem;
 	m_pServer = pServer;
 	m_pConfig = pConfig;
 	m_pConsole = pConsole;
@@ -1103,6 +1107,10 @@ void CGameContext::OnInit()
 	m_pTradeSystem = new CTradeSystem();
 	m_pTradeSystem->Init(this);
 
+	// the configured NPCs (datasrc/bots/npc/*.json)
+	m_pNpcSystem = new CNpcSystem();
+	m_pNpcSystem->Init(this, Storage());
+
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 
 	Console()->Chain("sv_vote_kick", ConchainSettingUpdate, this);
@@ -1179,6 +1187,9 @@ void CGameContext::OnShutdown()
 
 	delete m_pTradeSystem;
 	m_pTradeSystem = 0;
+
+	delete m_pNpcSystem;
+	m_pNpcSystem = 0;
 
 	delete m_pController;
 	m_pController = 0;

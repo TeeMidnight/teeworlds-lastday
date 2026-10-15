@@ -1,0 +1,220 @@
+/* (c) Teeworlds Archive Project Contributors.                                               */
+/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* This is a modified version of Teeworlds - see license.txt for details.                    */
+#include <base/system.h>
+
+#include <engine/shared/jsonparser.h>
+#include <engine/storage.h>
+
+#include "gamecontext.h"
+#include "npcdata.h"
+
+namespace
+{
+const char *gs_pSkinParts[NUM_SKINPARTS] = {"body", "marking", "decoration", "hands", "feet", "eyes"};
+
+// The TeeInfo skin part colours the engine hands to clients carry H, S and L in
+// the low 24 bits (the hardcoded bot skins use the same layout); alpha is not
+// part of the value.
+int PackHsla(int Hue, int Sat, int Lgt)
+{
+	return ((Hue & 0xff) << 16) | ((Sat & 0xff) << 8) | (Lgt & 0xff);
+}
+
+int ReadInt(const json_value &Value, int Default)
+{
+	if(Value.type == json_integer || Value.type == json_double)
+		return (int) (json_int_t) Value;
+	return Default;
+}
+} // namespace
+
+CNpcSystem::CNpcSystem()
+{
+	m_pGameServer = 0;
+	m_pStorage = 0;
+}
+
+CNpcSystem::~CNpcSystem()
+{
+	Clear();
+}
+
+void CNpcSystem::Clear()
+{
+	for(int i = 0; i < m_lDefs.size(); i++)
+		delete m_lDefs[i];
+	m_lDefs.clear();
+}
+
+int CNpcSystem::ListCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+{
+	(void) StorageType;
+	CNpcSystem *pSelf = static_cast<CNpcSystem *>(pUser);
+	if(IsDir)
+		return 0;
+
+	const int Len = str_length(pFilename);
+	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
+		return 0;
+
+	// the file name is the default npc id; the json "npc_id" wins when present
+	char aDefaultId[64];
+	if(Len - 5 >= (int) sizeof(aDefaultId))
+	{
+		dbg_msg("npc", "npc file name too long: '%s'", pFilename);
+		return 0;
+	}
+	str_copy(aDefaultId, pFilename, sizeof(aDefaultId));
+	aDefaultId[Len - 5] = '\0';
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), "bots/npc/%s", pFilename);
+	pSelf->Load(aDefaultId, aPath);
+	return 0;
+}
+
+void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseFile(pFilePath, m_pStorage, IStorage::TYPE_ALL);
+	if(!pJson || pJson->type != json_object)
+	{
+		dbg_msg("npc", "failed to load npc '%s' from '%s'", pDefaultId, pFilePath);
+		return;
+	}
+
+	SNpcDef *pDef = new SNpcDef();
+	mem_zero(pDef, sizeof(SNpcDef));
+
+	const char *pId = (*pJson)["npc_id"];
+	if(!pId[0])
+		pId = pDefaultId;
+	str_copy(pDef->m_aNpcId, pId, sizeof(pDef->m_aNpcId));
+	if(!pDef->m_aNpcId[0])
+	{
+		dbg_msg("npc", "npc '%s' has an empty id", pFilePath);
+		delete pDef;
+		return;
+	}
+
+	// identity is derived from the id, so it survives a respawn
+	char aSeed[128];
+	str_format(aSeed, sizeof(aSeed), "lastday:npc/%s", pDef->m_aNpcId);
+	const Uuid BotId = calculate_uuid(aSeed);
+
+	// a definition may only be used once: a duplicate id is a configuration
+	// error, not a second spawn
+	if(Find(pDef->m_aNpcId) || Find(BotId))
+	{
+		dbg_msg("npc", "duplicate npc id '%s' (each npc definition may only be used once)", pDef->m_aNpcId);
+		delete pDef;
+		return;
+	}
+	pDef->m_BotId = BotId;
+
+	str_copy(pDef->m_aName, (*pJson)["name"], sizeof(pDef->m_aName));
+	if(!pDef->m_aName[0])
+		str_copy(pDef->m_aName, pDef->m_aNpcId, sizeof(pDef->m_aName));
+	str_copy(pDef->m_aWorld, (*pJson)["world"], sizeof(pDef->m_aWorld));
+
+	// the spawn is in tiles; the centre of the tile is where a tee stands
+	const int TileX = ReadInt((*pJson)["x"], 0);
+	const int TileY = ReadInt((*pJson)["y"], 0);
+	pDef->m_Pos = vec2(TileX * 32.0f + 16.0f, TileY * 32.0f + 16.0f);
+
+	pDef->m_Health = maximum(1, ReadInt((*pJson)["health"], 10));
+	pDef->m_HealthRegen = maximum(0, ReadInt((*pJson)["health_regen"], 0));
+
+	// skin: one object per part, LunarTee's "skin7" shape
+	{
+		const json_value &rSkin = (*pJson)["skin"];
+		if(rSkin.type == json_object)
+		{
+			for(int i = 0; i < NUM_SKINPARTS; i++)
+			{
+				const json_value &rPart = rSkin[gs_pSkinParts[i]];
+				if(rPart.type != json_object)
+					continue;
+
+				str_copy(pDef->m_Skin.m_aaSkinPartNames[i], rPart["name"], sizeof(pDef->m_Skin.m_aaSkinPartNames[i]));
+				const json_value &rCustom = rPart["custom_color"];
+				const bool Custom = rCustom.type == json_boolean ? (bool) rCustom : false;
+				pDef->m_Skin.m_aUseCustomColors[i] = Custom ? 1 : 0;
+				pDef->m_Skin.m_aSkinPartColors[i] = Custom ?
+					PackHsla(ReadInt(rPart["hue"], 0), ReadInt(rPart["sat"], 0), ReadInt(rPart["lgt"], 0)) : 0;
+			}
+		}
+	}
+
+	// shelf: what this NPC sells; the price is another item
+	{
+		const json_value &rSells = (*pJson)["sells"];
+		if(rSells.type == json_array)
+		{
+			for(unsigned i = 0; i < rSells.u.array.length; i++)
+			{
+				const json_value &rSell = rSells[i];
+				if(rSell.type != json_object)
+					continue;
+				const char *pItem = rSell["item"];
+				if(!pItem[0])
+					continue;
+
+				SNpcSell &Sell = pDef->m_lSells.emplace();
+				Sell.m_Item = CItemID::FromName(pItem);
+				Sell.m_Count = maximum(1, ReadInt(rSell["count"], 1));
+				const char *pPrice = rSell["price_item"];
+				Sell.m_PriceItem = CItemID::FromName(pPrice);
+				Sell.m_PriceCount = maximum(0, ReadInt(rSell["price_count"], 0));
+			}
+		}
+	}
+
+	// aggro tuning
+	{
+		const json_value &rAggro = (*pJson)["aggro"];
+		if(rAggro.type == json_object)
+		{
+			pDef->m_Aggro.m_Threshold = ReadInt(rAggro["threshold"], 0);
+			pDef->m_Aggro.m_PerKill = ReadInt(rAggro["per_kill"], 0);
+			pDef->m_Aggro.m_PerHit = ReadInt(rAggro["per_hit"], 0);
+			pDef->m_Aggro.m_KillDecay = ReadInt(rAggro["kill_decay"], 0);
+		}
+	}
+
+	m_lDefs.add(pDef);
+	dbg_msg("npc", "loaded npc '%s' ('%s') world '%s' pos %d,%d hp %d regen %d sells %d",
+		pDef->m_aNpcId, pDef->m_aName, pDef->m_aWorld,
+		TileX, TileY, pDef->m_Health, pDef->m_HealthRegen, pDef->m_lSells.size());
+}
+
+void CNpcSystem::Init(CGameContext *pGameServer, IStorage *pStorage)
+{
+	m_pGameServer = pGameServer;
+	m_pStorage = pStorage;
+
+	Clear();
+	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "bots/npc", ListCallback, this);
+	dbg_msg("npc", "loaded %d npc definition(s)", m_lDefs.size());
+}
+
+const SNpcDef *CNpcSystem::Find(const char *pNpcId) const
+{
+	if(!pNpcId || !pNpcId[0])
+		return 0;
+	for(int i = 0; i < m_lDefs.size(); i++)
+		if(str_comp(m_lDefs[i]->m_aNpcId, pNpcId) == 0)
+			return m_lDefs[i];
+	return 0;
+}
+
+const SNpcDef *CNpcSystem::Find(const Uuid &BotId) const
+{
+	if(BotId == UUID_ZEROED)
+		return 0;
+	for(int i = 0; i < m_lDefs.size(); i++)
+		if(m_lDefs[i]->m_BotId == BotId)
+			return m_lDefs[i];
+	return 0;
+}
