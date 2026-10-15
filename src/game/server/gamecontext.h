@@ -7,6 +7,7 @@
 
 #include <base/tl/hashtable.h>
 #include <base/tl/sorted_array.h>
+#include <base/uuid.h>
 
 #include <engine/console.h>
 #include <engine/server.h>
@@ -108,6 +109,13 @@ public:
 	CItemSystem *Item() const { return m_pItemSystem; }
 	CTradeSystem *Trade() const { return m_pTradeSystem; }
 	CNpcSystem *Npcs() const { return m_pNpcSystem; }
+
+	// apply a signed aggro delta to the (npc, account) ledger
+	void NpcAddAggro(const Uuid &Npc, const Uuid &User, int Delta);
+	// sum the ledger of one (npc, account) pair; 0 when absent or no database
+	int NpcGetAggro(const Uuid &Npc, const Uuid &User);
+	// record the default 0 aggro of one player with every configured NPC
+	void EnsureNpcAggroFor(class CPlayer *pPlayer);
 
 	// persist a player's status to the database (only when the player is
 	// logged in to an account); the write is queued on the database job pool

@@ -74,6 +74,83 @@ void CNpcEntity::Tick()
 	}
 }
 
+int CNpcEntity::HitClientID(CEntity *pFrom)
+{
+	if(!pFrom)
+		return -1;
+	// a projectile or explosion reports the client that fired it
+	if(pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD)
+		return static_cast<CChildEntity *>(pFrom)->GetOwner();
+	if(pFrom->ObjType() == CGameWorld::ENTTYPE_CHARACTER)
+		return static_cast<CCharacter *>(pFrom)->GetCID();
+	return -1;
+}
+
+void CNpcEntity::AddAggro(int ClientID, int Delta)
+{
+	if(!m_pDef || Delta == 0 || ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return;
+	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
+		return;
+	GameServer()->NpcAddAggro(m_pDef->m_BotId, pPlayer->m_AccountUuid, Delta);
+}
+
+void CNpcEntity::ShowHealth(int ClientID)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return;
+	const char *pName = m_pDef ? m_pDef->m_aName : m_TeeInfo.m_aName;
+	char aBuf[160];
+	str_format(aBuf, sizeof(aBuf), "%s: %d/%d", pName, maximum(0, m_Health), m_MaxHealth);
+	GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, aBuf);
+}
+
+bool CNpcEntity::OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
+{
+	(void) Force;
+	(void) Source;
+	(void) Dmg;
+	(void) Weapon;
+
+	// a player landing a hit sees the remaining health and adds per-hit aggro
+	const int ClientID = HitClientID(pFrom);
+	if(ClientID >= 0)
+	{
+		ShowHealth(ClientID);
+		if(m_pDef)
+			AddAggro(ClientID, m_pDef->m_Aggro.m_PerHit);
+	}
+	return true;
+}
+
+void CNpcEntity::OnBotHit(CEntity *pTarget, bool Killed)
+{
+	// the NPC killing a player decays the aggro it holds for that player
+	if(!Killed || !m_pDef || !pTarget || pTarget->ObjType() != CGameWorld::ENTTYPE_CHARACTER)
+		return;
+	CCharacter *pChr = static_cast<CCharacter *>(pTarget);
+	AddAggro(pChr->GetCID(), -m_pDef->m_Aggro.m_KillDecay);
+}
+
+void CNpcEntity::Die(CEntity *pKiller, int Weapon)
+{
+	if(!m_Alive)
+		return;
+
+	// a player that lands the killing blow gains per-kill aggro and sees the
+	// final health; the world or any non-player source adds nothing
+	const int ClientID = HitClientID(pKiller);
+	if(ClientID >= 0)
+	{
+		ShowHealth(ClientID);
+		if(m_pDef)
+			AddAggro(ClientID, m_pDef->m_Aggro.m_PerKill);
+	}
+
+	CBotEntity::Die(pKiller, Weapon);
+}
+
 bool CNpcEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
 {
 	// NPCs are immovable: a hit lands and damages, but its knockback impulse is

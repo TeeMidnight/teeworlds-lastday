@@ -666,6 +666,7 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 
 	pPlayer->m_AccountUuid = Row.m_Uuid;
 	pPlayer->m_LoggedIn = true;
+	pSelf->GameServer()->EnsureNpcAggroFor(pPlayer);
 	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
 		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
 
@@ -722,6 +723,7 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 
 	pPlayer->m_AccountUuid = Row.m_Uuid;
 	pPlayer->m_LoggedIn = true;
+	pSelf->GameServer()->EnsureNpcAggroFor(pPlayer);
 	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
 		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
 	pPlayer->TryRespawn();

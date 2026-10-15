@@ -38,12 +38,24 @@ public:
 
 	const SNpcDef *NpcDef() const { return m_pDef; }
 
+	// --- aggro events ---
+	void Die(CEntity *pKiller, int Weapon) override;
+	bool OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon) override;
+	void OnBotHit(CEntity *pTarget, bool Killed) override;
+
 protected:
 	void OnAction() override;
 	// a peaceful NPC never acquires a target
 	CEntity *FindTarget() override { return nullptr; }
 
 private:
+	// the client behind a hit source, or -1 (projectiles report their owner)
+	static int HitClientID(CEntity *pFrom);
+	// add a signed delta to this NPC's aggro ledger for one client
+	void AddAggro(int ClientID, int Delta);
+	// show the NPC's remaining health to one client
+	void ShowHealth(int ClientID);
+
 	// the closest live player within the roam radius, or null
 	CEntity *ClosestPlayer();
 	// random walk, kept inside the spawn radius

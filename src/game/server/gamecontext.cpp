@@ -1135,6 +1135,33 @@ void CGameContext::SavePlayerData(CPlayer *pPlayer)
 	m_pDatabase->QueueJob(pJob);
 }
 
+void CGameContext::NpcAddAggro(const Uuid &Npc, const Uuid &User, int Delta)
+{
+	if(!m_pDatabase || Delta == 0 || Npc == UUID_ZEROED || User == UUID_ZEROED)
+		return;
+	m_pDatabase->AddNpcAggro(Npc, User, Delta);
+}
+
+int CGameContext::NpcGetAggro(const Uuid &Npc, const Uuid &User)
+{
+	int Aggro = 0;
+	if(m_pDatabase && Npc != UUID_ZEROED && User != UUID_ZEROED)
+		m_pDatabase->GetNpcAggro(Npc, User, &Aggro);
+	return Aggro;
+}
+
+void CGameContext::EnsureNpcAggroFor(CPlayer *pPlayer)
+{
+	if(!m_pDatabase || !m_pNpcSystem || !pPlayer || pPlayer->m_AccountUuid == UUID_ZEROED)
+		return;
+	for(int i = 0; i < m_pNpcSystem->NumDefs(); i++)
+	{
+		const SNpcDef *pDef = m_pNpcSystem->DefAt(i);
+		if(pDef)
+			m_pDatabase->EnsureNpcAggro(pDef->m_BotId, pPlayer->m_AccountUuid);
+	}
+}
+
 void CGameContext::OnShutdown()
 {
 	// persist the world content (dropped items etc.) of every loaded world

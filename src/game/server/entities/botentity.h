@@ -142,6 +142,9 @@ protected:
 	virtual CEntity *FindTarget();
 	// Swings the held weapon; called after the input was decided
 	virtual void DoWeapon();
+	// Called for every hittable a melee swing landed on; Killed is true when the
+	// swing was the one that brought a character down. A variant can react.
+	virtual void OnBotHit(CEntity *pTarget, bool Killed);
 	// Smoothly moves the aim cursor towards m_CursorTarget; shared by the
 	// default chase action and by variants such as the NPC.
 	void AimCursor();

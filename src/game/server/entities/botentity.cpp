@@ -247,12 +247,25 @@ void CBotEntity::DoWeapon()
 		else
 			Dir = vec2(0.0f, -1.0f);
 
+		// remember whether a character target was alive, so a variant can tell
+		// whether this swing was the killing blow
+		CCharacter *pTargetChr = pTarget->ObjType() == CGameWorld::ENTTYPE_CHARACTER ? static_cast<CCharacter *>(pTarget) : nullptr;
+		const bool WasAlive = !pTargetChr || pTargetChr->IsAlive();
+
 		pTarget->TakeHit(vec2(0.0f, -1.0f) + normalize(Dir + vec2(0.0f, -1.1f)) * 10.0f, Dir * -1, Dmg, this, WEAPON_HAMMER);
+		const bool Killed = WasAlive && pTargetChr && !pTargetChr->IsAlive();
+		OnBotHit(pTarget, Killed);
 		Hits++;
 	}
 
 	m_AttackTick = Server()->Tick();
 	m_ReloadTimer = Hits ? Server()->TickSpeed() / 3 : Server()->TickSpeed() / 2;
+}
+
+void CBotEntity::OnBotHit(CEntity *pTarget, bool Killed)
+{
+	(void) pTarget;
+	(void) Killed;
 }
 
 void CBotEntity::TickDefered()
