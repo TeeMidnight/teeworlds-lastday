@@ -117,8 +117,9 @@ public:
 	// --- damage helpers ---
 	bool IncreaseHealth(int Amount);
 	bool IncreaseArmor(int Amount);
-	// raw damage entry point (no friendly-fire filtering); TakeHit wraps it
-	bool TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon);
+	// raw damage entry point (no friendly-fire filtering); TakeHit wraps it.
+	// Virtual so a variant (the NPC) can drop the knockback impulse.
+	virtual bool TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon);
 
 	// the physics core, exposed for variants that want to drive it directly
 	CCharacterCore *Core() { return &m_Core; }
@@ -141,6 +142,9 @@ protected:
 	virtual CEntity *FindTarget();
 	// Swings the held weapon; called after the input was decided
 	virtual void DoWeapon();
+	// Smoothly moves the aim cursor towards m_CursorTarget; shared by the
+	// default chase action and by variants such as the NPC.
+	void AimCursor();
 
 	CBotTeeInfo m_TeeInfo;
 	Uuid m_BotID;

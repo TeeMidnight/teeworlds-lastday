@@ -49,7 +49,9 @@ public:
 		BOTROLE_HOSTILE = 0,
 		BOTROLE_NPC,
 	};
-	void SetBotRole(EBotRole Role) { m_Role = Role; }
+	// Sets the world's role and installs the matching default bot kind: the
+	// hub gets wandering NPCs, a contested world gets the default fighter.
+	void SetBotRole(EBotRole Role);
 	EBotRole Role() const { return m_Role; }
 	bool IsNpcWorld() const { return m_Role == BOTROLE_NPC; }
 

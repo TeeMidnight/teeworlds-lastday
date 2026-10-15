@@ -6,6 +6,7 @@
 
 #include <game/server/entities/botentity.h>
 #include <game/server/entities/character.h>
+#include <game/server/entities/npcentity.h>
 
 #include "botmanager.h"
 #include "gamecontext.h"
@@ -26,6 +27,13 @@ static IBotEntity *DefaultBotCreator(CGameWorld *pWorld, vec2 Pos, Uuid BotID, c
 {
 	(void) pUser;
 	return new CBotEntity(pWorld, Pos, BotID, TeeInfo, Team);
+}
+
+// The peaceful variant: a wandering NPC that never fights.
+static IBotEntity *NpcBotCreator(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team, void *pUser)
+{
+	(void) pUser;
+	return new CNpcEntity(pWorld, Pos, BotID, TeeInfo, Team);
 }
 
 CBotManager::CBotManager(CGameWorld *pGameWorld)
@@ -61,6 +69,17 @@ void CBotManager::SetBotTypeCreator(const char *pTypeName, FBotCreator pfnCreato
 	m_pfnBotCreator = pfnCreator ? pfnCreator : DefaultBotCreator;
 	m_pBotCreatorUser = pUser;
 	str_copy(m_aBotType, pTypeName ? pTypeName : "default", sizeof(m_aBotType));
+}
+
+void CBotManager::SetBotRole(EBotRole Role)
+{
+	m_Role = Role;
+	// the role owns the default kind: a peaceful world spawns NPCs, a contested
+	// one spawns the hostile default fighter
+	if(Role == BOTROLE_NPC)
+		SetBotTypeCreator("npc", NpcBotCreator);
+	else
+		SetBotTypeCreator("default", DefaultBotCreator);
 }
 
 void CBotManager::ClearPlayerMap(int ClientID)

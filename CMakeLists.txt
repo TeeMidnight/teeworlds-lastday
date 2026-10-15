@@ -772,6 +772,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/dropped_pickup.h
   entities/laser.cpp
   entities/laser.h
+  entities/npcentity.cpp
+  entities/npcentity.h
   entities/pickup.cpp
   entities/pickup.h
   entities/projectile.cpp

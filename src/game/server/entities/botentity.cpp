@@ -173,6 +173,11 @@ void CBotEntity::OnAction()
 		}
 	}
 
+	AimCursor();
+}
+
+void CBotEntity::AimCursor()
+{
 	// move the cursor towards the target at a limited speed, so the aim looks
 	// human instead of snapping instantly
 	vec2 Target = vec2(m_Input.m_TargetX, m_Input.m_TargetY);
