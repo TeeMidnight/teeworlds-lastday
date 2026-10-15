@@ -5,9 +5,9 @@
 
 #include <game/item_id.h>
 
-// The migration tooling computes item uuids outside the engine, so the mapping
-// from a namespaced name to its uuid is part of the on-disk contract and must
-// not drift. These vectors pin it down.
+// A namespaced name maps to a stable uuid that is written into inventories and
+// save files, so the mapping is part of the on-disk contract and must not
+// drift. These vectors pin it down.
 TEST(ItemID, NamespacedNameToUuid)
 {
 	const struct
