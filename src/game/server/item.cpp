@@ -9,6 +9,8 @@
 
 #include <game/server/gamecontext.h>
 
+#include <game/localization_format.h>
+
 // ---------------------------------------------------------------
 // CItemSystem::CInventory (inventory / item loading lives here; use effects
 // and crafting live in item_use.cpp / item_craft.cpp)
@@ -269,10 +271,9 @@ bool CItemSystem::AddItem(int ClientID, const CItemID &Id, int Count, bool Silen
 	const int Now = Inventory.Get(Id);
 
 	const char *pName = GetName(Id);
-	char aMsg[128];
-	str_format(aMsg, sizeof(aMsg), Localize("You got: %s x%d (%d)", "Item Pickup"),
+	const std::string Msg = LocalizeFormat("Item Pickup", "You got: {} x{} ({})",
 		Localize(pName, "Item Name"), Count, Now);
-	m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, aMsg);
+	m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
 	return true;
 }
 

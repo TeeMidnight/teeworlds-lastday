@@ -91,11 +91,8 @@ public:
 	void AddSpace();
 	void AddHorizontalRule();
 	void AddOption(const char *pDesc, const char *pCommand, const char *pPrefix = "");
-
-	void AddOptionFormat(const char *pDesc, const char *pCommand, const char *pPrefix, ...);
 	// wraps long text into DISPLAY rows (safe for multibyte utf-8)
 	void AddWrappedLinesOption(const char *pText);
-	void AddWrappedLinesOptionFormat(const char *pDesc, ...);
 
 private:
 	int m_CurrentClientID;

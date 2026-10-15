@@ -7,6 +7,7 @@
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/npcdata.h>
+#include <game/localization_format.h>
 #include <game/server/player.h>
 
 #include "npcentity.h"
@@ -27,7 +28,7 @@ static CBotTeeInfo NpcTeeInfoFromDef(const SNpcDef *pDef)
 	CBotTeeInfo Info;
 	mem_zero(&Info, sizeof(Info));
 	Info.m_Skin = pDef->m_Skin;
-	str_copy(Info.m_aName, pDef->m_aName, sizeof(Info.m_aName));
+	str_copy(Info.m_aName, NpcIDDisplayName(pDef->m_Id), sizeof(Info.m_aName));
 	return Info;
 }
 
@@ -45,7 +46,7 @@ CNpcEntity::CNpcEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 }
 
 CNpcEntity::CNpcEntity(CGameWorld *pWorld, const SNpcDef *pDef, int Team) :
-	CBotEntity(pWorld, pDef->m_Pos, pDef->m_BotId, NpcTeeInfoFromDef(pDef), Team)
+	CBotEntity(pWorld, pDef->m_Pos, pDef->m_Id.Value(), NpcTeeInfoFromDef(pDef), Team)
 {
 	m_pDef = pDef;
 	m_MaxHealth = pDef->m_Health;
@@ -62,6 +63,8 @@ CNpcEntity::CNpcEntity(CGameWorld *pWorld, const SNpcDef *pDef, int Team) :
 void CNpcEntity::Tick()
 {
 	CBotEntity::Tick();
+
+	TickInteract();
 
 	// the scripted respawn drives itself once started
 	if(m_State == NPCSTATE_TELEPORTING)
@@ -104,7 +107,7 @@ void CNpcEntity::AddAggro(int ClientID, int Delta)
 	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
 	if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
 		return;
-	GameServer()->NpcAddAggro(m_pDef->m_BotId, pPlayer->m_AccountUuid, Delta);
+	GameServer()->NpcAddAggro(m_pDef->m_Id.Value(), pPlayer->m_AccountUuid, Delta);
 	UpdateAggroCache(pPlayer->m_AccountUuid, Delta);
 }
 
@@ -112,7 +115,7 @@ void CNpcEntity::ShowHealth(int ClientID)
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
 		return;
-	const char *pName = m_pDef ? m_pDef->m_aName : m_TeeInfo.m_aName;
+	const char *pName = m_pDef ? NpcIDDisplayName(m_pDef->m_Id) : m_TeeInfo.m_aName;
 	char aBuf[160];
 	str_format(aBuf, sizeof(aBuf), "%s: %d/%d", pName, maximum(0, m_Health), m_MaxHealth);
 	GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, aBuf);
@@ -142,7 +145,7 @@ int CNpcEntity::CachedAggro(int ClientID)
 	// the ledger is the truth, but it is only re-read once a second per player
 	if(pEntry->m_RefreshTick < 0 || Server()->Tick() - pEntry->m_RefreshTick >= Server()->TickSpeed())
 	{
-		pEntry->m_Aggro = GameServer()->NpcGetAggro(m_pDef->m_BotId, pPlayer->m_AccountUuid);
+		pEntry->m_Aggro = GameServer()->NpcGetAggro(m_pDef->m_Id.Value(), pPlayer->m_AccountUuid);
 		pEntry->m_RefreshTick = Server()->Tick();
 	}
 	return pEntry->m_Aggro;
@@ -406,6 +409,28 @@ void CNpcEntity::MoveToWorld(CGameWorld *pNewWorld, vec2 Pos)
 
 	pNewWorld->InsertEntity(this);
 	pNewWorld->BotManager()->AdoptBot(this);
+}
+
+
+void CNpcEntity::TickInteract()
+{
+	if(!m_pDef)
+		return;
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+		CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
+		const bool InRange = pPlayer && pPlayer->m_LoggedIn && pPlayer->GameWorld() == GameWorld() &&
+			pChr && pChr->IsAlive() && distance(pChr->GetPos(), m_Pos) <= NPC_INTERACT_RADIUS;
+
+		// tell the player once, when they first step into range
+		if(InRange && !m_aClientInRange[i])
+		{
+			const std::string Msg = LocalizeFormat("NPC", "You unlocked the shop of {}.", NpcIDDisplayName(m_pDef->m_Id));
+			GameServer()->SendChat(-1, CHAT_WHISPER, i, Msg.c_str());
+		}
+		m_aClientInRange[i] = InRange;
+	}
 }
 
 void CNpcEntity::OnAction()

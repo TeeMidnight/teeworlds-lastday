@@ -36,6 +36,8 @@ public:
 	virtual bool LoadShopListings(array<SShopListing> &out) override;
 	virtual bool SaveShopListing(const SShopListing &Listing) override;
 	virtual bool DeleteShopListing(int Id) override;
+	virtual bool ClearNpcSells(const Uuid &Npc) override;
+	virtual bool SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, const char *pPriceItem, int PriceCount) override;
 	virtual bool SaveWorldSave(const char *pMap, const char *pJsonData) override;
 	virtual bool GetWorldSaveSize(const char *pMap, int *pSize) override;
 	virtual bool GetWorldSaveData(const char *pMap, char *pOut, int Size) override;

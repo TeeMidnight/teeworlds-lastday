@@ -133,6 +133,13 @@ public:
 	virtual bool SaveShopListing(const SShopListing &Listing) = 0;
 	virtual bool DeleteShopListing(int Id) = 0;
 
+	// -------- npc shelves --------
+	// A configured NPC's shelf is mirrored into SQL when its json is loaded, so
+	// the shop data is queryable even though the json stays the authoring
+	// source. Loading clears the NPC's rows first, so a removed entry is gone.
+	virtual bool ClearNpcSells(const Uuid &Npc) = 0;
+	virtual bool SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, const char *pPriceItem, int PriceCount) = 0;
+
 	// -------- world saves (world persistence) --------
 	// one row per world instance (one map name, e.g. "<floor>_<seed>" for
 	// generated worlds or the plain name for static maps), so a world's

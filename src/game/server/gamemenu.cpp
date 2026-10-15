@@ -304,12 +304,12 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	// player stats
 	{
 		CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
-		pMenu->AddOptionFormat(Localize("Name: %s", "Menu Main"), "DISPLAY", "-", pMenu->Server()->ClientName(ClientID));
+		pMenu->AddOption(LocalizeFormat("Menu Main", "Name: {}", pMenu->Server()->ClientName(ClientID)).c_str(), "DISPLAY", "-");
 		if(pPlayer)
 		{
-			pMenu->AddOptionFormat(Localize("Level: %d", "Menu Main"), "DISPLAY", "-", pPlayer->m_Status.m_Level);
+			pMenu->AddOption(LocalizeFormat("Menu Main", "Level: {}", pPlayer->m_Status.m_Level).c_str(), "DISPLAY", "-");
 			// mercury chapter: the forgetting meter (0 = clear mind)
-			pMenu->AddOptionFormat(Localize("Forgetting: %d", "Menu Main"), "DISPLAY", "-", pPlayer->m_Status.m_Forgetting);
+			pMenu->AddOption(LocalizeFormat("Menu Main", "Forgetting: {}", pPlayer->m_Status.m_Forgetting).c_str(), "DISPLAY", "-");
 		}
 	}
 	pMenu->AddHorizontalRule();
@@ -375,7 +375,7 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 		}
 		else
 		{
-			pMenu->AddOptionFormat(Localize("%d. None", "Menu Inventory"), "DISPLAY", "-", i + 1);
+			pMenu->AddOption(LocalizeFormat("Menu Inventory", "{}. None", i + 1).c_str(), "DISPLAY", "-");
 		}
 	}
 
@@ -398,16 +398,6 @@ void CGameMenu::AddWrappedLinesOption(const char *pText)
 			break;
 		pCursor += Advance;
 	}
-}
-
-void CGameMenu::AddWrappedLinesOptionFormat(const char *pDesc, ...)
-{
-	va_list List;
-	va_start(List, pDesc);
-	char aBuf[VOTE_DESC_LENGTH * 4];
-	vsnprintf(aBuf, sizeof(aBuf), pDesc, List);
-	va_end(List);
-	AddWrappedLinesOption(aBuf);
 }
 
 // data threaded through CItemSystem::ForEachItemType (item view menu): joins
@@ -515,9 +505,8 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	pMenu->ClearOptions(ClientID);
 	pMenu->AddPageTitle();
 
-	char aHeader[VOTE_DESC_LENGTH];
-	str_format(aHeader, sizeof(aHeader), "%s x%d", pLocalizedName, Count);
-	pMenu->AddOption(aHeader, "DISPLAY", "=");
+	const std::string Header = std::format("{} x{}", pLocalizedName, Count);
+	pMenu->AddOption(Header.c_str(), "DISPLAY", "=");
 
 	// description (localized), wrapped over several rows. a forgotten item
 	// (high forgetting) shows no description: the player can't recall it
@@ -541,12 +530,10 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	pItem->ForEachItemType(Id, ItemTypeLineCallback, &TypeLine);
 	if(TypeLine.m_Count > 0)
 	{
-		char aTypeRow[VOTE_DESC_LENGTH * 4];
 		if(TypeLine.m_Count == 1)
-			str_format(aTypeRow, sizeof(aTypeRow), Localize("Type: %s", "Menu Inventory"), TypeLine.m_aTypes);
+			pMenu->AddWrappedLinesOption(LocalizeFormat("Menu Inventory", "Type: {}", (const char *) TypeLine.m_aTypes).c_str());
 		else
-			str_format(aTypeRow, sizeof(aTypeRow), Localize("Types: %s", "Menu Inventory"), TypeLine.m_aTypes);
-		pMenu->AddWrappedLinesOption(aTypeRow);
+			pMenu->AddWrappedLinesOption(LocalizeFormat("Menu Inventory", "Types: {}", (const char *) TypeLine.m_aTypes).c_str());
 	}
 
 	pMenu->AddHorizontalRule();
@@ -593,11 +580,9 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 		const CItemSystem::SResult &Give = Craft.m_aGives[g];
 		const char *pResultName = pData->m_pItem->GetName(Give.m_Id);
 		if(g == 0)
-			pMenu->AddOptionFormat("%d. %s x%d", Craft.m_aCraftId, "→",
-				pData->m_Index, Localize(pResultName, "Item Name"), Give.m_Count);
+			pMenu->AddOption(std::format("{}. {} x{}", pData->m_Index, Localize(pResultName, "Item Name"), Give.m_Count).c_str(), Craft.m_aCraftId, "→");
 		else
-			pMenu->AddOptionFormat(Localize("   + %s x%d", "Menu Craft"), "DISPLAY", "-",
-				Localize(pResultName, "Item Name"), Give.m_Count);
+			pMenu->AddOption(LocalizeFormat("Menu Craft", "   + {} x{}", Localize(pResultName, "Item Name"), Give.m_Count).c_str(), "DISPLAY", "-");
 	}
 
 	for(int i = 0; i < Craft.m_NumNeeded; i++)
@@ -611,20 +596,16 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 			// whether the player owns it (☑) or not (☒)
 			const char *pMark = Have > 0 ? "☑" : "☒";
 			if(Need.m_MatchByType)
-				pMenu->AddOptionFormat(Localize("   [tool] any %s %s", "Menu Craft"), "DISPLAY", "-",
-					Localize(Need.m_aType, "Item Type"), pMark);
+				pMenu->AddOption(LocalizeFormat("Menu Craft", "   [tool] any {} {}", Localize(Need.m_aType, "Item Type"), pMark).c_str(), "DISPLAY", "-");
 			else
-				pMenu->AddOptionFormat(Localize("   [tool] %s %s", "Menu Craft"), "DISPLAY", "-",
-					Localize(pData->m_pItem->GetName(Need.m_Id), "Item Name"), pMark);
+				pMenu->AddOption(LocalizeFormat("Menu Craft", "   [tool] {} {}", Localize(pData->m_pItem->GetName(Need.m_Id), "Item Name"), pMark).c_str(), "DISPLAY", "-");
 		}
 		else
 		{
 			if(Need.m_MatchByType)
-				pMenu->AddOptionFormat(Localize("   any %s %d/%d", "Menu Craft"), "DISPLAY", "-",
-					Localize(Need.m_aType, "Item Type"), Have, Need.m_Count);
+				pMenu->AddOption(LocalizeFormat("Menu Craft", "   any {} {}/{}", Localize(Need.m_aType, "Item Type"), Have, Need.m_Count).c_str(), "DISPLAY", "-");
 			else
-				pMenu->AddOptionFormat("   %s %d/%d", "DISPLAY", "-",
-					Localize(pData->m_pItem->GetName(Need.m_Id), "Item Name"), Have, Need.m_Count);
+				pMenu->AddOption(std::format("   {} {}/{}", Localize(pData->m_pItem->GetName(Need.m_Id), "Item Name"), Have, Need.m_Count).c_str(), "DISPLAY", "-");
 		}
 	}
 }
@@ -643,10 +624,9 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			const CItemSystem::SCraftDef *pCraft = pItem->GetCraft(VoteStatus.m_aCmd);
 			if(pCraft)
 			{
-				char aMsg[128];
-				str_format(aMsg, sizeof(aMsg), Localize("Crafted: %s x%d", "Menu Craft"),
+				const std::string Msg = LocalizeFormat("Menu Craft", "Crafted: {} x{}",
 					Localize(pItem->GetName(pCraft->m_aGives[0].m_Id), "Item Name"), pCraft->m_aGives[0].m_Count);
-				pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, aMsg);
+				pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
 			}
 		}
 		else if(Result == CItemSystem::CRAFT_NO_MATERIALS)
@@ -734,16 +714,6 @@ void CGameMenu::AddOption(const char *pDesc, const char *pCommand, const char *p
 	mem_copy(pOption->m_aCommand, pCommand, Len + 1);
 }
 
-void CGameMenu::AddOptionFormat(const char *pDesc, const char *pCommand, const char *pPrefix, ...)
-{
-	va_list List;
-	va_start(List, pPrefix);
-	char aBuf[VOTE_DESC_LENGTH];
-	vsnprintf(aBuf, sizeof(aBuf), pDesc, List);
-	va_end(List);
-	AddOption(aBuf, pCommand, pPrefix);
-}
-
 CGameMenu::CPlayerData::CPlayerData()
 {
 	m_pVoteOptionHeap = new CHeap();
@@ -793,25 +763,25 @@ bool CGameMenu::MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGa
 		// resolve the display name through the item system (translated)
 		const char *pRawName = !Item.IsZero() ? pItem->GetName(Item) : (pWeapon ? pWeapon->Name() : nullptr);
 
-		char aDesc[VOTE_DESC_LENGTH];
+		std::string Desc;
 		if(pRawName && pRawName[0])
 		{
 			const char *pName = Localize(pRawName, "Item Name");
 			if(pWeapon)
-				str_format(aDesc, sizeof(aDesc), "%d. %s", i + 1, pName);
+				Desc = std::format("{}. {}", i + 1, pName);
 			else
 				// an item without a corresponding weapon (e.g. a resource):
 				// falls back to the hand
-				str_format(aDesc, sizeof(aDesc), Localize("%d. %s (hand)", "Menu Loadout"), i + 1, pName);
+				Desc = LocalizeFormat("Menu Loadout", "{}. {} (hand)", i + 1, pName);
 		}
 		else if(!Item.IsZero())
-			str_format(aDesc, sizeof(aDesc), Localize("%d. (hand)", "Menu Loadout"), i + 1);
+			Desc = LocalizeFormat("Menu Loadout", "{}. (hand)", i + 1);
 		else
-			str_format(aDesc, sizeof(aDesc), Localize("%d. (empty)", "Menu Loadout"), i + 1);
+			Desc = LocalizeFormat("Menu Loadout", "{}. (empty)", i + 1);
 
 		char aCmd[16];
 		str_format(aCmd, sizeof(aCmd), "PICK %d", i);
-		pMenu->AddOption(aDesc, aCmd);
+		pMenu->AddOption(Desc.c_str(), aCmd);
 	}
 
 	return true;
@@ -941,13 +911,14 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 		for(int d = 0; d < pNpcs->NumDefs(); d++)
 		{
 			const SNpcDef *pDef = pNpcs->DefAt(d);
-			if(!pDef)
+			// only a nearby NPC's shelf can be traded with
+			if(!pDef || !pMenu->GameServer()->NpcInRange(ClientID, d))
 				continue;
 			for(int s = 0; s < pDef->m_lSells.size(); s++)
 			{
 				const SNpcSell &Sell = pDef->m_lSells[s];
 				const std::string Desc = LocalizeFormat("Menu Trade", "{}: {} x{} for {} x{}",
-					pDef->m_aName, Sell.m_Item, Sell.m_Count, Sell.m_PriceItem, Sell.m_PriceCount);
+					NpcIDDisplayName(pDef->m_Id), Sell.m_Item, Sell.m_Count, Sell.m_PriceItem, Sell.m_PriceCount);
 				char aCmd[32];
 				str_format(aCmd, sizeof(aCmd), "BUYNPC %d %d", d, s);
 				pMenu->AddOption(Desc.c_str(), aCmd, "$");

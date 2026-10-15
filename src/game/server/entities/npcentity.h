@@ -72,6 +72,9 @@ private:
 	// hand the bot over to another world's bot manager and re-bind its core
 	void MoveToWorld(CGameWorld *pNewWorld, vec2 Pos);
 
+	// announce the shop to players that enter the trading range
+	void TickInteract();
+
 	// the closest live player within the roam radius, or null
 	CEntity *ClosestPlayer();
 	// random walk, kept inside the spawn radius
@@ -86,6 +89,10 @@ private:
 		int m_RefreshTick;
 	};
 	array<SNpcAggroEntry> m_lAggro;
+
+	// who was inside the trading range last tick, so the unlock notice fires
+	// once per entry instead of every frame
+	bool m_aClientInRange[MAX_CLIENTS] = {};
 
 	// the scripted respawn. While teleporting the NPC is invincible and its AI
 	// is suspended; it is moved to the main world, emotes, then comes home.

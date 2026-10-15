@@ -418,12 +418,12 @@ IBotEntity *CBotManager::SpawnNpc(const SNpcDef *pDef)
 		return nullptr;
 	// the definition carries a fixed identity, so a second copy of the same npc
 	// (or the same world reloaded) never spawns twice
-	if(BotByID(pDef->m_BotId))
+	if(BotByID(pDef->m_Id.Value()))
 		return nullptr;
 
 	IBotEntity *pBot = new CNpcEntity(m_pGameWorld, pDef, TEAM_BLUE);
-	m_Bots.set(pDef->m_BotId, pBot);
-	m_lBotOrder.add(pDef->m_BotId);
+	m_Bots.set(pDef->m_Id.Value(), pBot);
+	m_lBotOrder.add(pDef->m_Id.Value());
 	if(pBot->TeeID() != -1)
 		m_BotsByTeeID.set(pBot->TeeID(), pBot);
 

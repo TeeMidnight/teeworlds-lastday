@@ -703,6 +703,8 @@ set_src(GAME_SHARED GLOB src/game
   localization.h
   localization_format.h
   mapitems.h
+  npc_id.cpp
+  npc_id.h
   tuning.h
   variables.h
   version.h

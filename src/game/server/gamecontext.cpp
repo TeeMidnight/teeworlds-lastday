@@ -15,6 +15,7 @@
 #include <game/collision.h>
 #include <game/gamecore.h>
 #include <game/localization.h>
+#include <game/localization_format.h>
 #include <game/version.h>
 #include <generated/server_data.h>
 
@@ -369,9 +370,8 @@ bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 D
 	new CDroppedPickup(pWorld, pChr->GetPos(), Direction, Id, Count);
 
 	const char *pName = pItems->GetName(Id);
-	char aMsg[128];
-	str_format(aMsg, sizeof(aMsg), Localize("You dropped: %s x%d", "Item Drop"), Localize(pName, "Item Name"), Count);
-	SendChat(-1, CHAT_WHISPER, ClientID, aMsg);
+	const std::string Msg = LocalizeFormat("Item Drop", "You dropped: {} x{}", Localize(pName, "Item Name"), Count);
+	SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
 	return true;
 }
 
@@ -1158,7 +1158,7 @@ void CGameContext::EnsureNpcAggroFor(CPlayer *pPlayer)
 	{
 		const SNpcDef *pDef = m_pNpcSystem->DefAt(i);
 		if(pDef)
-			m_pDatabase->EnsureNpcAggro(pDef->m_BotId, pPlayer->m_AccountUuid);
+			m_pDatabase->EnsureNpcAggro(pDef->m_Id.Value(), pPlayer->m_AccountUuid);
 	}
 }
 
@@ -1169,6 +1169,11 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 	const SNpcDef *pDef = m_pNpcSystem->DefAt(DefIndex);
 	if(!pDef || SellIndex < 0 || SellIndex >= pDef->m_lSells.size())
 		return false;
+	if(!NpcInRange(ClientID, DefIndex))
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You must be near the merchant.", "Trade"));
+		return false;
+	}
 
 	const SNpcSell &Sell = pDef->m_lSells[SellIndex];
 	CItemSystem *pItems = Item();
@@ -1195,9 +1200,31 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 	}
 
 	char aBuf[192];
-	str_format(aBuf, sizeof(aBuf), "Bought %s x%d from %s", pItems->GetName(Sell.m_Item), Sell.m_Count, pDef->m_aName);
+	str_format(aBuf, sizeof(aBuf), "Bought %s x%d from %s", pItems->GetName(Sell.m_Item), Sell.m_Count, NpcIDDisplayName(pDef->m_Id));
 	SendChat(-1, CHAT_WHISPER, ClientID, aBuf);
 	return true;
+}
+
+bool CGameContext::NpcInRange(int ClientID, int DefIndex)
+{
+	if(!m_pNpcSystem || ClientID < 0 || ClientID >= MAX_CLIENTS || !m_apPlayers[ClientID])
+		return false;
+	const SNpcDef *pDef = m_pNpcSystem->DefAt(DefIndex);
+	if(!pDef)
+		return false;
+
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	CCharacter *pChr = pPlayer->GetCharacter();
+	if(!pChr || !pChr->IsAlive())
+		return false;
+
+	CGameWorld *pWorld = pPlayer->GameWorld();
+	if(!pWorld || !pWorld->HasBotManager())
+		return false;
+	IBotEntity *pBot = pWorld->GetBotManager()->BotByID(pDef->m_Id.Value());
+	if(!pBot || !pBot->IsAlive())
+		return false;
+	return distance(pBot->GetPos(), pChr->GetPos()) <= NPC_INTERACT_RADIUS;
 }
 
 void CGameContext::OnShutdown()

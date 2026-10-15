@@ -9,6 +9,7 @@
 #include <base/vmath.h>
 
 #include <game/item_id.h>
+#include <game/npc_id.h>
 #include <game/server/bot.h> // CBotSkin
 
 class CGameContext;
@@ -38,9 +39,7 @@ struct SNpcAggroDef
 // describes exactly one spawn: it may not be reused for a second one.
 struct SNpcDef
 {
-	char m_aNpcId[64];
-	Uuid m_BotId; // deterministic, derived from the npc id
-	char m_aName[64];
+	CNpcID m_Id;        // deterministic identity and name source
 	char m_aWorld[64]; // map name the NPC is spawned in
 	vec2 m_Pos;        // world position (tiles converted by the loader)
 	int m_Health;
@@ -50,8 +49,11 @@ struct SNpcDef
 	array<SNpcSell> m_lSells;
 };
 
-// Loads and owns every NPC definition. Definitions are keyed by their npc id
-// and by their deterministic BotID.
+// How close a player must be to trade with an NPC (and to be told about it),
+// in world units. Five tiles matches the NPC's normal attention range.
+constexpr float NPC_INTERACT_RADIUS = 5.0f * 32.0f;
+
+// Loads and owns every NPC definition. Definitions are keyed by their CNpcID.
 class CNpcSystem
 {
 	CGameContext *m_pGameServer;
@@ -59,6 +61,8 @@ class CNpcSystem
 	array<SNpcDef *> m_lDefs;
 
 	void Clear();
+	// mirror every loaded NPC's shelf into the database (clear + insert)
+	void PersistShelves();
 	static int ListCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	void Load(const char *pDefaultId, const char *pFilePath);
 
@@ -68,8 +72,7 @@ public:
 
 	void Init(CGameContext *pGameServer, IStorage *pStorage);
 
-	const SNpcDef *Find(const char *pNpcId) const;
-	const SNpcDef *Find(const Uuid &BotId) const;
+	const SNpcDef *Find(const CNpcID &Id) const;
 	const SNpcDef *DefAt(int Index) const { return Index >= 0 && Index < m_lDefs.size() ? m_lDefs[Index] : 0; }
 	int NumDefs() const { return m_lDefs.size(); }
 };

@@ -145,9 +145,25 @@ bool CDatabasePostgres::Init()
 		dbg_msg("database", "failed to create shop_listings schema: %s", PQresultErrorMessage(pRes));
 	PQclear(pRes);
 
-	if(Ok && SavesOk && AggroOk && ShopOk)
+	// the shelf of each configured NPC, mirrored from its json
+	const char *pCreateNpcShop =
+		"CREATE TABLE IF NOT EXISTS npc_shop ("
+		" npc_id UUID NOT NULL,"
+		" item TEXT NOT NULL,"
+		" \"count\" INTEGER NOT NULL,"
+		" price_item TEXT NOT NULL,"
+		" price_count INTEGER NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price_item));";
+
+	pRes = PQexec(m_pConn, pCreateNpcShop);
+	const bool NpcShopOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!NpcShopOk)
+		dbg_msg("database", "failed to create npc_shop schema: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+
+	if(Ok && SavesOk && AggroOk && ShopOk && NpcShopOk)
 		dbg_msg("database", "postgres database ready");
-	return Ok && SavesOk && AggroOk && ShopOk;
+	return Ok && SavesOk && AggroOk && ShopOk && NpcShopOk;
 }
 
 bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
@@ -490,6 +506,46 @@ bool CDatabasePostgres::DeleteShopListing(int Id)
 	const char *apParams[1] = {aId};
 	PGresult *pRes = PQexecParams(m_pConn, "DELETE FROM shop_listings WHERE id = $1::int;", 1, 0, apParams, 0, 0, 0);
 	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::ClearNpcSells(const Uuid &Npc)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	const char *apParams[1] = {aNpc};
+	PGresult *pRes = PQexecParams(m_pConn, "DELETE FROM npc_shop WHERE npc_id = $1::uuid;", 1, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, const char *pPriceItem, int PriceCount)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aCount[32];
+	char aPriceCount[32];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	str_format(aCount, sizeof(aCount), "%d", Count);
+	str_format(aPriceCount, sizeof(aPriceCount), "%d", PriceCount);
+
+	const char *apParams[5] = {aNpc, pItem, aCount, pPriceItem, aPriceCount};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO npc_shop (npc_id, item, \"count\", price_item, price_count) VALUES ($1::uuid, $2::text, $3::int, $4::text, $5::int) "
+		"ON CONFLICT (npc_id, item, price_item) DO UPDATE SET \"count\" = EXCLUDED.\"count\", price_count = EXCLUDED.price_count;",
+		5, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to save npc sell '%s': %s", aNpc, PQresultErrorMessage(pRes));
 	PQclear(pRes);
 	return Ok;
 }

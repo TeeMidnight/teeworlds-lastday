@@ -6,6 +6,8 @@
 #include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
 
+#include <game/server/database/database.h>
+
 #include "gamecontext.h"
 #include "npcdata.h"
 
@@ -26,6 +28,16 @@ int ReadInt(const json_value &Value, int Default)
 	if(Value.type == json_integer || Value.type == json_double)
 		return (int) (json_int_t) Value;
 	return Default;
+}
+
+// the persistable name of an item id: its namespaced source, or the uuid
+void ItemSourceName(const CItemID &Id, char *pOut, int Size)
+{
+	const char *pSource = Id.SourceName();
+	if(pSource && pSource[0])
+		str_copy(pOut, pSource, Size);
+	else
+		Id.FormatUuid(pOut, Size);
 }
 } // namespace
 
@@ -90,32 +102,32 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 	const char *pId = (*pJson)["npc_id"];
 	if(!pId[0])
 		pId = pDefaultId;
-	str_copy(pDef->m_aNpcId, pId, sizeof(pDef->m_aNpcId));
-	if(!pDef->m_aNpcId[0])
+	const CNpcID Id = CNpcID::FromName(pId);
+	if(Id.IsZero())
 	{
 		dbg_msg("npc", "npc '%s' has an empty id", pFilePath);
 		delete pDef;
 		return;
 	}
 
-	// identity is derived from the id, so it survives a respawn
-	char aSeed[128];
-	str_format(aSeed, sizeof(aSeed), "lastday:npc/%s", pDef->m_aNpcId);
-	const Uuid BotId = calculate_uuid(aSeed);
-
 	// a definition may only be used once: a duplicate id is a configuration
 	// error, not a second spawn
-	if(Find(pDef->m_aNpcId) || Find(BotId))
+	if(Find(Id))
 	{
-		dbg_msg("npc", "duplicate npc id '%s' (each npc definition may only be used once)", pDef->m_aNpcId);
+		dbg_msg("npc", "duplicate npc id '%s' (each npc definition may only be used once)", pId);
 		delete pDef;
 		return;
 	}
-	pDef->m_BotId = BotId;
+	pDef->m_Id = Id;
 
-	str_copy(pDef->m_aName, (*pJson)["name"], sizeof(pDef->m_aName));
-	if(!pDef->m_aName[0])
-		str_copy(pDef->m_aName, pDef->m_aNpcId, sizeof(pDef->m_aName));
+	// the display name is registered against the id; it is content, not UI text,
+	// so it never gets a translation entry
+	const char *pName = (*pJson)["name"];
+	if(!pName[0])
+		pName = pId;
+	char aSource[128];
+	str_copy(aSource, Id.SourceName(), sizeof(aSource));
+	NpcIDRegisterName(Id, aSource, pName);
 	str_copy(pDef->m_aWorld, (*pJson)["world"], sizeof(pDef->m_aWorld));
 
 	// the spawn is in tiles; the centre of the tile is where a tee stands
@@ -185,7 +197,7 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 
 	m_lDefs.add(pDef);
 	dbg_msg("npc", "loaded npc '%s' ('%s') world '%s' pos %d,%d hp %d regen %d sells %d",
-		pDef->m_aNpcId, pDef->m_aName, pDef->m_aWorld,
+		Id.SourceName(), NpcIDDisplayName(Id), pDef->m_aWorld,
 		TileX, TileY, pDef->m_Health, pDef->m_HealthRegen, pDef->m_lSells.size());
 }
 
@@ -197,24 +209,38 @@ void CNpcSystem::Init(CGameContext *pGameServer, IStorage *pStorage)
 	Clear();
 	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "bots/npc", ListCallback, this);
 	dbg_msg("npc", "loaded %d npc definition(s)", m_lDefs.size());
+
+	PersistShelves();
 }
 
-const SNpcDef *CNpcSystem::Find(const char *pNpcId) const
+void CNpcSystem::PersistShelves()
 {
-	if(!pNpcId || !pNpcId[0])
-		return 0;
+	if(!m_pGameServer || !m_pGameServer->Database())
+		return;
+	CDatabase *pDB = m_pGameServer->Database();
+
 	for(int i = 0; i < m_lDefs.size(); i++)
-		if(str_comp(m_lDefs[i]->m_aNpcId, pNpcId) == 0)
-			return m_lDefs[i];
-	return 0;
+	{
+		const SNpcDef *pDef = m_lDefs[i];
+		pDB->ClearNpcSells(pDef->m_Id.Value());
+		for(int s = 0; s < pDef->m_lSells.size(); s++)
+		{
+			const SNpcSell &Sell = pDef->m_lSells[s];
+			char aItem[64];
+			char aPrice[64];
+			ItemSourceName(Sell.m_Item, aItem, sizeof(aItem));
+			ItemSourceName(Sell.m_PriceItem, aPrice, sizeof(aPrice));
+			pDB->SaveNpcSell(pDef->m_Id.Value(), aItem, Sell.m_Count, aPrice, Sell.m_PriceCount);
+		}
+	}
 }
 
-const SNpcDef *CNpcSystem::Find(const Uuid &BotId) const
+const SNpcDef *CNpcSystem::Find(const CNpcID &Id) const
 {
-	if(BotId == UUID_ZEROED)
+	if(Id.IsZero())
 		return 0;
 	for(int i = 0; i < m_lDefs.size(); i++)
-		if(m_lDefs[i]->m_BotId == BotId)
+		if(m_lDefs[i]->m_Id == Id)
 			return m_lDefs[i];
 	return 0;
 }
