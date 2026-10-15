@@ -136,6 +136,10 @@ public:
 	static void Com_About(IConsole::IResult *pResult, void *pContext);
 	static void ComRegister(IConsole::IResult *pResult, void *pContext);
 	static void ComLogin(IConsole::IResult *pResult, void *pContext);
+	static void ComSell(IConsole::IResult *pResult, void *pContext);
+	static void ComUnlist(IConsole::IResult *pResult, void *pContext);
+	static void ComBuy(IConsole::IResult *pResult, void *pContext);
+	static void ComShop(IConsole::IResult *pResult, void *pContext);
 	void RegisterChatCommands(CCommandManager *pManager);
 
 	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }

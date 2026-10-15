@@ -42,6 +42,17 @@ public:
 	// refuse. pUser is the value passed to SetBotTypeCreator.
 	typedef IBotEntity *(*FBotCreator)(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team, void *pUser);
 
+	// Whether the world's bots are hostile fighters or peaceful NPCs. The hub
+	// world must never spawn hostile bots, only NPCs.
+	enum EBotRole
+	{
+		BOTROLE_HOSTILE = 0,
+		BOTROLE_NPC,
+	};
+	void SetBotRole(EBotRole Role) { m_Role = Role; }
+	EBotRole Role() const { return m_Role; }
+	bool IsNpcWorld() const { return m_Role == BOTROLE_NPC; }
+
 private:
 	CGameWorld *m_pGameWorld;
 
@@ -65,6 +76,9 @@ private:
 	FBotCreator m_pfnBotCreator;
 	void *m_pBotCreatorUser;
 	char m_aBotType[32];
+
+	// hostile or peaceful (set from the world kind by the game context)
+	EBotRole m_Role;
 
 	// How many bots this world wants to keep alive.
 	int DesiredBotCount() const;

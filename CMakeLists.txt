@@ -796,6 +796,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   player.cpp
   player.h
   player_data.cpp
+  trade.cpp
+  trade.h
   weapon.h
   weaponmanager.cpp
   weaponmanager.h

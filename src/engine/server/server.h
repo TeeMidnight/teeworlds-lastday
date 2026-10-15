@@ -196,6 +196,8 @@ public:
 		int m_Size;
 		int m_MapID;
 		bool m_Loaded;
+		// engine/server/mapgen.h EWorldKind of this map, -1 when unknown
+		int m_WorldKind;
 
 		const char *GetMapName();
 		static void Clean(CMapInfo &This, void *pUser);
@@ -306,6 +308,7 @@ public:
 
 	virtual bool SwitchClientMap(int ClientID, unsigned MapID);
 	virtual const char *GetMapName(unsigned MapID);
+	virtual int GetMapWorldKind(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);
 };
 

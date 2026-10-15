@@ -6,6 +6,7 @@
 
 #include <engine/engine.h>
 #include <engine/map.h>
+#include <engine/server/mapgen.h>
 #include <engine/shared/config.h>
 #include <engine/shared/jsonwriter.h>
 #include <engine/shared/memheap.h>
@@ -27,6 +28,7 @@
 #include "gamecontroller.h"
 #include "item.h"
 #include "player.h"
+#include "trade.h"
 #include "weapon.h"
 #include "weaponmanager.h"
 
@@ -50,6 +52,7 @@ void CGameContext::Construct(int Resetting)
 	m_pController = 0;
 	m_pDatabase = 0;
 	m_pItemSystem = 0;
+	m_pTradeSystem = 0;
 	m_MainWorldID = 0;
 	m_LockTeams = 0;
 
@@ -576,6 +579,10 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 	if(!m_apPlayers[ClientID])
 		return;
 
+	// return any escrowed trade goods to this player before the slot is
+	// recycled, then persist the resulting inventory
+	m_pTradeSystem->RemoveListingsOf(ClientID);
+
 	// persist the player's status before dropping
 	SavePlayerData(m_apPlayers[ClientID]);
 
@@ -1079,6 +1086,10 @@ void CGameContext::OnInit()
 	m_pItemSystem = new CItemSystem();
 	m_pItemSystem->Init(this, Storage());
 
+	// the player owned shop (in-memory listings for this session)
+	m_pTradeSystem = new CTradeSystem();
+	m_pTradeSystem->Init(this);
+
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 
 	Console()->Chain("sv_vote_kick", ConchainSettingUpdate, this);
@@ -1131,6 +1142,9 @@ void CGameContext::OnShutdown()
 
 	delete m_pItemSystem;
 	m_pItemSystem = 0;
+
+	delete m_pTradeSystem;
+	m_pTradeSystem = 0;
 
 	delete m_pController;
 	m_pController = 0;
@@ -1247,10 +1261,15 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 	pNewWorld->m_WorldID = MapID;
 	pNewWorld->InitCollision(Kernel()->RequestInterface<IMap>());
 
-	// only worlds whose game mode wants bots get a manager; BotManager() would
-	// also create one on demand, this just makes the decision explicit
-	if(m_pController->IsUsingBot())
-		pNewWorld->BotManager();
+	// Bots are allowed only in euclidean worlds with sv_bots enabled. A
+	// non-euclidean space stays empty, and the hub spawns peaceful NPCs only
+	// (never hostile bots). An unknown kind is treated as non-euclidean.
+	const int WorldKind = Server()->GetMapWorldKind(MapID);
+	if(Config()->m_SvBots > 0 && (WorldKind == WORLDKIND_EUCLID || WorldKind == WORLDKIND_HUB))
+	{
+		CBotManager *pBots = pNewWorld->BotManager();
+		pBots->SetBotRole(WorldKind == WORLDKIND_HUB ? CBotManager::BOTROLE_NPC : CBotManager::BOTROLE_HOSTILE);
+	}
 
 	// remember the canonical map name: it is the persistence key of the
 	// world saves stored in the database

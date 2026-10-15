@@ -12,6 +12,7 @@
 #include "gamemenu.h"
 #include "item.h"
 #include "player.h"
+#include "trade.h"
 #include "weapon.h"
 #include "weaponmanager.h"
 
@@ -86,6 +87,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	Register("CRAFT", "Craft", MenuCraft, nullptr); // Localize("Craft", "CRAFT")
 	Register("LOADOUT", "Loadout", MenuLoadout, nullptr); // Localize("Loadout", "LOADOUT")
 	Register("WEAPONPICK", "Choose Weapon", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Weapon", "WEAPONPICK")
+	Register("TRADE", "Player Shops", MenuTrade, nullptr); // Localize("Player Shops", "TRADE")
 	Register("VOTE", "Server Vote", MenuVote, nullptr); // Localize("Server Vote", "VOTE")
 }
 
@@ -267,6 +269,11 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->SetPlayerPage(ClientID, "LOADOUT");
 			return false;
 		}
+		else if(str_comp(VoteStatus.m_aCmd, "PAGE TRADE") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "TRADE");
+			return false;
+		}
 		else if(str_comp(VoteStatus.m_aCmd, "HIDDEN") == 0)
 		{
 			pMenu->GameServer()->m_apPlayers[ClientID]->m_Status.m_HideTip = true;
@@ -303,6 +310,7 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		pMenu->AddOption(Localize("Inventory", "Menu Main"), "PAGE INVENTORY", "★");
 		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
+		pMenu->AddOption(Localize("Player Shops", "Menu Main"), "PAGE TRADE", "★");
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
 	}
 
@@ -845,6 +853,52 @@ bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class 
 		char aCmd[UUID_MAXSTRSIZE];
 		ItemCommand(Id, aCmd, sizeof(aCmd));
 		pMenu->AddOption(Localize(pName, "Item Name"), aCmd);
+	}
+
+	return true;
+}
+
+bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	// clicking a listing buys it. The command is "BUY <id>".
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "NONE") != 0 &&
+		str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_startswith(VoteStatus.m_aCmd, "BUY "))
+	{
+		const int ListingId = str_toint(VoteStatus.m_aCmd + 4);
+		pMenu->GameServer()->Trade()->Buy(ClientID, ListingId);
+		pMenu->SetPlayerPage(ClientID, "TRADE");
+		return false;
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	pMenu->AddOption(Localize("Click a listing to buy it.", "Menu Trade"), "DISPLAY", "-");
+	pMenu->AddOption(Localize("List your own goods with: /sell <item> <count> <price item> <price count>", "Menu Trade"), "DISPLAY", "-");
+	pMenu->AddHorizontalRule();
+
+	CTradeSystem *pTrade = pMenu->GameServer()->Trade();
+	if(!pTrade || pTrade->NumListings() == 0)
+	{
+		pMenu->AddOption(Localize("No goods are for sale.", "Menu Trade"), "DISPLAY", "-");
+		return true;
+	}
+
+	for(int i = 0; i < pTrade->NumListings(); i++)
+	{
+		const CTradeSystem::SListing *pListing = pTrade->ListingAt(i);
+		if(!pListing)
+			continue;
+		const std::string Desc = LocalizeFormat("Menu Trade", "#{} {}: {} x{} for {} x{}",
+			pListing->m_Id, pMenu->Server()->ClientName(pListing->m_Seller),
+			pListing->m_OfferItem, pListing->m_OfferCount, pListing->m_PriceItem, pListing->m_PriceCount);
+		char aCmd[32];
+		str_format(aCmd, sizeof(aCmd), "BUY %d", pListing->m_Id);
+		pMenu->AddOption(Desc.c_str(), aCmd, "$");
 	}
 
 	return true;

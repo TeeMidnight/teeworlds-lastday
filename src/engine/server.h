@@ -78,6 +78,11 @@ public:
 	// canonical map name of a loaded/known map, or "" when unknown
 	virtual const char *GetMapName(unsigned MapID) = 0;
 
+	// The kind of space a map is (a engine/server/mapgen.h EWorldKind value),
+	// or -1 when unknown. The game layer uses this to decide whether a world
+	// may contain bots at all and whether they are hostile or peaceful NPCs.
+	virtual int GetMapWorldKind(unsigned MapID) { return -1; }
+
 	// releases the cached map data of a map that no client needs anymore
 	// (the map can be re-loaded on demand if a client switches to it again)
 	virtual void UnloadMap(unsigned MapID) = 0;

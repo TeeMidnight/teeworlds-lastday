@@ -109,6 +109,8 @@ private:
 	// loadout (weapon equipment) menu
 	static bool MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// player owned shops (listing / buying goods)
+	static bool MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 
 	// ----- server vote state -----
 	enum

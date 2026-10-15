@@ -189,6 +189,10 @@ void CBotEntity::OnAction()
 
 CEntity *CBotEntity::FindTarget()
 {
+	// a peaceful NPC never acquires a target: it only wanders
+	if(GameWorld()->HasBotManager() && GameWorld()->GetBotManager()->IsNpcWorld())
+		return nullptr;
+
 	// chase the closest hittable entity that is not us and is in line of sight
 	CEntity *pTarget = GameWorld()->ClosestFlagEntity(GetPos(), 320.0f, CGameWorld::ENTFLAG_HITABLE, this);
 	if(pTarget && GameWorld()->Collision()->IntersectLine(GetPos(), pTarget->GetPos(), NULL, NULL))

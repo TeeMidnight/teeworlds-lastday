@@ -36,11 +36,13 @@ CBotManager::CBotManager(CGameWorld *pGameWorld)
 	m_pfnBotCreator = DefaultBotCreator;
 	m_pBotCreatorUser = nullptr;
 	str_copy(m_aBotType, "default", sizeof(m_aBotType));
+	m_Role = BOTROLE_HOSTILE;
 
 	ClearPlayerMap(-1);
 
-	dbg_msg("bot", "manager ready: type='%s' wanted=%d (0.7 tee ids %d..%d, 0.8 tee ids %d..%d)",
-		m_aBotType, DesiredBotCount(), BOT_TEEID_07_MIN, BOT_TEEID_07_MAX, BOT_TEEID_08_MIN, BOT_TEEID_08_MAX);
+	dbg_msg("bot", "manager ready: type='%s' role=%s wanted=%d (0.7 tee ids %d..%d, 0.8 tee ids %d..%d)",
+		m_aBotType, m_Role == BOTROLE_NPC ? "npc" : "hostile",
+		DesiredBotCount(), BOT_TEEID_07_MIN, BOT_TEEID_07_MAX, BOT_TEEID_08_MIN, BOT_TEEID_08_MAX);
 }
 
 CBotManager::~CBotManager()

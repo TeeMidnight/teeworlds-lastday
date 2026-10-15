@@ -1395,6 +1395,7 @@ unsigned CServer::PushMapList(const char *pMapName)
 		Info.m_MapID = MapID;
 		Info.m_pData = 0;
 		Info.m_Loaded = false;
+		Info.m_WorldKind = -1;
 		m_MapInfos.set(str_quickhash(pMapName), Info);
 	}
 	return MapID;
@@ -1466,6 +1467,22 @@ int CServer::LoadMap(CMapInfo *pInfo)
 			str_copy(aBuf, aGenPath, sizeof(aBuf));
 			IsGenerated = true;
 		}
+	}
+
+	// remember the kind of space this map is, so the game layer can decide
+	// whether bots are allowed here and whether they are hostile. Generated
+	// floors are euclidean; static floors are looked up in the mapgen config.
+	{
+		EWorldKind Kind = WORLDKIND_NONEUCLID;
+		if(IsGenerated)
+			Kind = WORLDKIND_EUCLID;
+		else if(m_pMapGen && m_pMapGen->GetFloorKind(pInfo->m_aName, &Kind))
+		{
+			// found in the floor config
+		}
+		else
+			Kind = str_comp(pInfo->m_aName, "Connector") == 0 ? WORLDKIND_HUB : WORLDKIND_NONEUCLID;
+		pInfo->m_WorldKind = (int) Kind;
 	}
 
 	// check for valid standard map (generated maps are always accepted)
@@ -1999,6 +2016,12 @@ const char *CServer::GetMapName(unsigned MapID)
 {
 	CMapInfo *pInfo = m_MapInfos[MapID];
 	return pInfo ? pInfo->GetMapName() : "";
+}
+
+int CServer::GetMapWorldKind(unsigned MapID)
+{
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	return pInfo ? pInfo->m_WorldKind : -1;
 }
 
 void CServer::UnloadMap(unsigned MapID)

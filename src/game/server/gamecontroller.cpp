@@ -7,6 +7,7 @@
 #include <engine/shared/config.h>
 #include <cmath>
 
+#include <game/localization_format.h>
 #include <game/mapitems.h>
 #include <game/version.h>
 #include <generated/server_data.h>
@@ -20,6 +21,7 @@
 #include "gamecontroller.h"
 #include "item.h"
 #include "player.h"
+#include "trade.h"
 #include "weapon.h"
 #include "weaponmanager.h"
 
@@ -729,12 +731,90 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 	pSelf->SendSystemChat(ClientID, Localize("Logged in.", "Account"));
 }
 
+void CGameController::ComSell(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	int ClientID = pCmdContext->m_ClientID;
+
+	if(pResult->NumArguments() < 4)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("Usage: /sell <item> <count> <price item> <price count>", "Trade"));
+		return;
+	}
+	CItemID Offer;
+	CItemID Price;
+	if(!CItemID::Parse(pResult->GetString(0), &Offer) || !CItemID::Parse(pResult->GetString(2), &Price))
+	{
+		pSelf->SendSystemChat(ClientID, Localize("Unknown item.", "Trade"));
+		return;
+	}
+	pSelf->GameServer()->Trade()->AddListing(ClientID, Offer, pResult->GetInteger(1), Price, pResult->GetInteger(3));
+}
+
+void CGameController::ComUnlist(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	int ClientID = pCmdContext->m_ClientID;
+
+	if(pResult->NumArguments() < 1)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("Usage: /unlist <id>", "Trade"));
+		return;
+	}
+	pSelf->GameServer()->Trade()->RemoveListing(pResult->GetInteger(0), ClientID, false);
+}
+
+void CGameController::ComBuy(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	int ClientID = pCmdContext->m_ClientID;
+
+	if(pResult->NumArguments() < 1)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("Usage: /buy <id>", "Trade"));
+		return;
+	}
+	pSelf->GameServer()->Trade()->Buy(ClientID, pResult->GetInteger(0));
+}
+
+void CGameController::ComShop(IConsole::IResult *pResult, void *pContext)
+{
+	(void) pResult;
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	int ClientID = pCmdContext->m_ClientID;
+
+	CTradeSystem *pTrade = pSelf->GameServer()->Trade();
+	if(pTrade->NumListings() == 0)
+	{
+		pSelf->SendSystemChat(ClientID, Localize("No goods are for sale.", "Trade"));
+		return;
+	}
+	for(int i = 0; i < pTrade->NumListings(); i++)
+	{
+		const CTradeSystem::SListing *pListing = pTrade->ListingAt(i);
+		if(!pListing)
+			continue;
+		const std::string Line = LocalizeFormat("Trade", "#{} {}: {} x{} for {} x{}",
+			pListing->m_Id, pSelf->GameServer()->Server()->ClientName(pListing->m_Seller),
+			pListing->m_OfferItem, pListing->m_OfferCount, pListing->m_PriceItem, pListing->m_PriceCount);
+		pSelf->SendSystemChat(ClientID, Line.c_str());
+	}
+}
+
 void CGameController::RegisterChatCommands(CCommandManager *pManager)
 {
 	pManager->AddCommand("about", "About the mod", "", Com_About, this);
 	pManager->AddCommand("info", "About the mod", "", Com_About, this);
 	pManager->AddCommand("register", "Register a new account", "s[username] s[password]", ComRegister, this);
 	pManager->AddCommand("login", "Log in to an account", "s[username] s[password]", ComLogin, this);
+	pManager->AddCommand("sell", "List an item for sale", "s[item] i[count] s[price] i[price]", ComSell, this);
+	pManager->AddCommand("unlist", "Remove one of your listings", "i[id]", ComUnlist, this);
+	pManager->AddCommand("buy", "Buy a listing", "i[id]", ComBuy, this);
+	pManager->AddCommand("shop", "List the player shops", "", ComShop, this);
 }
 
 void CGameController::SendSystemChat(int TargetID, const char *pMsg)
