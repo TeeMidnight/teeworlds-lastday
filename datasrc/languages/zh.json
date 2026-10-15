@@ -601,11 +601,6 @@
 		},
 		{
 			"context": "Trade",
-			"or": "Usage: /sell <item> <count> <price item> <price count>",
-			"tr": "用法：/sell <物品> <数量> <价格物品> <价格数量>"
-		},
-		{
-			"context": "Trade",
 			"or": "Unknown item.",
 			"tr": "未知物品。"
 		},
@@ -665,24 +660,9 @@
 			"tr": "没有商品在售。"
 		},
 		{
-			"context": "Trade",
-			"or": "Usage: /unlist <id>",
-			"tr": "用法：/unlist <编号>"
-		},
-		{
-			"context": "Trade",
-			"or": "Usage: /buy <id>",
-			"tr": "用法：/buy <编号>"
-		},
-		{
 			"context": "Menu Trade",
 			"or": "Click a listing to buy it.",
 			"tr": "点击挂单进行购买。"
-		},
-		{
-			"context": "Menu Trade",
-			"or": "List your own goods with: /sell <item> <count> <price item> <price count>",
-			"tr": "用 /sell <物品> <数量> <价格物品> <价格数量> 上架你的物品。"
 		},
 		{
 			"context": "Menu Trade",
@@ -718,6 +698,96 @@
 			"context": "Menu Craft",
 			"or": "   + %s x%d",
 			"tr": "   + %s x%d"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Sell Goods",
+			"tr": "出售物品"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "My Listings",
+			"tr": "我的挂单"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Click the item you want to sell.",
+			"tr": "点击你想出售的物品。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "{} x{}",
+			"tr": "{} x{}"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "How many do you want to sell?",
+			"tr": "你想出售多少个？"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Selling: {} (you have {})",
+			"tr": "出售：{}（你有 {}）"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Type the amount in the vote reason box, then click Confirm.",
+			"tr": "在投票理由框里输入数量，然后点击确认。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Confirm",
+			"tr": "确认"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "You are selling {} x{}. Click the item you want as payment.",
+			"tr": "你正在出售 {} x{}。点击你想作为报酬的物品。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Payment: {}. Type the amount in the vote reason box, then click Confirm.",
+			"tr": "报酬：{}。在投票理由框里输入数量，然后点击确认。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Click one of your listings to take it down.",
+			"tr": "点击你的挂单将其下架。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "#{}: {} x{} for {} x{}",
+			"tr": "#{}：{} x{} 换 {} x{}"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "You have no listings.",
+			"tr": "你没有任何挂单。"
+		},
+		{
+			"context": "TRADE_SELL",
+			"or": "Sell Goods",
+			"tr": "出售物品"
+		},
+		{
+			"context": "TRADE_SELL_COUNT",
+			"or": "Amount",
+			"tr": "数量"
+		},
+		{
+			"context": "TRADE_SELL_PRICE",
+			"or": "Price",
+			"tr": "报酬"
+		},
+		{
+			"context": "TRADE_SELL_PRICE_COUNT",
+			"or": "Price Amount",
+			"tr": "报酬数量"
+		},
+		{
+			"context": "TRADE_MINE",
+			"or": "My Listings",
+			"tr": "我的挂单"
 		}
 	]
 }

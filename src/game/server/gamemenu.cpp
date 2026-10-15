@@ -79,6 +79,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	{
 		m_aLoadoutSlot[i] = -1;
 		m_aItemViewId[i] = CItemID();
+		m_aTradeDraft[i] = STradeDraft();
 	}
 
 	Register("MAIN", "Main Menu", MenuMain, nullptr); // Localize("Main Menu", "MAIN")
@@ -88,6 +89,11 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	Register("LOADOUT", "Loadout", MenuLoadout, nullptr); // Localize("Loadout", "LOADOUT")
 	Register("WEAPONPICK", "Choose Weapon", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Weapon", "WEAPONPICK")
 	Register("TRADE", "Player Shops", MenuTrade, nullptr); // Localize("Player Shops", "TRADE")
+	Register("TRADE_SELL", "Sell Goods", MenuTradeSell, nullptr, "TRADE"); // Localize("Sell Goods", "TRADE_SELL")
+	Register("TRADE_SELL_COUNT", "Amount", MenuTradeSellCount, nullptr, "TRADE_SELL"); // Localize("Amount", "TRADE_SELL_COUNT")
+	Register("TRADE_SELL_PRICE", "Price", MenuTradeSellPrice, nullptr, "TRADE_SELL_COUNT"); // Localize("Price", "TRADE_SELL_PRICE")
+	Register("TRADE_SELL_PRICE_COUNT", "Price Amount", MenuTradeSellPriceCount, nullptr, "TRADE_SELL_PRICE"); // Localize("Price Amount", "TRADE_SELL_PRICE_COUNT")
+	Register("TRADE_MINE", "My Listings", MenuTradeMine, nullptr, "TRADE"); // Localize("My Listings", "TRADE_MINE")
 	Register("VOTE", "Server Vote", MenuVote, nullptr); // Localize("Server Vote", "VOTE")
 }
 
@@ -109,6 +115,7 @@ void CGameMenu::Register(const char *pPageName, const char *pTitle, FMenuCallbac
 void CGameMenu::OnClientEntered(int ClientID)
 {
 	m_aPlayerData[ClientID].Reset(true);
+	m_aTradeDraft[ClientID] = STradeDraft();
 	SetPlayerPage(ClientID, "MAIN");
 	// the voter set changed
 	m_VoteUpdate = true;
@@ -865,21 +872,35 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 	if(!pPlayer)
 		return true;
 
-	// clicking a listing buys it. The command is "BUY <id>".
-	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "NONE") != 0 &&
-		str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_startswith(VoteStatus.m_aCmd, "BUY "))
+	if(VoteStatus.m_aCmd[0])
 	{
-		const int ListingId = str_toint(VoteStatus.m_aCmd + 4);
-		pMenu->GameServer()->Trade()->Buy(ClientID, ListingId);
-		pMenu->SetPlayerPage(ClientID, "TRADE");
-		return false;
+		if(str_comp(VoteStatus.m_aCmd, "PAGE TRADE_SELL") == 0)
+		{
+			pMenu->m_aTradeDraft[ClientID] = STradeDraft();
+			pMenu->SetPlayerPage(ClientID, "TRADE_SELL");
+			return false;
+		}
+		if(str_comp(VoteStatus.m_aCmd, "PAGE TRADE_MINE") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "TRADE_MINE");
+			return false;
+		}
+		// clicking a listing buys it. The command is "BUY <id>".
+		if(str_startswith(VoteStatus.m_aCmd, "BUY "))
+		{
+			const int ListingId = str_toint(VoteStatus.m_aCmd + 4);
+			pMenu->GameServer()->Trade()->Buy(ClientID, ListingId);
+			pMenu->SetPlayerPage(ClientID, "TRADE");
+			return false;
+		}
 	}
 
 	pMenu->ClearOptions(ClientID);
 	pMenu->AddPageTitle();
-	pMenu->AddOption(Localize("Click a listing to buy it.", "Menu Trade"), "DISPLAY", "-");
-	pMenu->AddOption(Localize("List your own goods with: /sell <item> <count> <price item> <price count>", "Menu Trade"), "DISPLAY", "-");
+	pMenu->AddOption(Localize("Sell Goods", "Menu Trade"), "PAGE TRADE_SELL", "★");
+	pMenu->AddOption(Localize("My Listings", "Menu Trade"), "PAGE TRADE_MINE", "★");
 	pMenu->AddHorizontalRule();
+	pMenu->AddOption(Localize("Click a listing to buy it.", "Menu Trade"), "DISPLAY", "-");
 
 	CTradeSystem *pTrade = pMenu->GameServer()->Trade();
 	if(!pTrade || pTrade->NumListings() == 0)
@@ -901,6 +922,221 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 		pMenu->AddOption(Desc.c_str(), aCmd, "$");
 	}
 
+	return true;
+}
+
+// step 1: pick the item to sell from the inventory
+bool CGameMenu::MenuTradeSell(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_comp(VoteStatus.m_aCmd, "NONE") != 0)
+	{
+		CItemID Id;
+		if(CItemID::Parse(VoteStatus.m_aCmd, &Id) && !Id.IsZero() && pItem->GetItemCount(ClientID, Id) > 0)
+		{
+			pMenu->m_aTradeDraft[ClientID] = STradeDraft();
+			pMenu->m_aTradeDraft[ClientID].m_OfferItem = Id;
+			pMenu->SetPlayerPage(ClientID, "TRADE_SELL_COUNT");
+			return false;
+		}
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	pMenu->AddOption(Localize("Click the item you want to sell.", "Menu Trade"), "DISPLAY", "-");
+	pMenu->AddHorizontalRule();
+
+	const CItemSystem::CInventory &Inventory = pItem->GetInventory(ClientID);
+	for(int i = 0; i < CItemSystem::CInventory::MAX_ITEMS; i++)
+	{
+		if(Inventory.IsEmpty(i))
+			continue;
+		const CItemID &Id = Inventory.m_aItems[i].m_Id;
+		char aCmd[UUID_MAXSTRSIZE];
+		ItemCommand(Id, aCmd, sizeof(aCmd));
+		const std::string Desc = LocalizeFormat("Menu Trade", "{} x{}", Id, Inventory.m_aItems[i].m_Count);
+		pMenu->AddOption(Desc.c_str(), aCmd, "-");
+	}
+	return true;
+}
+
+// step 2: type the amount into the vote reason box, then confirm
+bool CGameMenu::MenuTradeSellCount(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+	STradeDraft &Draft = pMenu->m_aTradeDraft[ClientID];
+	if(Draft.m_OfferItem.IsZero() || pItem->GetItemCount(ClientID, Draft.m_OfferItem) <= 0)
+	{
+		pMenu->SetPlayerPage(ClientID, "TRADE_SELL");
+		return false;
+	}
+
+	if(str_comp(VoteStatus.m_aCmd, "SELLCOUNT") == 0)
+	{
+		int Count = VoteStatus.m_aReason[0] ? str_toint(VoteStatus.m_aReason) : 1;
+		const int Owned = pItem->GetItemCount(ClientID, Draft.m_OfferItem);
+		if(Count < 1)
+			Count = 1;
+		if(Count > Owned)
+			Count = Owned;
+		Draft.m_OfferCount = Count;
+		pMenu->SetPlayerPage(ClientID, "TRADE_SELL_PRICE");
+		return false;
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	pMenu->AddOption(Localize("How many do you want to sell?", "Menu Trade"), "DISPLAY", "-");
+	{
+		const std::string Desc = LocalizeFormat("Menu Trade", "Selling: {} (you have {})",
+			Draft.m_OfferItem, pItem->GetItemCount(ClientID, Draft.m_OfferItem));
+		pMenu->AddOption(Desc.c_str(), "DISPLAY", "-");
+	}
+	pMenu->AddOption(Localize("Type the amount in the vote reason box, then click Confirm.", "Menu Trade"), "DISPLAY", "-");
+	pMenu->AddOption(Localize("Confirm", "Menu Trade"), "SELLCOUNT", "★");
+	return true;
+}
+
+// step 3: pick the item the buyer has to pay with
+bool CGameMenu::MenuTradeSellPrice(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+	STradeDraft &Draft = pMenu->m_aTradeDraft[ClientID];
+	if(Draft.m_OfferItem.IsZero() || Draft.m_OfferCount <= 0 || pItem->GetItemCount(ClientID, Draft.m_OfferItem) < Draft.m_OfferCount)
+	{
+		pMenu->SetPlayerPage(ClientID, "TRADE_SELL");
+		return false;
+	}
+
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_comp(VoteStatus.m_aCmd, "NONE") != 0)
+	{
+		CItemID Id;
+		if(CItemID::Parse(VoteStatus.m_aCmd, &Id) && !Id.IsZero() && pItem->GetItemCount(ClientID, Id) > 0)
+		{
+			Draft.m_PriceItem = Id;
+			pMenu->SetPlayerPage(ClientID, "TRADE_SELL_PRICE_COUNT");
+			return false;
+		}
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	{
+		const std::string Desc = LocalizeFormat("Menu Trade", "You are selling {} x{}. Click the item you want as payment.",
+			Draft.m_OfferItem, Draft.m_OfferCount);
+		pMenu->AddOption(Desc.c_str(), "DISPLAY", "-");
+	}
+	pMenu->AddHorizontalRule();
+
+	const CItemSystem::CInventory &Inventory = pItem->GetInventory(ClientID);
+	for(int i = 0; i < CItemSystem::CInventory::MAX_ITEMS; i++)
+	{
+		if(Inventory.IsEmpty(i))
+			continue;
+		const CItemID &Id = Inventory.m_aItems[i].m_Id;
+		char aCmd[UUID_MAXSTRSIZE];
+		ItemCommand(Id, aCmd, sizeof(aCmd));
+		const std::string Desc = LocalizeFormat("Menu Trade", "{} x{}", Id, Inventory.m_aItems[i].m_Count);
+		pMenu->AddOption(Desc.c_str(), aCmd, "-");
+	}
+	return true;
+}
+
+// step 4: type the price amount and create the listing
+bool CGameMenu::MenuTradeSellPriceCount(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	STradeDraft &Draft = pMenu->m_aTradeDraft[ClientID];
+	if(Draft.m_OfferItem.IsZero() || Draft.m_OfferCount <= 0 || Draft.m_PriceItem.IsZero())
+	{
+		pMenu->SetPlayerPage(ClientID, "TRADE_SELL");
+		return false;
+	}
+
+	if(str_comp(VoteStatus.m_aCmd, "SELLPRICE") == 0)
+	{
+		int Count = VoteStatus.m_aReason[0] ? str_toint(VoteStatus.m_aReason) : 1;
+		if(Count < 1)
+			Count = 1;
+		const int ListingId = pMenu->GameServer()->Trade()->AddListing(
+			ClientID, Draft.m_OfferItem, Draft.m_OfferCount, Draft.m_PriceItem, Count);
+		if(ListingId >= 0)
+		{
+			pMenu->m_aTradeDraft[ClientID] = STradeDraft();
+			pMenu->SetPlayerPage(ClientID, "TRADE_MINE");
+		}
+		else
+			pMenu->SetPlayerPage(ClientID, "TRADE_SELL_PRICE_COUNT");
+		return false;
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	{
+		const std::string Desc = LocalizeFormat("Menu Trade", "Payment: {}. Type the amount in the vote reason box, then click Confirm.",
+			Draft.m_PriceItem);
+		pMenu->AddOption(Desc.c_str(), "DISPLAY", "-");
+	}
+	pMenu->AddOption(Localize("Confirm", "Menu Trade"), "SELLPRICE", "★");
+	return true;
+}
+
+// the player's own listings: click one to take it down again
+bool CGameMenu::MenuTradeMine(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	if(VoteStatus.m_aCmd[0] && str_startswith(VoteStatus.m_aCmd, "UNLIST "))
+	{
+		const int ListingId = str_toint(VoteStatus.m_aCmd + 7);
+		pMenu->GameServer()->Trade()->RemoveListing(ListingId, ClientID, false);
+		pMenu->SetPlayerPage(ClientID, "TRADE_MINE");
+		return false;
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	pMenu->AddOption(Localize("Click one of your listings to take it down.", "Menu Trade"), "DISPLAY", "-");
+	pMenu->AddHorizontalRule();
+
+	CTradeSystem *pTrade = pMenu->GameServer()->Trade();
+	int Shown = 0;
+	for(int i = 0; pTrade && i < pTrade->NumListings(); i++)
+	{
+		const CTradeSystem::SListing *pListing = pTrade->ListingAt(i);
+		if(!pListing || pListing->m_Seller != ClientID)
+			continue;
+		const std::string Desc = LocalizeFormat("Menu Trade", "#{}: {} x{} for {} x{}",
+			pListing->m_Id, pListing->m_OfferItem, pListing->m_OfferCount, pListing->m_PriceItem, pListing->m_PriceCount);
+		char aCmd[24];
+		str_format(aCmd, sizeof(aCmd), "UNLIST %d", pListing->m_Id);
+		pMenu->AddOption(Desc.c_str(), aCmd, "-");
+		Shown++;
+	}
+	if(Shown == 0)
+		pMenu->AddOption(Localize("You have no listings.", "Menu Trade"), "DISPLAY", "-");
 	return true;
 }
 
