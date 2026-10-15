@@ -22,6 +22,25 @@ static const float NPC_ROAM_RADIUS = NPC_ROAM_RADIUS_TILES * 32.0f;
 static const int NPC_CHASE_BONUS_TILES = 5;
 static const float NPC_CHASE_RADIUS = (NPC_ROAM_RADIUS_TILES + NPC_CHASE_BONUS_TILES) * 32.0f;
 
+// Whether a solid wall sits right in front of the NPC at body height. This is
+// the only reason a wandering NPC jumps: it walks into a step or a wall.
+static bool WallAhead(CGameWorld *pWorld, vec2 Pos, int Dir, float HalfSize)
+{
+	if(Dir == 0)
+		return false;
+	const float X = Pos.x + Dir * (HalfSize + 4.0f);
+	return pWorld->Collision()->CheckPoint(X, Pos.y) ||
+		pWorld->Collision()->CheckPoint(X, Pos.y - HalfSize * 0.5f) ||
+		pWorld->Collision()->CheckPoint(X, Pos.y + HalfSize * 0.5f);
+}
+
+// Whether the NPC is standing on solid ground.
+static bool OnGround(CGameWorld *pWorld, vec2 Pos, float HalfSize)
+{
+	return pWorld->Collision()->CheckPoint(Pos.x, Pos.y + HalfSize + 2.0f) ||
+		pWorld->Collision()->CheckPoint(Pos.x, Pos.y + HalfSize + 6.0f);
+}
+
 // The identity the client is shown, taken straight from the definition.
 static CBotTeeInfo NpcTeeInfoFromDef(const SNpcDef *pDef)
 {
@@ -471,9 +490,8 @@ void CNpcEntity::OnAction()
 
 void CNpcEntity::Wander()
 {
-	// occasionally hop, so a small ledge does not trap it
-	if(random_int() % 1000 < 25)
-		m_Input.m_Jump = 1;
+	const float HalfSize = GetProximityRadius() * 0.5f;
+	bool ShouldJump = false;
 
 	// Outside the spawn radius: head back before anything else. The direction
 	// is forced so it cannot keep wandering further out.
@@ -487,19 +505,30 @@ void CNpcEntity::Wander()
 		else
 			m_WanderDir = random_int() % 2 ? 1 : -1;
 		m_Input.m_Direction = m_WanderDir;
-		// climb back if the spawn point is above us
-		if(m_SpawnPos.y < m_Pos.y - CCharacterCore::PHYS_SIZE)
-			m_Input.m_Jump = 1;
-		return;
+
+		// the spawn is above, or a wall stands in the way: a jump is warranted
+		if(m_SpawnPos.y < m_Pos.y - CCharacterCore::PHYS_SIZE || WallAhead(GameWorld(), m_Pos, m_WanderDir, HalfSize))
+			ShouldJump = true;
+	}
+	else
+	{
+		// Inside the radius: change direction once in a while and keep walking;
+		// the previous direction otherwise persists.
+		if(random_int() % 1000 < 55)
+		{
+			m_WanderDir = random_int() % 3 - 1;
+			m_Input.m_Direction = m_WanderDir;
+		}
+
+		// no aimless hopping: only a wall actually blocking the way is worth one
+		if(WallAhead(GameWorld(), m_Pos, m_Input.m_Direction, HalfSize))
+			ShouldJump = true;
 	}
 
-	// Inside the radius: change direction once in a while and keep walking; the
-	// previous direction otherwise persists, exactly like the default wander.
-	if(random_int() % 1000 < 55)
-	{
-		m_WanderDir = random_int() % 3 - 1;
-		m_Input.m_Direction = m_WanderDir;
-		if(m_WanderDir)
-			m_CursorTarget = vec2(length(m_CursorTarget) * m_WanderDir, 0.0f);
-	}
+	// the NPC looks where it walks, so body and head agree
+	if(m_Input.m_Direction != 0)
+		m_CursorTarget = vec2(100.0f * m_Input.m_Direction, 0.0f);
+
+	if(ShouldJump && OnGround(GameWorld(), m_Pos, HalfSize) && !(m_Core.m_Jumped & 1))
+		m_Input.m_Jump = 1;
 }
