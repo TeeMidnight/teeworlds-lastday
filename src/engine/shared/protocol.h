@@ -93,7 +93,8 @@ enum
 	// Real connection slots the engine can serve. MAX_CLIENTS is kept above it
 	// only because the 0.8 Tee/TeeInfo item id space is wider than the
 	// connection table; it is deliberately NOT widened to hold bots, which are
-	// a game-layer concept and never own a client slot.
+	// a game-layer concept and never own a client slot. sv_max_clients is
+	// capped at this value so a real id can never enter a bot range.
 	NET_MAX_CLIENTS_07 = 64,
 
 	// Tee/TeeInfo snapshot item id space: [0, MAX_CLIENTS) are real clients

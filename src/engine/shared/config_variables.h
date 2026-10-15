@@ -20,8 +20,12 @@ MACRO_CONFIG_STR(SvHostname, sv_hostname, 128, "", CFGFLAG_SAVE | CFGFLAG_SERVER
 MACRO_CONFIG_STR(Bindaddr, bindaddr, 128, "", CFGFLAG_SAVE | CFGFLAG_CLIENT | CFGFLAG_SERVER | CFGFLAG_MASTER, "Address to bind the client/server to")
 MACRO_CONFIG_INT(SvPort, sv_port, 8303, 0, 0, CFGFLAG_SAVE | CFGFLAG_SERVER, "Port to use for the server")
 // MACRO_CONFIG_STR(SvMap, sv_map, 128, "dm1", CFGFLAG_SAVE | CFGFLAG_SERVER, "Map to use on the server")
-MACRO_CONFIG_INT(SvMaxClients, sv_max_clients, 8, 1, MAX_CLIENTS, CFGFLAG_SAVE | CFGFLAG_SERVER, "Maximum number of clients that are allowed on a server")
-MACRO_CONFIG_INT(SvMaxClientsPerIP, sv_max_clients_per_ip, 4, 1, MAX_CLIENTS, CFGFLAG_SAVE | CFGFLAG_SERVER, "Maximum number of clients with the same IP that can connect to the server")
+// A real client id must never reach BOT_TEEID_07_MIN, or a 0.7 peer would
+// read a bot where it expects a player (and vice versa). The network layer
+// already refuses more than NET_MAX_CLIENTS_07 connections; this keeps the
+// setting itself honest instead of advertising slots that cannot exist.
+MACRO_CONFIG_INT(SvMaxClients, sv_max_clients, 8, 1, NET_MAX_CLIENTS_07, CFGFLAG_SAVE | CFGFLAG_SERVER, "Maximum number of clients that are allowed on a server")
+MACRO_CONFIG_INT(SvMaxClientsPerIP, sv_max_clients_per_ip, 4, 1, NET_MAX_CLIENTS_07, CFGFLAG_SAVE | CFGFLAG_SERVER, "Maximum number of clients with the same IP that can connect to the server")
 MACRO_CONFIG_INT(SvBots, sv_bots, 0, 0, MAX_BOTS_07, CFGFLAG_SAVE | CFGFLAG_SERVER, "Number of bots the server keeps alive (0 = no bots)")
 MACRO_CONFIG_INT(SvMapDownloadSpeed, sv_map_download_speed, 12, 1, 16, CFGFLAG_SAVE | CFGFLAG_SERVER, "Number of map data packages a client gets on each request")
 MACRO_CONFIG_INT(SvHighBandwidth, sv_high_bandwidth, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Use high bandwidth mode. Doubles the bandwidth required for the server. LAN use only")
