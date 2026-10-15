@@ -665,6 +665,11 @@
 			"tr": "你必须靠近商人才能交易。"
 		},
 		{
+			"context": "Trade",
+			"or": "Out of stock.",
+			"tr": "已售罄。"
+		},
+		{
 			"context": "NPC",
 			"or": "You unlocked the shop of {}.",
 			"tr": "你解锁了来自{}的商店"
@@ -683,6 +688,11 @@
 			"context": "Menu Trade",
 			"or": "#{} {}: {} x{} for {} x{}",
 			"tr": "#{} {}：{} x{} 换 {} x{}"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "{}: {} x{} for {} x{} (stock {}, restock {}s)",
+			"tr": "{}：{} x{} 换 {} x{}（库存 {}，{}秒后补货）"
 		},
 		{
 			"context": "Menu Main",

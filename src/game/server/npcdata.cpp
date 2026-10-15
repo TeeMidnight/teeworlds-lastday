@@ -179,6 +179,13 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 				const char *pPrice = rSell["price_item"];
 				Sell.m_PriceItem = CItemID::FromName(pPrice);
 				Sell.m_PriceCount = maximum(0, ReadInt(rSell["price_count"], 0));
+
+				// restock rules; without a restock interval the stock never changes
+				Sell.m_StockMin = maximum(0, ReadInt(rSell["stock_min"], Sell.m_Count));
+				Sell.m_StockMax = maximum(Sell.m_StockMin, ReadInt(rSell["stock_max"], Sell.m_StockMin));
+				Sell.m_RestockSeconds = maximum(0, ReadInt(rSell["restock_seconds"], 0));
+				Sell.m_Stock = 0;
+				Sell.m_RestockAt = 0;
 			}
 		}
 	}
@@ -221,18 +228,106 @@ void CNpcSystem::PersistShelves()
 
 	for(int i = 0; i < m_lDefs.size(); i++)
 	{
-		const SNpcDef *pDef = m_lDefs[i];
+		SNpcDef *pDef = m_lDefs[i];
 		pDB->ClearNpcSells(pDef->m_Id.Value());
 		for(int s = 0; s < pDef->m_lSells.size(); s++)
 		{
-			const SNpcSell &Sell = pDef->m_lSells[s];
+			SNpcSell &Sell = pDef->m_lSells[s];
 			char aItem[64];
 			char aPrice[64];
 			ItemSourceName(Sell.m_Item, aItem, sizeof(aItem));
 			ItemSourceName(Sell.m_PriceItem, aPrice, sizeof(aPrice));
 			pDB->SaveNpcSell(pDef->m_Id.Value(), aItem, Sell.m_Count, aPrice, Sell.m_PriceCount);
+			LoadOrInitStock(m_lDefs[i], Sell);
 		}
 	}
+}
+
+int CNpcSystem::RollStock(const SNpcSell &Sell) const
+{
+	if(Sell.m_StockMax <= Sell.m_StockMin)
+		return Sell.m_StockMin;
+	return Sell.m_StockMin + random_int() % (Sell.m_StockMax - Sell.m_StockMin + 1);
+}
+
+void CNpcSystem::PersistStock(const SNpcDef *pDef, const SNpcSell &Sell)
+{
+	CDatabase *pDB = m_pGameServer ? m_pGameServer->Database() : nullptr;
+	if(!pDB)
+		return;
+	char aItem[64];
+	char aPrice[64];
+	ItemSourceName(Sell.m_Item, aItem, sizeof(aItem));
+	ItemSourceName(Sell.m_PriceItem, aPrice, sizeof(aPrice));
+	pDB->SaveNpcStock(pDef->m_Id.Value(), aItem, aPrice, Sell.m_Stock, Sell.m_RestockAt);
+}
+
+void CNpcSystem::LoadOrInitStock(SNpcDef *pDef, SNpcSell &Sell)
+{
+	CDatabase *pDB = m_pGameServer ? m_pGameServer->Database() : nullptr;
+	char aItem[64];
+	char aPrice[64];
+	ItemSourceName(Sell.m_Item, aItem, sizeof(aItem));
+	ItemSourceName(Sell.m_PriceItem, aPrice, sizeof(aPrice));
+
+	int Stock = 0;
+	int RestockAt = 0;
+	if(pDB && pDB->GetNpcStock(pDef->m_Id.Value(), aItem, aPrice, &Stock, &RestockAt))
+	{
+		Sell.m_Stock = Stock;
+		Sell.m_RestockAt = RestockAt;
+		return;
+	}
+
+	// first sight of this entry: roll the opening stock and schedule the restock
+	Sell.m_Stock = RollStock(Sell);
+	if(Sell.m_RestockSeconds > 0)
+		Sell.m_RestockAt = time_timestamp() + Sell.m_RestockSeconds;
+	PersistStock(pDef, Sell);
+}
+
+bool CNpcSystem::RestockDue()
+{
+	if(!m_pGameServer || !m_pGameServer->Database())
+		return false;
+
+	const int Now = time_timestamp();
+	bool Changed = false;
+	for(int i = 0; i < m_lDefs.size(); i++)
+	{
+		SNpcDef *pDef = m_lDefs[i];
+		for(int s = 0; s < pDef->m_lSells.size(); s++)
+		{
+			SNpcSell &Sell = pDef->m_lSells[s];
+			if(Sell.m_RestockSeconds <= 0 || Now < Sell.m_RestockAt)
+				continue;
+
+			// a still larger remaining stock is kept; only a low one is topped up
+			const int Rolled = RollStock(Sell);
+			if(Rolled > Sell.m_Stock)
+				Sell.m_Stock = Rolled;
+			Sell.m_RestockAt = Now + Sell.m_RestockSeconds;
+			PersistStock(pDef, Sell);
+			Changed = true;
+		}
+	}
+	return Changed;
+}
+
+bool CNpcSystem::ConsumeStock(int DefIndex, int SellIndex, int Count)
+{
+	if(DefIndex < 0 || DefIndex >= m_lDefs.size() || Count <= 0)
+		return false;
+	SNpcDef *pDef = m_lDefs[DefIndex];
+	if(SellIndex < 0 || SellIndex >= pDef->m_lSells.size())
+		return false;
+
+	SNpcSell &Sell = pDef->m_lSells[SellIndex];
+	if(Sell.m_Stock < Count)
+		return false;
+	Sell.m_Stock -= Count;
+	PersistStock(pDef, Sell);
+	return true;
 }
 
 const SNpcDef *CNpcSystem::Find(const CNpcID &Id) const

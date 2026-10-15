@@ -236,6 +236,24 @@ void CGameMenu::RefreshMenu(int ClientID)
 	SetPlayerPage(ClientID, m_aPlayerData[ClientID].m_CurrentPage);
 }
 
+void CGameMenu::RefreshShop(int ExceptClientID)
+{
+	// regenerating another client's page must not steal m_CurrentClientID from a
+	// callback that is still running (AddOption uses it)
+	const int SavedClient = m_CurrentClientID;
+	const unsigned TradePage = str_quickhash("TRADE");
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(i == ExceptClientID)
+			continue;
+		if(!GameServer()->m_apPlayers[i] || !Server()->ClientIngame(i))
+			continue;
+		if(m_aPlayerData[i].m_CurrentPage == TradePage)
+			RefreshMenu(i);
+	}
+	m_CurrentClientID = SavedClient;
+}
+
 void CGameMenu::SetPlayerPage(int ClientID, unsigned Page)
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
@@ -917,8 +935,9 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			for(int s = 0; s < pDef->m_lSells.size(); s++)
 			{
 				const SNpcSell &Sell = pDef->m_lSells[s];
-				const std::string Desc = LocalizeFormat("Menu Trade", "{}: {} x{} for {} x{}",
-					NpcIDDisplayName(pDef->m_Id), Sell.m_Item, Sell.m_Count, Sell.m_PriceItem, Sell.m_PriceCount);
+				const int RestockIn = Sell.m_RestockSeconds > 0 ? maximum(0, Sell.m_RestockAt - time_timestamp()) : 0;
+				const std::string Desc = LocalizeFormat("Menu Trade", "{}: {} x{} for {} x{} (stock {}, restock {}s)",
+					NpcIDDisplayName(pDef->m_Id), Sell.m_Item, Sell.m_Count, Sell.m_PriceItem, Sell.m_PriceCount, Sell.m_Stock, RestockIn);
 				char aCmd[32];
 				str_format(aCmd, sizeof(aCmd), "BUYNPC %d %d", d, s);
 				pMenu->AddOption(Desc.c_str(), aCmd, "$");

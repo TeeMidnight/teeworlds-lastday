@@ -83,6 +83,10 @@ public:
 
 	void ClearOptions(int ClientID);
 	void RefreshMenu(int ClientID);
+	// Regenerate the shop page of every client currently looking at it (stock
+	// changed). ExceptClientID is skipped: its callback is the caller and will
+	// regenerate itself.
+	void RefreshShop(int ExceptClientID = -1);
 	void SetPlayerPage(int ClientID, unsigned Page);
 	void SetPlayerPage(int ClientID, const char *pPage);
 

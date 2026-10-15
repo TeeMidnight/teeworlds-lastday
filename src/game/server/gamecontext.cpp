@@ -405,6 +405,11 @@ void CGameContext::OnTick()
 	if(m_pDatabase)
 		m_pDatabase->ReapJobs();
 
+	// top up any NPC shelf whose restock time passed; open shop pages then need
+	// to be regenerated so their stock and countdown stay live
+	if(m_pNpcSystem && m_pNpcSystem->RestockDue())
+		m_pGameMenu->RefreshShop(-1);
+
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
 		pWorld->m_Core.m_Tuning = *static_cast<CGameContext *>(pUser)->Tuning();
@@ -1179,6 +1184,11 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 	CItemSystem *pItems = Item();
 	if(!pItems->IsKnownItem(Sell.m_Item))
 		return false;
+	if(Sell.m_Stock < Sell.m_Count)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("Out of stock.", "Trade"));
+		return false;
+	}
 
 	const bool HasPrice = Sell.m_PriceCount > 0 && !Sell.m_PriceItem.IsZero();
 	if(HasPrice && pItems->GetItemCount(ClientID, Sell.m_PriceItem) < Sell.m_PriceCount)
@@ -1198,10 +1208,21 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 		pItems->RemoveItem(ClientID, Sell.m_Item, Sell.m_Count);
 		return false;
 	}
+	// take the stock out of the shelf; the checkout above already checked it
+	if(!m_pNpcSystem->ConsumeStock(DefIndex, SellIndex, Sell.m_Count))
+	{
+		pItems->RemoveItem(ClientID, Sell.m_Item, Sell.m_Count);
+		if(HasPrice)
+			pItems->AddItem(ClientID, Sell.m_PriceItem, Sell.m_PriceCount, true);
+		return false;
+	}
 
-	char aBuf[192];
-	str_format(aBuf, sizeof(aBuf), "Bought %s x%d from %s", pItems->GetName(Sell.m_Item), Sell.m_Count, NpcIDDisplayName(pDef->m_Id));
-	SendChat(-1, CHAT_WHISPER, ClientID, aBuf);
+	const std::string Msg = std::format("Bought {} x{} from {}", pItems->GetName(Sell.m_Item), Sell.m_Count, NpcIDDisplayName(pDef->m_Id));
+	SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
+
+	// other players looking at the shop must see the stock drop too; the caller
+	// regenerates this buyer's own page after the callback
+	GameMenu()->RefreshShop(ClientID);
 	return true;
 }
 

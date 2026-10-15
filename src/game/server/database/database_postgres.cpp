@@ -161,9 +161,25 @@ bool CDatabasePostgres::Init()
 		dbg_msg("database", "failed to create npc_shop schema: %s", PQresultErrorMessage(pRes));
 	PQclear(pRes);
 
-	if(Ok && SavesOk && AggroOk && ShopOk && NpcShopOk)
+	// runtime stock of each shelf entry, so a purchase/restock survives a restart
+	const char *pCreateNpcStock =
+		"CREATE TABLE IF NOT EXISTS npc_stock ("
+		" npc_id UUID NOT NULL,"
+		" item TEXT NOT NULL,"
+		" price_item TEXT NOT NULL,"
+		" stock INTEGER NOT NULL,"
+		" restock_at BIGINT NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price_item));";
+
+	pRes = PQexec(m_pConn, pCreateNpcStock);
+	const bool NpcStockOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!NpcStockOk)
+		dbg_msg("database", "failed to create npc_stock schema: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+
+	if(Ok && SavesOk && AggroOk && ShopOk && NpcShopOk && NpcStockOk)
 		dbg_msg("database", "postgres database ready");
-	return Ok && SavesOk && AggroOk && ShopOk && NpcShopOk;
+	return Ok && SavesOk && AggroOk && ShopOk && NpcShopOk && NpcStockOk;
 }
 
 bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
@@ -546,6 +562,61 @@ bool CDatabasePostgres::SaveNpcSell(const Uuid &Npc, const char *pItem, int Coun
 	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
 		dbg_msg("database", "failed to save npc sell '%s': %s", aNpc, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::GetNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int *pStock, int *pRestockAt)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+
+	const char *apParams[3] = {aNpc, pItem, pPriceItem};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"SELECT stock, restock_at FROM npc_stock WHERE npc_id = $1::uuid AND item = $2::text AND price_item = $3::text;",
+		3, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+
+	bool Found = false;
+	if(PQntuples(pRes) > 0 && !PQgetisnull(pRes, 0, 0))
+	{
+		*pStock = str_toint(PQgetvalue(pRes, 0, 0));
+		*pRestockAt = str_toint(PQgetvalue(pRes, 0, 1));
+		Found = true;
+	}
+	PQclear(pRes);
+	return Found;
+}
+
+bool CDatabasePostgres::SaveNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int Stock, int RestockAt)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aStock[32];
+	char aRestock[32];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	str_format(aStock, sizeof(aStock), "%d", Stock);
+	str_format(aRestock, sizeof(aRestock), "%d", RestockAt);
+
+	const char *apParams[5] = {aNpc, pItem, pPriceItem, aStock, aRestock};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO npc_stock (npc_id, item, price_item, stock, restock_at) VALUES ($1::uuid, $2::text, $3::text, $4::int, $5::bigint) "
+		"ON CONFLICT (npc_id, item, price_item) DO UPDATE SET stock = EXCLUDED.stock, restock_at = EXCLUDED.restock_at;",
+		5, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to save npc stock '%s': %s", aNpc, PQresultErrorMessage(pRes));
 	PQclear(pRes);
 	return Ok;
 }

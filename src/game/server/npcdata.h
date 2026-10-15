@@ -16,13 +16,23 @@ class CGameContext;
 class IStorage;
 
 // One entry on an NPC's shelf. The price is another item; price_count 0 makes
-// the entry free.
+// the entry free. The stock rules come from the json; the stock itself is
+// runtime state persisted in npc_stock.
 struct SNpcSell
 {
 	CItemID m_Item;
-	int m_Count;
+	int m_Count; // units handed over per purchase
 	CItemID m_PriceItem;
 	int m_PriceCount;
+
+	// restock rules
+	int m_StockMin;
+	int m_StockMax;
+	int m_RestockSeconds; // 0 disables restocking
+
+	// runtime stock state
+	int m_Stock;
+	int m_RestockAt; // unix time of the next restock
 };
 
 // How an NPC's aggro level moves. The level itself is a database ledger; these
@@ -61,8 +71,14 @@ class CNpcSystem
 	array<SNpcDef *> m_lDefs;
 
 	void Clear();
-	// mirror every loaded NPC's shelf into the database (clear + insert)
+	// mirror every loaded NPC's shelf into the database (clear + insert) and
+	// load (or roll) the runtime stock of each entry
 	void PersistShelves();
+	// the stock amount one restock rolls for an entry
+	int RollStock(const SNpcSell &Sell) const;
+	// read an entry's stock from npc_stock, or roll and store a fresh one
+	void LoadOrInitStock(SNpcDef *pDef, SNpcSell &Sell);
+	void PersistStock(const SNpcDef *pDef, const SNpcSell &Sell);
 	static int ListCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	void Load(const char *pDefaultId, const char *pFilePath);
 
@@ -71,6 +87,14 @@ public:
 	~CNpcSystem();
 
 	void Init(CGameContext *pGameServer, IStorage *pStorage);
+
+	// Roll new stock for every entry whose restock time has passed. A rolled
+	// amount below the current stock leaves the stock alone. Returns true when
+	// something changed, so open shop menus can be regenerated.
+	bool RestockDue();
+	// Take Count units out of a shelf entry, persisting the result. Returns
+	// false when the entry does not have that much stock.
+	bool ConsumeStock(int DefIndex, int SellIndex, int Count);
 
 	const SNpcDef *Find(const CNpcID &Id) const;
 	const SNpcDef *DefAt(int Index) const { return Index >= 0 && Index < m_lDefs.size() ? m_lDefs[Index] : 0; }

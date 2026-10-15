@@ -128,6 +128,14 @@ bool CDatabaseSQLite::Init()
 		" \"count\" INTEGER NOT NULL,"
 		" price_item TEXT NOT NULL,"
 		" price_count INTEGER NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price_item));"
+		// runtime stock of each shelf entry, so a purchase/restock survives a restart
+		"CREATE TABLE IF NOT EXISTS npc_stock ("
+		" npc_id TEXT NOT NULL,"
+		" item TEXT NOT NULL,"
+		" price_item TEXT NOT NULL,"
+		" stock INTEGER NOT NULL,"
+		" restock_at INTEGER NOT NULL,"
 		" PRIMARY KEY (npc_id, item, price_item));";
 
 	char *pErr = 0;
@@ -553,6 +561,62 @@ bool CDatabaseSQLite::SaveNpcSell(const Uuid &Npc, const char *pItem, int Count,
 	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
 		dbg_msg("database", "failed to save npc sell '%s': %s", aNpc, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::GetNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int *pStock, int *pRestockAt)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT stock, restock_at FROM npc_stock WHERE npc_id = ?1 AND item = ?2 AND price_item = ?3;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, pItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 3, pPriceItem, -1, SQLITE_TRANSIENT);
+
+	bool Found = false;
+	if(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		*pStock = sqlite3_column_int(pStmt, 0);
+		*pRestockAt = sqlite3_column_int(pStmt, 1);
+		Found = true;
+	}
+	sqlite3_finalize(pStmt);
+	return Found;
+}
+
+bool CDatabaseSQLite::SaveNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int Stock, int RestockAt)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT OR REPLACE INTO npc_stock (npc_id, item, price_item, stock, restock_at) VALUES (?1, ?2, ?3, ?4, ?5);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, pItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 3, pPriceItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 4, Stock);
+	sqlite3_bind_int(pStmt, 5, RestockAt);
+
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to save npc stock '%s': %s", aNpc, sqlite3_errmsg(m_pDB));
 	sqlite3_finalize(pStmt);
 	return Ok;
 }

@@ -140,6 +140,11 @@ public:
 	virtual bool ClearNpcSells(const Uuid &Npc) = 0;
 	virtual bool SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, const char *pPriceItem, int PriceCount) = 0;
 
+	// runtime stock of one shelf entry: how much is left and when it next
+	// restocks (unix seconds). Get returns false when the entry has no row yet.
+	virtual bool GetNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int *pStock, int *pRestockAt) = 0;
+	virtual bool SaveNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int Stock, int RestockAt) = 0;
+
 	// -------- world saves (world persistence) --------
 	// one row per world instance (one map name, e.g. "<floor>_<seed>" for
 	// generated worlds or the plain name for static maps), so a world's
