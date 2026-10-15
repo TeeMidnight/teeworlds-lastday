@@ -56,10 +56,29 @@ private:
 	// show the NPC's remaining health to one client
 	void ShowHealth(int ClientID);
 
+	// the closest player whose ledger aggro is over the threshold, or -1
+	int FindHatedPlayer();
+	// move towards a hated player, but never past the chase radius
+	void Chase(int ClientID);
+	// the aggro of one client, cached from the ledger for a short while
+	int CachedAggro(int ClientID);
+	// keep the cache in step with a delta that was just written
+	void UpdateAggroCache(const Uuid &Account, int Delta);
+
 	// the closest live player within the roam radius, or null
 	CEntity *ClosestPlayer();
 	// random walk, kept inside the spawn radius
 	void Wander();
+
+	// one cached aggro level per account seen recently, refreshed from the
+	// ledger at most once a second so reading it stays off the hot path
+	struct SNpcAggroEntry
+	{
+		Uuid m_Account;
+		int m_Aggro;
+		int m_RefreshTick;
+	};
+	array<SNpcAggroEntry> m_lAggro;
 
 	// the configuration this NPC was built from (null for a random one)
 	const SNpcDef *m_pDef;

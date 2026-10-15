@@ -14,6 +14,11 @@
 static const int NPC_ROAM_RADIUS_TILES = 5;
 static const float NPC_ROAM_RADIUS = NPC_ROAM_RADIUS_TILES * 32.0f;
 
+// a hated player may lure the NPC this many tiles beyond its normal circle,
+// but the NPC never pursues further than the combined radius
+static const int NPC_CHASE_BONUS_TILES = 5;
+static const float NPC_CHASE_RADIUS = (NPC_ROAM_RADIUS_TILES + NPC_CHASE_BONUS_TILES) * 32.0f;
+
 // The identity the client is shown, taken straight from the definition.
 static CBotTeeInfo NpcTeeInfoFromDef(const SNpcDef *pDef)
 {
@@ -94,6 +99,7 @@ void CNpcEntity::AddAggro(int ClientID, int Delta)
 	if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
 		return;
 	GameServer()->NpcAddAggro(m_pDef->m_BotId, pPlayer->m_AccountUuid, Delta);
+	UpdateAggroCache(pPlayer->m_AccountUuid, Delta);
 }
 
 void CNpcEntity::ShowHealth(int ClientID)
@@ -104,6 +110,113 @@ void CNpcEntity::ShowHealth(int ClientID)
 	char aBuf[160];
 	str_format(aBuf, sizeof(aBuf), "%s: %d/%d", pName, maximum(0, m_Health), m_MaxHealth);
 	GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, aBuf);
+}
+
+int CNpcEntity::CachedAggro(int ClientID)
+{
+	if(!m_pDef || ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return 0;
+	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
+		return 0;
+
+	SNpcAggroEntry *pEntry = nullptr;
+	for(int i = 0; i < m_lAggro.size(); i++)
+		if(m_lAggro[i].m_Account == pPlayer->m_AccountUuid)
+			pEntry = &m_lAggro[i];
+
+	if(!pEntry)
+	{
+		pEntry = &m_lAggro.emplace();
+		pEntry->m_Account = pPlayer->m_AccountUuid;
+		pEntry->m_Aggro = 0;
+		pEntry->m_RefreshTick = -1;
+	}
+
+	// the ledger is the truth, but it is only re-read once a second per player
+	if(pEntry->m_RefreshTick < 0 || Server()->Tick() - pEntry->m_RefreshTick >= Server()->TickSpeed())
+	{
+		pEntry->m_Aggro = GameServer()->NpcGetAggro(m_pDef->m_BotId, pPlayer->m_AccountUuid);
+		pEntry->m_RefreshTick = Server()->Tick();
+	}
+	return pEntry->m_Aggro;
+}
+
+void CNpcEntity::UpdateAggroCache(const Uuid &Account, int Delta)
+{
+	for(int i = 0; i < m_lAggro.size(); i++)
+		if(m_lAggro[i].m_Account == Account)
+		{
+			m_lAggro[i].m_Aggro += Delta;
+			return;
+		}
+
+	SNpcAggroEntry &Entry = m_lAggro.emplace();
+	Entry.m_Account = Account;
+	Entry.m_Aggro = Delta;
+	Entry.m_RefreshTick = -1;
+}
+
+int CNpcEntity::FindHatedPlayer()
+{
+	if(!m_pDef || m_pDef->m_Aggro.m_Threshold <= 0)
+		return -1;
+
+	int Best = -1;
+	float BestDist = NPC_CHASE_RADIUS;
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+		if(!pPlayer || !pPlayer->m_LoggedIn)
+			continue;
+		CCharacter *pChr = pPlayer->GetCharacter();
+		if(!pChr || !pChr->IsAlive())
+			continue;
+
+		// only a player the NPC could actually reach is a target
+		const float Dist = distance(pChr->GetPos(), m_SpawnPos);
+		if(Dist > BestDist)
+			continue;
+		if(CachedAggro(i) <= m_pDef->m_Aggro.m_Threshold)
+			continue;
+
+		BestDist = Dist;
+		Best = i;
+	}
+	return Best;
+}
+
+void CNpcEntity::Chase(int ClientID)
+{
+	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
+	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
+	if(!pChr || !pChr->IsAlive())
+		return;
+
+	const vec2 Target = pChr->GetPos();
+
+	// never pursue past the chase radius: turn back instead
+	if(distance(m_Pos, m_SpawnPos) > NPC_CHASE_RADIUS)
+	{
+		m_Input.m_Direction = m_SpawnPos.x < m_Pos.x ? -1 : (m_SpawnPos.x > m_Pos.x ? 1 : 0);
+		m_Input.m_Jump = m_SpawnPos.y < m_Pos.y - CCharacterCore::PHYS_SIZE ? 1 : 0;
+		if(m_SpawnPos.x != m_Pos.x)
+			m_CursorTarget = vec2(length(m_CursorTarget) * m_Input.m_Direction, 0.0f);
+		return;
+	}
+
+	const float dx = Target.x - m_Pos.x;
+	if(absolute(dx) > 24.0f)
+		m_Input.m_Direction = (int) sign(dx);
+	else
+		m_Input.m_Direction = 0;
+
+	if(Target.y - m_Pos.y < -48.0f && !(m_Core.m_Jumped & 1) && (m_Core.m_Vel.y > -1.25f))
+		m_Input.m_Jump = 1;
+
+	m_CursorTarget = Target - m_Pos;
+	if(distance(Target, m_Pos) < 48.0f)
+		m_Input.m_Fire = 1;
 }
 
 bool CNpcEntity::OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
@@ -184,6 +297,16 @@ CEntity *CNpcEntity::ClosestPlayer()
 
 void CNpcEntity::OnAction()
 {
+	// A player over the aggro threshold is the top priority: the NPC chases and
+	// attacks them, out to the chase radius.
+	const int Hated = FindHatedPlayer();
+	if(Hated >= 0)
+	{
+		Chase(Hated);
+		AimCursor();
+		return;
+	}
+
 	CEntity *pPlayer = ClosestPlayer();
 	if(pPlayer)
 	{
