@@ -623,9 +623,15 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 	char aPath[IO_MAX_PATH_LENGTH];
 	str_format(aPath, sizeof(aPath), "%s/%s.map", GetMapByMapType(MapType), pMap);
 
-	if(!DataFile.Open(Storage(), aPath))
+	// Write beside the target and move it into place only once the whole file
+	// exists, so a failed save cannot leave a half-written map behind a good
+	// one. The temporary shares the directory, so the rename stays atomic.
+	char aTmpPath[IO_MAX_PATH_LENGTH];
+	str_format(aTmpPath, sizeof(aTmpPath), "%s.tmp", aPath);
+
+	if(!DataFile.Open(Storage(), aTmpPath))
 	{
-		dbg_msg("mapcreater", "failed to open file '%s'...", aPath);
+		dbg_msg("mapcreater", "failed to open file '%s'...", aTmpPath);
 		return false;
 	}
 
@@ -847,7 +853,19 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 		DataFile.AddItem(MAPITEMTYPE_JSON, Entry.m_ID, sizeof(CMapItemJson), &JsonItem);
 	}
 
-	DataFile.Finish();
+	if(!DataFile.Finish())
+	{
+		dbg_msg("mapcreater", "failed to write '%s'", aTmpPath);
+		Storage()->RemoveFile(aTmpPath, IStorage::TYPE_SAVE);
+		return false;
+	}
+
+	if(!Storage()->RenameFile(aTmpPath, aPath, IStorage::TYPE_SAVE))
+	{
+		dbg_msg("mapcreater", "failed to move '%s' into place", aTmpPath);
+		Storage()->RemoveFile(aTmpPath, IStorage::TYPE_SAVE);
+		return false;
+	}
 
 	return true;
 }
