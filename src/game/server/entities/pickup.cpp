@@ -41,7 +41,7 @@ void CPickup::Tick()
 			return;
 	}
 	// Check if a player intersected us
-	CCharacter *pChr = (CCharacter *) GameWorld()->ClosestEntity(m_Pos, 20.0f, CGameWorld::ENTTYPE_CHARACTER, 0);
+	CCharacter *pChr = (CCharacter *) GameWorld()->ClosestEntity(m_Pos, 20.0f, CGameWorld::ENTTYPE_CHARACTER, 0, true);
 	if(pChr && !GameServer()->m_pController->CanCharacterPickup(pChr))
 		return;
 

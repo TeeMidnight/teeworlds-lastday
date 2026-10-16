@@ -278,10 +278,10 @@ CEntity *CNpcEntity::FindHostileBot()
 		if(pBot->GetBotTeam() == m_Team && str_comp(pBot->BotTypeName(), "npc") == 0)
 			continue;
 		// only a bot the NPC could actually reach and see is a target
-		if(GameWorld()->Collision()->IntersectLine(m_Pos, pEnt->GetPos(), NULL, NULL))
+		if(GameWorld()->Collision()->IntersectLine(m_Pos, GameWorld()->PosInFrame(pEnt), NULL, NULL))
 			continue;
 
-		const float Dist = distance(pEnt->GetPos(), m_SpawnPos);
+		const float Dist = distance(GameWorld()->PosInFrame(pEnt), m_SpawnPos);
 		if(Dist > BestDist)
 			continue;
 

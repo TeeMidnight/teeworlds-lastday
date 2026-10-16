@@ -97,6 +97,45 @@ bool CGameWorld::RingNeighbour(int Direction, char *pMapName, int MapNameSize, f
 	return true;
 }
 
+int CGameWorld::CollectRingNeighbours(SRingNeighbour *pOut, int Max)
+{
+	if(!m_Ring || m_Period <= 0 || Max <= 0)
+		return 0;
+
+	int Count = 0;
+	for(int Dir = -1; Dir <= 1 && Count < Max; Dir += 2)
+	{
+		char aName[64];
+		if(!RingNeighbour(Dir, aName, sizeof(aName), 0.0f, nullptr))
+			continue;
+		CGameWorld *pNeighbour = GameServer()->WorldByID(str_quickhash(aName));
+		if(!pNeighbour || pNeighbour == this)
+			continue;
+		const float ShiftX = (float) RingNeighbourShift(m_OffsetX, pNeighbour->m_OffsetX, m_Period) * 32.0f;
+		pOut[Count].m_pWorld = pNeighbour;
+		pOut[Count].m_Offset = vec2(ShiftX, 0.0f);
+		Count++;
+	}
+	return Count;
+}
+
+vec2 CGameWorld::PosInFrame(CEntity *pEnt)
+{
+	if(!pEnt)
+		return vec2(0.0f, 0.0f);
+	if(pEnt->GameWorld() == this)
+		return pEnt->GetPos();
+
+	SRingNeighbour aNeighbours[2];
+	const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+	for(int n = 0; n < Neighbours; n++)
+	{
+		if(aNeighbours[n].m_pWorld == pEnt->GameWorld())
+			return pEnt->GetPos() + aNeighbours[n].m_Offset;
+	}
+	return pEnt->GetPos();
+}
+
 CGameWorld::~CGameWorld()
 {
 	// the manager goes first: bots are entities, and it keeps per-client tee
@@ -320,6 +359,27 @@ int CGameWorld::FindEntities(vec2 Pos, float Radius, array<CEntity *> &lpEnts, i
 		}
 	}
 
+	// A ring neighbour shares the boundary strip, so its entities there can be
+	// reached from here too. Resources are terrain bound and already exist in
+	// both instances, so they are never matched across the boundary.
+	if(Type != ENTTYPE_RESOURCE)
+	{
+		SRingNeighbour aNeighbours[2];
+		const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+		for(int n = 0; n < Neighbours; n++)
+		{
+			const vec2 Offset = aNeighbours[n].m_Offset;
+			for(auto &pEnt : aNeighbours[n].m_pWorld->m_alpEntityLists[Type])
+			{
+				if(distance(pEnt->m_Pos + Offset, Pos) < Radius + pEnt->GetProximityRadius())
+				{
+					lpEnts.add(pEnt);
+					Num++;
+				}
+			}
+		}
+	}
+
 	return Num;
 }
 
@@ -334,6 +394,23 @@ int CGameWorld::FindFlagEntities(vec2 Pos, float Radius, array<CEntity *> &lpEnt
 		{
 			lpEnts.add(pEnt);
 			Num++;
+		}
+	}
+
+	// see FindEntities: the boundary strip is shared with the ring neighbours
+	SRingNeighbour aNeighbours[2];
+	const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+	for(int n = 0; n < Neighbours; n++)
+	{
+		const vec2 Offset = aNeighbours[n].m_Offset;
+		for(auto &pEnt : aNeighbours[n].m_pWorld->m_lpFlagEntityList)
+		{
+			if(!Check(pEnt)) continue;
+			if(distance(pEnt->m_Pos + Offset, Pos) < Radius + pEnt->GetProximityRadius())
+			{
+				lpEnts.add(pEnt);
+				Num++;
+			}
 		}
 	}
 
@@ -523,6 +600,31 @@ CEntity *CGameWorld::IntersectEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &N
 		}
 	}
 
+	SRingNeighbour aNeighbours[2];
+	const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+	for(int n = 0; n < Neighbours; n++)
+	{
+		const vec2 Offset = aNeighbours[n].m_Offset;
+		for(auto &pEnt : aNeighbours[n].m_pWorld->m_alpEntityLists[Type])
+		{
+			if(pEnt == pNotThis)
+				continue;
+			const vec2 EntityPos = pEnt->m_Pos + Offset;
+			vec2 IntersectPos = closest_point_on_line(Pos0, Pos1, EntityPos);
+			float Len = distance(EntityPos, IntersectPos);
+			if(Len < pEnt->GetProximityRadius() + Radius)
+			{
+				Len = distance(Pos0, IntersectPos);
+				if(Len < ClosestLen)
+				{
+					NewPos = IntersectPos;
+					ClosestLen = Len;
+					pClosest = pEnt;
+				}
+			}
+		}
+	}
+
 	return pClosest;
 }
 
@@ -552,10 +654,35 @@ CEntity *CGameWorld::IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec
 		}
 	}
 
+	SRingNeighbour aNeighbours[2];
+	const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+	for(int n = 0; n < Neighbours; n++)
+	{
+		const vec2 Offset = aNeighbours[n].m_Offset;
+		for(auto &pEnt : aNeighbours[n].m_pWorld->m_lpFlagEntityList)
+		{
+			if(pEnt == pNotThis || !Check(pEnt))
+				continue;
+			const vec2 EntityPos = pEnt->m_Pos + Offset;
+			vec2 IntersectPos = closest_point_on_line(Pos0, Pos1, EntityPos);
+			float Len = distance(EntityPos, IntersectPos);
+			if(Len < pEnt->GetProximityRadius() + Radius)
+			{
+				Len = distance(Pos0, IntersectPos);
+				if(Len < ClosestLen)
+				{
+					NewPos = IntersectPos;
+					ClosestLen = Len;
+					pClosest = pEnt;
+				}
+			}
+		}
+	}
+
 	return pClosest;
 }
 
-CEntity *CGameWorld::ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis)
+CEntity *CGameWorld::ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis, bool AcrossRing)
 {
 	// Find other entities
 	float ClosestRange = Radius * 2;
@@ -573,6 +700,31 @@ CEntity *CGameWorld::ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pN
 			{
 				ClosestRange = Len;
 				pClosest = pEnt;
+			}
+		}
+	}
+
+	// an item or a player right across the boundary is physically adjacent
+	if(AcrossRing)
+	{
+		SRingNeighbour aNeighbours[2];
+		const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+		for(int n = 0; n < Neighbours; n++)
+		{
+			const vec2 Offset = aNeighbours[n].m_Offset;
+			for(auto &pEnt : aNeighbours[n].m_pWorld->m_alpEntityLists[Type])
+			{
+				if(pEnt == pNotThis)
+					continue;
+				float Len = distance(Pos, pEnt->m_Pos + Offset);
+				if(Len < pEnt->GetProximityRadius() + Radius)
+				{
+					if(Len < ClosestRange)
+					{
+						ClosestRange = Len;
+						pClosest = pEnt;
+					}
+				}
 			}
 		}
 	}
@@ -599,6 +751,27 @@ CEntity *CGameWorld::ClosestFlagEntity(vec2 Pos, float Radius, int Flag, CEntity
 			{
 				ClosestRange = Len;
 				pClosest = pEnt;
+			}
+		}
+	}
+
+	SRingNeighbour aNeighbours[2];
+	const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+	for(int n = 0; n < Neighbours; n++)
+	{
+		const vec2 Offset = aNeighbours[n].m_Offset;
+		for(auto &pEnt : aNeighbours[n].m_pWorld->m_lpFlagEntityList)
+		{
+			if(pEnt == pNotThis || !Check(pEnt))
+				continue;
+			float Len = distance(Pos, pEnt->m_Pos + Offset);
+			if(Len < pEnt->GetProximityRadius() + Radius)
+			{
+				if(Len < ClosestRange)
+				{
+					ClosestRange = Len;
+					pClosest = pEnt;
+				}
 			}
 		}
 	}
@@ -654,7 +827,7 @@ void CGameWorld::CreateExplosion(vec2 Pos, CEntity *pOwner, int Weapon, int MaxD
 	const int Num = FindFlagEntities(Pos, Radius, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 	for(int i = 0; i < Num; i++)
 	{
-		vec2 Diff = lpEnts[i]->GetPos() - Pos;
+		vec2 Diff = PosInFrame(lpEnts[i]) - Pos;
 		vec2 Force(0, MaxForce);
 		float l = length(Diff);
 		if(l)

@@ -39,21 +39,21 @@ int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Am
 		// CCharacter: a bot is hittable too, so cast to the common base
 		CHitableEntity *pTarget = static_cast<CHitableEntity *>(lpEnts[i]);
 
-		if((pTarget == pChr) || pWorld->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos(), NULL, NULL))
+		if((pTarget == pChr) || pWorld->Collision()->IntersectLine(ProjStartPos, pWorld->PosInFrame(pTarget), NULL, NULL))
 			continue;
 
 		if(SwingHitEffect())
 		{
 			// set his velocity to fast upward (for now)
-			if(length(pTarget->GetPos() - ProjStartPos) > 0.0f)
-				pWorld->CreateHammerHit(pTarget->GetPos() - normalize(pTarget->GetPos() - ProjStartPos) * pChr->GetProximityRadius() * 0.5f);
+			if(length(pWorld->PosInFrame(pTarget) - ProjStartPos) > 0.0f)
+				pWorld->CreateHammerHit(pWorld->PosInFrame(pTarget) - normalize(pWorld->PosInFrame(pTarget) - ProjStartPos) * pChr->GetProximityRadius() * 0.5f);
 			else
 				pWorld->CreateHammerHit(ProjStartPos);
 		}
 
 		vec2 Dir;
-		if(length(pTarget->GetPos() - ChrPos) > 0.0f)
-			Dir = normalize(pTarget->GetPos() - ChrPos);
+		if(length(pWorld->PosInFrame(pTarget) - ChrPos) > 0.0f)
+			Dir = normalize(pWorld->PosInFrame(pTarget) - ChrPos);
 		else
 			Dir = vec2(0.f, -1.f);
 
@@ -72,7 +72,7 @@ int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Am
 			CResourceEntity *pRes = static_cast<CResourceEntity *>(lpResEnts[i]);
 			if(pRes->IsRespawning())
 				continue;
-			if(pWorld->Collision()->IntersectLine(ProjStartPos, pRes->GetPos(), NULL, NULL))
+			if(pWorld->Collision()->IntersectLine(ProjStartPos, pWorld->PosInFrame(pRes), NULL, NULL))
 				continue;
 
 			// The last hit destroys the node, so bank the drop first: when the
@@ -85,12 +85,12 @@ int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Am
 				if(!pPlayer || !pChr->GameServer()->Item()->AddItem(pPlayer->GetCID(), pRes->Item(), 1))
 					continue;
 				pRes->TakeHit(1);
-				pWorld->CreateSound(pRes->GetPos(), SOUND_PICKUP_ARMOR);
+				pWorld->CreateSound(pWorld->PosInFrame(pRes), SOUND_PICKUP_ARMOR);
 			}
 			else
 			{
 				pRes->TakeHit(1);
-				pWorld->CreateHammerHit(pRes->GetPos());
+				pWorld->CreateHammerHit(pWorld->PosInFrame(pRes));
 			}
 			Hits++;
 		}

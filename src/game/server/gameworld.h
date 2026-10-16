@@ -55,6 +55,16 @@ private:
 	CLayers m_Layers;
 	CCollision m_Collision;
 
+	// One live ring neighbour of this world, with the offset (world units) that
+	// maps its local x onto this world's axis. The entity queries use these so a
+	// hit, a pickup or an explosion can cross the shared boundary.
+	struct SRingNeighbour
+	{
+		CGameWorld *m_pWorld;
+		vec2 m_Offset;
+	};
+	int CollectRingNeighbours(SRingNeighbour *pOut, int Max);
+
 public:
 	class CGameContext *GameServer() { return m_pGameServer; }
 	class CConfig *Config() { return m_pConfig; }
@@ -174,7 +184,7 @@ public:
 		Returns:
 			Returns a pointer to the closest CEntity or NULL if no CEntity is close enough.
 	*/
-	CEntity *ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis);
+	CEntity *ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis, bool AcrossRing = false);
 	CEntity *ClosestFlagEntity(vec2 Pos, float Radius, int Flag, CEntity *pNotThis);
 
 	/*
@@ -194,6 +204,12 @@ public:
 	*/
 	CEntity *IntersectEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Type, CEntity *pNotThis = 0);
 	CEntity *IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Flag, CEntity *pNotThis = 0);
+
+	// The position of an entity as seen in this world's frame: an entity of a
+	// live ring neighbour is shifted by the boundary offset, everything else is
+	// its own position. Callers acting on a cross-boundary hit must use this
+	// instead of GetPos().
+	vec2 PosInFrame(CEntity *pEnt);
 
 	/*
 		Function: insert_entity

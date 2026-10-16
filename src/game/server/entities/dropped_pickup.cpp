@@ -44,7 +44,7 @@ void CDroppedPickup::Tick()
 	// try to collect the item when a player touches it
 	if(Now >= m_NoPickupTick)
 	{
-		CCharacter *pChr = (CCharacter *) GameWorld()->ClosestEntity(m_Pos, 22.0f, CGameWorld::ENTTYPE_CHARACTER, 0);
+		CCharacter *pChr = (CCharacter *) GameWorld()->ClosestEntity(m_Pos, 22.0f, CGameWorld::ENTTYPE_CHARACTER, 0, true);
 		if(pChr && pChr->IsAlive() && GameServer()->m_pController->CanCharacterPickup(pChr))
 		{
 			// only collected when the player has inventory space; otherwise

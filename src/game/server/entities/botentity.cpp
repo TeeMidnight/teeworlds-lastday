@@ -143,7 +143,7 @@ void CBotEntity::OnAction()
 	CEntity *pTarget = FindTarget();
 	if(pTarget)
 	{
-		const vec2 Target = pTarget->GetPos();
+		const vec2 Target = GameWorld()->PosInFrame(pTarget);
 
 		// walk towards the target, but only correct while noticeably off
 		if(absolute(Target.x - m_Pos.x) > 48.0f)
@@ -211,7 +211,7 @@ CEntity *CBotEntity::FindTarget()
 
 	// chase the closest hittable entity that is not us and is in line of sight
 	CEntity *pTarget = GameWorld()->ClosestFlagEntity(GetPos(), 320.0f, CGameWorld::ENTFLAG_HITABLE, this);
-	if(pTarget && GameWorld()->Collision()->IntersectLine(GetPos(), pTarget->GetPos(), NULL, NULL))
+	if(pTarget && GameWorld()->Collision()->IntersectLine(GetPos(), GameWorld()->PosInFrame(pTarget), NULL, NULL))
 		pTarget = 0;
 	return pTarget;
 }
@@ -249,12 +249,12 @@ void CBotEntity::DoWeapon()
 		CHitableEntity *pTarget = static_cast<CHitableEntity *>(lpEnts[i]);
 		if(pTarget == this)
 			continue;
-		if(GameWorld()->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos(), NULL, NULL))
+		if(GameWorld()->Collision()->IntersectLine(ProjStartPos, GameWorld()->PosInFrame(pTarget), NULL, NULL))
 			continue;
 
 		vec2 Dir;
-		if(length(pTarget->GetPos() - m_Pos) > 0.0f)
-			Dir = normalize(pTarget->GetPos() - m_Pos);
+		if(length(GameWorld()->PosInFrame(pTarget) - m_Pos) > 0.0f)
+			Dir = normalize(GameWorld()->PosInFrame(pTarget) - m_Pos);
 		else
 			Dir = vec2(0.0f, -1.0f);
 

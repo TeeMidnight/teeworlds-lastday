@@ -84,11 +84,11 @@ public:
 				continue;
 
 			// check so we are sufficiently close
-			if(distance(lpEnts[i]->GetPos(), pChr->GetPos()) > Radius)
+			if(distance(pChr->GameWorld()->PosInFrame(lpEnts[i]), pChr->GetPos()) > Radius)
 				continue;
 
 			// hit a player, give him damage and stuffs...
-			pChr->GameWorld()->CreateSound(lpEnts[i]->GetPos(), SOUND_NINJA_HIT);
+			pChr->GameWorld()->CreateSound(pChr->GameWorld()->PosInFrame(lpEnts[i]), SOUND_NINJA_HIT);
 			pChr->m_lpHitObjects.add(lpEnts[i]->GetID());
 
 			// set his velocity to fast upward (for now)
