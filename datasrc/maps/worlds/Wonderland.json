@@ -69,6 +69,17 @@
                 }
             ],
             "entrance": "Underground"
+        },
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": 0,
+                    "tiles_start_y": "ignore",
+                    "tiles_end_x": 2,
+                    "tiles_end_y": "ignore"
+                }
+            ],
+            "entrance": "Grove"
         }
     ]
 }

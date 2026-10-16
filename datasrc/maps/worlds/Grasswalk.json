@@ -22,6 +22,17 @@
                 }
             ],
             "entrance": "Highlands"
+        },
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": 126,
+                    "tiles_start_y": "ignore",
+                    "tiles_end_x": "ignore",
+                    "tiles_end_y": "ignore"
+                }
+            ],
+            "entrance": "Underdeep"
         }
     ],
     "resources": [

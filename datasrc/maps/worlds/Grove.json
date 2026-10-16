@@ -1,0 +1,90 @@
+{
+    "base": "Grove",
+    "structs": [
+        {
+            "base": "Wonderland_Post",
+            "proba": 30,
+            "resources": [
+                {
+                    "res_id": "stone",
+                    "display": "armor",
+                    "proba": 45,
+                    "hardness_min": 1,
+                    "hardness_max": 4,
+                    "respawntime_min": 30,
+                    "respawntime_max": 60
+                }
+            ]
+        },
+        {
+            "base": "Wonderland_Post2",
+            "proba": 30,
+            "resources": [
+                {
+                    "res_id": "stone",
+                    "display": "armor",
+                    "proba": 45,
+                    "hardness_min": 1,
+                    "hardness_max": 4,
+                    "respawntime_min": 30,
+                    "respawntime_max": 60
+                }
+            ]
+        }
+    ],
+    "entrances": [
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": "ignore",
+                    "tiles_start_y": -1,
+                    "tiles_end_x": "ignore",
+                    "tiles_end_y": 1
+                }
+            ],
+            "entrance": "Heaven"
+        },
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": 0,
+                    "tiles_start_y": "ignore",
+                    "tiles_end_x": 2,
+                    "tiles_end_y": "ignore"
+                }
+            ],
+            "entrance": "Underground"
+        },
+        {
+            "tiles": [
+                {
+                    "tiles_start_x": 158,
+                    "tiles_start_y": "ignore",
+                    "tiles_end_x": "ignore",
+                    "tiles_end_y": "ignore"
+                }
+            ],
+            "entrance": "Thicket"
+        }
+    ],
+    "resources": [
+        {
+            "res_id": "grass",
+            "display": "health",
+            "proba": 60,
+            "hardness_min": 1,
+            "hardness_max": 1,
+            "respawntime_min": 45,
+            "respawntime_max": 90
+        },
+        {
+            "res_id": "stone",
+            "display": "armor",
+            "proba": 25,
+            "hardness_min": 1,
+            "hardness_max": 5,
+            "respawntime_min": 60,
+            "respawntime_max": 120
+        }
+    ]
+}
