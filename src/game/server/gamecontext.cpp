@@ -423,11 +423,26 @@ void CGameContext::OnTick()
 	// single owned, so half of what they see and can mine lives next door
 	EnsureOccupiedRingNeighbours();
 
+	// bind the neighbours' players as proxy cores before anything moves, so a
+	// hook or a player collision this tick sees them where they are
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		(void) pUser;
+		pWorld->RefreshRingProxies();
+	}, nullptr);
+
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
 		pWorld->m_Core.m_Tuning = *static_cast<CGameContext *>(pUser)->Tuning();
 		pWorld->Tick();
 	}, this);
+
+	// pass on the drag a hook applied to a proxy, so the real character is pulled
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		(void) pUser;
+		pWorld->ForwardRingProxyDrag();
+	}, nullptr);
 
 	// if(world.paused) // make sure that the game object always updates
 	m_pController->Tick();

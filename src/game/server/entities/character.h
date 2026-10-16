@@ -77,6 +77,11 @@ public:
 	class CPlayer *GetPlayer() { return m_pPlayer; }
 	int GetCID();
 
+	// ring proxies: the core position a neighbouring world mirrors, and the hook
+	// drag a proxy received that belongs to this character
+	vec2 CorePos() const { return m_Core.m_Pos; }
+	void AddHookDragVel(vec2 Vel) { m_Core.m_HookDragVel += Vel; }
+
 	// the item id in the active loadout slot (a zeroed id when the slot is
 	// empty). Use GetUsableWeapon() to resolve the weapon it equips as.
 	CItemID GetActiveWeapon() const { return WeaponAtSlot(m_ActiveWeapon); }

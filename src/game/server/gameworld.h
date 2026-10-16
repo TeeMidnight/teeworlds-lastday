@@ -102,6 +102,13 @@ public:
 	int m_Stride;       // distance between two neighbouring instances
 	int m_Period;       // circumference of the whole ring
 
+	// Ring: the live neighbours' players are bound into this world's core under
+	// their real client id, translated onto this world's axis, so a hook or a
+	// player collision in this world sees them. A hook's drag applied to a proxy
+	// is forwarded to the real core at the end of the tick.
+	CCharacterCore m_aRingProxyCores[MAX_CLIENTS];
+	CGameWorld *m_apRingProxyOwner[MAX_CLIENTS];
+
 	bool IsRing() const { return m_Ring; }
 	// x (world units) at which walking right / left leaves this instance
 	float RingRightTriggerX() const;
@@ -109,6 +116,10 @@ public:
 	// The map name of the neighbour in Direction (+1 right, -1 left) and the
 	// arrival x for a character leaving at LocalX. False when this is not a ring.
 	bool RingNeighbour(int Direction, char *pMapName, int MapNameSize, float LocalX, float *pArrivalX) const;
+	// bind / update the neighbour proxies (call before the worlds tick)
+	void RefreshRingProxies();
+	// release the proxies that no longer have an owner and pass any hook drag on
+	void ForwardRingProxyDrag();
 
 	// persist the whole state of this world (dropped item pickups today,
 	// and any future world attributes added later) into the world_saves row

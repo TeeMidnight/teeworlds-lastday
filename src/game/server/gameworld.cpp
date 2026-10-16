@@ -49,6 +49,7 @@ CGameWorld::CGameWorld(CGameContext *pGameServer)
 	m_OffsetX = 0;
 	m_Stride = 0;
 	m_Period = 0;
+	mem_zero(m_apRingProxyOwner, sizeof(m_apRingProxyOwner));
 
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 	{
@@ -130,6 +131,83 @@ vec2 CGameWorld::PosInFrame(CEntity *pEnt)
 			return pEnt->GetPos() + aNeighbours[n].m_Offset;
 	}
 	return pEnt->GetPos();
+}
+
+void CGameWorld::RefreshRingProxies()
+{
+	if(!m_Ring)
+		return;
+
+	bool aSeen[MAX_CLIENTS];
+	mem_zero(aSeen, sizeof(aSeen));
+
+	SRingNeighbour aNeighbours[2];
+	const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+	for(int n = 0; n < Neighbours; n++)
+	{
+		CGameWorld *pNeighbour = aNeighbours[n].m_pWorld;
+		const vec2 Offset = aNeighbours[n].m_Offset;
+		for(auto &pEnt : pNeighbour->m_alpEntityLists[ENTTYPE_CHARACTER])
+		{
+			CCharacter *pChr = static_cast<CCharacter *>(pEnt);
+			if(!pChr || !pChr->IsAlive())
+				continue;
+			const int CID = pChr->GetCID();
+			if(CID < 0 || CID >= MAX_CLIENTS)
+				continue;
+			// a real character of this world would own the id; only ever take a
+			// free slot or our own proxy
+			CCharacterCore *pExisting = m_Core.GetCharacter(CID);
+			if(pExisting && pExisting != &m_aRingProxyCores[CID])
+				continue;
+			if(pExisting != &m_aRingProxyCores[CID] || m_apRingProxyOwner[CID] != pNeighbour)
+			{
+				m_aRingProxyCores[CID].Init(&m_Core, &m_Collision);
+				m_aRingProxyCores[CID].Reset();
+				m_Core.SetCharacter(CID, &m_aRingProxyCores[CID]);
+				m_apRingProxyOwner[CID] = pNeighbour;
+			}
+			m_aRingProxyCores[CID].m_Pos = pChr->CorePos() + Offset;
+			aSeen[CID] = true;
+		}
+	}
+
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(m_apRingProxyOwner[i] && !aSeen[i])
+		{
+			if(m_Core.GetCharacter(i) == &m_aRingProxyCores[i])
+				m_Core.SetCharacter(i, nullptr);
+			m_apRingProxyOwner[i] = nullptr;
+		}
+	}
+}
+
+void CGameWorld::ForwardRingProxyDrag()
+{
+	if(!m_Ring)
+		return;
+
+	for(int c = 0; c < MAX_CLIENTS; c++)
+	{
+		if(!m_apRingProxyOwner[c])
+			continue;
+		CCharacterCore &Proxy = m_aRingProxyCores[c];
+		if(Proxy.m_HookDragVel.x == 0.0f && Proxy.m_HookDragVel.y == 0.0f)
+			continue;
+
+		CGameWorld *pOwner = m_apRingProxyOwner[c];
+		for(auto &pEnt : pOwner->m_alpEntityLists[ENTTYPE_CHARACTER])
+		{
+			CCharacter *pChr = static_cast<CCharacter *>(pEnt);
+			if(pChr && pChr->IsAlive() && pChr->GetCID() == c)
+			{
+				pChr->AddHookDragVel(Proxy.m_HookDragVel);
+				break;
+			}
+		}
+		Proxy.m_HookDragVel = vec2(0.0f, 0.0f);
+	}
 }
 
 CGameWorld::~CGameWorld()

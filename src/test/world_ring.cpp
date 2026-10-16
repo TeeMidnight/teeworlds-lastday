@@ -12,6 +12,9 @@
 #include <engine/server/mapgen.h>
 #include <engine/server/worldgen.h>
 
+#include <game/collision.h>
+#include <game/gamecore.h>
+
 #include <vector>
 
 namespace {
@@ -240,4 +243,36 @@ TEST(WorldRing, NeighbourSeedWrapsAroundTheRing)
 	EXPECT_EQ(RingNeighbourSeed(1, -1, 1024), 1024);
 	EXPECT_EQ(RingNeighbourSeed(1024, 1, 1024), 1);
 	EXPECT_EQ(RingNeighbourSeed(1024, -1, 1024), 1023);
+}
+
+// A hook flying at a core bound at a translated column grabs it: this is the
+// mechanism the ring proxy relies on to reach a player in the next instance.
+TEST(RingProxy, HookGrabsACoreBoundAtATranslatedColumn)
+{
+	const int CW = 64, CH = 16;
+	std::vector<int> aTiles((size_t) CW * CH, 0);
+	CCollision Coll;
+	Coll.InitForTesting(CW, CH, aTiles.data(), false);
+
+	CWorldCore World;
+	CCharacterCore Hooker, Proxy;
+	Hooker.Init(&World, &Coll);
+	Hooker.Reset();
+	Proxy.Init(&World, &Coll);
+	Proxy.Reset();
+
+	// the next instance's player, bound under its real client id and standing at
+	// the column it would occupy in this map
+	World.SetCharacter(5, &Proxy);
+	Proxy.m_Pos = vec2(90.0f, 0.0f);
+
+	Hooker.m_Pos = vec2(0.0f, 0.0f);
+	Hooker.m_HookState = HOOK_FLYING;
+	Hooker.m_HookPos = Hooker.m_Pos;
+	Hooker.m_HookDir = vec2(1.0f, 0.0f);
+	Hooker.m_HookedPlayer = -1;
+	Hooker.m_Input.m_Hook = 1;
+
+	Hooker.Tick(true, true);
+	EXPECT_EQ(Hooker.m_HookedPlayer, 5);
 }
