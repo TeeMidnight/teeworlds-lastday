@@ -336,6 +336,7 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 	else
 	{
 		pPlayer->m_HasPendingArrival = false;
+		dbg_msg("game", "failed to switch client %d to map %u", pPlayer->GetCID(), MapID);
 	}
 }
 
@@ -1554,6 +1555,20 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 	// remember the canonical map name: it is the persistence key of the
 	// world saves stored in the database
 	str_copy(pNewWorld->m_aMapName, Server()->GetMapName(MapID), sizeof(pNewWorld->m_aMapName));
+
+	// A ring crossing names the neighbouring instance at runtime, and the engine
+	// only switches to or loads a map it already knows, so register the two
+	// neighbours now. Loading one of them registers its own further neighbours
+	// in turn, which is how the ring is discovered lazily.
+	if(pNewWorld->IsRing())
+	{
+		for(int Dir = -1; Dir <= 1; Dir += 2)
+		{
+			char aName[64];
+			if(pNewWorld->RingNeighbour(Dir, aName, sizeof(aName), 0.0f, nullptr))
+				Server()->RegisterMapName(aName);
+		}
+	}
 	// restore the saved state (dropped items etc.) of this world
 	pNewWorld->RestoreFromDatabase();
 

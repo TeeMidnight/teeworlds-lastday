@@ -547,6 +547,7 @@ bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 
 			float ArrivalX = 0.0f;
 			if(pWorld->RingNeighbour(Direction, aTarget, sizeof(aTarget), NewPos.x, &ArrivalX))
 			{
+				dbg_msg("game", "ring crossing %s -> %s at x %.0f", pWorld->m_aMapName, aTarget, NewPos.x);
 				pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(aTarget), vec2(ArrivalX, NewPos.y), true);
 				return true;
 			}

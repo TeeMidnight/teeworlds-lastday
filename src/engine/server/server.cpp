@@ -2044,6 +2044,14 @@ bool CServer::LoadMapForWorld(unsigned MapID)
 	return true;
 }
 
+bool CServer::RegisterMapName(const char *pName)
+{
+	if(!pName || !pName[0])
+		return false;
+	PushMapList(pName);
+	return true;
+}
+
 const char *CServer::GetMapName(unsigned MapID)
 {
 	CMapInfo *pInfo = m_MapInfos[MapID];

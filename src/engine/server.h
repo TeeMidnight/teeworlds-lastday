@@ -92,6 +92,11 @@ public:
 	// neighbour in so an entity can cross into it. A default keeps the
 	// interface usable by an implementation that does not support worlds.
 	virtual bool LoadMapForWorld(unsigned MapID) { return false; }
+
+	// Registers a map name with the engine so it can be switched to or loaded
+	// later. A ring crossing names its target at runtime, and the engine only
+	// acts on a map it already knows, so the name has to be introduced first.
+	virtual bool RegisterMapName(const char *pName) { return false; }
 };
 
 class IGameServer : public IInterface

@@ -311,6 +311,7 @@ public:
 	virtual int GetMapWorldKind(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);
 	virtual bool LoadMapForWorld(unsigned MapID);
+	virtual bool RegisterMapName(const char *pName);
 };
 
 #endif
