@@ -540,12 +540,12 @@ void CGameWorld::Snap(int SnappingClient)
 
 	// Ring: the live neighbours share the strip around the boundary, so their
 	// entities there belong in this snapshot too, shifted onto this map's axis.
-	// Only what actually renders is mirrored (players, drops, projectiles);
-	// resources are terrain bound and identical in both instances already.
-	// Nothing is mutated beyond the offset field, which is cleared right after.
+	// Every entity type is mirrored: the entity shifts itself (and whatever it
+	// renders from) for the call, so nothing has to be listed here. A type whose
+	// per client identity is unknown (a bot the client was not told about)
+	// simply renders nothing.
 	if(m_Ring && SnappingClient != -1 && m_Period > 0)
 	{
-		const int aTypes[] = {ENTTYPE_DROPPEDPICKUP, ENTTYPE_PROJECTILE, ENTTYPE_CHARACTER};
 		for(int Dir = -1; Dir <= 1; Dir += 2)
 		{
 			char aName[64];
@@ -557,13 +557,13 @@ void CGameWorld::Snap(int SnappingClient)
 
 			const float ShiftX = (float) RingNeighbourShift(m_OffsetX, pNeighbour->m_OffsetX, m_Period) * 32.0f;
 			const vec2 Offset(ShiftX, 0.0f);
-			for(int t = 0; t < 3; t++)
+			for(int t = 0; t < NUM_ENTTYPES; t++)
 			{
-				for(auto &pEnt : pNeighbour->m_alpEntityLists[aTypes[t]])
+				for(auto &pEnt : pNeighbour->m_alpEntityLists[t])
 				{
-					pEnt->SetSnapOffset(Offset);
+					pEnt->ShiftForSnap(Offset);
 					pEnt->Snap(SnappingClient);
-					pEnt->SetSnapOffset(vec2(0.0f, 0.0f));
+					pEnt->ShiftForSnap(-Offset);
 				}
 			}
 		}
@@ -624,14 +624,17 @@ void CGameWorld::Tick()
 	// someone is in the neighbour (its world is then loaded).
 	if(IsRing())
 	{
-		const int aTypes[] = {ENTTYPE_DROPPEDPICKUP, ENTTYPE_PROJECTILE, ENTTYPE_BOTENTITY};
 		const float RightX = RingRightTriggerX();
 		const float LeftX = RingLeftTriggerX();
 		array<CEntity *> lCrossing;
-		for(int t = 0; t < 3; t++)
+		// generic: every type is scanned and each entity decides whether it
+		// crosses. Stationary entities (resources, flags, lasers) do not opt in.
+		for(int t = 0; t < NUM_ENTTYPES; t++)
 		{
-			for(auto &pEnt : m_alpEntityLists[aTypes[t]])
+			for(auto &pEnt : m_alpEntityLists[t])
 			{
+				if(!pEnt->RingCrosses())
+					continue;
 				const float X = pEnt->RingPos().x;
 				if(X >= RightX || X <= LeftX)
 					lCrossing.add(pEnt);

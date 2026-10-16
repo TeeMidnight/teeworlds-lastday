@@ -22,7 +22,6 @@ CEntity::CEntity(CGameWorld *pGameWorld, int ObjType, int ObjFlag, vec2 Pos, int
 
 	m_MarkedForDestroy = false;
 	m_Pos = Pos;
-	m_SnapOffset = vec2(0.0f, 0.0f);
 }
 
 CEntity::~CEntity()
@@ -33,7 +32,7 @@ CEntity::~CEntity()
 
 int CEntity::NetworkClipped(int SnappingClient)
 {
-	return NetworkClipped(SnappingClient, m_Pos + m_SnapOffset);
+	return NetworkClipped(SnappingClient, m_Pos);
 }
 
 int CEntity::NetworkClipped(int SnappingClient, vec2 CheckPos)

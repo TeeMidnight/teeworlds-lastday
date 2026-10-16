@@ -43,6 +43,7 @@ public:
 	virtual void TickDefered();
 	virtual void TickPaused();
 	virtual void Snap(int SnappingClient);
+	virtual void ShiftForSnap(vec2 Delta) override;
 	virtual void PostSnap();
 
 	bool IsGrounded();

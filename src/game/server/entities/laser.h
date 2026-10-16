@@ -16,6 +16,7 @@ public:
 	virtual void Tick();
 	virtual void TickPaused();
 	virtual void Snap(int SnappingClient);
+	virtual void ShiftForSnap(vec2 Delta);
 
 	// the owning client left; drop the reference so HitCharacter no longer
 	// skips a tee that reused the slot

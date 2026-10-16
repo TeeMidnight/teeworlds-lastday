@@ -99,6 +99,7 @@ public:
 	void TickDefered() override;
 	void TickPaused() override;
 	void Snap(int SnappingClient) override;
+	void ShiftForSnap(vec2 Delta) override;
 	void PostSnap() override;
 
 	// --- CHitableEntity ---
@@ -116,6 +117,7 @@ public:
 	int GetArmor() const override { return m_Armor; }
 	void Die(CEntity *pKiller, int Weapon) override;
 	void MoveToWorld(CGameWorld *pNewWorld, vec2 Pos) override;
+	bool RingCrosses() const override { return true; }
 	void OnBotTick() override;
 	bool OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon) override;
 

@@ -24,6 +24,8 @@ public:
 
 	virtual void Tick();
 	virtual void Snap(int SnappingClient);
+	// ring: a dropped item crosses the boundary like a player does
+	virtual bool RingCrosses() const override { return true; }
 
 	// the dropped item's id / stack size
 	const CItemID &ItemId() const { return m_ItemId; }

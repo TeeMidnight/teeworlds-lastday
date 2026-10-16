@@ -17,9 +17,12 @@ and the 1024 instances close into one world that can be walked around.
 - Crossing: past 2/3 of the shared strip the character steps into the right
   neighbour, past 1/3 into the left one; the landing sits on the same global
   column, so the world transfer keeps its position and cannot bounce.
-- Entities: dropped pickups, projectiles and bots cross at the same trigger;
-  the live neighbours' players, drops and projectiles are also rendered in the
-  current map, and hits and pickups reach across the boundary.
+- Entities: the ring view of a neighbour is generic, not a per type list. Any
+  entity is found by the normal queries across the boundary, rendered there via
+  ShiftForSnap (each entity shifts whatever it draws from), and an entity that
+  opts in with RingCrosses follows the boundary transfer (drops, projectiles,
+  bots). A type whose per client identity is unknown - a bot the client was not
+  told about - renders nothing rather than the wrong tee.
 - Resources: a node is only spawned past the shared margin, so each physical
   node has a single owner and is never mined twice.
 - The neighbours of an occupied ring instance are kept loaded.
@@ -39,4 +42,7 @@ Cross-boundary hooks and player collisions work through proxy cores: each ring
 instance binds its live neighbours' players into its own world core under their
 real client id, translated onto its axis, and forwards any hook drag to the real
 character. The mirrored snapshot gives the client the same characters, so its
-prediction matches. Bots are not proxied (their tee ids are mapped per client).
+prediction matches. Bots are not proxied: their core ids are derived per
+instance and their client facing ids are assigned per receiving client, so both
+the id and the identity would have to be negotiated before they can be hooked or
+rendered across a boundary.

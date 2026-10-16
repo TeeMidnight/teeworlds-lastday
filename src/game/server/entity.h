@@ -59,10 +59,6 @@ protected:
 	*/
 	vec2 m_Pos;
 
-	// Horizontal shift applied only while this entity is mirrored from a
-	// neighbouring ring instance during a snapshot; zero otherwise.
-	vec2 m_SnapOffset;
-
 public:
 	/* Constructor */
 	CEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0);
@@ -72,9 +68,15 @@ public:
 
 	void SetGameWorld(class CGameWorld *pGameWorld) { m_pGameWorld = pGameWorld; }
 
-	// see m_SnapOffset: a mirroring world shifts a neighbour's entity into its
-	// own frame for the duration of one Snap call
-	void SetSnapOffset(vec2 Offset) { m_SnapOffset = Offset; }
+	// Ring: shift this entity, and whatever it renders from, into a neighbouring
+	// instance's frame for the duration of one mirrored Snap call. The default
+	// moves m_Pos; a projectile renders from its launch point in m_Pos, so the
+	// default already moves the whole flight. Entities that render from other
+	// fields (a character or bot core, a laser's from point) override it.
+	virtual void ShiftForSnap(vec2 Delta) { m_Pos += Delta; }
+	// Ring: whether this entity follows the boundary transfer when it crosses a
+	// trigger. Off by default; movable entities opt in.
+	virtual bool RingCrosses() const { return false; }
 
 	// Ring crossings. RingPos is where the entity really is: a projectile keeps
 	// its launch point in m_Pos rather than its current point, so it overrides

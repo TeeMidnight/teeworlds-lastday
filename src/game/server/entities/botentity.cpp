@@ -389,6 +389,15 @@ void CBotEntity::TickPaused()
 	++m_ReckoningTick;
 }
 
+void CBotEntity::ShiftForSnap(vec2 Delta)
+{
+	m_Pos += Delta;
+	m_Core.m_Pos += Delta;
+	m_Core.m_HookPos += Delta;
+	m_SendCore.m_Pos += Delta;
+	m_SendCore.m_HookPos += Delta;
+}
+
 void CBotEntity::Snap(int SnappingClient)
 {
 	CBotManager *pBotManager = GameWorld()->BotManager();

@@ -30,6 +30,7 @@ public:
 	// rather than the current point (see CEntity::RingPos)
 	virtual vec2 RingPos();
 	virtual void OnRingTransfer(float ArrivalX);
+	virtual bool RingCrosses() const override { return true; }
 
 private:
 	vec2 m_Direction;

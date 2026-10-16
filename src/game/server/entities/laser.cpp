@@ -204,6 +204,12 @@ void CLaser::TickPaused()
 	++m_EvalTick;
 }
 
+void CLaser::ShiftForSnap(vec2 Delta)
+{
+	m_Pos += Delta;
+	m_From += Delta;
+}
+
 void CLaser::Snap(int SnappingClient)
 {
 	if(NetworkClippedLine(SnappingClient, m_From, m_Pos))
