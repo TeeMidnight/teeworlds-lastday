@@ -39,9 +39,9 @@ CGameWorld::CGameWorld(CGameContext *pGameServer)
 	m_pServer = m_pGameServer->Server();
 	m_Events.SetGameServer(pGameServer);
 
-	m_pBotManager = nullptr;
-
 	m_aMapName[0] = '\0';
+	m_BotConfigured = false;
+	m_BotNpcRole = false;
 	m_Ring = false;
 	m_RingSeed = 0;
 	m_RingSize = 0;
@@ -212,10 +212,11 @@ void CGameWorld::ForwardRingProxyDrag()
 
 CGameWorld::~CGameWorld()
 {
-	// the manager goes first: bots are entities, and it keeps per-client tee
-	// id state that must not outlive them
-	delete m_pBotManager;
-	m_pBotManager = nullptr;
+	// The global manager owns the bots as entities, so retire this world's
+	// before the entity lists are torn down: a bot's destructor unbinds its
+	// core from this world and must not run after that core is gone.
+	if(class CBotManager *pBots = GameServer()->BotManager())
+		pBots->ClearBots(this);
 
 	// delete all entities
 	for(int i = 0; i < NUM_ENTTYPES; i++)
@@ -225,9 +226,33 @@ CGameWorld::~CGameWorld()
 
 CBotManager *CGameWorld::BotManager()
 {
-	if(!m_pBotManager)
-		m_pBotManager = new CBotManager(this);
-	return m_pBotManager;
+	return GameServer()->BotManager();
+}
+
+CBotManager *CGameWorld::GetBotManager() const
+{
+	return GameServer()->BotManager();
+}
+
+bool CGameWorld::HasBotManager() const
+{
+	return GameServer()->BotManager() != nullptr;
+}
+
+int CGameWorld::RingNeighbours(CGameWorld **ppWorlds, vec2 *pOffsets, int Max)
+{
+	if(!ppWorlds || Max <= 0)
+		return 0;
+
+	SRingNeighbour aNeighbours[2];
+	const int Count = CollectRingNeighbours(aNeighbours, minimum(Max, 2));
+	for(int i = 0; i < Count; i++)
+	{
+		ppWorlds[i] = aNeighbours[i].m_pWorld;
+		if(pOffsets)
+			pOffsets[i] = aNeighbours[i].m_Offset;
+	}
+	return Count;
 }
 
 void CGameWorld::InitCollision(IMap *pMap)
@@ -572,10 +597,6 @@ void CGameWorld::Snap(int SnappingClient)
 
 void CGameWorld::PostSnap()
 {
-	// refresh the per-client bot tee id mapping after this tick's snapshots
-	if(m_pBotManager)
-		m_pBotManager->PostSnap();
-
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 		for(auto &pEnt : m_alpEntityLists[i])
 			pEnt->PostSnap();
@@ -598,10 +619,6 @@ void CGameWorld::RemoveEntities()
 
 void CGameWorld::Tick()
 {
-	// bots decide their input and respawn before the entities advance
-	if(m_pBotManager)
-		m_pBotManager->Tick();
-
 	// update all objects by index, not with a range: an entity may insert
 	// another one into the same list while it ticks (a laser refracts, a
 	// projectile fragments). array::add reallocates and invalidates a captured

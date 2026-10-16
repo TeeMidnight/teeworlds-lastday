@@ -133,8 +133,9 @@ public:
 
 	/*
 		Function: PickTeeID
-			Chooses the private TeeID for a bot, derived from its BotID so it is
-			stable, then probed forward until no live core holds it.
+			Chooses the private TeeID for a bot. The global CBotManager derives
+			it from the BotID (so it is stable) and keeps it unique among the
+			live bots of every world.
 		Returns:
 			A free id in [BOT_TEEID_07_MIN, BOT_TEEID_08_MAX], or -1 when the
 			whole range is taken.

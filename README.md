@@ -21,8 +21,8 @@ and the 1024 instances close into one world that can be walked around.
   entity is found by the normal queries across the boundary, rendered there via
   ShiftForSnap (each entity shifts whatever it draws from), and an entity that
   opts in with RingCrosses follows the boundary transfer (drops, projectiles,
-  bots). A type whose per client identity is unknown - a bot the client was not
-  told about - renders nothing rather than the wrong tee.
+  bots). A bot the client was not told about renders nothing rather than the
+  wrong tee.
 - Resources: a node is only spawned past the shared margin, so each physical
   node has a single owner and is never mined twice.
 - The neighbours of an occupied ring instance are kept loaded.
@@ -42,7 +42,12 @@ Cross-boundary hooks and player collisions work through proxy cores: each ring
 instance binds its live neighbours' players into its own world core under their
 real client id, translated onto its axis, and forwards any hook drag to the real
 character. The mirrored snapshot gives the client the same characters, so its
-prediction matches. Bots are not proxied: their core ids are derived per
-instance and their client facing ids are assigned per receiving client, so both
-the id and the identity would have to be negotiated before they can be hooked or
-rendered across a boundary.
+prediction matches.
+
+Bots are covered by a single global `CBotManager` for the whole game rather than
+one per instance. Its per-client slot table is global, so the bots of the
+client's own world and of its live neighbours resolve to distinct ids and the
+neighbour mirror can render them; the manager also hands each bot a globally
+unique private CWorldCore id, so a snapshot tee id names exactly one bot. Bots
+are not bound as proxy cores, so a hook cannot reach one across the seam until it
+crosses with RingCrosses and is handed to the neighbour world.

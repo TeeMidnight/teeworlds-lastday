@@ -45,14 +45,10 @@ CBotTeeInfo BotMakeRandomTeeInfo(const char *pName)
 
 int CBotEntity::PickTeeID(CGameWorld *pGameWorld, Uuid BotID)
 {
-	// Hash the BotID into the seed so a bot keeps its slot across a respawn and
-	// bots spread across the container's parts. The probing lives in
-	// PickFreeCharacterTeeID, shared with the prediction world.
-	unsigned Seed = 0;
-	for(int i = 0; i < (int) sizeof(BotID.m_aData); i++)
-		Seed = Seed * 31u + BotID.m_aData[i];
-
-	return PickFreeCharacterTeeID(&pGameWorld->m_Core, Seed);
+	// The manager hands the id out and keeps it globally unique across every
+	// world, so a snapshot's server-internal tee id names exactly one bot.
+	CBotManager *pBots = pGameWorld->GameServer()->BotManager();
+	return pBots ? pBots->PickTeeID(BotID) : -1;
 }
 
 CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team) :
@@ -234,7 +230,7 @@ void CBotEntity::AimCursor()
 CEntity *CBotEntity::FindTarget()
 {
 	// a peaceful NPC never acquires a target: it only wanders
-	if(GameWorld()->HasBotManager() && GameWorld()->GetBotManager()->IsNpcWorld())
+	if(GameWorld()->IsNpcWorld())
 		return nullptr;
 
 	// chase the closest hittable entity that is not us and is in line of sight

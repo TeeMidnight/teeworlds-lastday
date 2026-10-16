@@ -52,6 +52,7 @@ void CGameContext::Construct(int Resetting)
 		m_apPlayers[i] = 0;
 
 	m_pController = 0;
+	m_pBotManager = 0;
 	m_pDatabase = 0;
 	m_pItemSystem = 0;
 	m_pTradeSystem = 0;
@@ -89,6 +90,9 @@ CGameContext::~CGameContext()
 			delete pWorld;
 		}, this);
 		m_pWorlds.clear();
+		// the manager owns the worlds' bots, so it must outlive them
+		delete m_pBotManager;
+		m_pBotManager = 0;
 	}
 }
 
@@ -432,6 +436,11 @@ void CGameContext::OnTick()
 		pWorld->RefreshRingProxies();
 	}, nullptr);
 
+	// the one manager tops up every configured world before its entities
+	// advance, so a bot respawned this tick takes part in it
+	if(m_pBotManager)
+		m_pBotManager->Tick();
+
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
 		pWorld->m_Core.m_Tuning = *static_cast<CGameContext *>(pUser)->Tuning();
@@ -523,17 +532,8 @@ void CGameContext::OnClientEnter(int ClientID)
 	// a (re)entering client knows no bot identity yet: forget every bot tee id
 	// this slot was handed before, so it does not inherit the previous
 	// occupant's bots
-	struct SRefreshBots
-	{
-		int m_ClientID;
-	};
-	SRefreshBots Refresh = {ClientID};
-	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
-	{
-		SRefreshBots *pRefresh = static_cast<SRefreshBots *>(pUser);
-		if(pWorld && pWorld->HasBotManager())
-			pWorld->GetBotManager()->OnClientRefresh(pRefresh->m_ClientID);
-	}, &Refresh);
+	if(m_pBotManager)
+		m_pBotManager->OnClientRefresh(ClientID);
 
 	m_pController->OnPlayerConnect(m_apPlayers[ClientID]);
 
@@ -1108,6 +1108,11 @@ void CGameContext::OnInit()
 	m_pConfig = Kernel()->RequestInterface<IConfigManager>()->Values();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
+
+	// the one bot manager for the whole game: it owns every world's bots and
+	// the per-client tee id mapping, so ring neighbours cannot collide
+	m_pBotManager = new CBotManager(this);
+
 	m_CommandManager.Init(m_pConsole, this, NewCommandHook, RemoveCommandHook);
 
 	g_Localization.Load(Config()->m_SvLanguagefile, Storage(), Console(), true);
@@ -1279,10 +1284,9 @@ bool CGameContext::NpcInRange(int ClientID, int DefIndex)
 	if(!pChr || !pChr->IsAlive())
 		return false;
 
-	CGameWorld *pWorld = pPlayer->GameWorld();
-	if(!pWorld || !pWorld->HasBotManager())
+	if(!m_pBotManager)
 		return false;
-	IBotEntity *pBot = pWorld->GetBotManager()->BotByID(pDef->m_Id.Value());
+	IBotEntity *pBot = m_pBotManager->BotByID(pDef->m_Id.Value());
 	if(!pBot || !pBot->IsAlive())
 		return false;
 	return distance(pBot->GetPos(), pChr->GetPos()) <= NPC_INTERACT_RADIUS;
@@ -1335,6 +1339,10 @@ void CGameContext::OnShutdown()
 	m_pWorlds.clear();
 	m_MainWorldID = 0;
 
+	// after the worlds: the manager owns their bots as entities
+	delete m_pBotManager;
+	m_pBotManager = 0;
+
 	delete m_pItemSystem;
 	m_pItemSystem = 0;
 
@@ -1373,6 +1381,11 @@ void CGameContext::OnSnap(int ClientID)
 void CGameContext::OnPreSnap() {}
 void CGameContext::OnPostSnap()
 {
+	// refresh the global per-client bot mapping once, after the entities of
+	// every world emitted their snapshots
+	if(m_pBotManager)
+		m_pBotManager->PostSnap();
+
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
 		pWorld->PostSnap();
@@ -1543,13 +1556,12 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 		}
 	}
 
-	if(BotWorld || lpNpcs.size())
+	pNewWorld->m_BotConfigured = BotWorld || lpNpcs.size() > 0;
+	pNewWorld->m_BotNpcRole = WorldKind == WORLDKIND_HUB || lpNpcs.size() > 0;
+	if(m_pBotManager)
 	{
-		CBotManager *pBots = pNewWorld->BotManager();
-		const bool Peaceful = WorldKind == WORLDKIND_HUB || lpNpcs.size();
-		pBots->SetBotRole(Peaceful ? CBotManager::BOTROLE_NPC : CBotManager::BOTROLE_HOSTILE);
 		for(int i = 0; i < lpNpcs.size(); i++)
-			pBots->SpawnNpc(lpNpcs[i]);
+			m_pBotManager->SpawnNpc(pNewWorld, lpNpcs[i]);
 	}
 
 	// remember the canonical map name: it is the persistence key of the

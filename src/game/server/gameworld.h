@@ -11,6 +11,7 @@
 
 class CEntity;
 class CCharacter;
+struct SNpcDef;
 
 /*
 	Class: Game World
@@ -48,10 +49,6 @@ private:
 	class CConfig *m_pConfig;
 	class IServer *m_pServer;
 
-	// owns this world's bots and their per-client tee id mapping; created on
-	// demand so a world without bots pays nothing
-	class CBotManager *m_pBotManager;
-
 	CLayers m_Layers;
 	CCollision m_Collision;
 
@@ -66,18 +63,25 @@ private:
 	int CollectRingNeighbours(SRingNeighbour *pOut, int Max);
 
 public:
-	class CGameContext *GameServer() { return m_pGameServer; }
+	class CGameContext *GameServer() const { return m_pGameServer; }
 	class CConfig *Config() { return m_pConfig; }
 	class IServer *Server() { return m_pServer; }
 	class CCollision *Collision() { return &m_Collision; }
 
-	// the world's bot manager, created lazily; never null while the world is
-	// alive
+	// the one global bot manager; it owns every world's bots and their
+	// per-client tee id mapping
 	class CBotManager *BotManager();
-	// the manager only if it already exists, for callers that must not
-	// allocate one (snap, teardown, per-world sweeps)
-	class CBotManager *GetBotManager() const { return m_pBotManager; }
-	bool HasBotManager() const { return m_pBotManager != nullptr; }
+	class CBotManager *GetBotManager() const;
+	bool HasBotManager() const;
+
+	// Bot layer configuration of this world. The manager owns the bots; a world
+	// only records whether it wants any and, for a content world, the configured
+	// NPCs whose fixed identity it respawns.
+	bool m_BotConfigured;
+	bool m_BotNpcRole;
+	array<const SNpcDef *> m_lBotDefinedNpcs;
+	bool IsNpcWorld() const { return m_BotNpcRole; }
+	bool BotConfigured() const { return m_BotConfigured; }
 
 	CEventHandler m_Events;
 	CWorldCore m_Core;
@@ -120,6 +124,10 @@ public:
 	void RefreshRingProxies();
 	// release the proxies that no longer have an owner and pass any hook drag on
 	void ForwardRingProxyDrag();
+	// The live ring neighbour worlds of this world, with the offset (world
+	// units) that maps each neighbour's local x onto this world's axis. Returns
+	// the number written (at most Max).
+	int RingNeighbours(CGameWorld **ppWorlds, vec2 *pOffsets, int Max);
 
 	// persist the whole state of this world (dropped item pickups today,
 	// and any future world attributes added later) into the world_saves row

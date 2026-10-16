@@ -18,12 +18,11 @@
 #include <algorithm>
 #include <vector>
 
-CConfig *CBotManager::Config() const { return GameServer()->Config(); }
-CGameContext *CBotManager::GameServer() const { return GameWorld()->GameServer(); }
-CGameController *CBotManager::GameController() const { return GameServer()->m_pController; }
-IServer *CBotManager::Server() const { return GameServer()->Server(); }
+CConfig *CBotManager::Config() const { return m_pGameServer->Config(); }
+CGameController *CBotManager::GameController() const { return m_pGameServer->m_pController; }
+IServer *CBotManager::Server() const { return m_pGameServer->Server(); }
 
-// The kind every manager spawns unless a different creator was registered.
+// The kind every world spawns unless it is a peaceful NPC world.
 static IBotEntity *DefaultBotCreator(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team, void *pUser)
 {
 	(void) pUser;
@@ -37,20 +36,14 @@ static IBotEntity *NpcBotCreator(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const
 	return new CNpcEntity(pWorld, Pos, BotID, TeeInfo, Team);
 }
 
-CBotManager::CBotManager(CGameWorld *pGameWorld)
+CBotManager::CBotManager(CGameContext *pGameServer)
 {
-	m_pGameWorld = pGameWorld;
+	m_pGameServer = pGameServer;
 	m_lBotOrder.hint_size(MAX_BOTS_07);
-
-	m_pfnBotCreator = DefaultBotCreator;
-	m_pBotCreatorUser = nullptr;
-	str_copy(m_aBotType, "default", sizeof(m_aBotType));
-	m_Role = BOTROLE_HOSTILE;
 
 	ClearPlayerMap(-1);
 
-	dbg_msg("bot", "manager ready: type='%s' role=%s wanted=%d (0.7 tee ids %d..%d, 0.8 tee ids %d..%d)",
-		m_aBotType, m_Role == BOTROLE_NPC ? "npc" : "hostile",
+	dbg_msg("bot", "global manager ready, wanted=%d per world (0.7 tee ids %d..%d, 0.8 tee ids %d..%d)",
 		DesiredBotCount(), BOT_TEEID_07_MIN, BOT_TEEID_07_MAX, BOT_TEEID_08_MIN, BOT_TEEID_08_MAX);
 }
 
@@ -63,24 +56,6 @@ IBotEntity *CBotManager::BotByID(Uuid BotID) const
 {
 	IBotEntity *const *ppBot = m_Bots.get(BotID);
 	return ppBot ? *ppBot : nullptr;
-}
-
-void CBotManager::SetBotTypeCreator(const char *pTypeName, FBotCreator pfnCreator, void *pUser)
-{
-	m_pfnBotCreator = pfnCreator ? pfnCreator : DefaultBotCreator;
-	m_pBotCreatorUser = pUser;
-	str_copy(m_aBotType, pTypeName ? pTypeName : "default", sizeof(m_aBotType));
-}
-
-void CBotManager::SetBotRole(EBotRole Role)
-{
-	m_Role = Role;
-	// the role owns the default kind: a peaceful world spawns NPCs, a contested
-	// one spawns the hostile default fighter
-	if(Role == BOTROLE_NPC)
-		SetBotTypeCreator("npc", NpcBotCreator);
-	else
-		SetBotTypeCreator("default", DefaultBotCreator);
 }
 
 void CBotManager::ClearPlayerMap(int ClientID)
@@ -99,6 +74,14 @@ void CBotManager::ClearPlayerMap(int ClientID)
 		m_aaBotIDMaps[ClientID][i] = UUID_ZEROED;
 }
 
+void CBotManager::RemoveFromPlayerMaps(Uuid BotID)
+{
+	for(int c = 0; c < MAX_CLIENTS; c++)
+		for(int i = 0; i < BOT_MAX_PER_CLIENT; i++)
+			if(m_aaBotIDMaps[c][i] == BotID)
+				m_aaBotIDMaps[c][i] = UUID_ZEROED;
+}
+
 void CBotManager::ClearBots()
 {
 	for(int i = 0; i < m_lBotOrder.size(); i++)
@@ -112,13 +95,56 @@ void CBotManager::ClearBots()
 		delete pBot;
 	}
 	m_lBotOrder.clear();
-	m_lDefinedNpcs.clear();
 	ClearPlayerMap(-1);
+}
+
+void CBotManager::ClearBots(CGameWorld *pWorld)
+{
+	if(!pWorld)
+		return;
+
+	for(int i = 0; i < m_lBotOrder.size();)
+	{
+		IBotEntity *pBot = BotByID(m_lBotOrder[i]);
+		if(!pBot || pBot->GameWorld() != pWorld)
+		{
+			i++;
+			continue;
+		}
+
+		const Uuid BotID = m_lBotOrder[i];
+		if(pBot->TeeID() != -1)
+			m_BotsByTeeID.remove(pBot->TeeID());
+		m_Bots.remove(BotID);
+		RemoveFromPlayerMaps(BotID);
+		delete pBot;
+		m_lBotOrder.remove_index(i);
+	}
 }
 
 bool DistanceCompare(const std::pair<float, Uuid> &a, const std::pair<float, Uuid> &b)
 {
 	return a.first < b.first;
+}
+
+int CBotManager::PickTeeID(Uuid BotID) const
+{
+	// Hash the BotID into the seed so a bot keeps its slot across a respawn and
+	// bots spread across the range instead of filling it from the bottom.
+	unsigned Seed = 0;
+	for(int i = 0; i < (int) sizeof(BotID.m_aData); i++)
+		Seed = Seed * 31u + BotID.m_aData[i];
+
+	const int Range = BOT_TEEID_08_MAX - BOT_TEEID_07_MIN + 1;
+	const int Start = (int) (Seed % (unsigned) Range);
+	for(int i = 0; i < Range; i++)
+	{
+		const int Id = BOT_TEEID_07_MIN + (Start + i) % Range;
+		// ids are global, so the table of live bots is the whole allocation map
+		if(!m_BotsByTeeID.get(Id))
+			return Id;
+	}
+	return -1;
 }
 
 int CBotManager::FindClientID(int SnappingClient, Uuid BotID) const
@@ -137,7 +163,7 @@ int CBotManager::FindClientID(int SnappingClient, Uuid BotID) const
 		return -1;
 	}
 
-	if(SnappingClient < 0 || SnappingClient >= MAX_CLIENTS || !GameServer()->m_apPlayers[SnappingClient])
+	if(SnappingClient < 0 || SnappingClient >= MAX_CLIENTS || !m_pGameServer->m_apPlayers[SnappingClient])
 		return -1;
 
 	for(int i = 0; i < BOT_MAX_PER_CLIENT; i++)
@@ -161,8 +187,9 @@ int CBotManager::TranslateTeeIDForClient(int SnappingClient, int TeeID) const
 	if(TeeID < BOT_TEEID_07_MIN)
 		return TeeID;
 
-	// The bot holding this internal id. It keeps that id for life, so the id
-	// alone identifies it, whatever client we are snapping for.
+	// The bot holding this internal id. PickTeeID keeps the id globally unique
+	// for the bot's whole life, so the id alone identifies it, whatever world
+	// it currently lives in and whatever client we are snapping for.
 	IBotEntity *pBot = 0;
 	IBotEntity *const *ppBot = m_BotsByTeeID.get(TeeID);
 	if(ppBot)
@@ -213,10 +240,7 @@ void CBotManager::ReleaseBot(Uuid BotID)
 
 	// the bot is not in this world anymore; forget every client slot pointing
 	// at it so a recycled tee id is not resolved to it
-	for(int c = 0; c < MAX_CLIENTS; c++)
-		for(int i = 0; i < BOT_MAX_PER_CLIENT; i++)
-			if(m_aaBotIDMaps[c][i] == BotID)
-				m_aaBotIDMaps[c][i] = UUID_ZEROED;
+	RemoveFromPlayerMaps(BotID);
 }
 
 void CBotManager::AdoptBot(IBotEntity *pBot)
@@ -237,7 +261,7 @@ void CBotManager::SendBotEmoticon(Uuid BotID, int Emoticon)
 {
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(!GameServer()->m_apPlayers[i])
+		if(!m_pGameServer->m_apPlayers[i])
 			continue;
 		const int TeeID = FindClientID(i, BotID);
 		if(TeeID == -1)
@@ -294,25 +318,62 @@ void CBotManager::SendBotDrop(int ClientID, int TeeID)
 
 void CBotManager::UpdatePlayerMap(int ClientID)
 {
-	if(ClientID < 0 || ClientID >= MAX_CLIENTS || !GameServer()->m_apPlayers[ClientID])
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || !m_pGameServer->m_apPlayers[ClientID])
 		return;
+
+	CPlayer *pPlayer = m_pGameServer->m_apPlayers[ClientID];
+	CGameWorld *pView = pPlayer->GameWorld();
+
+	// The worlds whose bots this client can be shown: its own, plus the live
+	// ring neighbours the snapshot mirrors. Collecting their offsets once keeps
+	// the distance ranking in the client's own frame.
+	CGameWorld *apWorlds[3];
+	vec2 aOffsets[3];
+	int NumWorlds = 0;
+	if(pView)
+	{
+		apWorlds[NumWorlds] = pView;
+		aOffsets[NumWorlds] = vec2(0.0f, 0.0f);
+		NumWorlds++;
+		CGameWorld *apRing[2];
+		vec2 aRingOffsets[2];
+		const int Neighbours = pView->RingNeighbours(apRing, aRingOffsets, 2);
+		for(int i = 0; i < Neighbours && NumWorlds < 3; i++)
+		{
+			apWorlds[NumWorlds] = apRing[i];
+			aOffsets[NumWorlds] = aRingOffsets[i];
+			NumWorlds++;
+		}
+	}
 
 	Uuid aLastMap[BOT_MAX_PER_CLIENT];
 	mem_copy(aLastMap, m_aaBotIDMaps[ClientID], sizeof(m_aaBotIDMaps[ClientID]));
 
 	Uuid *pMap = m_aaBotIDMaps[ClientID];
 
-	// drop entries whose bot is gone (died or was removed)
+	// drop entries whose bot is gone, dead or no longer in one of the worlds
+	// this client is being shown
 	for(int i = 0; i < BOT_MAX_PER_CLIENT; i++)
 	{
 		if(pMap[i] == UUID_ZEROED)
 			continue;
 		IBotEntity *pBot = BotByID(pMap[i]);
-		if(!pBot || !pBot->IsAlive())
+		bool Visible = pBot && pBot->IsAlive();
+		if(Visible)
+		{
+			Visible = false;
+			for(int w = 0; w < NumWorlds; w++)
+				if(pBot->GameWorld() == apWorlds[w])
+				{
+					Visible = true;
+					break;
+				}
+		}
+		if(!Visible)
 			pMap[i] = UUID_ZEROED;
 	}
 
-	// rank every live bot by distance to this client's view position
+	// rank every live visible bot by distance to this client's view position
 	std::vector<std::pair<float, Uuid>> Distances;
 	Distances.reserve(m_lBotOrder.size());
 	for(int i = 0; i < m_lBotOrder.size(); i++)
@@ -321,7 +382,17 @@ void CBotManager::UpdatePlayerMap(int ClientID)
 		if(!pBot || !pBot->IsAlive())
 			continue;
 
-		Distances.emplace_back(distance(GameServer()->m_apPlayers[ClientID]->m_ViewPos, pBot->GetPos()), m_lBotOrder[i]);
+		int World = -1;
+		for(int w = 0; w < NumWorlds; w++)
+			if(pBot->GameWorld() == apWorlds[w])
+			{
+				World = w;
+				break;
+			}
+		if(World < 0)
+			continue;
+
+		Distances.emplace_back(distance(pPlayer->m_ViewPos, pBot->GetPos() + aOffsets[World]), m_lBotOrder[i]);
 	}
 	std::sort(Distances.begin(), Distances.end(), DistanceCompare);
 	Distances.resize(minimum((int) Distances.size(), (int) BOT_MAX_PER_CLIENT));
@@ -381,13 +452,15 @@ void CBotManager::UpdatePlayerMap(int ClientID)
 	}
 }
 
-IBotEntity *CBotManager::CreateBot()
+IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld)
 {
-	return CreateBot(random_uuid(), vec2(0.0f, 0.0f));
+	return CreateBot(pWorld, random_uuid(), vec2(0.0f, 0.0f));
 }
 
-IBotEntity *CBotManager::CreateBot(Uuid BotID, vec2 Pos)
+IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 {
+	if(!pWorld)
+		return nullptr;
 	// never reuse a BotID: it is the identity, and a client may still hold it
 	// in a snapshot delta from a previous life
 	if(BotID == UUID_ZEROED || BotByID(BotID))
@@ -396,12 +469,14 @@ IBotEntity *CBotManager::CreateBot(Uuid BotID, vec2 Pos)
 	vec2 SpawnPos = Pos;
 	if(SpawnPos == vec2(0.0f, 0.0f))
 	{
-		if(!GameController()->CanSpawn(GameWorld(), TEAM_BLUE, &SpawnPos))
+		if(!GameController()->CanSpawn(pWorld, TEAM_BLUE, &SpawnPos))
 			return nullptr;
 	}
 
 	const CBotTeeInfo TeeInfo = BotMakeRandomTeeInfo();
-	IBotEntity *pBot = m_pfnBotCreator(GameWorld(), SpawnPos, BotID, TeeInfo, TEAM_BLUE, m_pBotCreatorUser);
+	IBotEntity *pBot = pWorld->IsNpcWorld()
+		? NpcBotCreator(pWorld, SpawnPos, BotID, TeeInfo, TEAM_BLUE, nullptr)
+		: DefaultBotCreator(pWorld, SpawnPos, BotID, TeeInfo, TEAM_BLUE, nullptr);
 	if(!pBot)
 		return nullptr;
 
@@ -412,26 +487,26 @@ IBotEntity *CBotManager::CreateBot(Uuid BotID, vec2 Pos)
 	return pBot;
 }
 
-IBotEntity *CBotManager::SpawnNpc(const SNpcDef *pDef)
+IBotEntity *CBotManager::SpawnNpc(CGameWorld *pWorld, const SNpcDef *pDef)
 {
-	if(!pDef)
+	if(!pWorld || !pDef)
 		return nullptr;
 	// the definition carries a fixed identity, so a second copy of the same npc
 	// (or the same world reloaded) never spawns twice
 	if(BotByID(pDef->m_Id.Value()))
 		return nullptr;
 
-	IBotEntity *pBot = new CNpcEntity(m_pGameWorld, pDef, TEAM_BLUE);
+	IBotEntity *pBot = new CNpcEntity(pWorld, pDef, TEAM_BLUE);
 	m_Bots.set(pDef->m_Id.Value(), pBot);
 	m_lBotOrder.add(pDef->m_Id.Value());
 	if(pBot->TeeID() != -1)
 		m_BotsByTeeID.set(pBot->TeeID(), pBot);
 
 	bool Known = false;
-	for(int i = 0; i < m_lDefinedNpcs.size() && !Known; i++)
-		Known = m_lDefinedNpcs[i] == pDef;
+	for(int i = 0; i < pWorld->m_lBotDefinedNpcs.size() && !Known; i++)
+		Known = pWorld->m_lBotDefinedNpcs[i] == pDef;
 	if(!Known)
-		m_lDefinedNpcs.add(pDef);
+		pWorld->m_lBotDefinedNpcs.add(pDef);
 	return pBot;
 }
 
@@ -445,63 +520,107 @@ int CBotManager::DesiredBotCount() const
 	return minimum(Count, (int) BOT_MAX_PER_CLIENT);
 }
 
-void CBotManager::Tick()
+int CBotManager::LiveBotsInWorld(CGameWorld *pWorld) const
 {
+	int Count = 0;
+	for(int i = 0; i < m_lBotOrder.size(); i++)
+	{
+		IBotEntity *const *ppBot = m_Bots.get(m_lBotOrder[i]);
+		if(ppBot && *ppBot && (*ppBot)->GameWorld() == pWorld)
+			Count++;
+	}
+	return Count;
+}
+
+void CBotManager::TickWorld(CGameWorld *pWorld)
+{
+	if(!pWorld || !pWorld->m_BotConfigured)
+		return;
+
 	// a world that owns configured NPCs respawns those instead of rolling
 	// random bots, so the population is exactly the definitions
-	if(m_lDefinedNpcs.size())
+	if(pWorld->m_lBotDefinedNpcs.size())
+	{
+		for(int i = 0; i < pWorld->m_lBotDefinedNpcs.size(); i++)
+		{
+			const SNpcDef *pDef = pWorld->m_lBotDefinedNpcs[i];
+			if(pDef && !BotByID(pDef->m_Id.Value()))
+				SpawnNpc(pWorld, pDef);
+		}
 		return;
+	}
 
 	// respawn up to the desired population
 	int Guard = 0;
-	while(m_lBotOrder.size() < DesiredBotCount() && Guard++ < MAX_BOTS_07)
+	while(LiveBotsInWorld(pWorld) < DesiredBotCount() && Guard++ < MAX_BOTS_07)
 	{
-		if(!CreateBot())
+		if(!CreateBot(pWorld))
 			break;
 	}
 }
 
+void CBotManager::Tick()
+{
+	struct SBotTick
+	{
+		CBotManager *m_pSelf;
+	};
+	SBotTick Data = {this};
+	m_pGameServer->m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		SBotTick *pData = static_cast<SBotTick *>(pUser);
+		if(pWorld)
+			pData->m_pSelf->TickWorld(pWorld);
+	}, &Data);
+}
+
 void CBotManager::PostSnap()
 {
-	// A bot manager belongs to one world, so only a client currently inside it
-	// needs a refresh; a client in another world gets one when it enters (see
-	// OnClientRefresh). Updating every client for every world was the bulk of
-	// the per-snapshot cost.
+	// One manager covers every world, so refresh each client exactly once no
+	// matter how many worlds it can see.
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
-		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-		if(pPlayer && pPlayer->GameWorld() == GameWorld() && Server()->ClientIngame(i))
+		CPlayer *pPlayer = m_pGameServer->m_apPlayers[i];
+		if(pPlayer && !pPlayer->m_MapLoading && Server()->ClientIngame(i))
 			UpdatePlayerMap(i);
 	}
 }
 
 void CBotManager::CreateDamage(vec2 Pos, Uuid BotID, vec2 Source, int HealthAmount, int ArmorAmount, bool Self)
 {
+	IBotEntity *pBot = BotByID(BotID);
+	if(!pBot)
+		return;
+
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(!GameServer()->m_apPlayers[i])
+		if(!m_pGameServer->m_apPlayers[i])
 			continue;
 
 		const int ClientID = FindClientID(i, BotID);
 		if(ClientID == -1)
 			continue;
 
-		GameWorld()->CreateDamage(Pos, ClientID, Source, HealthAmount, ArmorAmount, Self);
+		pBot->GameWorld()->CreateDamage(Pos, ClientID, Source, HealthAmount, ArmorAmount, Self);
 	}
 }
 
 void CBotManager::CreateDeath(vec2 Pos, Uuid BotID)
 {
+	IBotEntity *pBot = BotByID(BotID);
+	if(!pBot)
+		return;
+
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(!GameServer()->m_apPlayers[i])
+		if(!m_pGameServer->m_apPlayers[i])
 			continue;
 
 		const int ClientID = FindClientID(i, BotID);
 		if(ClientID == -1)
 			continue;
 
-		GameWorld()->CreateDeath(Pos, ClientID);
+		pBot->GameWorld()->CreateDeath(Pos, ClientID);
 	}
 }
 
@@ -517,6 +636,7 @@ void CBotManager::OnBotDeath(Uuid BotID)
 	// remove, not remove_fast: the order is what makes the per-client slot
 	// assignment (and the demo tee ids) deterministic
 	m_lBotOrder.remove(BotID);
+	RemoveFromPlayerMaps(BotID);
 }
 
 void CBotManager::OnClientRefresh(int ClientID)

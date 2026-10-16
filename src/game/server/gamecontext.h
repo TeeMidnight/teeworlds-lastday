@@ -18,6 +18,7 @@
 #include "gamemenu.h"
 #include "gameworld.h"
 
+class CBotManager;
 class CDatabase;
 class CItemSystem;
 class CNpcSystem;
@@ -91,6 +92,10 @@ public:
 	class CPlayer *m_apPlayers[MAX_CLIENTS];
 
 	class CGameController *m_pController;
+	// The one bot manager of the whole game. It owns every world's bots and
+	// the per-client tee id mapping, so two live ring neighbours can never
+	// hand a client the same bot slot.
+	class CBotManager *m_pBotManager;
 	unsigned m_MainWorldID;
 	hash_table<unsigned, CGameWorld *, 4> m_pWorlds;
 
@@ -109,6 +114,9 @@ public:
 	CItemSystem *Item() const { return m_pItemSystem; }
 	CTradeSystem *Trade() const { return m_pTradeSystem; }
 	CNpcSystem *Npcs() const { return m_pNpcSystem; }
+
+	// the global bot manager (null before OnInit)
+	class CBotManager *BotManager() const { return m_pBotManager; }
 
 	// the always-loaded main world (Connector) and a lookup by map id
 	CGameWorld *MainWorld();
