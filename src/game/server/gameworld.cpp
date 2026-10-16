@@ -8,6 +8,7 @@
 
 #include <generated/server_data.h>
 
+#include <engine/server/worldgen.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
 
@@ -41,12 +42,59 @@ CGameWorld::CGameWorld(CGameContext *pGameServer)
 	m_pBotManager = nullptr;
 
 	m_aMapName[0] = '\0';
+	m_Ring = false;
+	m_RingSeed = 0;
+	m_RingSize = 0;
+	m_SharedMargin = 0;
+	m_OffsetX = 0;
+	m_Stride = 0;
+	m_Period = 0;
 
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 	{
 		m_alpEntityLists[i].hint_size(16);
 	}
 	m_lpFlagEntityList.hint_size(8);
+}
+
+float CGameWorld::RingRightTriggerX() const
+{
+	return RingTriggerX(m_Collision.GetWidth(), m_SharedMargin, 1);
+}
+
+float CGameWorld::RingLeftTriggerX() const
+{
+	return RingTriggerX(m_Collision.GetWidth(), m_SharedMargin, -1);
+}
+
+bool CGameWorld::RingNeighbour(int Direction, char *pMapName, int MapNameSize, float LocalX, float *pArrivalX) const
+{
+	if(!m_Ring || Direction == 0 || !m_aMapName[0])
+		return false;
+
+	// the floor name is the map name without its trailing "_<seed>"
+	char aFloor[64];
+	str_copy(aFloor, m_aMapName, sizeof(aFloor));
+	char *pUnderscore = nullptr;
+	for(char *p = aFloor; *p; p++)
+	{
+		if(*p == '_')
+			pUnderscore = p;
+	}
+	if(!pUnderscore)
+		return false;
+	*pUnderscore = '\0';
+
+	int Target = m_RingSeed + Direction;
+	if(Target > m_RingSize)
+		Target = 1;
+	if(Target < 1)
+		Target = m_RingSize;
+
+	str_format(pMapName, MapNameSize, "%s_%d", aFloor, Target);
+	if(pArrivalX)
+		*pArrivalX = RingArrivalX(m_Stride, Direction, LocalX);
+	return true;
 }
 
 CGameWorld::~CGameWorld()
@@ -135,7 +183,26 @@ void CGameWorld::InitCollision(IMap *pMap)
 				const json_value &rWrap = (*pJson)["wrap_x"];
 				const bool Wrap = rWrap.type == json_integer && rWrap.u.integer != 0;
 				m_Collision.SetWrapX(Wrap);
-				dbg_msg("game", "world wrap_x = %d", Wrap ? 1 : 0);
+
+				// a ring instance opens into its neighbours instead of wrapping on
+				// itself; the geometry it records is what resolves a crossing
+				const json_value &rRing = (*pJson)["ring"];
+				m_Ring = rRing.type == json_integer && rRing.u.integer != 0;
+				if(m_Ring)
+				{
+					m_RingSeed = (int) (json_int_t) (*pJson)["ring_seed"];
+					m_RingSize = (int) (json_int_t) (*pJson)["ring_size"];
+					m_SharedMargin = (int) (json_int_t) (*pJson)["shared_margin"];
+					m_OffsetX = (int) (json_int_t) (*pJson)["offset_x"];
+					m_Period = (int) (json_int_t) (*pJson)["period"];
+					m_Stride = m_Collision.GetWidth() - m_SharedMargin;
+					dbg_msg("game", "world ring %d/%d, shared margin %d, stride %d, period %d",
+						m_RingSeed, m_RingSize, m_SharedMargin, m_Stride, m_Period);
+				}
+				else
+				{
+					dbg_msg("game", "world wrap_x = %d", Wrap ? 1 : 0);
+				}
 			}
 		}
 	}

@@ -80,6 +80,26 @@ public:
 	// saves in the database
 	char m_aMapName[64];
 
+	// Ring geometry of a generated instance, read from the world json. Disabled
+	// (the default, and every hand authored map) means the instance is a world
+	// of its own; enabled means its left and right edges lead into the
+	// neighbouring instances of the floor's ring.
+	bool m_Ring;
+	int m_RingSeed;     // this instance's index, 1..m_RingSize
+	int m_RingSize;
+	int m_SharedMargin; // tiles shared with each neighbour
+	int m_OffsetX;      // global x of this instance's local x = 0
+	int m_Stride;       // distance between two neighbouring instances
+	int m_Period;       // circumference of the whole ring
+
+	bool IsRing() const { return m_Ring; }
+	// x (world units) at which walking right / left leaves this instance
+	float RingRightTriggerX() const;
+	float RingLeftTriggerX() const;
+	// The map name of the neighbour in Direction (+1 right, -1 left) and the
+	// arrival x for a character leaving at LocalX. False when this is not a ring.
+	bool RingNeighbour(int Direction, char *pMapName, int MapNameSize, float LocalX, float *pArrivalX) const;
+
 	// persist the whole state of this world (dropped item pickups today,
 	// and any future world attributes added later) into the world_saves row
 	// of m_aMapName. Called when the world is unloaded and when the server

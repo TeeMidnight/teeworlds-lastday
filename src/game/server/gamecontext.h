@@ -173,7 +173,10 @@ public:
 	void SendRemoveChatCommand(const CCommandManager::CCommand *pCommand, int ClientID);
 
 	//
-	void SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID);
+	// MapID == the current world moves the character to a spawn. ArrivalPos is
+	// only meaningful with HasArrival, which a ring crossing uses to land the
+	// character on the column it left instead of at a spawn.
+	void SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos = vec2(0.0f, 0.0f), bool HasArrival = false);
 
 	// engine events
 	virtual void OnInit();

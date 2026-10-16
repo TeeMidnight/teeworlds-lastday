@@ -530,6 +530,29 @@ bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 
 
 	CGameWorld *pWorld = pChr->GameWorld();
 
+	// A ring instance has no edge of its own: past the trigger the character
+	// steps into the neighbouring instance. The trigger is a half plane, so
+	// testing the destination is enough, and the arrival lands on the inner
+	// third of the strip, inside the other trigger, so it cannot bounce.
+	if(pWorld->IsRing())
+	{
+		int Direction = 0;
+		if(NewPos.x >= pWorld->RingRightTriggerX())
+			Direction = 1;
+		else if(NewPos.x <= pWorld->RingLeftTriggerX())
+			Direction = -1;
+		if(Direction != 0)
+		{
+			char aTarget[64];
+			float ArrivalX = 0.0f;
+			if(pWorld->RingNeighbour(Direction, aTarget, sizeof(aTarget), NewPos.x, &ArrivalX))
+			{
+				pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(aTarget), vec2(ArrivalX, NewPos.y), true);
+				return true;
+			}
+		}
+	}
+
 	// generated worlds define their entrances as tile regions in the map
 	// info; teleport the character when it enters one of these regions.
 	// The whole movement path is checked (like the collision box movement

@@ -34,6 +34,8 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_DeadSpecMode = false;
 	m_Spawning = false;
 	m_MapLoading = false;
+	m_HasPendingArrival = false;
+	m_PendingArrivalPos = vec2(0.0f, 0.0f);
 	mem_zero(&m_Latency, sizeof(m_Latency));
 
 	m_Status.m_HideTip = false;
@@ -432,6 +434,8 @@ void CPlayer::TryRespawn()
 		return;
 
 	m_Spawning = false;
+	// a character respawned here gets a real spawn, not a pending crossing
+	m_HasPendingArrival = false;
 	m_pCharacter = new(m_ClientID) CCharacter(GameWorld());
 	m_pCharacter->Spawn(this, SpawnPos);
 	GameWorld()->CreatePlayerSpawn(SpawnPos);

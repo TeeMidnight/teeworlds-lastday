@@ -309,7 +309,7 @@ void CGameContext::SendRemoveChatCommand(const CCommandManager::CCommand *pComma
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientID);
 }
 
-void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID)
+void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos, bool HasArrival)
 {
 	if(pPlayer->GameWorld()->WorldID() == MapID)
 	{
@@ -321,12 +321,21 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID)
 		return;
 	}
 
+	// A ring crossing keeps the mapped column; every other switch falls back to
+	// a spawn once the new map has loaded.
+	pPlayer->m_HasPendingArrival = HasArrival;
+	pPlayer->m_PendingArrivalPos = ArrivalPos;
+
 	if(Server()->SwitchClientMap(pPlayer->GetCID(), MapID))
 	{
 		CGameWorld **ppWorld = m_pWorlds[MapID];
 		CGameWorld *pWorld = ppWorld ? *ppWorld : nullptr;
 		if(pWorld)
 			pPlayer->SwitchWorld(pWorld);
+	}
+	else
+	{
+		pPlayer->m_HasPendingArrival = false;
 	}
 }
 
@@ -555,10 +564,21 @@ void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 	}
 	else if(GetPlayerChar(ClientID))
 	{
-		vec2 SpawnPos;
-		if(m_pController->CanSpawn(m_apPlayers[ClientID]->GameWorld(), m_apPlayers[ClientID]->GetTeam(), &SpawnPos))
+		CPlayer *pPlayer = m_apPlayers[ClientID];
+		if(pPlayer->m_HasPendingArrival)
 		{
-			m_apPlayers[ClientID]->GetCharacter()->MoveTo(m_apPlayers[ClientID]->GameWorld(), SpawnPos);
+			// a ring crossing: land on the column the character left, which the
+			// shared field gives the same terrain in both instances
+			pPlayer->m_HasPendingArrival = false;
+			pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), pPlayer->m_PendingArrivalPos);
+		}
+		else
+		{
+			vec2 SpawnPos;
+			if(m_pController->CanSpawn(pPlayer->GameWorld(), pPlayer->GetTeam(), &SpawnPos))
+			{
+				pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), SpawnPos);
+			}
 		}
 	}
 	m_apPlayers[ClientID]->m_MapLoading = false;

@@ -85,6 +85,12 @@ public:
 	bool m_RespawnDisabled;
 	bool m_MapLoading;
 
+	// A ring crossing detaches the character across a map switch; the landing
+	// position therefore has to survive outside the world. Set when the switch
+	// starts and consumed when the new map finishes loading.
+	bool m_HasPendingArrival;
+	vec2 m_PendingArrivalPos;
+
 	//
 	int m_Vote;
 	int m_VotePos;

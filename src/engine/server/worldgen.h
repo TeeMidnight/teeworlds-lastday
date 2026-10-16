@@ -108,6 +108,26 @@ struct CWorldRing
 };
 CWorldRing WorldRing(const CInstruction *pInstruction, int Seed);
 
+// The x (in world units) at which a character leaves a ring instance to one
+// side. The shared margin is split 1/3 : 2/3, so a crossing has hysteresis:
+// the outgoing trigger sits at 2/3 of the strip and the arrival lands back at
+// 1/3, which stops a character that just crossed from crossing straight back.
+// Direction is +1 for the right neighbour and -1 for the left.
+inline float RingTriggerX(int WidthTiles, int SharedMargin, int Direction)
+{
+	if(Direction > 0)
+		return ((float) (WidthTiles - SharedMargin) + (float) (2 * SharedMargin) / 3.0f) * 32.0f;
+	return ((float) SharedMargin / 3.0f) * 32.0f;
+}
+
+// Where a crossing from LocalX (world units) lands in the neighbour: the same
+// global column, re-based onto the neighbour's local axis. StrideTiles is the
+// distance between two neighbouring instances.
+inline float RingArrivalX(int StrideTiles, int Direction, float LocalX)
+{
+	return LocalX - (float) Direction * (float) StrideTiles * 32.0f;
+}
+
 // The index a generated solid cell is marked with before the automapper runs.
 // Matches the shipped rule sets' "basetile", so the mapper sees a solid tile.
 enum

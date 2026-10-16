@@ -199,3 +199,23 @@ TEST(WorldRing, ClosesAfterTheLastInstance)
 	delete pLast;
 	delete pFirst;
 }
+
+TEST(WorldRing, TransferHysteresis)
+{
+	// the worked example: 300 tiles wide, 75 shared, stride 225
+	EXPECT_FLOAT_EQ(RingTriggerX(300, 75, 1), 275.0f * 32.0f);
+	EXPECT_FLOAT_EQ(RingTriggerX(300, 75, -1), 25.0f * 32.0f);
+
+	// crossing right at the trigger lands 50 tiles into the next instance;
+	// crossing left at the trigger lands at 250
+	EXPECT_FLOAT_EQ(RingArrivalX(225, 1, RingTriggerX(300, 75, 1)), 50.0f * 32.0f);
+	EXPECT_FLOAT_EQ(RingArrivalX(225, -1, RingTriggerX(300, 75, -1)), 250.0f * 32.0f);
+
+	// the landing is strictly inside both triggers, so a crossing cannot bounce
+	const float Right = RingTriggerX(300, 75, 1);
+	const float Left = RingTriggerX(300, 75, -1);
+	EXPECT_GT(RingArrivalX(225, 1, Right), Left);
+	EXPECT_LT(RingArrivalX(225, 1, Right), Right);
+	EXPECT_GT(RingArrivalX(225, -1, Left), Left);
+	EXPECT_LT(RingArrivalX(225, -1, Left), Right);
+}
