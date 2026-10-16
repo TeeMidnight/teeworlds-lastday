@@ -34,3 +34,9 @@ Generated maps are cached by name: after changing a floor's generation settings,
 delete `generatedmaps/<Floor>_<Seed>.map` from the storage save path so the next
 request regenerates it. `mapgentool worldjson <Map>` prints the ring geometry a
 generated map carries.
+
+Known limitation: the hook and the player-vs-player physics live in the
+prediction-shared character core and only see the character table of their own
+world, so hooking or colliding with a player on the other side of a boundary
+needs matching client work. Everything else (crossing, mirrored rendering,
+damage, explosions, pickups, bots) is handled server side.

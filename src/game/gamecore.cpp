@@ -230,7 +230,10 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 				GoingToHitGround = true;
 		}
 
-		// Check against other players first
+		// Check against other players first. Only the character cores bound to
+		// this world are seen: a player across a ring boundary lives in another
+		// world core (and another map), so hooking them is deliberately not
+		// handled here. See the ring notes in the README.
 		if(m_pWorld && m_pWorld->m_Tuning.m_PlayerHooking)
 		{
 			float Distance = 0.0f;

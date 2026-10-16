@@ -231,8 +231,20 @@ void CGameWorld::InitCollision(IMap *pMap)
 					m_OffsetX = (int) (json_int_t) (*pJson)["offset_x"];
 					m_Period = (int) (json_int_t) (*pJson)["period"];
 					m_Stride = m_Collision.GetWidth() - m_SharedMargin;
-					dbg_msg("game", "world ring %d/%d, shared margin %d, stride %d, period %d",
-						m_RingSeed, m_RingSize, m_SharedMargin, m_Stride, m_Period);
+					// A stale or hand edited metadata set must not leave the world in a
+					// state where the two triggers overlap or the ring cannot close;
+					// fall back to a plain map instead.
+					if(m_Stride <= 0 || m_SharedMargin <= 0 || m_RingSize < 2 || m_Period <= 0)
+					{
+						dbg_msg("game", "ignoring invalid ring geometry (%d/%d, margin %d, stride %d, period %d)",
+							m_RingSeed, m_RingSize, m_SharedMargin, m_Stride, m_Period);
+						m_Ring = false;
+					}
+					else
+					{
+						dbg_msg("game", "world ring %d/%d, shared margin %d, stride %d, period %d",
+							m_RingSeed, m_RingSize, m_SharedMargin, m_Stride, m_Period);
+					}
 				}
 				else
 				{
