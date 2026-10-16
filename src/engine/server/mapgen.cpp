@@ -75,7 +75,8 @@ void CMapGen::WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEn
 			{
 				// only the generated worlds get a seed appended; static
 				// maps (e.g. the main world Connector) keep their plain name
-				if(m_lInstructions.get(str_quickhash(rTarget.u.string.ptr)))
+				EWorldKind TargetKind;
+				if(GetFloorKind(rTarget.u.string.ptr, &TargetKind) && TargetKind != WORLDKIND_HUB)
 				{
 					char aTarget[64];
 					str_format(aTarget, sizeof(aTarget), "%s_%d", rTarget.u.string.ptr, DeriveTargetSeed(Seed, rTarget.u.string.ptr));
@@ -110,7 +111,8 @@ void CMapGen::WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEn
 		pWriter->EndObject();
 		pWriter->EndArray();
 		pWriter->WriteAttribute("entrance");
-		if(m_lInstructions.get(str_quickhash(Entrance.m_aTarget)))
+		EWorldKind TargetKind;
+		if(GetFloorKind(Entrance.m_aTarget, &TargetKind) && TargetKind != WORLDKIND_HUB)
 		{
 			char aTarget[64];
 			str_format(aTarget, sizeof(aTarget), "%s_%d", Entrance.m_aTarget, DeriveTargetSeed(Seed, Entrance.m_aTarget));

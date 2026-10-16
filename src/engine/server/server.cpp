@@ -739,7 +739,14 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 void CServer::SendMap(int ClientID)
 {
 	CMapInfo *pInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
-	LoadMap(pInfo);
+	// Never announce a map that cannot be loaded: doing so hands the client
+	// an undefined size/crc/sha ("invalid map size") and map data that does
+	// not match the name it was told.
+	if(!pInfo || !LoadMap(pInfo))
+	{
+		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "failed to load the map to send");
+		return;
+	}
 	CMsgPacker Msg(NETMSG_MAP_CHANGE, true);
 	Msg.AddString(pInfo->GetMapName(), 0);
 	Msg.AddInt(pInfo->m_Crc);
@@ -1390,11 +1397,13 @@ unsigned CServer::PushMapList(const char *pMapName)
 	unsigned MapID = str_quickhash(pMapName);
 	if(!m_MapInfos[MapID]) // this map hasn't been pushed
 	{
+		// Zero the whole record: m_Size/m_Crc/m_Sha256 are read as soon as
+		// the map is announced, so an entry that never finished loading must
+		// not carry indeterminate bytes.
 		CMapInfo Info;
+		mem_zero(&Info, sizeof(Info));
 		str_copy(Info.m_aName, pMapName, sizeof(Info.m_aName));
 		Info.m_MapID = MapID;
-		Info.m_pData = 0;
-		Info.m_Loaded = false;
 		Info.m_WorldKind = -1;
 		m_MapInfos.set(str_quickhash(pMapName), Info);
 	}
@@ -1513,16 +1522,24 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "server", aBufMsg);
 	str_format(aBufMsg, sizeof(aBufMsg), "%s crc is %08x", aBuf, pInfo->m_Crc);
 	Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "server", aBufMsg);
-	pInfo->m_Loaded = true;
-
-	// load complete map into memory for download
+	// load complete map into memory for download. The client is told this
+	// buffer's length, so a map that cannot be read back must not be announced
+	// as loaded (and must never be announced with a size of 0).
 	{
 		if(pInfo->m_pData)
 			mem_free(pInfo->m_pData);
-		unsigned Size;
-		Storage()->ReadFile(aBuf, IStorage::TYPE_ALL, (void **) &pInfo->m_pData, &Size);
+		unsigned Size = 0;
+		if(!Storage()->ReadFile(aBuf, IStorage::TYPE_ALL, (void **) &pInfo->m_pData, &Size) || !pInfo->m_pData || Size == 0)
+		{
+			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "failed to read the map for download");
+			pInfo->m_pData = 0;
+			pInfo->m_Size = 0;
+			return 0;
+		}
 		pInfo->m_Size = (int) Size;
 	}
+
+	pInfo->m_Loaded = true;
 
 	CMapItemInfo *pItem = (CMapItemInfo *) m_pMap->FindItem(MAPITEMTYPE_INFO, 0);
 	if(pItem && pItem->m_Version == 1)
@@ -2005,15 +2022,15 @@ void CServer::SnapSetStaticsize(int ItemType, int Size)
 bool CServer::SwitchClientMap(int ClientID, unsigned MapID)
 {
 	CMapInfo *pInfo = m_MapInfos[MapID];
-	if(pInfo)
-	{
-		m_aClients[ClientID].Reset(false);
-		m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
-		m_aClients[ClientID].m_MapID = MapID;
-		SendMap(ClientID);
-		return true;
-	}
-	return false;
+	// An unloadable map must not become the client's map: the game world
+	// would switch under it while the client cannot obtain the map data.
+	if(!pInfo || !LoadMap(pInfo))
+		return false;
+	m_aClients[ClientID].Reset(false);
+	m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
+	m_aClients[ClientID].m_MapID = MapID;
+	SendMap(ClientID);
+	return true;
 }
 
 const char *CServer::GetMapName(unsigned MapID)

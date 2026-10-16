@@ -1089,8 +1089,10 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 			Writer.EndArray();
 			Writer.WriteAttribute("entrance");
 			// a target that is itself a generated floor gets its instance
-			// seed appended, a static map keeps its plain name
-			if(m_lInstructions.get(str_quickhash(Entrance.m_aTarget)))
+			// seed appended, a static map (e.g. the hub Connector) keeps its
+			// plain name
+			EWorldKind TargetKind;
+			if(GetFloorKind(Entrance.m_aTarget, &TargetKind) && TargetKind != WORLDKIND_HUB)
 			{
 				char aTarget[64];
 				str_format(aTarget, sizeof(aTarget), "%s_%d", Entrance.m_aTarget, DeriveTargetSeed(Seed, Entrance.m_aTarget));
