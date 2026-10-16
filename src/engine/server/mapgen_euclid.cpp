@@ -115,6 +115,9 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 {
 	const char *pFloorName = pInstruction->m_aFloorName;
 	const CWorldRing Ring = WorldRing(pInstruction, Seed);
+	if(Ring.m_Enabled)
+		dbg_msg("mapgen", "ring instance %d/%d, shared margin %d, stride %d, period %d",
+			Seed, pInstruction->m_Generation.m_Ring.m_Size, pInstruction->m_Generation.m_Ring.m_SharedMargin, Ring.m_Stride, Ring.m_Period);
 
 	// A euclidean floor does not read a base map at all. Its terrain is entirely
 	// procedural, and its look comes from the tileset, the background and the

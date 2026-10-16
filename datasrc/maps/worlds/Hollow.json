@@ -210,6 +210,12 @@
             "drift": true,
             "drift_seconds": 1200,
             "direction": "left"
+        },
+        "ring": {
+            "enabled": true,
+            "size": 1024,
+            "shared_margin": 75,
+            "base_seed": 2202
         }
     },
     "entrances": [

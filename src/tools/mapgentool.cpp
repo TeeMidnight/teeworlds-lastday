@@ -27,7 +27,9 @@
 #include <engine/kernel.h>
 #include <engine/server/mapgen.h>
 #include <engine/shared/config.h>
+#include <engine/shared/datafile.h>
 #include <engine/storage.h>
+#include <game/mapitems.h>
 
 namespace {
 
@@ -83,11 +85,48 @@ bool GenerateFloor(CMapGen &rGen, IStorage *pStorage, const char *pFloor, int Se
 	return true;
 }
 
+// Prints the world geometry json (MAPITEMTYPE_JSON id 2) of a generated map,
+// so a caller can confirm the horizontal wrap and the ring metadata a floor
+// wrote without decoding the map by hand.
+bool DumpWorldJson(IStorage *pStorage, const char *pMap)
+{
+	char aPath[128];
+	str_format(aPath, sizeof(aPath), "generatedmaps/%s.map", pMap);
+	CDataFileReader Reader;
+	if(!Reader.Open(pStorage, aPath, IStorage::TYPE_SAVE))
+	{
+		dbg_msg("mapgentool", "cannot open %s", aPath);
+		return false;
+	}
+	bool Ok = false;
+	CMapItemJson *pJson = (CMapItemJson *) Reader.FindItem(MAPITEMTYPE_JSON, 2);
+	if(!pJson)
+		dbg_msg("mapgentool", "no world json in %s", aPath);
+	else
+	{
+		const char *pData = (const char *) Reader.GetData(pJson->m_Data);
+		if(pData)
+		{
+			// the writer pretty prints, so flatten it onto one log line
+			char aFlat[1024];
+			int n = 0;
+			for(const char *p = pData; *p && n < (int) sizeof(aFlat) - 1; p++)
+				aFlat[n++] = (*p == '\n' || *p == '\r' || *p == '\t') ? ' ' : *p;
+			aFlat[n] = '\0';
+			dbg_msg("mapgentool", "world json of %s: %s", pMap, aFlat);
+			Ok = true;
+		}
+	}
+	Reader.Close();
+	return Ok;
+}
+
 void PrintUsage(const char *pProgram)
 {
 	dbg_msg("mapgentool", "usage: %s list", pProgram);
 	dbg_msg("mapgentool", "       %s <floor> [seed...]", pProgram);
 	dbg_msg("mapgentool", "       %s all [seed...]", pProgram);
+	dbg_msg("mapgentool", "       %s worldjson <map...>", pProgram);
 	dbg_msg("mapgentool", "runs the mapgen world generator without the server and writes");
 	dbg_msg("mapgentool", "generatedmaps/<floor>_<seed>.map into the storage save path");
 }
@@ -145,6 +184,14 @@ int main(int argc, const char **argv)
 			dbg_msg("mapgentool", "%-16s %s", Names.m_aaNames[i], Known ? WorldKindName(Kind) : "unknown");
 		}
 		return 0;
+	}
+	if(str_comp(pCommand, "worldjson") == 0)
+	{
+		int Failures = 0;
+		for(int i = 2; i < argc; i++)
+			if(!DumpWorldJson(pStorage, argv[i]))
+				Failures++;
+		return Failures == 0 ? 0 : 1;
 	}
 
 	// the seeds follow the command; a bare seed list defaults to seed 1
