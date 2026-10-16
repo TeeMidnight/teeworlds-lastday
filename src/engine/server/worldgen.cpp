@@ -438,6 +438,12 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 					if(Ore.m_Proba < 100 && (int) (Hash % 100u) >= Ore.m_Proba)
 						continue;
 
+					// Ring: the left shared strip is the previous instance's right
+					// strip. Only the owner spawns a node there, so the same physical
+					// resource is never generated twice.
+					if(Ring.m_Enabled && x < rGen.m_Ring.m_SharedMargin)
+						continue;
+
 					CGeneratedWorld::CResource &Resource = pWorld->m_lResources.emplace();
 					str_copy(Resource.m_aResId, Ore.m_aResId, sizeof(Resource.m_aResId));
 					str_copy(Resource.m_aDisplay, Ore.m_aDisplay, sizeof(Resource.m_aDisplay));
@@ -474,6 +480,10 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 
 				const unsigned Hash = TileHash((int) Ring.m_NoiseSeed + o * 104729 + 17, Ring.m_OffsetX + x, StandY);
 				if((int) (Hash % 100u) >= Ore.m_SurfaceProba)
+					continue;
+
+				// see the deep vein pass: the left strip belongs to the neighbour
+				if(Ring.m_Enabled && x < rGen.m_Ring.m_SharedMargin)
 					continue;
 
 				CGeneratedWorld::CResource &Resource = pWorld->m_lResources.emplace();

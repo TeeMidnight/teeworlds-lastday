@@ -88,6 +88,11 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 			if(RespawnRange > 0)
 				RespawnTime += (int) ((Hash >> 16) % (unsigned) RespawnRange);
 
+			// Ring: the left shared strip belongs to the previous instance, so a
+			// node there is not spawned twice
+			if(Ring.m_Enabled && x < pInstruction->m_Generation.m_Ring.m_SharedMargin)
+				continue;
+
 			CGeneratedWorld::CResource &Resource = pWorld->m_lResources.emplace();
 			str_copy(Resource.m_aResId, Config.m_aResId, sizeof(Resource.m_aResId));
 			str_copy(Resource.m_aDisplay, Config.m_aDisplay, sizeof(Resource.m_aDisplay));

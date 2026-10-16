@@ -158,17 +158,19 @@ TEST(WorldRing, NeighboursShareTheirTerrainAndResources)
 		}
 	}
 
-	std::vector<SRes> lA, lB;
-	CollectResources(pA, S + EDGE, W - EDGE, lA);
-	CollectResources(pB, EDGE, M - EDGE, lB);
-	ASSERT_EQ(lA.size(), lB.size());
-	for(int i = 0; i < (int) lA.size() && i < (int) lB.size(); i++)
-	{
-		EXPECT_EQ(lA[i].m_X, lB[i].m_X) << "resource " << i;
-		EXPECT_EQ(lA[i].m_Y, lB[i].m_Y) << "resource " << i;
-		EXPECT_EQ(lA[i].m_Hardness, lB[i].m_Hardness) << "resource " << i;
-		EXPECT_EQ(lA[i].m_RespawnTime, lB[i].m_RespawnTime) << "resource " << i;
-	}
+	// The shared strip has a single resource owner: an instance only creates a
+	// node where its local column is at least one shared margin in, so its left
+	// strip is empty and its right strip carries the nodes the next instance
+	// skips. A physical node therefore exists exactly once across the ring.
+	std::vector<SRes> lOwned, lSkipped;
+	CollectResources(pA, S + EDGE, W - EDGE, lOwned);
+	CollectResources(pB, EDGE, M - EDGE, lSkipped);
+	EXPECT_FALSE(lOwned.empty());
+	EXPECT_TRUE(lSkipped.empty());
+	for(int i = 0; i < pA->m_lResources.size(); i++)
+		EXPECT_GE(pA->m_lResources[i].m_X, M) << "slice 1 node in its left strip";
+	for(int i = 0; i < pB->m_lResources.size(); i++)
+		EXPECT_GE(pB->m_lResources[i].m_X, M) << "slice 2 node in its left strip";
 
 	delete pA;
 	delete pB;

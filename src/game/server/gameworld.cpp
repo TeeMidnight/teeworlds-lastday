@@ -359,10 +359,10 @@ int CGameWorld::FindEntities(vec2 Pos, float Radius, array<CEntity *> &lpEnts, i
 		}
 	}
 
-	// A ring neighbour shares the boundary strip, so its entities there can be
-	// reached from here too. Resources are terrain bound and already exist in
-	// both instances, so they are never matched across the boundary.
-	if(Type != ENTTYPE_RESOURCE)
+	// Ring: a resource node in the shared strip has a single owner (the
+	// generator only spawns it on the side whose local column is past the
+	// margin), so scanning the neighbour is how a node that physically sits in
+	// this world's left strip is reached from here.
 	{
 		SRingNeighbour aNeighbours[2];
 		const int Neighbours = CollectRingNeighbours(aNeighbours, 2);

@@ -419,6 +419,10 @@ void CGameContext::OnTick()
 	if(m_pNpcSystem && m_pNpcSystem->RestockDue())
 		m_pGameMenu->RefreshShop(-1);
 
+	// a player in a ring instance needs both neighbours live: the shared strip is
+	// single owned, so half of what they see and can mine lives next door
+	EnsureOccupiedRingNeighbours();
+
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
 		pWorld->m_Core.m_Tuning = *static_cast<CGameContext *>(pUser)->Tuning();
@@ -1468,6 +1472,26 @@ bool CGameContext::HasRingNeighbour(unsigned MapID) const
 		}
 	}
 	return false;
+}
+
+void CGameContext::EnsureOccupiedRingNeighbours()
+{
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = m_apPlayers[i];
+		if(!pPlayer)
+			continue;
+		CGameWorld *pWorld = pPlayer->GameWorld();
+		if(!pWorld || !pWorld->IsRing())
+			continue;
+		for(int Dir = -1; Dir <= 1; Dir += 2)
+		{
+			char aName[64];
+			if(!pWorld->RingNeighbour(Dir, aName, sizeof(aName), 0.0f, nullptr))
+				continue;
+			EnsureWorld(str_quickhash(aName));
+		}
+	}
 }
 
 void CGameContext::RequestLoadWorld(unsigned MapID)

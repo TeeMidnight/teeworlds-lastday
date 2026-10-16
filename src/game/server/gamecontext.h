@@ -122,6 +122,10 @@ public:
 	// whether a ring world with a player has the given map as a live neighbour
 	bool HasRingNeighbour(unsigned MapID) const;
 
+	// Make sure the live neighbours of every occupied ring world exist, so the
+	// single owner nodes and entities in the shared strip can be reached.
+	void EnsureOccupiedRingNeighbours();
+
 	// apply a signed aggro delta to the (npc, account) ledger
 	void NpcAddAggro(const Uuid &Npc, const Uuid &User, int Delta);
 	// sum the ledger of one (npc, account) pair; 0 when absent or no database
