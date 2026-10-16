@@ -26,6 +26,11 @@ public:
 	virtual void TickPaused();
 	virtual void Snap(int SnappingClient);
 
+	// a projectile's m_Pos is its launch point, so a crossing rebases the launch
+	// rather than the current point (see CEntity::RingPos)
+	virtual vec2 RingPos();
+	virtual void OnRingTransfer(float ArrivalX);
+
 private:
 	vec2 m_Direction;
 	int m_LifeSpan;

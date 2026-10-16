@@ -422,6 +422,48 @@ void CGameWorld::Tick()
 		for(int j = 0; j < m_alpEntityLists[i].size(); j++)
 			m_alpEntityLists[i][j]->TickDefered();
 
+	// Ring: an entity that crossed a boundary trigger belongs to the
+	// neighbouring instance now, so a thrown item or a projectile continues its
+	// flight instead of stopping at an edge that is not there. The crossing is
+	// collected first and moved after the list was scanned. The neighbour has to
+	// be live; when it is not, the entity waits here and moves as soon as
+	// someone is in the neighbour (its world is then loaded).
+	if(IsRing())
+	{
+		const int aTypes[] = {ENTTYPE_DROPPEDPICKUP, ENTTYPE_PROJECTILE};
+		const float RightX = RingRightTriggerX();
+		const float LeftX = RingLeftTriggerX();
+		array<CEntity *> lCrossing;
+		for(int t = 0; t < 2; t++)
+		{
+			for(auto &pEnt : m_alpEntityLists[aTypes[t]])
+			{
+				const float X = pEnt->RingPos().x;
+				if(X >= RightX || X <= LeftX)
+					lCrossing.add(pEnt);
+			}
+		}
+		for(int i = 0; i < lCrossing.size(); i++)
+		{
+			CEntity *pEnt = lCrossing[i];
+			const float X = pEnt->RingPos().x;
+			const int Direction = X >= RightX ? 1 : -1;
+			char aTarget[64];
+			float ArrivalX = 0.0f;
+			if(!RingNeighbour(Direction, aTarget, sizeof(aTarget), X, &ArrivalX))
+				continue;
+			// bring the neighbour in if it is not live yet, so the crossing is not
+			// lost when nobody is on the other side
+			CGameWorld *pTarget = GameServer()->EnsureWorld(str_quickhash(aTarget));
+			if(!pTarget || pTarget == this)
+				continue;
+			RemoveEntity(pEnt);
+			pEnt->SetGameWorld(pTarget);
+			pEnt->OnRingTransfer(ArrivalX);
+			pTarget->InsertEntity(pEnt);
+		}
+	}
+
 	RemoveEntities();
 }
 

@@ -310,6 +310,7 @@ public:
 	virtual const char *GetMapName(unsigned MapID);
 	virtual int GetMapWorldKind(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);
+	virtual bool LoadMapForWorld(unsigned MapID);
 };
 
 #endif

@@ -98,6 +98,19 @@ void CProjectile::TickPaused()
 	++m_StartTick;
 }
 
+vec2 CProjectile::RingPos()
+{
+	const float Ct = (Server()->Tick() - m_StartTick) / (float) Server()->TickSpeed();
+	return GetPos(Ct);
+}
+
+void CProjectile::OnRingTransfer(float ArrivalX)
+{
+	// m_Pos is the launch point: shifting it shifts the whole trajectory, so
+	// rebase by the difference between the current point and the arrival.
+	m_Pos.x += ArrivalX - RingPos().x;
+}
+
 void CProjectile::FillInfo(CNetObj_Projectile *pProj)
 {
 	pProj->m_X = round_to_int(m_Pos.x);

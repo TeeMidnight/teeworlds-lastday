@@ -86,6 +86,12 @@ public:
 	// releases the cached map data of a map that no client needs anymore
 	// (the map can be re-loaded on demand if a client switches to it again)
 	virtual void UnloadMap(unsigned MapID) = 0;
+
+	// Loads a map (generating it on demand) and makes sure its game world
+	// exists, without switching any client's map. Used to bring a ring
+	// neighbour in so an entity can cross into it. A default keeps the
+	// interface usable by an implementation that does not support worlds.
+	virtual bool LoadMapForWorld(unsigned MapID) { return false; }
 };
 
 class IGameServer : public IInterface

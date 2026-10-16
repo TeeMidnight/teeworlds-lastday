@@ -114,6 +114,14 @@ public:
 	CGameWorld *MainWorld();
 	CGameWorld *WorldByID(unsigned MapID);
 
+	// The world of a map, loading (and generating) its map without switching any
+	// client's map when it does not exist yet. Null when the map cannot be
+	// loaded. Used to bring a ring neighbour in.
+	CGameWorld *EnsureWorld(unsigned MapID);
+
+	// whether a ring world with a player has the given map as a live neighbour
+	bool HasRingNeighbour(unsigned MapID) const;
+
 	// apply a signed aggro delta to the (npc, account) ledger
 	void NpcAddAggro(const Uuid &Npc, const Uuid &User, int Delta);
 	// sum the ledger of one (npc, account) pair; 0 when absent or no database

@@ -68,6 +68,13 @@ public:
 
 	void SetGameWorld(class CGameWorld *pGameWorld) { m_pGameWorld = pGameWorld; }
 
+	// Ring crossings. RingPos is where the entity really is: a projectile keeps
+	// its launch point in m_Pos rather than its current point, so it overrides
+	// this. OnRingTransfer rebases the entity onto the neighbour's axis when it
+	// crosses, keeping the same global column.
+	virtual vec2 RingPos() { return m_Pos; }
+	virtual void OnRingTransfer(float ArrivalX) { m_Pos.x = ArrivalX; }
+
 	/* Objects */
 	class CGameWorld *GameWorld() { return m_pGameWorld; }
 	class CConfig *Config() { return m_pGameWorld->Config(); }

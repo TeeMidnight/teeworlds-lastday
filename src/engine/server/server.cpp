@@ -2033,6 +2033,17 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID)
 	return true;
 }
 
+bool CServer::LoadMapForWorld(unsigned MapID)
+{
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	if(!pInfo || !LoadMap(pInfo))
+		return false;
+	// An already loaded map returns before LoadMap asks for the world, so ask
+	// explicitly; RequestLoadWorld is idempotent.
+	GameServer()->RequestLoadWorld(MapID);
+	return true;
+}
+
 const char *CServer::GetMapName(unsigned MapID)
 {
 	CMapInfo *pInfo = m_MapInfos[MapID];

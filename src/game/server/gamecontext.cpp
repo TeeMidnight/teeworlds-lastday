@@ -1438,6 +1438,38 @@ CGameWorld *CGameContext::WorldByID(unsigned MapID)
 	return ppWorld ? *ppWorld : nullptr;
 }
 
+CGameWorld *CGameContext::EnsureWorld(unsigned MapID)
+{
+	CGameWorld *pWorld = WorldByID(MapID);
+	if(pWorld)
+		return pWorld;
+	if(!Server()->LoadMapForWorld(MapID))
+		return nullptr;
+	return WorldByID(MapID);
+}
+
+bool CGameContext::HasRingNeighbour(unsigned MapID) const
+{
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = m_apPlayers[i];
+		if(!pPlayer)
+			continue;
+		CGameWorld *pWorld = pPlayer->GameWorld();
+		if(!pWorld || !pWorld->IsRing())
+			continue;
+		for(int Dir = -1; Dir <= 1; Dir += 2)
+		{
+			char aName[64];
+			float ArrivalX = 0.0f;
+			if(pWorld->RingNeighbour(Dir, aName, sizeof(aName), 0.0f, &ArrivalX) &&
+				str_quickhash(aName) == MapID)
+				return true;
+		}
+	}
+	return false;
+}
+
 void CGameContext::RequestLoadWorld(unsigned MapID)
 {
 	// Loading is idempotent: a duplicate request (a delayed map load callback,
@@ -1543,6 +1575,10 @@ void CGameContext::UnloadIdleWorlds()
 			if(pSelf->m_apPlayers[i] && pSelf->m_apPlayers[i]->GameWorld() == pWorld)
 				return;
 		}
+		// keep the live neighbours of a ring world, so a crossing entity has
+		// somewhere to go even when nobody is in the neighbour yet
+		if(pSelf->HasRingNeighbour(pWorld->WorldID()))
+			return;
 		pCollector->m_lToUnload.add(pWorld->WorldID());
 	}, &Collector);
 
