@@ -28,8 +28,11 @@
 #include <engine/server/mapgen.h>
 #include <engine/shared/config.h>
 #include <engine/shared/datafile.h>
+#include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
 #include <game/mapitems.h>
+
+#include <vector>
 
 namespace {
 
@@ -85,6 +88,117 @@ bool GenerateFloor(CMapGen &rGen, IStorage *pStorage, const char *pFloor, int Se
 	return true;
 }
 
+// Decompresses a tile data chunk (skip run length encoded) into a flat RGBA
+// style array of Count four byte tiles.
+// Decompresses a tile data chunk (skip run length encoded) into a flat array of
+// four byte tiles, the same layout the map stores.
+void DecodeTiles(CDataFileReader &Reader, int DataIndex, int Count, unsigned char *pOut)
+{
+	const int Size = Reader.GetDataSize(DataIndex);
+	const unsigned char *pStart = (const unsigned char *) Reader.GetData(DataIndex);
+	if(!pStart || Size < 4)
+		return;
+	const unsigned char *pEnd = pStart + Size;
+	const unsigned char *pSaved = pStart;
+	int i = 0;
+	while(i < Count && pSaved + 4 <= pEnd)
+	{
+		const int Skip = pSaved[2];
+		for(int k = 0; k <= Skip && i < Count; k++)
+		{
+			pOut[(size_t) i * 4 + 0] = pSaved[0];
+			pOut[(size_t) i * 4 + 1] = pSaved[1];
+			pOut[(size_t) i * 4 + 2] = 0;
+			pOut[(size_t) i * 4 + 3] = 0;
+			i++;
+		}
+		pSaved += 4;
+	}
+}
+
+// Regenerates two neighbouring instances of a ring floor and compares the strip
+// they share straight out of the generated maps. This is the only check that
+// also covers the automapper and the map writer, not just the in memory
+// generator. A couple of columns at the outer edge of each strip are skipped:
+// the automapper clamps there and those columns are beyond the transfer.
+bool RingCheck(IStorage *pStorage, CMapGen &rGen, const char *pFloor)
+{
+	if(!rGen.RequestNewMap(pFloor, 1) || !rGen.RequestNewMap(pFloor, 2))
+	{
+		dbg_msg("mapgentool", "ringcheck: %s could not be generated", pFloor);
+		return false;
+	}
+
+	CDataFileReader A, B;
+	char aPathA[IO_MAX_PATH_LENGTH], aPathB[IO_MAX_PATH_LENGTH];
+	str_format(aPathA, sizeof(aPathA), "generatedmaps/%s_1.map", pFloor);
+	str_format(aPathB, sizeof(aPathB), "generatedmaps/%s_2.map", pFloor);
+	if(!A.Open(pStorage, aPathA, IStorage::TYPE_SAVE) || !B.Open(pStorage, aPathB, IStorage::TYPE_SAVE))
+	{
+		dbg_msg("mapgentool", "ringcheck: could not open the generated maps of %s", pFloor);
+		return false;
+	}
+
+	// the shared margin and the ring flag come from the world json
+	int SharedMargin = 0, Ring = 0;
+	{
+		CMapItemJson *pJson = (CMapItemJson *) A.FindItem(MAPITEMTYPE_JSON, 2);
+		const char *pData = pJson ? (const char *) A.GetData(pJson->m_Data) : nullptr;
+		if(!pData)
+		{
+			dbg_msg("mapgentool", "ringcheck: %s has no world json", pFloor);
+			return false;
+		}
+		CJsonParser Parser;
+		json_value *pWorld = Parser.ParseString(pData, "world");
+		if(!pWorld || pWorld->type != json_object)
+			return false;
+		Ring = (int) (json_int_t) (*pWorld)["ring"];
+		SharedMargin = (int) (json_int_t) (*pWorld)["shared_margin"];
+	}
+	if(Ring == 0 || SharedMargin <= 0)
+	{
+		dbg_msg("mapgentool", "ringcheck: %s is not a ring floor", pFloor);
+		return false;
+	}
+
+	const int EDGE = 2;
+	int Layers = 0, Mismatches = 0;
+	int Start = 0, Num = 0;
+	A.GetType(MAPITEMTYPE_LAYER, &Start, &Num);
+	for(int i = 0; i < Num; i++)
+	{
+		int TypeA = 0, IDA = 0, TypeB = 0, IDB = 0;
+		CMapItemLayerTilemap *pA = (CMapItemLayerTilemap *) A.GetItem(Start + i, &TypeA, &IDA);
+		CMapItemLayerTilemap *pB = (CMapItemLayerTilemap *) B.GetItem(Start + i, &TypeB, &IDB);
+		if(!pA || !pB || pA->m_Layer.m_Type != LAYERTYPE_TILES || pB->m_Layer.m_Type != LAYERTYPE_TILES)
+			continue;
+		const int W = pA->m_Width, H = pA->m_Height;
+		const int Stride = W - SharedMargin;
+		if(pB->m_Width != W || pB->m_Height != H || Stride <= 0)
+			continue;
+		std::vector<unsigned char> TA((size_t) W * H * 4), TB((size_t) W * H * 4);
+		DecodeTiles(A, pA->m_Data, W * H, TA.data());
+		DecodeTiles(B, pB->m_Data, W * H, TB.data());
+		for(int y = 0; y < H; y++)
+		{
+			for(int x = EDGE; x < SharedMargin - EDGE; x++)
+			{
+				const size_t ia = ((size_t) y * W + (Stride + x)) * 4;
+				const size_t ib = ((size_t) y * W + x) * 4;
+				if(TA[ia] != TB[ib] || TA[ia + 1] != TB[ib + 1] || TA[ia + 2] != TB[ib + 2])
+					Mismatches++;
+			}
+		}
+		Layers++;
+	}
+
+	dbg_msg("mapgentool", "ringcheck %s: %d tile layer(s), %d mismatching tile(s)", pFloor, Layers, Mismatches);
+	A.Close();
+	B.Close();
+	return Layers > 0 && Mismatches == 0;
+}
+
 // Prints the world geometry json (MAPITEMTYPE_JSON id 2) of a generated map,
 // so a caller can confirm the horizontal wrap and the ring metadata a floor
 // wrote without decoding the map by hand.
@@ -126,6 +240,7 @@ void PrintUsage(const char *pProgram)
 	dbg_msg("mapgentool", "usage: %s list", pProgram);
 	dbg_msg("mapgentool", "       %s <floor> [seed...]", pProgram);
 	dbg_msg("mapgentool", "       %s all [seed...]", pProgram);
+	dbg_msg("mapgentool", "       %s ringcheck <floor...>", pProgram);
 	dbg_msg("mapgentool", "       %s worldjson <map...>", pProgram);
 	dbg_msg("mapgentool", "runs the mapgen world generator without the server and writes");
 	dbg_msg("mapgentool", "generatedmaps/<floor>_<seed>.map into the storage save path");
@@ -184,6 +299,14 @@ int main(int argc, const char **argv)
 			dbg_msg("mapgentool", "%-16s %s", Names.m_aaNames[i], Known ? WorldKindName(Kind) : "unknown");
 		}
 		return 0;
+	}
+	if(str_comp(pCommand, "ringcheck") == 0)
+	{
+		int Failures = 0;
+		for(int i = 2; i < argc; i++)
+			if(!RingCheck(pStorage, Gen, argv[i]))
+				Failures++;
+		return Failures == 0 ? 0 : 1;
 	}
 	if(str_comp(pCommand, "worldjson") == 0)
 	{
