@@ -115,8 +115,12 @@ public:
 	// down the world. MarginX keeps the outermost columns out of that wrap, so
 	// the border does not end up as a lone corner tile; 0 wraps edge to edge,
 	// which is what a hand drawn map wants. pRemap rewrites the produced indices.
+	//
+	// CoordOffsetX is added to the tile x before the random rule rolls. A ring
+	// instance must roll on its global column, or two instances would pick
+	// different variants for the strip of terrain they share.
 	bool Proceed(const char *pRuleSetName, CTile *pTiles, int Width, int Height, unsigned Seed,
-		bool WrapX = false, int MarginX = 0, const array<CRemap> *pRemap = 0) const;
+		bool WrapX = false, int MarginX = 0, const array<CRemap> *pRemap = 0, int CoordOffsetX = 0) const;
 
 	const CRuleSet *FindRuleSet(const char *pName) const;
 	int NumRuleSets() const { return m_lRuleSets.size(); }

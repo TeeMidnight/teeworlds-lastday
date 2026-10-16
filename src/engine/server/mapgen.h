@@ -293,6 +293,21 @@ struct CInstruction
 		// The drifting cloud layers (euclidean floors only).
 		CCloudsConfig m_Clouds;
 
+		// The ring that links the instances (seeds 1..m_Size) of one euclidean
+		// floor into a single closed world. Disabled by default: a floor without
+		// a "ring" block keeps the old self-wrapping cylinder. Enabled makes every
+		// instance a window of one shared noise field, so neighbouring instances
+		// overlap for m_SharedMargin tiles of identical terrain and can be walked
+		// into from either side.
+		struct CRingConfig
+		{
+			bool m_Enabled;
+			int m_Size;         // how many instances form the ring (1024)
+			int m_SharedMargin; // tiles an instance shares with each neighbour (75)
+			int m_BaseSeed;     // the single noise seed of the whole ring
+		};
+		CRingConfig m_Ring;
+
 		// every layer to emit, in the order they are written out
 		array<CLayerConfig> m_Layers;
 

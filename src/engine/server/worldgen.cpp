@@ -68,6 +68,32 @@ static noise::CFractalParams ToNoiseParams(const CInstruction::CNoiseConfig &rCo
 	return Params;
 }
 
+// Resolves the ring geometry of one floor instance. See CWorldRing in worldgen.h.
+static CWorldRing RingFromGeneration(const CInstruction::CGeneration &rGen, int Seed)
+{
+	CWorldRing Ring;
+	Ring.m_Enabled = rGen.m_Ring.m_Enabled && rGen.m_Ring.m_SharedMargin > 0 &&
+		rGen.m_Ring.m_Size > 1 && rGen.m_Width > rGen.m_Ring.m_SharedMargin;
+	if(!Ring.m_Enabled)
+	{
+		Ring.m_OffsetX = 0;
+		Ring.m_Period = rGen.m_Width;
+		Ring.m_Stride = rGen.m_Width;
+		Ring.m_NoiseSeed = (unsigned) Seed;
+		return Ring;
+	}
+	Ring.m_Stride = rGen.m_Width - rGen.m_Ring.m_SharedMargin;
+	Ring.m_OffsetX = (Seed - 1) * Ring.m_Stride;
+	Ring.m_Period = rGen.m_Ring.m_Size * Ring.m_Stride;
+	Ring.m_NoiseSeed = (unsigned) rGen.m_Ring.m_BaseSeed;
+	return Ring;
+}
+
+CWorldRing WorldRing(const CInstruction *pInstruction, int Seed)
+{
+	return RingFromGeneration(pInstruction->m_Generation, Seed);
+}
+
 // The tile a generated solid cell carries before the automapper runs. It matches
 // the shipped rule sets' "basetile", so the generator only decides solid vs air
 // and lets the rules pick the autotile variant.
@@ -132,18 +158,20 @@ static void GenerateHeightmap(const CInstruction::CGeneration &rGen, int Seed, a
 	LowWarp.m_Frequency = WarpParams.m_Frequency * 0.25f;
 	LowWarp.m_Octaves = maximum(1, WarpParams.m_Octaves - 2);
 
-	const float Period = (float) rGen.m_Width;
+	const CWorldRing Ring = RingFromGeneration(rGen, Seed);
 
 	lSurface.clear();
 	lSurface.hint_size(rGen.m_Width);
 	for(int x = 0; x < rGen.m_Width; x++)
 	{
-		// sampled on the cylindrical axis, so the field runs continuously
-		// through the wrap and the two edges really are the same place
-		const float Base = noise::Fractal2DPeriodic((unsigned) (Seed + rGen.m_Surface.m_SeedOffset), SurfaceParams,
-			(float) x, 0.0f, Period);
-		const float Warp = noise::Fractal2DPeriodic((unsigned) (Seed * 3u + 77u + rGen.m_Surface.m_SeedOffset), LowWarp,
-			(float) x, 1000.0f, Period);
+		// Sample the ring's shared field at this instance's global column: two
+		// overlapping instances read the same value, so the strip they share is
+		// identical in both and the field closes after Ring.m_Period tiles.
+		const float GlobalX = (float) (Ring.m_OffsetX + x);
+		const float Base = noise::Fractal2DPeriodic((unsigned) (Ring.m_NoiseSeed + (unsigned) rGen.m_Surface.m_SeedOffset), SurfaceParams,
+			GlobalX, 0.0f, (float) Ring.m_Period);
+		const float Warp = noise::Fractal2DPeriodic((unsigned) (Ring.m_NoiseSeed * 3u + 77u + (unsigned) rGen.m_Surface.m_SeedOffset), LowWarp,
+			GlobalX, 1000.0f, (float) Ring.m_Period);
 		const float Height = Base + Warp * 0.5f;
 
 		int Y = rGen.m_SurfaceLevel - (int) (Height * rGen.m_SurfaceAmplitude);
@@ -152,6 +180,13 @@ static void GenerateHeightmap(const CInstruction::CGeneration &rGen, int Seed, a
 		Y = clamp(Y, 16, rGen.m_Height - rGen.m_EdgeWall - 8);
 		lSurface.add(Y);
 	}
+
+	// A ring instance has no seam of its own: its edges are interior terrain
+	// that continues into the neighbour, and flattening them would carve a flat
+	// notch out of the strip the neighbour also generates. Only the self-wrapping
+	// cylinder levels its seam.
+	if(Ring.m_Enabled)
+		return;
 
 	// -----------------------------------------------------------------
 	// flatten the seam
@@ -261,6 +296,7 @@ static void CarveCaves(const CInstruction::CGeneration &rGen, int Seed, CGenerat
 	const noise::CFractalParams Params = ToNoiseParams(rGen.m_Caves.m_Noise);
 	const float Threshold = rGen.m_Caves.m_Threshold;
 	const int MaxY = Height - rGen.m_EdgeWall - 1;
+	const CWorldRing Ring = RingFromGeneration(rGen, Seed);
 
 	// the cave field is evaluated once per tile, then the thresholded result is
 	// cleaned up, so a tile can be removed or re-filled based on its neighbours
@@ -275,8 +311,8 @@ static void CarveCaves(const CInstruction::CGeneration &rGen, int Seed, CGenerat
 		// edge continues on the right edge instead of being cut off
 		for(int y = StartY; y < MaxY; y++)
 		{
-			const float Value = noise::Fractal3DPeriodic((unsigned) (Seed + rGen.m_Caves.m_Noise.m_SeedOffset), Params,
-				(float) x, (float) y, (float) (x + y) * 0.5f, (float) Width);
+			const float Value = noise::Fractal3DPeriodic((unsigned) (Ring.m_NoiseSeed + (unsigned) rGen.m_Caves.m_Noise.m_SeedOffset), Params,
+				(float) (Ring.m_OffsetX + x), (float) y, (float) (Ring.m_OffsetX + x + y) * 0.5f, (float) Ring.m_Period);
 			if(Value > Threshold)
 				pCave[y * Width + x] = 1;
 		}
@@ -309,7 +345,14 @@ static void CarveCaves(const CInstruction::CGeneration &rGen, int Seed, CGenerat
 					{
 						if(!dx && !dy)
 							continue;
-						const int Nx = (x + dx + Width) % Width; // wrap around
+						// A cylinder wraps to its own far edge; a ring would have to read
+						// the neighbouring instance, whose cave buffer this instance does
+						// not have. The difference only lands on the outermost column,
+						// which the transfer region never reaches, so it is skipped.
+						const int RawX = x + dx;
+						if(Ring.m_Enabled && (RawX < 0 || RawX >= Width))
+							continue;
+						const int Nx = (RawX + Width) % Width;
 						if(pCave[Ny * Width + Nx])
 							Neighbours++;
 					}
@@ -355,6 +398,7 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 	CGeneratedWorld::CLayer *pMain = &pWorld->m_lLayers[CGeneratedWorld::LAYER_TERRAIN];
 	const int Width = rGen.m_Width;
 	const int Height = rGen.m_Height;
+	const CWorldRing Ring = RingFromGeneration(rGen, Seed);
 
 	for(int o = 0; o < rGen.m_Ores.size(); o++)
 	{
@@ -375,8 +419,13 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 
 				// the third axis varies with position, or the vein would be a
 				// flat sheet extruded through the rock rather than a blob
-				const float Value = noise::Fractal3D((unsigned) (Seed + Ore.m_Noise.m_SeedOffset), Params,
-					(float) x, (float) y, (float) (x - y) * 0.5f + (float) o * 100.0f);
+				// The ore field is not periodic in x (it keeps a real third axis),
+				// but driving it with the global column still makes the shared strip
+				// identical in both neighbours; only the ring's closing seam sees a
+				// change in vein layout, which is invisible in sparse rock.
+				const float GlobalX = (float) (Ring.m_OffsetX + x);
+				const float Value = noise::Fractal3D((unsigned) (Ring.m_NoiseSeed + (unsigned) Ore.m_Noise.m_SeedOffset), Params,
+					GlobalX, (float) y, (GlobalX - (float) y) * 0.5f + (float) o * 100.0f);
 				if(Value <= Ore.m_Threshold)
 					continue;
 
@@ -385,7 +434,7 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 				VeinCount++;
 				for(int p = 0; p < Ore.m_Probes; p++)
 				{
-					const unsigned Hash = TileHash(Seed + o * 7919, x * 31 + p, y);
+					const unsigned Hash = TileHash((int) Ring.m_NoiseSeed + o * 7919, (Ring.m_OffsetX + x) * 31 + p, y);
 					if(Ore.m_Proba < 100 && (int) (Hash % 100u) >= Ore.m_Proba)
 						continue;
 
@@ -423,7 +472,7 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 				if(pMain->m_pTiles[(StandY - 1) * Width + x].m_Index != TILE_AIR)
 					continue;
 
-				const unsigned Hash = TileHash(Seed + o * 104729 + 17, x, StandY);
+				const unsigned Hash = TileHash((int) Ring.m_NoiseSeed + o * 104729 + 17, Ring.m_OffsetX + x, StandY);
 				if((int) (Hash % 100u) >= Ore.m_SurfaceProba)
 					continue;
 
@@ -478,6 +527,8 @@ static void CarveSurfaceEntrances(const CInstruction::CGeneration &rGen, int See
 	const CInstruction::CSurfaceEntranceConfig &Config = rGen.m_SurfaceEntrances;
 	if(!Config.m_Enabled || Config.m_Count <= 0 || pWorld->m_lLayers.size() < 3)
 		return;
+
+	const CWorldRing Ring = RingFromGeneration(rGen, Seed);
 
 	CGeneratedWorld::CLayer *pMain = &pWorld->m_lLayers[CGeneratedWorld::LAYER_TERRAIN];
 	const int Width = rGen.m_Width;
@@ -573,12 +624,16 @@ static void CarveSurfaceEntrances(const CInstruction::CGeneration &rGen, int See
 		Score += (rGen.m_SurfaceLevel - SurfaceY);
 
 		// stable per column jitter, so seeds differ without picking bad spots
-		Score += (int) (TileHash(Seed, X, 90210) % 7u);
+		Score += (int) (TileHash((int) Ring.m_NoiseSeed, Ring.m_OffsetX + X, 90210) % 7u);
 		return Score;
 	};
 
-	// pick the best column in each of Count bands, keeping them separated
-	const int Margin = maximum(Config.m_Margin, Config.m_Width + Config.m_Frame + 2);
+	// pick the best column in each of Count bands, keeping them separated.
+	// A ring instance must not place an entrance inside the strip it shares with
+	// a neighbour: the two would carve different structures into the same tiles.
+	// The effective margin therefore starts past the shared strip.
+	const int SharedMargin = Ring.m_Enabled ? rGen.m_Ring.m_SharedMargin : 0;
+	const int Margin = maximum(Config.m_Margin, SharedMargin + Config.m_Width + Config.m_Frame + 2);
 	const int BandWidth = maximum(1, (Width - 2 * Margin) / Config.m_Count);
 	array<int> lChosen;
 	for(int b = 0; b < Config.m_Count; b++)
@@ -702,6 +757,12 @@ static void PlaceSpawns(const CInstruction::CGeneration &rGen, int Seed, CGenera
 	const int Width = rGen.m_Width;
 	const int Height = rGen.m_Height;
 	const int Edge = rGen.m_EdgeWall;
+	const CWorldRing Ring = RingFromGeneration(rGen, Seed);
+
+	// keep spawns out of the shared strip, where the neighbour would pick its own
+	const int SharedMargin = Ring.m_Enabled ? rGen.m_Ring.m_SharedMargin : 0;
+	const int MinX = Edge + 8 + SharedMargin;
+	const int MaxX = Width - Edge - 8 - SharedMargin;
 
 	// A spawn may never sit on an entrance: arriving in a world uses one of
 	// these, so a spawn that overlaps a trigger teleports the player straight
@@ -725,9 +786,9 @@ static void PlaceSpawns(const CInstruction::CGeneration &rGen, int Seed, CGenera
 	// wherever the ground happens to be flat
 	const int BucketSize = 48;
 	int Placed = 0;
-	for(int StartX = Edge + 8; StartX < Width - Edge - 8; StartX += BucketSize)
+	for(int StartX = MinX; StartX < MaxX; StartX += BucketSize)
 	{
-		const int EndX = minimum(StartX + BucketSize, Width - Edge - 8);
+		const int EndX = minimum(StartX + BucketSize, MaxX);
 		for(int x = StartX; x < EndX; x++)
 		{
 			// m_Surface is the first *solid* row of the column, so the open tile

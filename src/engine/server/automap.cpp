@@ -289,7 +289,7 @@ static int RemapIndex(int Index, const array<CAutoMapper::CRemap> *pRemap)
 }
 
 bool CAutoMapper::Proceed(const char *pRuleSetName, CTile *pTiles, int Width, int Height, unsigned Seed,
-	bool WrapX, int MarginX, const array<CRemap> *pRemap) const
+	bool WrapX, int MarginX, const array<CRemap> *pRemap, int CoordOffsetX) const
 {
 	const CRuleSet *pConf = FindRuleSet(pRuleSetName);
 	if(!pConf)
@@ -354,7 +354,7 @@ bool CAutoMapper::Proceed(const char *pRuleSetName, CTile *pTiles, int Width, in
 						RespectRules = false;
 				}
 
-				if(!RespectRules || !RollRandom(Seed + (unsigned) i * 7919u, x, y, Rule.m_Random))
+				if(!RespectRules || !RollRandom(Seed + (unsigned) i * 7919u, x + CoordOffsetX, y, Rule.m_Random))
 					continue;
 
 				pTile->m_Index = RemapIndex(Rule.m_Index, pRemap);

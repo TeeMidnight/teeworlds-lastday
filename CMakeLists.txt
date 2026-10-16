@@ -916,11 +916,16 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     test.cpp
     test.h
     thread.cpp
+    world_ring.cpp
     world_wrap.cpp
   )
   set(TARGET_TESTRUNNER testrunner)
   add_executable(${TARGET_TESTRUNNER} EXCLUDE_FROM_ALL
     ${TESTS}
+    # The world generator is a server translation unit, but the ring tests call
+    # it directly to compare two neighbouring instances.
+    src/engine/server/noise.cpp
+    src/engine/server/worldgen.cpp
     $<TARGET_OBJECTS:engine-shared>
     $<TARGET_OBJECTS:game-shared>
     ${DEPS}

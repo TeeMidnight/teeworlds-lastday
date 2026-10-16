@@ -90,6 +90,24 @@ CGeneratedWorld *GenerateEuclideanWorld(const CInstruction *pInstruction, int Se
 // spawn points and derives the collision layer.
 void BuildWorldEntrances(const CInstruction *pInstruction, int Seed, CGeneratedWorld *pWorld);
 
+// Maps one instance (Seed) of a euclidean floor onto its floor's ring.
+//
+// Without a ring this is the classic self-wrapping cylinder: offset 0, period =
+// width and the instance's own seed driving the noise. With a ring the instance
+// is a window of the ring's single shared noise field: instance Seed starts at
+// global x (Seed-1)*m_Stride and the field closes after m_Period tiles. Two
+// neighbouring instances then read the very same value for the strip they
+// share, which is what makes the terrain continue across the boundary.
+struct CWorldRing
+{
+	bool m_Enabled;
+	int m_OffsetX; // global x of this instance's local x = 0
+	int m_Period;  // circumference of the whole ring, in tiles
+	int m_Stride;  // distance between two neighbouring instances
+	unsigned m_NoiseSeed;
+};
+CWorldRing WorldRing(const CInstruction *pInstruction, int Seed);
+
 // The index a generated solid cell is marked with before the automapper runs.
 // Matches the shipped rule sets' "basetile", so the mapper sees a solid tile.
 enum

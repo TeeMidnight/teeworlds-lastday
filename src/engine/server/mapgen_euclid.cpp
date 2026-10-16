@@ -54,6 +54,7 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 	CGeneratedWorld::CLayer *pMain = &pWorld->m_lLayers[CGeneratedWorld::LAYER_TERRAIN];
 	const int Width = pMain->m_Width;
 	const int Height = pMain->m_Height;
+	const CWorldRing Ring = WorldRing(pInstruction, Seed);
 	int Placed = 0;
 
 	for(int c = 0; c < lConfigs.size(); c++)
@@ -74,7 +75,7 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 			if(pMain->m_pTiles[(StandY + 1) * Width + x].m_Index == TILE_AIR)
 				continue;
 
-			const unsigned Hash = DeterministicHash(Seed + c * 104729 + 17, x);
+			const unsigned Hash = DeterministicHash((int) Ring.m_NoiseSeed + c * 104729 + 17, Ring.m_OffsetX + x);
 			if((int) (Hash % 100u) >= Config.m_Proba)
 				continue;
 
@@ -108,6 +109,7 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 {
 	const char *pFloorName = pInstruction->m_aFloorName;
+	const CWorldRing Ring = WorldRing(pInstruction, Seed);
 
 	// A euclidean floor does not read a base map at all. Its terrain is entirely
 	// procedural, and its look comes from the tileset, the background and the
@@ -151,7 +153,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 			// the world is a cylinder, so the rules sample across the seam
 			// instead of hitting a wall; the outermost columns are held out of
 			// that wrap so the border does not wear corner tiles
-			if(!Mapper.Proceed(pMainSet, Layer.m_pTiles, Layer.m_Width, Layer.m_Height, (unsigned) Seed, true, pInstruction->m_Generation.m_WrapMargin))
+			if(!Mapper.Proceed(pMainSet, Layer.m_pTiles, Layer.m_Width, Layer.m_Height, Ring.m_NoiseSeed, !Ring.m_Enabled, pInstruction->m_Generation.m_WrapMargin, nullptr, Ring.m_OffsetX))
 				dbg_msg("mapgen", "automap rule set '%s' is unknown, the layer '%s' stays unstyled", pMainSet, Layer.m_aName);
 		}
 	}
@@ -370,7 +372,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 		const CAutoMapper::CRuleSet *pCaveSet = Gen.m_aCaveRuleSet[0] ? Mapper.FindRuleSet(Gen.m_aCaveRuleSet) : nullptr;
 		const bool CaveMatches = pCaveSet && str_comp(pCaveSet->m_aSource, pMainSource) == 0;
 		const char *pWallSet = CaveMatches ? Gen.m_aCaveRuleSet : Gen.m_aMainRuleSet;
-		if(!Mapper.Proceed(pWallSet, lWallTiles.base_ptr(), SubWidth, SubHeight, (unsigned) Seed + 0x51ed, true, Gen.m_WrapMargin))
+		if(!Mapper.Proceed(pWallSet, lWallTiles.base_ptr(), SubWidth, SubHeight, Ring.m_NoiseSeed + 0x51ed, !Ring.m_Enabled, Gen.m_WrapMargin, nullptr, Ring.m_OffsetX))
 			dbg_msg("mapgen", "cave rule set '%s' is unknown, the wall stays plain", pWallSet);
 		WallDarkened = !CaveMatches;
 
@@ -440,7 +442,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 			for(int r = 0; r < pDoodadSet->m_aDoodads.size(); r++)
 			{
 				const CAutoMapper::CDoodad &Doodad = pDoodadSet->m_aDoodads[r];
-				if(!RollOneIn(Seed, x * 131 + r * 7919, Doodad.m_Random))
+				if(!RollOneIn((int) Ring.m_NoiseSeed, (Ring.m_OffsetX + x) * 131 + r * 7919, Doodad.m_Random))
 					continue;
 
 				// Only ground vegetation is placed. Ceiling and wall doodads
@@ -1139,7 +1141,21 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 		CJsonWriter Writer(&Stream);
 		Writer.BeginObject();
 		Writer.WriteAttribute("wrap_x");
-		Writer.WriteIntValue(1);
+		Writer.WriteIntValue(Ring.m_Enabled ? 0 : 1);
+		// Ring geometry, so the game world can resolve the neighbouring instance
+		// and a crossing's global offset without re-reading the floor config.
+		Writer.WriteAttribute("ring");
+		Writer.WriteIntValue(Ring.m_Enabled ? 1 : 0);
+		Writer.WriteAttribute("ring_seed");
+		Writer.WriteIntValue(Seed);
+		Writer.WriteAttribute("ring_size");
+		Writer.WriteIntValue(Gen.m_Ring.m_Size);
+		Writer.WriteAttribute("shared_margin");
+		Writer.WriteIntValue(Gen.m_Ring.m_SharedMargin);
+		Writer.WriteAttribute("offset_x");
+		Writer.WriteIntValue(Ring.m_OffsetX);
+		Writer.WriteAttribute("period");
+		Writer.WriteIntValue(Ring.m_Period);
 		Writer.EndObject();
 		lWorldJson.add(0);
 	}

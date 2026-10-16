@@ -279,7 +279,16 @@ static SCircle CircleAt(float X, float Frequency, float Period, float PeriodOffs
 
 	// one full turn per Period tiles, expressed in the noise's coordinates
 	const float Radius = (Period * Frequency) / 6.28318530718f;
-	const float Angle = ((X + PeriodOffset) / Period) * 6.28318530718f;
+
+	// Wrap the position onto the turn first. Sampling X = Period gives exactly
+	// the angle of X = 0 instead of one that merely rounds back to it, which is
+	// what lets a ring's closing seam (instance Size meets instance 1) match
+	// tile for tile rather than approximately. Integer-valued coordinates (the
+	// generator always samples whole tiles) make this exact.
+	float Position = fmodf(X + PeriodOffset, Period);
+	if(Position < 0.0f)
+		Position += Period;
+	const float Angle = (Position / Period) * 6.28318530718f;
 	SCircle Circle;
 	Circle.m_X = cosf(Angle) * Radius;
 	Circle.m_Y = sinf(Angle) * Radius;

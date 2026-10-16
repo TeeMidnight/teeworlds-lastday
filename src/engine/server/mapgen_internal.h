@@ -204,6 +204,19 @@ static inline void ParseGeneration(const json_value &rValue, CInstruction::CGene
 		Clouds.m_Direction = str_comp(aDirection, "right") == 0 ? 1 : -1;
 	}
 
+	// The ring linking the instances of this floor. Off by default so every
+	// existing floor keeps its self-wrapping cylinder; enabling it turns the
+	// floor's seeds 1..size into consecutive windows of one shared noise field.
+	// The margin is bounded so an instance always keeps a positive exclusive
+	// middle (a margin of half the width would make neighbours identical).
+	{
+		const json_value &rRing = rValue["ring"];
+		rOut.m_Ring.m_Enabled = JsonBool(rRing["enabled"], false);
+		rOut.m_Ring.m_Size = clamp(JsonInt(rRing["size"], 1024), 2, 65536);
+		rOut.m_Ring.m_SharedMargin = clamp(JsonInt(rRing["shared_margin"], 75), 0, rOut.m_Width / 2);
+		rOut.m_Ring.m_BaseSeed = JsonInt(rRing["base_seed"], 1);
+	}
+
 	// The layers to emit, in order. Each entry says what the layer is for (role)
 	// and how it moves (parallax), so the generator can place it correctly
 	// relative to the terrain and the game layer.
