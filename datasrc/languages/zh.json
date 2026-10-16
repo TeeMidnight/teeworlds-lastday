@@ -843,6 +843,41 @@
 			"context": "Menu Trade",
 			"or": "{}. {} ({})",
 			"tr": "{}. {}（{}）"
+		},
+		{
+			"context": "Item Name",
+			"or": "Bandage",
+			"tr": "绷带"
+		},
+		{
+			"context": "Item Name",
+			"or": "Medkit",
+			"tr": "急救包"
+		},
+		{
+			"context": "Item Name",
+			"or": "Herb Tonic",
+			"tr": "草药酊剂"
+		},
+		{
+			"context": "Item Desc: Bandage",
+			"or": "Clean cloth wrapped over a wound. Mends a little health without clouding the mind.",
+			"tr": "包扎伤口的干净布条。恢复少量生命，且不会令头脑昏沉。"
+		},
+		{
+			"context": "Item Desc: Medkit",
+			"or": "A field kit with everything needed to patch a tee up completely.",
+			"tr": "一套战地医疗包，能将 tee 完全治愈。"
+		},
+		{
+			"context": "Item Desc: Herb Tonic",
+			"or": "A bitter brew that clears the head and mends a scratch or two.",
+			"tr": "苦涩的药汤，能清醒头脑并治愈些许擦伤。"
+		},
+		{
+			"context": "Item Type",
+			"or": "medicine",
+			"tr": "药物"
 		}
 	]
 }

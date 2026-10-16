@@ -26,6 +26,82 @@
 #include "mapgen_internal.h"
 
 // ---------------------------------------------------------------------------
+// surface resources
+// ---------------------------------------------------------------------------
+
+// A non euclidean floor places its configured "resources" on the red team spawn
+// points of its base map. A euclidean floor has no spawn points to hang them on,
+// so its "resources" list is scattered over the open ground line instead: one
+// deterministic roll per eligible column, per config. The same worlds.json
+// format therefore works for both kinds, and this is what makes healing plants
+// reachable in the generated surface floors.
+static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed, CGeneratedWorld *pWorld)
+{
+	if(!pInstruction->m_ResourcesJson.size() || !pWorld->m_lLayers.size())
+		return;
+
+	const int StoredLen = pInstruction->m_ResourcesJson.size();
+	char *pStored = new char[StoredLen + 1];
+	if(StoredLen > 0)
+		mem_copy(pStored, pInstruction->m_ResourcesJson.base_ptr(), StoredLen);
+	pStored[StoredLen] = 0;
+	array<CResourceConfig> lConfigs;
+	ParseResources(pStored, lConfigs);
+	delete[] pStored;
+	if(!lConfigs.size())
+		return;
+
+	CGeneratedWorld::CLayer *pMain = &pWorld->m_lLayers[CGeneratedWorld::LAYER_TERRAIN];
+	const int Width = pMain->m_Width;
+	const int Height = pMain->m_Height;
+	int Placed = 0;
+
+	for(int c = 0; c < lConfigs.size(); c++)
+	{
+		const CResourceConfig &Config = lConfigs[c];
+		for(int x = 0; x < Width && x < pWorld->m_Surface.size(); x++)
+		{
+			// the open tile just above the ground line
+			const int StandY = pWorld->m_Surface[x] - 1;
+			if(StandY <= 0 || StandY >= Height - 1)
+				continue;
+			// it has to stand on solid ground with clear air above and in front,
+			// so the node is neither buried in a hill nor floating over a cave
+			if(pMain->m_pTiles[StandY * Width + x].m_Index != TILE_AIR)
+				continue;
+			if(pMain->m_pTiles[(StandY - 1) * Width + x].m_Index != TILE_AIR)
+				continue;
+			if(pMain->m_pTiles[(StandY + 1) * Width + x].m_Index == TILE_AIR)
+				continue;
+
+			const unsigned Hash = DeterministicHash(Seed + c * 104729 + 17, x);
+			if((int) (Hash % 100u) >= Config.m_Proba)
+				continue;
+
+			int Hardness = Config.m_HardnessMin;
+			const int HardRange = Config.m_HardnessMax - Config.m_HardnessMin + 1;
+			if(HardRange > 0)
+				Hardness += (int) ((Hash >> 8) % (unsigned) HardRange);
+			int RespawnTime = Config.m_RespawnTimeMin;
+			const int RespawnRange = Config.m_RespawnTimeMax - Config.m_RespawnTimeMin + 1;
+			if(RespawnRange > 0)
+				RespawnTime += (int) ((Hash >> 16) % (unsigned) RespawnRange);
+
+			CGeneratedWorld::CResource &Resource = pWorld->m_lResources.emplace();
+			str_copy(Resource.m_aResId, Config.m_aResId, sizeof(Resource.m_aResId));
+			str_copy(Resource.m_aDisplay, Config.m_aDisplay, sizeof(Resource.m_aDisplay));
+			Resource.m_X = x;
+			Resource.m_Y = StandY;
+			Resource.m_Hardness = Hardness;
+			Resource.m_RespawnTime = RespawnTime;
+			Placed++;
+		}
+	}
+
+	dbg_msg("worldgen", "surface resources: %d node(s)", Placed);
+}
+
+// ---------------------------------------------------------------------------
 // euclidean floor generation
 // ---------------------------------------------------------------------------
 
@@ -83,6 +159,10 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 	// Entrances are cut after the automapper, which resets every solid tile to
 	// its basetile and would erase the frame that marks the cave mouth.
 	BuildWorldEntrances(pInstruction, Seed, pWorld);
+
+	// the configured surface resources stand on the finished ground line, after
+	// the entrances were cut so nothing is placed inside a cave mouth
+	GenerateSurfaceResources(pInstruction, Seed, pWorld);
 
 	CMapCreator Creator(Storage(), Console());
 

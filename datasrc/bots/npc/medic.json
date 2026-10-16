@@ -1,0 +1,28 @@
+{
+    "npc_id": "medic",
+    "name": "Medic",
+    "world": "Connector",
+    "x": 20,
+    "y": 41,
+    "health": 20,
+    "health_regen": 1,
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true,  "hue": 233, "sat": 158, "lgt": 183},
+        "marking":    {"name": "duodonny", "custom_color": true,  "hue": 231, "sat": 146, "lgt": 218, "alp": 255},
+        "decoration": {"name": "twinbopp", "custom_color": true,  "hue": 233, "sat": 158, "lgt": 183},
+        "hands":      {"name": "standard", "custom_color": true,  "hue": 233, "sat": 158, "lgt": 183},
+        "feet":       {"name": "standard", "custom_color": true,  "hue": 0,   "sat": 146, "lgt": 224},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "sells": [
+        {"item": "bandage",    "count": 1, "price_item": "grass",      "price_count": 3, "stock_min": 8, "stock_max": 16, "restock_seconds": 240},
+        {"item": "herb_tonic", "count": 1, "price_item": "grass",      "price_count": 4, "stock_min": 3, "stock_max": 6,  "restock_seconds": 360},
+        {"item": "medkit",     "count": 1, "price_item": "iron_ingot", "price_count": 3, "stock_min": 1, "stock_max": 3,  "restock_seconds": 600}
+    ],
+    "aggro": {
+        "threshold": 0,
+        "per_kill": 0,
+        "per_hit": 0,
+        "kill_decay": 0
+    }
+}

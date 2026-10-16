@@ -672,11 +672,14 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
 		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
 
-	// starting kit for a new account: hammer + pistol + 100 pistol bullets
+	// starting kit for a new account: hammer + pistol + 100 pistol bullets and
+	// a few bandages, so a fresh tee is not left without any way to heal before
+	// it has found its first grass
 	CItemSystem *pItem = pSelf->GameServer()->Item();
 	pItem->AddItem(ClientID, "hammer", 1, true);
 	pItem->AddItem(ClientID, "gun", 1, true);
 	pItem->AddItem(ClientID, "pistol_bullet", 100, true);
+	pItem->AddItem(ClientID, "bandage", 3, true);
 
 	pPlayer->SaveStatus(pDB); // persist the initial status fields
 	pSelf->SendSystemChat(ClientID, Localize("Account created. You are now logged in.", "Account"));

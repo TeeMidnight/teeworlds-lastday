@@ -15,12 +15,14 @@ namespace
 {
 const char *gs_pSkinParts[NUM_SKINPARTS] = {"body", "marking", "decoration", "hands", "feet", "eyes"};
 
-// The TeeInfo skin part colours the engine hands to clients carry H, S and L in
-// the low 24 bits (the hardcoded bot skins use the same layout); alpha is not
-// part of the value.
-int PackHsla(int Hue, int Sat, int Lgt)
+// The TeeInfo skin part colours handed to clients pack H, S, L and A into one
+// int: alpha in the top byte, then hue, saturation and lightness. Only the
+// marking part is drawn with alpha, and the client keeps its alpha even for
+// team colours, so dropping it made a custom marking invisible. A missing
+// "alp" means opaque, matching the client's own skin files.
+int PackHsla(int Hue, int Sat, int Lgt, int Alp)
 {
-	return ((Hue & 0xff) << 16) | ((Sat & 0xff) << 8) | (Lgt & 0xff);
+	return ((Alp & 0xff) << 24) | ((Hue & 0xff) << 16) | ((Sat & 0xff) << 8) | (Lgt & 0xff);
 }
 
 int ReadInt(const json_value &Value, int Default)
@@ -154,7 +156,7 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 				const bool Custom = rCustom.type == json_boolean ? (bool) rCustom : false;
 				pDef->m_Skin.m_aUseCustomColors[i] = Custom ? 1 : 0;
 				pDef->m_Skin.m_aSkinPartColors[i] = Custom ?
-					PackHsla(ReadInt(rPart["hue"], 0), ReadInt(rPart["sat"], 0), ReadInt(rPart["lgt"], 0)) : 0;
+					PackHsla(ReadInt(rPart["hue"], 0), ReadInt(rPart["sat"], 0), ReadInt(rPart["lgt"], 0), ReadInt(rPart["alp"], 255)) : 0;
 			}
 		}
 	}

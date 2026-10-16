@@ -1,0 +1,13 @@
+{
+    "craft_id": "herb_tonic",
+    "needed": [
+        {
+            "item_id": "grass",
+            "count": 4
+        }
+    ],
+    "result": {
+        "item_id": "herb_tonic",
+        "count": 1
+    }
+}

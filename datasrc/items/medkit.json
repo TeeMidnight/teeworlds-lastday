@@ -1,0 +1,8 @@
+{
+    "name": "Medkit",
+    "desc": "A field kit with everything needed to patch a tee up completely.",
+    "item_type": ["medicine"],
+    "use": {
+        "health": 10
+    }
+}

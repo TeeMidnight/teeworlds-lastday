@@ -1,0 +1,17 @@
+{
+    "craft_id": "medkit",
+    "needed": [
+        {
+            "item_id": "bandage",
+            "count": 2
+        },
+        {
+            "item_id": "iron_ingot",
+            "count": 1
+        }
+    ],
+    "result": {
+        "item_id": "medkit",
+        "count": 1
+    }
+}
