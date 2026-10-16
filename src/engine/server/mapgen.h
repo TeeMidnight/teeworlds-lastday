@@ -145,6 +145,12 @@ struct CInstruction
 		int m_ColorTop[4]; // tint at the top edge
 		int m_ColorBottom[4]; // tint at the bottom edge (gradient)
 		int m_SeedOffset;
+
+		// Scatter the copies across the group-space band the camera can reach
+		// instead of across the whole world width. For a low-parallax layer that
+		// band is much narrower than the world and starts left of x = 0, so the
+		// copies overlap heavily and no cut quad edge lands inside the view.
+		bool m_Band;
 	};
 
 	// What a layer is for. Groups are drawn in file order, so the role decides
@@ -172,8 +178,55 @@ struct CInstruction
 		// quads; exactly one layer has this set
 		bool m_IsTerrain;
 
+		// Whether this decoration layer drifts sideways (clouds, fog). A
+		// drifting layer is emitted at -world, 0 and +world so a full width
+		// shift maps it onto itself, which is what hides the loop.
+		bool m_Drift;
+
+		// Whether a static layer is emitted at -world and +world as well. The
+		// copies continue the layer past the map's left and right edges, which
+		// a cylindrical world needs: without them the leftmost quads have no
+		// neighbour and their cut edge is visible near x = 0.
+		bool m_Wrap;
+
 		bool m_Enabled;
 		array<CQuadPassConfig> m_Quads;
+	};
+
+	// The day/night cycle the generator bakes into a euclidean floor.
+	//
+	// The whole cycle is emitted as synchronized map envelopes, so the client
+	// animates it without knowing anything about LastDay: the sky cross fades
+	// between the day and the night palette while a sun and a moon traverse the
+	// screen once per cycle. One palette and one pair of celestial bodies are
+	// generated per floor, so a snowy biome keeps a cold night and a desert a
+	// warm one. Disabled leaves the old static sky.
+	struct CDayNightConfig
+	{
+		bool m_Enabled;
+		int m_DayLengthSeconds; // one full cycle; 1200 = 20 minutes
+		// The midnight palette. Left unset (negative channel) each channel is
+		// derived from the day palette, darkened and shifted towards blue, so the
+		// configured day colour still drives the night look.
+		int m_NightSkyColor[4];
+		int m_NightHorizonColor[4];
+		// The warm band drawn at sunrise and sunset.
+		int m_DawnColor[4];
+		char m_aMoonImage[64];
+		int m_SunSize;  // sprite edge in screen pixels
+		int m_MoonSize;
+	};
+
+	// The sideways drift of the cloud layers. A drifting layer is emitted three
+	// times: once at its own position and once shifted by a full world width in
+	// each direction. The three copies make the layer exactly periodic over the
+	// width, so shifting it by one width and wrapping the envelope back to zero
+	// leaves the picture unchanged: the loop seam cannot be seen from anywhere.
+	struct CCloudsConfig
+	{
+		bool m_DriftEnabled;
+		int m_DriftSeconds; // time for the clouds to cross one full world width
+		int m_Direction;    // +1 drifts right, -1 drifts left
 	};
 
 	struct CGeneration
@@ -233,6 +286,12 @@ struct CInstruction
 
 		// The sun (or moon) drawn over the sky. Empty disables it.
 		char m_aSunImage[64];
+
+		// The generated day/night cycle (euclidean floors only).
+		CDayNightConfig m_DayNight;
+
+		// The drifting cloud layers (euclidean floors only).
+		CCloudsConfig m_Clouds;
 
 		// every layer to emit, in the order they are written out
 		array<CLayerConfig> m_Layers;

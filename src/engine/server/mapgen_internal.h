@@ -145,6 +145,65 @@ static inline void ParseGeneration(const json_value &rValue, CInstruction::CGene
 	// the sun (or moon) quad; empty disables it
 	JsonStr(rValue["sun_image"], rOut.m_aSunImage, sizeof(rOut.m_aSunImage), "sun");
 
+	// The generated day/night cycle. It defaults on for a euclidean floor: the
+	// cycle is the point of the feature, and a floor opts out with
+	// "enabled": false. Every field has a default so an empty block works, and
+	// the palette defaults derive from the day colours right above.
+	{
+		const json_value &rDayNight = rValue["day_night"];
+		CInstruction::CDayNightConfig &DayNight = rOut.m_DayNight;
+
+		DayNight.m_Enabled = JsonBool(rDayNight["enabled"], true);
+		// clamped both ways: a tiny period would strobe, a huge one would make
+		// the envelopes' fixed point time span meaningless
+		DayNight.m_DayLengthSeconds = clamp(JsonInt(rDayNight["day_length"], 1200), 30, 24 * 3600);
+		DayNight.m_SunSize = clamp(JsonInt(rDayNight["sun_size"], 170), 8, 1024);
+		DayNight.m_MoonSize = clamp(JsonInt(rDayNight["moon_size"], 150), 8, 1024);
+		JsonStr(rDayNight["moon_image"], DayNight.m_aMoonImage, sizeof(DayNight.m_aMoonImage), "moon");
+
+		// One derived night channel: the day value scaled down, with blue kept
+		// brighter than red and green so the result reads as moonlight rather
+		// than grey. An explicit value wins.
+		auto NightChannel = [](const json_value &rColor, int Channel, int DayValue) -> int
+		{
+			const int Value = JsonInt(rColor[Channel], -1);
+			if(Value >= 0)
+				return clamp(Value, 0, 255);
+			const float Scale = (Channel == 2) ? 0.34f : 0.18f;
+			return clamp((int) (DayValue * Scale), 0, 255);
+		};
+
+		const json_value &rNightSky = rDayNight["night_sky_color"];
+		const json_value &rNightHorizon = rDayNight["night_horizon_color"];
+		for(int c = 0; c < 4; c++)
+		{
+			DayNight.m_NightSkyColor[c] = c == 3 ? 255 : NightChannel(rNightSky, c, rOut.m_SkyColor[c]);
+			DayNight.m_NightHorizonColor[c] = c == 3 ? 255 : NightChannel(rNightHorizon, c, rOut.m_SkyHorizonColor[c]);
+		}
+
+		const json_value &rDawn = rDayNight["dawn_color"];
+		DayNight.m_DawnColor[0] = JsonInt(rDawn[0], 236);
+		DayNight.m_DawnColor[1] = JsonInt(rDawn[1], 150);
+		DayNight.m_DawnColor[2] = JsonInt(rDawn[2], 96);
+		DayNight.m_DawnColor[3] = JsonInt(rDawn[3], 255);
+	}
+
+	// The sideways drift of the cloud layers. Only layers marked "drift": true
+	// move, so mountains and other static scenery stay put. The drift is on by
+	// default; a floor only has to mark its cloud layers.
+	{
+		const json_value &rClouds = rValue["clouds"];
+		CInstruction::CCloudsConfig &Clouds = rOut.m_Clouds;
+		Clouds.m_DriftEnabled = JsonBool(rClouds["drift"], true);
+		// 1200 s is one full day, so the clouds cross the world once per cycle;
+		// that is about 12 px/s, a slow, readable drift
+		Clouds.m_DriftSeconds = clamp(JsonInt(rClouds["drift_seconds"], 1200), 30, 24 * 3600);
+
+		char aDirection[16];
+		JsonStr(rClouds["direction"], aDirection, sizeof(aDirection), "left");
+		Clouds.m_Direction = str_comp(aDirection, "right") == 0 ? 1 : -1;
+	}
+
 	// The layers to emit, in order. Each entry says what the layer is for (role)
 	// and how it moves (parallax), so the generator can place it correctly
 	// relative to the terrain and the game layer.
@@ -161,6 +220,8 @@ static inline void ParseGeneration(const json_value &rValue, CInstruction::CGene
 		JsonStr(rLayer["name"], Layer.m_aName, sizeof(Layer.m_aName), "Layer");
 		Layer.m_Enabled = JsonBool(rLayer["enabled"], true);
 		Layer.m_IsTerrain = JsonBool(rLayer["terrain"], false);
+		Layer.m_Drift = JsonBool(rLayer["drift"], false);
+		Layer.m_Wrap = JsonBool(rLayer["wrap"], false);
 		Layer.m_ParallaxX = JsonInt(rLayer["parallax_x"], 100);
 		Layer.m_ParallaxY = JsonInt(rLayer["parallax_y"], 100);
 		Layer.m_OffsetX = JsonInt(rLayer["offset_x"], 0);
@@ -197,6 +258,7 @@ static inline void ParseGeneration(const json_value &rValue, CInstruction::CGene
 			Quad.m_SpreadY = JsonInt(rQuad["spread_y"], 0);
 			Quad.m_AnchorY = JsonInt(rQuad["anchor_y"], 0);
 			Quad.m_SeedOffset = JsonInt(rQuad["seed_offset"], 40000 + (int) i * 977 + (int) q * 131);
+			Quad.m_Band = JsonBool(rQuad["band"], false);
 
 			const json_value &rTop = rQuad["color"];
 			Quad.m_ColorTop[0] = JsonInt(rTop[0], 255);

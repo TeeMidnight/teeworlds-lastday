@@ -243,6 +243,8 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 	// the vegetation doodads sheet and the sun/moon are both optional
 	AddImageRequest(pInstruction->m_Generation.m_aDoodadsTileset, 1024, 1024, true);
 	AddImageRequest(pInstruction->m_Generation.m_aSunImage, 512, 512, true);
+	// the moon of the day/night cycle, also optional
+	AddImageRequest(pInstruction->m_Generation.m_DayNight.m_aMoonImage, 512, 512, true);
 	// every quad pass in every layer asks for its own image
 	for(int i = 0; i < pInstruction->m_Generation.m_Layers.size(); i++)
 	{
@@ -515,9 +517,23 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 	// gets its own group at its own parallax, like the official maps.
 	// -----------------------------------------------------------------
 
-	// the sky: a screen sized quad at parallax 0. That pins the group to the
-	// camera, so the quad only has to cover the viewport; the official maps use
-	// about 1530x1534 px for a 1430x1050 screen, and the same size is used here.
+	// The alpha of the foreground night shade: one screen sized black quad
+	// drawn over everything so a single curve darkens sky, clouds, terrain and
+	// the celestial bodies together. Null while the floor has no day/night
+	// cycle, in which case no shade group is emitted.
+	CCreatorEnvelope *pNightShadeEnv = nullptr;
+
+	// -----------------------------------------------------------------
+	// the sky, the sun and the moon
+	//
+	// Everything lives in one parallax 0 group, which pins it to the viewport
+	// exactly like the official skies, so the quad only has to cover the
+	// screen. A static floor emits one gradient quad. A day/night floor emits
+	// the day gradient, a night gradient that blends over it, a warm band at
+	// sunrise and sunset, and a sun and a moon that ride synchronized
+	// envelopes around the screen once per cycle: the client animates the
+	// whole thing on its own.
+	// -----------------------------------------------------------------
 	auto EmitSky = [&]()
 	{
 		CCreatorGroupInfo *pGroup = Creator.AddGroup("Sky");
@@ -526,45 +542,252 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 		pGroup->m_OffsetX = 0;
 		pGroup->m_OffsetY = 0;
 
-		CCreatorLayerQuads *pLayer = pGroup->AddQuadsLayer("Sky");
-		CCreatorQuad *pQuad = pLayer->AddQuad(vec2(0.0f, 0.0f), vec2(1536.0f, 1536.0f));
+		// about 1530x1534 px covers a 1430x1050 screen, which is what the
+		// official maps use; the same size is kept here
+		const float SkySize = 1536.0f;
 
-		// a vertical gradient from the zenith colour down to the horizon, which
-		// is what the official skies do. Points 0/1 are the top edge, 2/3 the
-		// bottom.
-		const ColorRGBA Top(Gen.m_SkyColor[0], Gen.m_SkyColor[1], Gen.m_SkyColor[2], Gen.m_SkyColor[3]);
-		const ColorRGBA Horizon(Gen.m_SkyHorizonColor[0], Gen.m_SkyHorizonColor[1],
-			Gen.m_SkyHorizonColor[2], Gen.m_SkyHorizonColor[3]);
-		pQuad->m_aColors[0] = Top;
-		pQuad->m_aColors[1] = Top;
-		pQuad->m_aColors[2] = Horizon;
-		pQuad->m_aColors[3] = Horizon;
-
-		// The texcoords still span the whole (unused) texture: leaving them all
-		// at zero makes the renderer sample one degenerate texel, which comes
-		// out black because this quad has no image on purpose.
-		pQuad->m_aTexcoords[0] = ivec2(0, 0);
-		pQuad->m_aTexcoords[1] = ivec2(1024, 0);
-		pQuad->m_aTexcoords[2] = ivec2(0, 1024);
-		pQuad->m_aTexcoords[3] = ivec2(1024, 1024);
-
-		// the sun (or moon), a single sprite in the same screen space. Its
-		// position is relative to the sky quad's centre, so it sits in the
-		// upper right of whatever viewport the parallax 0 group covers.
-		if(Gen.m_aSunImage[0])
+		// A full screen gradient from the zenith colour (points 0/1) down to the
+		// horizon colour (points 2/3). The texcoords span the whole (unused)
+		// texture: leaving them all at zero makes the renderer sample one
+		// degenerate texel, which comes out black because there is no image.
+		auto AddGradientQuad = [&](CCreatorLayerQuads *pLayer, const ColorRGBA &Top, const ColorRGBA &Horizon) -> CCreatorQuad *
 		{
-			CCreatorImage *pSunImage = FindCreatorImage(Gen.m_aSunImage);
-			if(pSunImage)
+			CCreatorQuad *pQuad = pLayer->AddQuad(vec2(0.0f, 0.0f), vec2(SkySize, SkySize));
+			pQuad->m_aColors[0] = Top;
+			pQuad->m_aColors[1] = Top;
+			pQuad->m_aColors[2] = Horizon;
+			pQuad->m_aColors[3] = Horizon;
+			pQuad->m_aTexcoords[0] = ivec2(0, 0);
+			pQuad->m_aTexcoords[1] = ivec2(1024, 0);
+			pQuad->m_aTexcoords[2] = ivec2(0, 1024);
+			pQuad->m_aTexcoords[3] = ivec2(1024, 1024);
+			return pQuad;
+		};
+
+		const ColorRGBA DayTop(Gen.m_SkyColor[0], Gen.m_SkyColor[1], Gen.m_SkyColor[2], Gen.m_SkyColor[3]);
+		const ColorRGBA DayHorizon(Gen.m_SkyHorizonColor[0], Gen.m_SkyHorizonColor[1],
+			Gen.m_SkyHorizonColor[2], Gen.m_SkyHorizonColor[3]);
+
+		// a celestial body: its own quad layer, placed by the position envelope
+		// and faded in and out by the colour envelope
+		auto AddBodyQuad = [&](const char *pImageName, float Size, CCreatorEnvelope *pPosEnv, CCreatorEnvelope *pColorEnv)
+		{
+			if(!pImageName || !pImageName[0])
+				return;
+			CCreatorImage *pImage = FindCreatorImage(pImageName);
+			if(!pImage)
+				return;
+			CCreatorLayerQuads *pLayer = pGroup->AddQuadsLayer(pImageName);
+			pLayer->m_pImage = pImage;
+			// the body's centre is the origin; its position comes entirely from
+			// the position envelope
+			CCreatorQuad *pQuad = pLayer->AddQuad(vec2(0.0f, 0.0f), vec2(Size, Size));
+			pQuad->m_aTexcoords[0] = ivec2(0, 0);
+			pQuad->m_aTexcoords[1] = ivec2(1024, 0);
+			pQuad->m_aTexcoords[2] = ivec2(0, 1024);
+			pQuad->m_aTexcoords[3] = ivec2(1024, 1024);
+			pQuad->m_pPosEnv = pPosEnv;
+			pQuad->m_pColorEnv = pColorEnv;
+		};
+
+		if(!Gen.m_DayNight.m_Enabled)
+		{
+			CCreatorLayerQuads *pLayer = pGroup->AddQuadsLayer("Sky");
+			AddGradientQuad(pLayer, DayTop, DayHorizon);
+
+			// the sun (or moon), a single sprite in the same screen space. Its
+			// position is relative to the sky quad's centre, so it sits in the
+			// upper right of whatever viewport the parallax 0 group covers.
+			if(Gen.m_aSunImage[0])
 			{
-				CCreatorLayerQuads *pSunLayer = pGroup->AddQuadsLayer(Gen.m_aSunImage);
-				pSunLayer->m_pImage = pSunImage;
-				CCreatorQuad *pSun = pSunLayer->AddQuad(vec2(430.0f, -170.0f), vec2(170.0f, 170.0f));
-				pSun->m_aTexcoords[0] = ivec2(0, 0);
-				pSun->m_aTexcoords[1] = ivec2(1024, 0);
-				pSun->m_aTexcoords[2] = ivec2(0, 1024);
-				pSun->m_aTexcoords[3] = ivec2(1024, 1024);
+				CCreatorImage *pSunImage = FindCreatorImage(Gen.m_aSunImage);
+				if(pSunImage)
+				{
+					CCreatorLayerQuads *pSunLayer = pGroup->AddQuadsLayer(Gen.m_aSunImage);
+					pSunLayer->m_pImage = pSunImage;
+					CCreatorQuad *pSun = pSunLayer->AddQuad(vec2(430.0f, -170.0f), vec2(170.0f, 170.0f));
+					pSun->m_aTexcoords[0] = ivec2(0, 0);
+					pSun->m_aTexcoords[1] = ivec2(1024, 0);
+					pSun->m_aTexcoords[2] = ivec2(0, 1024);
+					pSun->m_aTexcoords[3] = ivec2(1024, 1024);
+				}
 			}
+			return;
 		}
+
+		// ---- the generated day/night cycle ----
+		const CInstruction::CDayNightConfig &DayNight = Gen.m_DayNight;
+		const int DayMs = DayNight.m_DayLengthSeconds * 1000;
+
+		// one envelope key: a cycle phase plus up to four channels
+		struct SKey
+		{
+			float m_Phase;
+			float m_aValues[4];
+		};
+
+		auto BuildEnvelope = [&](const char *pName, EEnvType Type, const array<SKey> &lKeys) -> CCreatorEnvelope *
+		{
+			CCreatorEnvelope *pEnv = Creator.AddEnvelope(pName, Type, true);
+			if(!pEnv)
+				return nullptr;
+			for(int i = 0; i < lKeys.size(); i++)
+			{
+				CCreatorEnvPoint *pPoint = pEnv->AddEnvPoint((int) (lKeys[i].m_Phase * DayMs + 0.5f), CURVETYPE_LINEAR);
+				for(int c = 0; c < 4; c++)
+					pPoint->m_aValues[c] = lKeys[i].m_aValues[c];
+			}
+			return pEnv;
+		};
+
+		auto PushKey = [](array<SKey> &lKeys, float Phase, float C0, float C1, float C2, float C3)
+		{
+			SKey &Key = lKeys.emplace();
+			Key.m_Phase = Phase;
+			Key.m_aValues[0] = C0;
+			Key.m_aValues[1] = C1;
+			Key.m_aValues[2] = C2;
+			Key.m_aValues[3] = C3;
+		};
+
+		// Every alpha envelope starts at phase 0 and ends at phase 1 with the
+		// same value, so the loop has no jump, and every one spans the whole
+		// cycle so the client gives them all the same synchronized duration.
+		array<SKey> lNightAlpha, lGlowAlpha, lSunAlpha, lMoonAlpha;
+		PushKey(lNightAlpha, 0.00f, 1, 1, 1, 0.50f);
+		PushKey(lNightAlpha, 0.10f, 1, 1, 1, 0.00f);
+		PushKey(lNightAlpha, 0.40f, 1, 1, 1, 0.00f);
+		PushKey(lNightAlpha, 0.50f, 1, 1, 1, 0.50f);
+		PushKey(lNightAlpha, 0.60f, 1, 1, 1, 1.00f);
+		PushKey(lNightAlpha, 0.90f, 1, 1, 1, 1.00f);
+		PushKey(lNightAlpha, 1.00f, 1, 1, 1, 0.50f);
+
+		PushKey(lGlowAlpha, 0.00f, 1, 1, 1, 1.00f);
+		PushKey(lGlowAlpha, 0.08f, 1, 1, 1, 0.00f);
+		PushKey(lGlowAlpha, 0.42f, 1, 1, 1, 0.00f);
+		PushKey(lGlowAlpha, 0.50f, 1, 1, 1, 1.00f);
+		PushKey(lGlowAlpha, 0.58f, 1, 1, 1, 0.00f);
+		PushKey(lGlowAlpha, 0.92f, 1, 1, 1, 0.00f);
+		PushKey(lGlowAlpha, 1.00f, 1, 1, 1, 1.00f);
+
+		PushKey(lSunAlpha, 0.00f, 1, 1, 1, 1.00f);
+		PushKey(lSunAlpha, 0.50f, 1, 1, 1, 1.00f);
+		PushKey(lSunAlpha, 0.55f, 1, 1, 1, 0.00f);
+		PushKey(lSunAlpha, 0.95f, 1, 1, 1, 0.00f);
+		PushKey(lSunAlpha, 1.00f, 1, 1, 1, 1.00f);
+
+		PushKey(lMoonAlpha, 0.00f, 1, 1, 1, 0.00f);
+		PushKey(lMoonAlpha, 0.46f, 1, 1, 1, 0.00f);
+		PushKey(lMoonAlpha, 0.50f, 1, 1, 1, 1.00f);
+		PushKey(lMoonAlpha, 0.95f, 1, 1, 1, 1.00f);
+		PushKey(lMoonAlpha, 1.00f, 1, 1, 1, 0.00f);
+
+		// The arc both bodies follow: rise at the left horizon at phase 0,
+		// cross high at phase 0.25, set at the right horizon at phase 0.5, then
+		// return below the horizon in the second half. The sun uses the first
+		// half of the cycle, the moon the second, which is what swaps them.
+		const float ArcX = 620.0f;
+		const float ArcY = 520.0f;
+		const float HorizonY = 140.0f;
+		const int PosSamples = 48;
+		auto SampleArc = [&](float ArcPhase, float KeyPhase, SKey &Key)
+		{
+			// the outbound leg sweeps left to right above the horizon, the return
+			// leg sweeps right to left below it, so the two ends meet at the same
+			// point and the loop never jumps
+			float U, X, Sign;
+			if(ArcPhase < 0.5f)
+			{
+				U = ArcPhase / 0.5f;
+				Sign = -1.0f;
+				X = -ArcX + 2.0f * ArcX * U;
+			}
+			else
+			{
+				U = (ArcPhase - 0.5f) / 0.5f;
+				Sign = 1.0f;
+				X = ArcX - 2.0f * ArcX * U;
+			}
+			Key.m_Phase = KeyPhase;
+			Key.m_aValues[0] = X;
+			Key.m_aValues[1] = HorizonY + Sign * ArcY * sinf(pi * U);
+			Key.m_aValues[2] = 0.0f;
+			Key.m_aValues[3] = 0.0f;
+		};
+		array<SKey> lSunPos, lMoonPos;
+		for(int i = 0; i <= PosSamples; i++)
+		{
+			const float Phase = (float) i / (float) PosSamples;
+			SKey &Sun = lSunPos.emplace();
+			SampleArc(Phase, Phase, Sun);
+			SKey &Moon = lMoonPos.emplace();
+			// the moon is half a cycle behind: it is up while the sun is down
+			SampleArc(Phase < 0.5f ? Phase + 0.5f : Phase - 0.5f, Phase, Moon);
+		}
+
+		CCreatorEnvelope *pNightAlpha = BuildEnvelope("DayNight_NightAlpha", EEnvType::Color, lNightAlpha);
+		CCreatorEnvelope *pGlowAlpha = BuildEnvelope("DayNight_DawnGlow", EEnvType::Color, lGlowAlpha);
+		CCreatorEnvelope *pSunAlpha = BuildEnvelope("DayNight_SunAlpha", EEnvType::Color, lSunAlpha);
+		CCreatorEnvelope *pMoonAlpha = BuildEnvelope("DayNight_MoonAlpha", EEnvType::Color, lMoonAlpha);
+		CCreatorEnvelope *pSunPos = BuildEnvelope("DayNight_SunPos", EEnvType::Pos, lSunPos);
+		CCreatorEnvelope *pMoonPos = BuildEnvelope("DayNight_MoonPos", EEnvType::Pos, lMoonPos);
+
+		// The night shade's alpha. It rides the same phases as the night sky so
+		// the whole scene turns at the same moment, and it stays clear through
+		// the middle of the day.
+		array<SKey> lNightShade;
+		auto PushShade = [&](float Phase, float Shade)
+		{
+			// rgb is unused because the quad is black; only alpha matters
+			PushKey(lNightShade, Phase, 1.0f, 1.0f, 1.0f, Shade);
+		};
+		PushShade(0.00f, 0.25f);
+		PushShade(0.10f, 0.00f);
+		PushShade(0.40f, 0.00f);
+		PushShade(0.50f, 0.25f);
+		PushShade(0.60f, 0.55f);
+		PushShade(0.90f, 0.55f);
+		PushShade(1.00f, 0.25f);
+		pNightShadeEnv = BuildEnvelope("DayNight_Shade", EEnvType::Color, lNightShade);
+
+		CCreatorLayerQuads *pSkyLayer = pGroup->AddQuadsLayer("Sky");
+
+		// the day gradient is the opaque base; the night gradient blends over it
+		AddGradientQuad(pSkyLayer, DayTop, DayHorizon);
+		const ColorRGBA NightTop(DayNight.m_NightSkyColor[0], DayNight.m_NightSkyColor[1],
+			DayNight.m_NightSkyColor[2], DayNight.m_NightSkyColor[3]);
+		const ColorRGBA NightHorizon(DayNight.m_NightHorizonColor[0], DayNight.m_NightHorizonColor[1],
+			DayNight.m_NightHorizonColor[2], DayNight.m_NightHorizonColor[3]);
+		CCreatorQuad *pNight = AddGradientQuad(pSkyLayer, NightTop, NightHorizon);
+		pNight->m_pColorEnv = pNightAlpha;
+
+		// the warm band that washes the sky at sunrise and sunset: two quads
+		// meeting at the horizon line, each fading away from it, so the band
+		// peaks softly instead of ending in a hard edge
+		{
+			const ColorRGBA Dawn(DayNight.m_DawnColor[0], DayNight.m_DawnColor[1],
+				DayNight.m_DawnColor[2], DayNight.m_DawnColor[3]);
+			ColorRGBA Clear = Dawn;
+			Clear.a = 0;
+
+			const float BandHeight = 300.0f;
+			CCreatorQuad *pUpper = pSkyLayer->AddQuad(vec2(0.0f, HorizonY - BandHeight * 0.5f), vec2(SkySize, BandHeight));
+			pUpper->m_aColors[0] = Clear;
+			pUpper->m_aColors[1] = Clear;
+			pUpper->m_aColors[2] = Dawn;
+			pUpper->m_aColors[3] = Dawn;
+			pUpper->m_pColorEnv = pGlowAlpha;
+
+			CCreatorQuad *pLower = pSkyLayer->AddQuad(vec2(0.0f, HorizonY + BandHeight * 0.5f), vec2(SkySize, BandHeight));
+			pLower->m_aColors[0] = Dawn;
+			pLower->m_aColors[1] = Dawn;
+			pLower->m_aColors[2] = Clear;
+			pLower->m_aColors[3] = Clear;
+			pLower->m_pColorEnv = pGlowAlpha;
+		}
+
+		AddBodyQuad(Gen.m_aSunImage, (float) DayNight.m_SunSize, pSunPos, pSunAlpha);
+		AddBodyQuad(DayNight.m_aMoonImage, (float) DayNight.m_MoonSize, pMoonPos, pMoonAlpha);
 	};
 
 	// emits one configured layer as a group. Terrain layers take their tiles
@@ -596,6 +819,35 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 			return;
 		}
 
+		// The drift is one synchronized position envelope per drifting layer. It
+		// runs from zero to exactly one world width; because the layer is emitted
+		// three times, the end of the envelope is the same picture as its start, so
+		// the client can wrap it without a visible jump.
+		CCreatorEnvelope *pDriftEnv = nullptr;
+		if(Layer.m_Drift && Gen.m_Clouds.m_DriftEnabled)
+		{
+			// nearer layers (higher parallax) cross faster, so the cloud decks
+			// keep their depth as they drift
+			const int Para = maximum(1, Layer.m_ParallaxX);
+			const int DriftMs = maximum(1000, Gen.m_Clouds.m_DriftSeconds * 1000 * 5 / Para);
+
+			char aEnvName[32];
+			str_format(aEnvName, sizeof(aEnvName), "CloudDrift_%s", Layer.m_aName);
+			pDriftEnv = Creator.AddEnvelope(aEnvName, EEnvType::Pos, true);
+			if(pDriftEnv)
+			{
+				const float Distance = (float) Gen.m_Clouds.m_Direction * (float) Width * 32.0f;
+				CCreatorEnvPoint *pStart = pDriftEnv->AddEnvPoint(0, CURVETYPE_LINEAR);
+				pStart->m_aValues[0] = 0.0f;
+				pStart->m_aValues[1] = 0.0f;
+				pStart->m_aValues[2] = 0.0f;
+				CCreatorEnvPoint *pEnd = pDriftEnv->AddEnvPoint(DriftMs, CURVETYPE_LINEAR);
+				pEnd->m_aValues[0] = Distance;
+				pEnd->m_aValues[1] = 0.0f;
+				pEnd->m_aValues[2] = 0.0f;
+			}
+		}
+
 		// a decoration layer: every pass becomes its own quad layer in the group
 		for(int q = 0; q < Layer.m_Quads.size(); q++)
 		{
@@ -610,16 +862,41 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 			CCreatorLayerQuads *pLayer = pGroup->AddQuadsLayer(Layer.m_aName);
 			pLayer->m_pImage = pImage;
 
-			for(int n = 0; n < maximum(1, Pass.m_Count); n++)
+			// A drifting layer is emitted at -world, 0 and +world: the three
+			// copies make it exactly periodic over the world width, so the
+			// envelope can be wrapped without a visible seam. A band pass already
+			// covers the camera's whole reach, so it needs no copies.
+			const int Copies = (!Pass.m_Band && (Layer.m_Drift || Layer.m_Wrap)) ? 3 : 1;
+			const float WorldWidthPx = (float) Width * 32.0f;
+
+			// The horizontal range the copies are spread over. By default it is
+			// the whole world. A band pass instead uses the strip the group can
+			// ever show: its centre travels from 0 to Width * parallax/100 as the
+			// camera crosses the world, and the widest client window adds a
+			// margin on each side. Spreading the copies over a strip that starts
+			// left of 0 keeps every quad edge outside the visible area.
+			float ScatterStartTiles = 0.0f;
+			float ScatterSpanTiles = (float) Width;
+			if(Pass.m_Band)
 			{
+				const float GroupSpanPx = (float) Width * 32.0f * (float) maximum(1, Layer.m_ParallaxX) / 100.0f;
+				const float ViewMarginPx = 2048.0f;
+				ScatterStartTiles = -ViewMarginPx / 32.0f;
+				ScatterSpanTiles = (GroupSpanPx + 2.0f * ViewMarginPx) / 32.0f;
+			}
+			const int PerPass = maximum(1, Pass.m_Count);
+			for(int i = 0; i < PerPass * Copies; i++)
+			{
+				const int n = i % PerPass;
+				const float CopyShift = Copies > 1 ? (float) (i / PerPass - 1) * WorldWidthPx : 0.0f;
 				const unsigned Hash = DeterministicHash(Pass.m_SeedOffset, n * 1000 + q);
 				const unsigned Hash2 = DeterministicHash(Pass.m_SeedOffset + 31337, n * 1000 + q);
 
-				// spread the copies across the world width with jitter, so they
+				// spread the copies across the chosen range with jitter, so they
 				// do not line up in a regular grid.
-				const float Slot = (float) Width / (float) maximum(1, Pass.m_Count);
+				const float Slot = ScatterSpanTiles / (float) maximum(1, Pass.m_Count);
 				const float Jitter = Slot > 1.0f ? (float) (Hash % 1000u) / 1000.0f * Slot * 0.8f : 0.0f;
-				const float CentreX = (n * Slot + Jitter) * 32.0f;
+				const float CentreX = (ScatterStartTiles + n * Slot + Jitter) * 32.0f + CopyShift;
 
 				// The y is a *screen* coordinate, not a world one.
 				//
@@ -664,6 +941,9 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 					pQuad->m_aTexcoords[2] = ivec2(0, V);
 					pQuad->m_aTexcoords[3] = ivec2(U, V);
 				}
+
+				if(pDriftEnv)
+					pQuad->m_pPosEnv = pDriftEnv;
 			}
 		}
 	};
@@ -770,6 +1050,23 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 	for(int i = 0; i < Gen.m_Layers.size(); i++)
 		if(Gen.m_Layers[i].m_Role == CInstruction::LAYERROLE_FOREGROUND)
 			EmitLayer(Gen.m_Layers[i]);
+
+	// 4. the night shade, emitted as the very last group so it sits on top of
+	//    the whole picture. It is a screen sized black quad at parallax 0, so it
+	//    is pinned to the viewport and darkens sky, clouds, terrain, entities and
+	//    the celestial bodies together as its alpha rises after sunset.
+	if(pNightShadeEnv)
+	{
+		CCreatorGroupInfo *pGroup = Creator.AddGroup("NightShade");
+		pGroup->m_ParallaxX = 0;
+		pGroup->m_ParallaxY = 0;
+		pGroup->m_OffsetX = 0;
+		pGroup->m_OffsetY = 0;
+
+		CCreatorLayerQuads *pLayer = pGroup->AddQuadsLayer("Shade");
+		CCreatorQuad *pQuad = pLayer->AddQuad(vec2(0.0f, 0.0f), vec2(1536.0f, 1536.0f), ColorRGBA(0, 0, 0, 255));
+		pQuad->m_pColorEnv = pNightShadeEnv;
+	}
 
 	// serialize the exits and the resources, then write the map
 	array<char> lEntranceJson;

@@ -28,6 +28,93 @@
         ],
         "layers": [
             {
+                "name": "CloudsFar",
+                "role": "background",
+                "parallax_x": 2,
+                "parallax_y": 2,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "bg_cloud3",
+                        "count": 9,
+                        "scale_x": 10,
+                        "scale_y": 6,
+                        "spread_y": 8,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            196,
+                            212,
+                            238,
+                            255
+                        ],
+                        "seed_offset": 41000,
+                        "anchor_y": -14
+                    }
+                ],
+                "drift": true
+            },
+            {
+                "name": "MountainsBack",
+                "role": "background",
+                "parallax_x": 3,
+                "parallax_y": 3,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "winter_mountains2",
+                        "count": 12,
+                        "scale_x": 46,
+                        "scale_y": 24,
+                        "spread_y": 5,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            196,
+                            212,
+                            240,
+                            255
+                        ],
+                        "seed_offset": 50000,
+                        "anchor_y": -1,
+                        "band": true
+                    }
+                ]
+            },
+            {
+                "name": "MountainsFront",
+                "role": "background",
+                "parallax_x": 4,
+                "parallax_y": 4,
+                "offset_x": 0,
+                "offset_y": 0,
+                "terrain": false,
+                "quads": [
+                    {
+                        "image": "winter_mountains2",
+                        "count": 12,
+                        "scale_x": 42,
+                        "scale_y": 32,
+                        "spread_y": 4,
+                        "repeat_x": 1,
+                        "repeat_y": 1,
+                        "color": [
+                            96,
+                            118,
+                            152,
+                            255
+                        ],
+                        "seed_offset": 51000,
+                        "anchor_y": 2,
+                        "band": true
+                    }
+                ]
+            },
+            {
                 "name": "Clouds1",
                 "role": "background",
                 "parallax_x": 6,
@@ -53,7 +140,8 @@
                         "seed_offset": 42000,
                         "anchor_y": -8
                     }
-                ]
+                ],
+                "drift": true
             },
             {
                 "name": "Main",
@@ -130,6 +218,15 @@
             "clearance": 2,
             "frame": 1,
             "margin": 24
+        },
+        "day_night": {
+            "enabled": true,
+            "day_length": 1200
+        },
+        "clouds": {
+            "drift": true,
+            "drift_seconds": 1200,
+            "direction": "left"
         }
     },
     "entrances": [

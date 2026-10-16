@@ -295,6 +295,9 @@ CCreatorEnvelope *CMapCreator::AddEnvelope(const char *pEnvName, EEnvType Type, 
 	pEnv->m_Synchronized = Synchronized;
 	pEnv->m_EnvID = -1;
 	pEnv->m_lpEnvPoints.clear();
+	// AddEnvPoint() locks this, and the destructor destroys it: without the
+	// matching create here the first point added would lock a null pointer.
+	pEnv->m_PointLock = lock_create();
 
 	return pEnv;
 }
