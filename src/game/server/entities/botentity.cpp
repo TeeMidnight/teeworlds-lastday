@@ -178,17 +178,28 @@ void CBotEntity::OnAction()
 
 void CBotEntity::AimCursor()
 {
-	// move the cursor towards the target at a limited speed, so the aim looks
-	// human instead of snapping instantly
+	// Move the cursor towards the target at a limited speed so the aim looks
+	// human instead of snapping instantly. The step is the smaller of the
+	// mouse speed and the remaining distance: consuming the whole remaining
+	// distance once the target is nearer than one step stops the integer
+	// cursor from freezing a few units short of the aim point. The old code
+	// skipped the update entirely in that case and also re-projected the
+	// cursor to the target's radius, which made short moves jump.
 	vec2 Target = vec2(m_Input.m_TargetX, m_Input.m_TargetY);
-	const float MouseSpeed = random_float() * 32.0f + 8.0f;
-	if(distance(Target, m_CursorTarget) > MouseSpeed)
+	const vec2 Delta = m_CursorTarget - Target;
+	const float Remaining = length(Delta);
+	if(Remaining > 0.0f)
 	{
-		vec2 Direction = normalize(m_CursorTarget - Target);
-		Target += Direction * MouseSpeed;
-		Target = normalize(Target) * clamp(length(m_CursorTarget), 0.0f, 400.0f);
-		m_Input.m_TargetX = (int) Target.x;
-		m_Input.m_TargetY = (int) Target.y;
+		const float MouseSpeed = random_float() * 32.0f + 8.0f;
+		const float Step = minimum(MouseSpeed, Remaining);
+		Target += Delta * (Step / Remaining);
+
+		// keep the cursor inside the maximum aim radius
+		if(length(Target) > 400.0f)
+			Target = normalize(Target) * 400.0f;
+
+		m_Input.m_TargetX = round_to_int(Target.x);
+		m_Input.m_TargetY = round_to_int(Target.y);
 	}
 }
 
