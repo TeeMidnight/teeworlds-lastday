@@ -128,6 +128,22 @@ inline float RingArrivalX(int StrideTiles, int Direction, float LocalX)
 	return LocalX - (float) Direction * (float) StrideTiles * 32.0f;
 }
 
+// The shortest horizontal shift (in tiles) that brings an entity of the
+// instance at OffsetTo into the frame of the instance at OffsetFrom. Taking the
+// short way round the ring is what makes the last instance line up with the
+// first instead of being a whole circumference away.
+inline int RingNeighbourShift(int OffsetFrom, int OffsetTo, int Period)
+{
+	if(Period <= 0)
+		return OffsetTo - OffsetFrom;
+	int D = OffsetTo - OffsetFrom;
+	while(D > Period / 2)
+		D -= Period;
+	while(D < -(Period / 2))
+		D += Period;
+	return D;
+}
+
 // The index a generated solid cell is marked with before the automapper runs.
 // Matches the shipped rule sets' "basetile", so the mapper sees a solid tile.
 enum

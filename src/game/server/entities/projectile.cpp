@@ -113,8 +113,8 @@ void CProjectile::OnRingTransfer(float ArrivalX)
 
 void CProjectile::FillInfo(CNetObj_Projectile *pProj)
 {
-	pProj->m_X = round_to_int(m_Pos.x);
-	pProj->m_Y = round_to_int(m_Pos.y);
+	pProj->m_X = round_to_int(m_Pos.x + m_SnapOffset.x);
+	pProj->m_Y = round_to_int(m_Pos.y + m_SnapOffset.y);
 	pProj->m_VelX = round_to_int(m_Direction.x * 100.0f);
 	pProj->m_VelY = round_to_int(m_Direction.y * 100.0f);
 	pProj->m_StartTick = m_StartTick;
@@ -125,7 +125,7 @@ void CProjectile::Snap(int SnappingClient)
 {
 	float Ct = (Server()->Tick() - m_StartTick) / (float) Server()->TickSpeed();
 
-	if(NetworkClipped(SnappingClient, GetPos(Ct)))
+	if(NetworkClipped(SnappingClient, GetPos(Ct) + m_SnapOffset))
 		return;
 
 	CNetObj_Projectile *pProj = static_cast<CNetObj_Projectile *>(Server()->SnapNewItem(NETOBJTYPE_PROJECTILE, GetID(), sizeof(CNetObj_Projectile)));

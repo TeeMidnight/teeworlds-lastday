@@ -818,7 +818,7 @@ void CCharacter::Snap(int SnappingClient)
 	{
 		if(m_Core.m_HookState == HOOK_IDLE)
 			return;
-		if(NetworkClippedLine(SnappingClient, m_Pos, m_Core.m_HookPos))
+		if(NetworkClippedLine(SnappingClient, m_Pos + m_SnapOffset, m_Core.m_HookPos + m_SnapOffset))
 			return;
 	}
 
@@ -841,6 +841,15 @@ void CCharacter::Snap(int SnappingClient)
 	{
 		pCharacter->m_Tick = m_ReckoningTick;
 		m_SendCore.Write(pCharacter);
+	}
+
+	// a mirrored character is drawn in the neighbouring instance's frame
+	if(m_SnapOffset.x != 0.0f || m_SnapOffset.y != 0.0f)
+	{
+		pCharacter->m_X += round_to_int(m_SnapOffset.x);
+		pCharacter->m_Y += round_to_int(m_SnapOffset.y);
+		pCharacter->m_HookX += round_to_int(m_SnapOffset.x);
+		pCharacter->m_HookY += round_to_int(m_SnapOffset.y);
 	}
 
 	// The core holds the hook target as a server-internal TeeID, but the client

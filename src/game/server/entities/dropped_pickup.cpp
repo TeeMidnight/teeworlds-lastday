@@ -97,7 +97,7 @@ void CDroppedPickup::Snap(int SnappingClient)
 	if(!pP)
 		return;
 
-	pP->m_X = round_to_int(m_Pos.x);
-	pP->m_Y = round_to_int(m_Pos.y);
+	pP->m_X = round_to_int(m_Pos.x + m_SnapOffset.x);
+	pP->m_Y = round_to_int(m_Pos.y + m_SnapOffset.y);
 	pP->m_Type = PICKUP_HAMMER;
 }

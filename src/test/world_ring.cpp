@@ -219,3 +219,15 @@ TEST(WorldRing, TransferHysteresis)
 	EXPECT_GT(RingArrivalX(225, -1, Left), Left);
 	EXPECT_LT(RingArrivalX(225, -1, Left), Right);
 }
+
+TEST(WorldRing, MirroredNeighbourTakesTheShortWayRound)
+{
+	const int Period = 1024 * 225;
+	// 1 -> 2 and back
+	EXPECT_EQ(RingNeighbourShift(0, 225, Period), 225);
+	EXPECT_EQ(RingNeighbourShift(225, 0, Period), -225);
+	// instance 1's left neighbour is the last instance, one stride back, not a
+	// whole circumference forward
+	EXPECT_EQ(RingNeighbourShift(0, 1023 * 225, Period), -225);
+	EXPECT_EQ(RingNeighbourShift(1023 * 225, 0, Period), 225);
+}

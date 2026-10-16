@@ -59,6 +59,10 @@ protected:
 	*/
 	vec2 m_Pos;
 
+	// Horizontal shift applied only while this entity is mirrored from a
+	// neighbouring ring instance during a snapshot; zero otherwise.
+	vec2 m_SnapOffset;
+
 public:
 	/* Constructor */
 	CEntity(CGameWorld *pGameWorld, int Objtype, int ObjFlag, vec2 Pos, int ProximityRadius = 0);
@@ -67,6 +71,10 @@ public:
 	virtual ~CEntity();
 
 	void SetGameWorld(class CGameWorld *pGameWorld) { m_pGameWorld = pGameWorld; }
+
+	// see m_SnapOffset: a mirroring world shifts a neighbour's entity into its
+	// own frame for the duration of one Snap call
+	void SetSnapOffset(vec2 Offset) { m_SnapOffset = Offset; }
 
 	// Ring crossings. RingPos is where the entity really is: a projectile keeps
 	// its launch point in m_Pos rather than its current point, so it overrides

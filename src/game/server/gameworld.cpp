@@ -374,6 +374,37 @@ void CGameWorld::Snap(int SnappingClient)
 		for(auto &pEnt : m_alpEntityLists[i])
 			pEnt->Snap(SnappingClient);
 	m_Events.Snap(SnappingClient);
+
+	// Ring: the live neighbours share the strip around the boundary, so their
+	// entities there belong in this snapshot too, shifted onto this map's axis.
+	// Only what actually renders is mirrored (players, drops, projectiles);
+	// resources are terrain bound and identical in both instances already.
+	// Nothing is mutated beyond the offset field, which is cleared right after.
+	if(m_Ring && SnappingClient != -1 && m_Period > 0)
+	{
+		const int aTypes[] = {ENTTYPE_DROPPEDPICKUP, ENTTYPE_PROJECTILE, ENTTYPE_CHARACTER};
+		for(int Dir = -1; Dir <= 1; Dir += 2)
+		{
+			char aName[64];
+			if(!RingNeighbour(Dir, aName, sizeof(aName), 0.0f, nullptr))
+				continue;
+			CGameWorld *pNeighbour = GameServer()->WorldByID(str_quickhash(aName));
+			if(!pNeighbour || pNeighbour == this)
+				continue;
+
+			const float ShiftX = (float) RingNeighbourShift(m_OffsetX, pNeighbour->m_OffsetX, m_Period) * 32.0f;
+			const vec2 Offset(ShiftX, 0.0f);
+			for(int t = 0; t < 3; t++)
+			{
+				for(auto &pEnt : pNeighbour->m_alpEntityLists[aTypes[t]])
+				{
+					pEnt->SetSnapOffset(Offset);
+					pEnt->Snap(SnappingClient);
+					pEnt->SetSnapOffset(vec2(0.0f, 0.0f));
+				}
+			}
+		}
+	}
 }
 
 void CGameWorld::PostSnap()
