@@ -446,33 +446,6 @@ void CNpcEntity::TickRespawn()
 	}
 }
 
-void CNpcEntity::MoveToWorld(CGameWorld *pNewWorld, vec2 Pos)
-{
-	if(!pNewWorld || pNewWorld == GameWorld())
-		return;
-
-	CGameWorld *pOldWorld = GameWorld();
-
-	// release from the old world: manager maps, core binding, entity list
-	if(pOldWorld->HasBotManager())
-		pOldWorld->GetBotManager()->ReleaseBot(m_BotID);
-	if(m_TeeID != -1)
-		pOldWorld->m_Core.SetCharacter(m_TeeID, 0);
-	pOldWorld->RemoveEntity(this);
-
-	// reparent and bind to the new world's core under a fresh tee id
-	SetGameWorld(pNewWorld);
-	m_TeeID = PickTeeID(pNewWorld, m_BotID);
-	m_Core.Init(&pNewWorld->m_Core, pNewWorld->Collision());
-	m_Core.m_Pos = Pos;
-	m_Core.m_Vel = vec2(0.0f, 0.0f);
-	m_Pos = Pos;
-	if(m_TeeID != -1)
-		pNewWorld->m_Core.SetCharacter(m_TeeID, &m_Core);
-
-	pNewWorld->InsertEntity(this);
-	pNewWorld->BotManager()->AdoptBot(this);
-}
 
 
 void CNpcEntity::TickInteract()

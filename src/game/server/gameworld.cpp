@@ -85,11 +85,7 @@ bool CGameWorld::RingNeighbour(int Direction, char *pMapName, int MapNameSize, f
 		return false;
 	*pUnderscore = '\0';
 
-	int Target = m_RingSeed + Direction;
-	if(Target > m_RingSize)
-		Target = 1;
-	if(Target < 1)
-		Target = m_RingSize;
+	const int Target = RingNeighbourSeed(m_RingSeed, Direction, m_RingSize);
 
 	str_format(pMapName, MapNameSize, "%s_%d", aFloor, Target);
 	if(pArrivalX)
@@ -538,11 +534,11 @@ void CGameWorld::Tick()
 	// someone is in the neighbour (its world is then loaded).
 	if(IsRing())
 	{
-		const int aTypes[] = {ENTTYPE_DROPPEDPICKUP, ENTTYPE_PROJECTILE};
+		const int aTypes[] = {ENTTYPE_DROPPEDPICKUP, ENTTYPE_PROJECTILE, ENTTYPE_BOTENTITY};
 		const float RightX = RingRightTriggerX();
 		const float LeftX = RingLeftTriggerX();
 		array<CEntity *> lCrossing;
-		for(int t = 0; t < 2; t++)
+		for(int t = 0; t < 3; t++)
 		{
 			for(auto &pEnt : m_alpEntityLists[aTypes[t]])
 			{
@@ -560,11 +556,22 @@ void CGameWorld::Tick()
 			float ArrivalX = 0.0f;
 			if(!RingNeighbour(Direction, aTarget, sizeof(aTarget), X, &ArrivalX))
 				continue;
-			// bring the neighbour in if it is not live yet, so the crossing is not
-			// lost when nobody is on the other side
-			CGameWorld *pTarget = GameServer()->EnsureWorld(str_quickhash(aTarget));
+			// A bot is owned by a manager and bound in the world core, so it is
+			// handed over rather than moved like a plain entity. It is only
+			// crossed into a neighbour that is already live: a world with no
+			// players should not be pulled in just because a wandering bot
+			// reached the boundary.
+			const bool IsBot = pEnt->ObjType() == ENTTYPE_BOTENTITY;
+			CGameWorld *pTarget = GameServer()->WorldByID(str_quickhash(aTarget));
+			if(!pTarget && !IsBot)
+				pTarget = GameServer()->EnsureWorld(str_quickhash(aTarget));
 			if(!pTarget || pTarget == this)
 				continue;
+			if(IsBot)
+			{
+				static_cast<IBotEntity *>(pEnt)->MoveToWorld(pTarget, vec2(ArrivalX, pEnt->GetPos().y));
+				continue;
+			}
 			RemoveEntity(pEnt);
 			pEnt->SetGameWorld(pTarget);
 			pEnt->OnRingTransfer(ArrivalX);

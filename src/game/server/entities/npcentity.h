@@ -75,8 +75,6 @@ private:
 	void StartRespawn();
 	// advance the scripted respawn once it has started
 	void TickRespawn();
-	// hand the bot over to another world's bot manager and re-bind its core
-	void MoveToWorld(CGameWorld *pNewWorld, vec2 Pos);
 
 	// announce the shop to players that enter the trading range
 	void TickInteract();

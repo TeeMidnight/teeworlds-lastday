@@ -132,6 +132,24 @@ inline float RingArrivalX(int StrideTiles, int Direction, float LocalX)
 // instance at OffsetTo into the frame of the instance at OffsetFrom. Taking the
 // short way round the ring is what makes the last instance line up with the
 // first instead of being a whole circumference away.
+// The instance index one step in Direction (+1 right, -1 left) reaches from
+// Seed, wrapping around the ring (instance Size is the last one).
+inline int RingNeighbourSeed(int Seed, int Direction, int Size)
+{
+	if(Size < 1)
+		return Seed;
+	int Target = Seed + Direction;
+	while(Target > Size)
+		Target -= Size;
+	while(Target < 1)
+		Target += Size;
+	return Target;
+}
+
+// The shortest horizontal shift (in tiles) that brings an entity of the
+// instance at OffsetTo into the frame of the instance at OffsetFrom. Taking the
+// short way round the ring is what makes the last instance line up with the
+// first instead of being a whole circumference away.
 inline int RingNeighbourShift(int OffsetFrom, int OffsetTo, int Period)
 {
 	if(Period <= 0)

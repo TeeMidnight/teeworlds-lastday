@@ -233,3 +233,11 @@ TEST(WorldRing, MirroredNeighbourTakesTheShortWayRound)
 	EXPECT_EQ(RingNeighbourShift(0, 1023 * 225, Period), -225);
 	EXPECT_EQ(RingNeighbourShift(1023 * 225, 0, Period), 225);
 }
+
+TEST(WorldRing, NeighbourSeedWrapsAroundTheRing)
+{
+	EXPECT_EQ(RingNeighbourSeed(1, 1, 1024), 2);
+	EXPECT_EQ(RingNeighbourSeed(1, -1, 1024), 1024);
+	EXPECT_EQ(RingNeighbourSeed(1024, 1, 1024), 1);
+	EXPECT_EQ(RingNeighbourSeed(1024, -1, 1024), 1023);
+}

@@ -57,6 +57,10 @@ public:
 	// Kill the bot; the manager is told so it can retire the BotID.
 	virtual void Die(CEntity *pKiller, int Weapon) = 0;
 
+	// Hand the bot over to another world's manager, re-binding its core and its
+	// tee id. Used by the NPC respawn teleport and by ring crossings.
+	virtual void MoveToWorld(CGameWorld *pNewWorld, vec2 Pos) = 0;
+
 	// --- behaviour hooks ---
 	// Called once per game tick before the physics core advances: this is
 	// where a variant decides its input.
@@ -111,6 +115,7 @@ public:
 	int GetHealth() const override { return m_Health; }
 	int GetArmor() const override { return m_Armor; }
 	void Die(CEntity *pKiller, int Weapon) override;
+	void MoveToWorld(CGameWorld *pNewWorld, vec2 Pos) override;
 	void OnBotTick() override;
 	bool OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon) override;
 
