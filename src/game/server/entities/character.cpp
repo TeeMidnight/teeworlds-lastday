@@ -430,9 +430,9 @@ void CCharacter::ResetInput()
 
 void CCharacter::Tick()
 {
-	// the scoreboard is the player's silent-step toggle: while it is open the
-	// character creeps at a quarter speed and its jumps make no sound
-	m_Core.m_SilentStep = (m_pPlayer->m_PlayerFlags & TEEFLAG_SCOREBOARD) != 0;
+	// the player's ready state is the silent-step toggle: while it is clear
+	// the character creeps at half speed and its jumps make no sound
+	m_Core.m_SilentStep = !m_pPlayer->m_IsReadyToPlay;
 
 	m_Core.m_Input = m_Input;
 	m_Core.Tick(true, true);

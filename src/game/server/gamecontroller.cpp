@@ -307,6 +307,7 @@ void CGameController::OnPlayerReadyChange(CPlayer *pPlayer)
 {
 	// change players ready state
 	pPlayer->m_IsReadyToPlay ^= 1;
+	SendSystemChat(pPlayer->GetCID(), pPlayer->m_IsReadyToPlay ? "行动状态：奔跑" : "行动状态：静步");
 }
 
 // general
