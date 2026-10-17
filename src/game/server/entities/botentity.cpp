@@ -116,9 +116,11 @@ void CBotEntity::MoveToWorld(CGameWorld *pNewWorld, vec2 Pos)
 		pOldWorld->m_Core.SetCharacter(m_TeeID, 0);
 	pOldWorld->RemoveEntity(this);
 
-	// reparent and bind to the new world's core under a fresh tee id
+	// Reparent and bind to the new world's core. The private tee id is global
+	// and unique among live bots, so it is already free in the target core and
+	// is kept: a hook that already names this bot keeps working across the
+	// transfer (the client-facing id is derived from the BotID separately).
 	SetGameWorld(pNewWorld);
-	m_TeeID = PickTeeID(pNewWorld, m_BotID);
 	m_Core.Init(&pNewWorld->m_Core, pNewWorld->Collision());
 	m_Core.m_Pos = Pos;
 	m_Core.m_Vel = vec2(0.0f, 0.0f);

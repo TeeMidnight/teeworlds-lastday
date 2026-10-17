@@ -62,8 +62,9 @@ public:
 	// Kill the bot; the manager is told so it can retire the BotID.
 	virtual void Die(CEntity *pKiller, int Weapon) = 0;
 
-	// Hand the bot over to another world's manager, re-binding its core and its
-	// tee id. Used by the NPC respawn teleport and by ring crossings.
+	// Hand the bot over to another world's manager, re-binding its core. Its
+	// private tee id is global, so it is kept. Used by the NPC respawn teleport
+	// and by ring crossings.
 	virtual void MoveToWorld(CGameWorld *pNewWorld, vec2 Pos) = 0;
 
 	// --- behaviour hooks ---
