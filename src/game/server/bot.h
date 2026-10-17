@@ -56,6 +56,37 @@ inline bool IsBotTeeId(int TeeId)
 	return TeeId >= BOT_TEEID_07_MIN && TeeId <= BOT_TEEID_08_MAX;
 }
 
+/*
+	Function: PickBotTeeID
+		Chooses a bot's private CWorldCore tee id from its stable BotID.
+
+	The BotID hash is the seed, so a respawn lands on the same slot, and the
+	probe walks the whole range so the result is -1 only when every id is taken.
+	Used(TeeID) decides which ids are taken; the global CBotManager checks every
+	live bot of every world, which is what makes the id unique across the ring.
+
+	Returns:
+		A free id in [BOT_TEEID_07_MIN, BOT_TEEID_08_MAX], or -1.
+*/
+template<class TUsed>
+inline int PickBotTeeID(Uuid BotID, TUsed Used)
+{
+	const int Range = BOT_TEEID_08_MAX - BOT_TEEID_07_MIN + 1;
+
+	unsigned Seed = 0;
+	for(int i = 0; i < (int) sizeof(BotID.m_aData); i++)
+		Seed = Seed * 31u + BotID.m_aData[i];
+
+	const int Start = (int) (Seed % (unsigned) Range);
+	for(int i = 0; i < Range; i++)
+	{
+		const int Id = BOT_TEEID_07_MIN + (Start + i) % Range;
+		if(!Used(Id))
+			return Id;
+	}
+	return -1;
+}
+
 // The identity a bot presents to clients. Mirrors what CPlayer::Snap writes
 // into TeeInfo, so a bot renders exactly like a real tee.
 struct CBotTeeInfo

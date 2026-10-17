@@ -653,7 +653,7 @@ void CGameWorld::Tick()
 				if(!pEnt->RingCrosses())
 					continue;
 				const float X = pEnt->RingPos().x;
-				if(X >= RightX || X <= LeftX)
+				if(RingCrossDirection(X, RightX, LeftX) != 0)
 					lCrossing.add(pEnt);
 			}
 		}
@@ -661,7 +661,7 @@ void CGameWorld::Tick()
 		{
 			CEntity *pEnt = lCrossing[i];
 			const float X = pEnt->RingPos().x;
-			const int Direction = X >= RightX ? 1 : -1;
+			const int Direction = RingCrossDirection(X, RightX, LeftX);
 			char aTarget[64];
 			float ArrivalX = 0.0f;
 			if(!RingNeighbour(Direction, aTarget, sizeof(aTarget), X, &ArrivalX))

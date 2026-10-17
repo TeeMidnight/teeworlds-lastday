@@ -128,10 +128,21 @@ inline float RingArrivalX(int StrideTiles, int Direction, float LocalX)
 	return LocalX - (float) Direction * (float) StrideTiles * 32.0f;
 }
 
-// The shortest horizontal shift (in tiles) that brings an entity of the
-// instance at OffsetTo into the frame of the instance at OffsetFrom. Taking the
-// short way round the ring is what makes the last instance line up with the
-// first instead of being a whole circumference away.
+// Whether a position (world units) is past one of the two transfer triggers,
+// and which way it leaves the instance. 0 means it is still inside.
+//
+// The comparison is inclusive on both sides: a position exactly at the trigger
+// has already crossed. The arrival lands back inside the other trigger, so the
+// transfer cannot bounce straight back.
+inline int RingCrossDirection(float X, float RightTriggerX, float LeftTriggerX)
+{
+	if(X >= RightTriggerX)
+		return 1;
+	if(X <= LeftTriggerX)
+		return -1;
+	return 0;
+}
+
 // The instance index one step in Direction (+1 right, -1 left) reaches from
 // Seed, wrapping around the ring (instance Size is the last one).
 inline int RingNeighbourSeed(int Seed, int Direction, int Size)

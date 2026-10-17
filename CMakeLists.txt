@@ -895,6 +895,7 @@ list(APPEND TARGETS_LINK ${TARGET_MAPGEN})
 if(GTEST_FOUND OR DOWNLOAD_GTEST)
   set_src(TESTS GLOB src/test
     aio.cpp
+    bot_identity.cpp
     bytes_be.cpp
     compression.cpp
     datafile.cpp

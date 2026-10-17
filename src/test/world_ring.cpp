@@ -225,6 +225,24 @@ TEST(WorldRing, TransferHysteresis)
 	EXPECT_LT(RingArrivalX(225, -1, Left), Right);
 }
 
+TEST(WorldRing, CrossDirectionMatchesTheTransferTriggers)
+{
+	const float Right = RingTriggerX(300, 75, 1);
+	const float Left = RingTriggerX(300, 75, -1);
+
+	// inside the instance: neither trigger
+	EXPECT_EQ(RingCrossDirection((Left + Right) * 0.5f, Right, Left), 0);
+	EXPECT_EQ(RingCrossDirection(Left + 1.0f, Right, Left), 0);
+	EXPECT_EQ(RingCrossDirection(Right - 1.0f, Right, Left), 0);
+
+	// at or past a trigger: crosses that way. The boundary is inclusive, so an
+	// entity standing exactly on it is transferred rather than left behind.
+	EXPECT_EQ(RingCrossDirection(Right, Right, Left), 1);
+	EXPECT_EQ(RingCrossDirection(Right + 1.0f, Right, Left), 1);
+	EXPECT_EQ(RingCrossDirection(Left, Right, Left), -1);
+	EXPECT_EQ(RingCrossDirection(Left - 1.0f, Right, Left), -1);
+}
+
 TEST(WorldRing, MirroredNeighbourTakesTheShortWayRound)
 {
 	const int Period = 1024 * 225;

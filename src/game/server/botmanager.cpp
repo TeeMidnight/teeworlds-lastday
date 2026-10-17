@@ -129,22 +129,12 @@ bool DistanceCompare(const std::pair<float, Uuid> &a, const std::pair<float, Uui
 
 int CBotManager::PickTeeID(Uuid BotID) const
 {
-	// Hash the BotID into the seed so a bot keeps its slot across a respawn and
-	// bots spread across the range instead of filling it from the bottom.
-	unsigned Seed = 0;
-	for(int i = 0; i < (int) sizeof(BotID.m_aData); i++)
-		Seed = Seed * 31u + BotID.m_aData[i];
-
-	const int Range = BOT_TEEID_08_MAX - BOT_TEEID_07_MIN + 1;
-	const int Start = (int) (Seed % (unsigned) Range);
-	for(int i = 0; i < Range; i++)
+	// ids are global, so the table of live bots is the whole allocation map;
+	// PickBotTeeID derives the slot from the BotID and probes past used ones
+	return PickBotTeeID(BotID, [this](int TeeID) -> bool
 	{
-		const int Id = BOT_TEEID_07_MIN + (Start + i) % Range;
-		// ids are global, so the table of live bots is the whole allocation map
-		if(!m_BotsByTeeID.get(Id))
-			return Id;
-	}
-	return -1;
+		return m_BotsByTeeID.get(TeeID) != nullptr;
+	});
 }
 
 int CBotManager::FindClientID(int SnappingClient, Uuid BotID) const
