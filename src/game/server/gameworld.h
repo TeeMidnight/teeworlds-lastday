@@ -113,6 +113,21 @@ public:
 	CCharacterCore m_aRingProxyCores[MAX_CLIENTS];
 	CGameWorld *m_apRingProxyOwner[MAX_CLIENTS];
 
+	// Ring: a bot of a live neighbour is borrowed into this world's core under
+	// its globally unique private tee id, so a hook or a collision on this side
+	// reaches the bot as well. Player ids and bot ids never overlap, so a world
+	// can hold both kinds of proxy at once. The cores are heap allocated:
+	// CWorldCore keeps a pointer to them and the proxy list may grow.
+	struct SBotRingProxy
+	{
+		CCharacterCore *m_pCore;
+		CGameWorld *m_pOwner;
+		int m_TeeID;
+		bool m_Seen;
+	};
+	array<SBotRingProxy> m_lBotRingProxies;
+	int FindBotRingProxy(int TeeID);
+
 	bool IsRing() const { return m_Ring; }
 	// x (world units) at which walking right / left leaves this instance
 	float RingRightTriggerX() const;

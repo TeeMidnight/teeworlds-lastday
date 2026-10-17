@@ -133,6 +133,14 @@ vec2 CGameWorld::PosInFrame(CEntity *pEnt)
 	return pEnt->GetPos();
 }
 
+int CGameWorld::FindBotRingProxy(int TeeID)
+{
+	for(int i = 0; i < m_lBotRingProxies.size(); i++)
+		if(m_lBotRingProxies[i].m_TeeID == TeeID)
+			return i;
+	return -1;
+}
+
 void CGameWorld::RefreshRingProxies()
 {
 	if(!m_Ring)
@@ -181,6 +189,64 @@ void CGameWorld::RefreshRingProxies()
 			m_apRingProxyOwner[i] = nullptr;
 		}
 	}
+
+	// Bot proxies: keyed by the bot's globally unique private tee id. That id is
+	// already in the server's core space and the manager's
+	// TranslateTeeIDForClient knows it, so a hook that grabs the proxy names the
+	// right bot without a second translation table.
+	for(int i = 0; i < m_lBotRingProxies.size(); i++)
+		m_lBotRingProxies[i].m_Seen = false;
+
+	for(int n = 0; n < Neighbours; n++)
+	{
+		CGameWorld *pNeighbour = aNeighbours[n].m_pWorld;
+		const vec2 Offset = aNeighbours[n].m_Offset;
+		for(auto &pEnt : pNeighbour->m_alpEntityLists[ENTTYPE_BOTENTITY])
+		{
+			IBotEntity *pBot = static_cast<IBotEntity *>(pEnt);
+			if(!pBot || !pBot->IsAlive())
+				continue;
+			const int TeeID = pBot->TeeID();
+			if(TeeID < 0)
+				continue;
+
+			int Index = FindBotRingProxy(TeeID);
+			if(Index < 0)
+			{
+				SBotRingProxy New;
+				New.m_pCore = new CCharacterCore();
+				New.m_pCore->Init(&m_Core, &m_Collision);
+				New.m_pCore->Reset();
+				New.m_pOwner = pNeighbour;
+				New.m_TeeID = TeeID;
+				New.m_Seen = true;
+				Index = m_lBotRingProxies.add(New);
+			}
+
+			SBotRingProxy &Proxy = m_lBotRingProxies[Index];
+			CCharacterCore *pExisting = m_Core.GetCharacter(TeeID);
+			// never steal an id another core already owns; the entry then stays
+			// unseen and is dropped below
+			if(pExisting && pExisting != Proxy.m_pCore)
+				continue;
+			if(pExisting != Proxy.m_pCore)
+				m_Core.SetCharacter(TeeID, Proxy.m_pCore);
+			Proxy.m_pOwner = pNeighbour;
+			Proxy.m_Seen = true;
+			Proxy.m_pCore->m_Pos = pBot->GetPos() + Offset;
+		}
+	}
+
+	for(int i = m_lBotRingProxies.size() - 1; i >= 0; i--)
+	{
+		if(m_lBotRingProxies[i].m_Seen)
+			continue;
+		const int TeeID = m_lBotRingProxies[i].m_TeeID;
+		if(m_Core.GetCharacter(TeeID) == m_lBotRingProxies[i].m_pCore)
+			m_Core.SetCharacter(TeeID, nullptr);
+		delete m_lBotRingProxies[i].m_pCore;
+		m_lBotRingProxies.remove_index(i);
+	}
 }
 
 void CGameWorld::ForwardRingProxyDrag()
@@ -208,6 +274,29 @@ void CGameWorld::ForwardRingProxyDrag()
 		}
 		Proxy.m_HookDragVel = vec2(0.0f, 0.0f);
 	}
+
+	// the same for a borrowed neighbour bot: add the drag it took to the real
+	// bot's core, which applies it in its own TickDefered
+	for(int i = 0; i < m_lBotRingProxies.size(); i++)
+	{
+		SBotRingProxy &Proxy = m_lBotRingProxies[i];
+		if(!Proxy.m_pOwner)
+			continue;
+		if(Proxy.m_pCore->m_HookDragVel.x == 0.0f && Proxy.m_pCore->m_HookDragVel.y == 0.0f)
+			continue;
+
+		CGameWorld *pOwner = Proxy.m_pOwner;
+		for(auto &pEnt : pOwner->m_alpEntityLists[ENTTYPE_BOTENTITY])
+		{
+			IBotEntity *pBot = static_cast<IBotEntity *>(pEnt);
+			if(pBot && pBot->TeeID() == Proxy.m_TeeID)
+			{
+				pBot->Core()->m_HookDragVel += Proxy.m_pCore->m_HookDragVel;
+				break;
+			}
+		}
+		Proxy.m_pCore->m_HookDragVel = vec2(0.0f, 0.0f);
+	}
 }
 
 CGameWorld::~CGameWorld()
@@ -217,6 +306,15 @@ CGameWorld::~CGameWorld()
 	// core from this world and must not run after that core is gone.
 	if(class CBotManager *pBots = GameServer()->BotManager())
 		pBots->ClearBots(this);
+
+	// release the borrowed neighbour bots before this world's core dies
+	for(int i = 0; i < m_lBotRingProxies.size(); i++)
+	{
+		if(m_Core.GetCharacter(m_lBotRingProxies[i].m_TeeID) == m_lBotRingProxies[i].m_pCore)
+			m_Core.SetCharacter(m_lBotRingProxies[i].m_TeeID, nullptr);
+		delete m_lBotRingProxies[i].m_pCore;
+	}
+	m_lBotRingProxies.clear();
 
 	// delete all entities
 	for(int i = 0; i < NUM_ENTTYPES; i++)

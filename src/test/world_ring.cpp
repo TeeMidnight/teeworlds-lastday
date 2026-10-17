@@ -294,3 +294,35 @@ TEST(RingProxy, HookGrabsACoreBoundAtATranslatedColumn)
 	Hooker.Tick(true, true);
 	EXPECT_EQ(Hooker.m_HookedPlayer, 5);
 }
+
+// A bot is borrowed into a neighbour's core under its private tee id, which
+// lies in the bot range above every real client id. The hook has to report that
+// id: TranslateTeeIDForClient then maps it to the id the receiving client knows.
+TEST(RingProxy, HookGrabsABotCoreBoundUnderItsPrivateID)
+{
+	const int CW = 64, CH = 16;
+	std::vector<int> aTiles((size_t) CW * CH, 0);
+	CCollision Coll;
+	Coll.InitForTesting(CW, CH, aTiles.data(), false);
+
+	CWorldCore World;
+	CCharacterCore Hooker, Proxy;
+	Hooker.Init(&World, &Coll);
+	Hooker.Reset();
+	Proxy.Init(&World, &Coll);
+	Proxy.Reset();
+
+	const int BotTeeID = BOT_TEEID_07_MIN + 17;
+	World.SetCharacter(BotTeeID, &Proxy);
+	Proxy.m_Pos = vec2(90.0f, 0.0f);
+
+	Hooker.m_Pos = vec2(0.0f, 0.0f);
+	Hooker.m_HookState = HOOK_FLYING;
+	Hooker.m_HookPos = Hooker.m_Pos;
+	Hooker.m_HookDir = vec2(1.0f, 0.0f);
+	Hooker.m_HookedPlayer = -1;
+	Hooker.m_Input.m_Hook = 1;
+
+	Hooker.Tick(true, true);
+	EXPECT_EQ(Hooker.m_HookedPlayer, BotTeeID);
+}

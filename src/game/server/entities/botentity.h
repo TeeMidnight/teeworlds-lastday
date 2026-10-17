@@ -48,6 +48,11 @@ public:
 	// client (BotTeeIdForVersion, resolved by FindClientID).
 	virtual int TeeID() const = 0;
 
+	// --- physics ---
+	// The core this bot registered in CWorldCore. A ring proxy uses it to pass
+	// a hook drag on to the real bot.
+	virtual CCharacterCore *Core() = 0;
+
 	// --- state ---
 	virtual bool IsAlive() const = 0;
 	virtual int GetHealth() const = 0;
@@ -129,7 +134,7 @@ public:
 	virtual bool TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon);
 
 	// the physics core, exposed for variants that want to drive it directly
-	CCharacterCore *Core() { return &m_Core; }
+	CCharacterCore *Core() override { return &m_Core; }
 
 	/*
 		Function: PickTeeID

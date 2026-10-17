@@ -48,6 +48,10 @@ Bots are covered by a single global `CBotManager` for the whole game rather than
 one per instance. Its per-client slot table is global, so the bots of the
 client's own world and of its live neighbours resolve to distinct ids and the
 neighbour mirror can render them; the manager also hands each bot a globally
-unique private CWorldCore id, so a snapshot tee id names exactly one bot. Bots
-are not bound as proxy cores, so a hook cannot reach one across the seam until it
-crosses with RingCrosses and is handed to the neighbour world.
+unique private CWorldCore id, so a snapshot tee id names exactly one bot.
+
+Bots are proxied as well: a live neighbour's bot is borrowed into this world's
+core under that same private id, translated onto the axis, so a hook or a
+collision on this side reaches it and the drag is forwarded to the real bot at
+the end of the tick. Since bot ids and real client ids never overlap, a world
+can hold player and bot proxies at the same time.
