@@ -4,10 +4,12 @@
 #ifndef ENGINE_SERVER_MAPGEN_H
 #define ENGINE_SERVER_MAPGEN_H
 
+#include <base/tl/array.h>
 #include <base/tl/hashtable.h>
 #include <base/tl/string.h>
 
 class CJsonWriter;
+class IStorage;
 struct _json_value;
 typedef struct _json_value json_value;
 struct CStructEntrance;
@@ -21,6 +23,17 @@ inline float HashToUnitFloat(unsigned Hash)
 	// strictly below 1.0 and never rounds up to a guaranteed success.
 	return (float) (Hash & 0xffffffu) / 16777216.0f;
 }
+
+// The server-side metadata of a generated map: entrance regions, resource
+// placements and world geometry. It is written next to the map as
+// "generatedmaps/<map>.json" instead of being embedded as map items, so the
+// map clients download contains only what they render.
+void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size);
+bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
+	const char *pEntrances, int EntrancesSize,
+	const char *pResources, int ResourcesSize,
+	const char *pWorld, int WorldSize);
+bool LoadGeneratedWorldMeta(IStorage *pStorage, const char *pMapName, array<char> &OutJson);
 
 // The kind of space a floor represents. The three kinds are generated and
 // traversed in fundamentally different ways, so this is a first class concept

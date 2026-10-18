@@ -1631,6 +1631,10 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 
 	CGameWorld *pNewWorld = new CGameWorld(this);
 	pNewWorld->m_WorldID = MapID;
+	// The canonical map name is needed before InitCollision: it is both the
+	// persistence key of the world saves and the key of the generated world
+	// metadata sidecar.
+	str_copy(pNewWorld->m_aMapName, Server()->GetMapName(MapID), sizeof(pNewWorld->m_aMapName));
 	pNewWorld->InitCollision(Kernel()->RequestInterface<IMap>());
 
 	// Bots are allowed only in euclidean worlds with sv_bots enabled. A
@@ -1660,10 +1664,6 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 		for(int i = 0; i < lpNpcs.size(); i++)
 			m_pBotManager->SpawnNpc(pNewWorld, lpNpcs[i]);
 	}
-
-	// remember the canonical map name: it is the persistence key of the
-	// world saves stored in the database
-	str_copy(pNewWorld->m_aMapName, Server()->GetMapName(MapID), sizeof(pNewWorld->m_aMapName));
 
 	// A ring crossing names the neighbouring instance at runtime, and the engine
 	// only switches to or loads a map it already knows, so register the two

@@ -11,6 +11,8 @@
 
 class CEntity;
 class CCharacter;
+struct _json_value;
+typedef struct _json_value json_value;
 struct SNpcDef;
 
 /*
@@ -172,7 +174,12 @@ public:
 	};
 	array<CEntranceInfo> m_lEntrances;
 	void ParseEntrances(const char *pJsonData);
+	void ParseEntrances(const json_value &rEntrances);
 	void SpawnResources(const char *pJsonData);
+	void SpawnResources(const json_value &rResources);
+	// apply the world geometry object (wrap / ring) read from the generated
+	// world metadata or, for older maps, from an embedded json map item
+	void ApplyWorldJson(const json_value &rWorld);
 
 	typedef array<CEntity *>::range TypeRange;
 	TypeRange DoTypeRange(int Type);

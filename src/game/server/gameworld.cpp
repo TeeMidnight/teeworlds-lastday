@@ -8,6 +8,7 @@
 
 #include <generated/server_data.h>
 
+#include <engine/server/mapgen.h>
 #include <engine/server/worldgen.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
@@ -394,8 +395,28 @@ void CGameWorld::InitCollision(IMap *pMap)
 			str_copy(m_aEntrances[1], (char *) pMap->GetData(pItem->m_Credits), sizeof(m_aEntrances[1]));
 	}
 
-	// generated worlds carry their entrance definitions as json in the
-	// MAPITEMTYPE_JSON item
+	// Generated maps keep their metadata in a sidecar file next to the map
+	// ("generatedmaps/<name>.json") instead of embedding json items, so the map
+	// clients download only carries what they render. Older generated maps
+	// still embed it; the item reads below are the fallback.
+	bool HasMeta = false;
+	array<char> aMeta;
+	if(LoadGeneratedWorldMeta(GameServer()->Storage(), m_aMapName, aMeta))
+	{
+		CJsonParser MetaParser;
+		json_value *pMeta = MetaParser.ParseString(aMeta.base_ptr(), "world meta");
+		if(pMeta && pMeta->type == json_object)
+		{
+			HasMeta = true;
+			ParseEntrances((*pMeta)["entrances"]);
+			ApplyWorldJson((*pMeta)["world"]);
+			SpawnResources((*pMeta)["resources"]);
+		}
+	}
+	if(HasMeta)
+		return;
+
+	// legacy generated maps carry the entrance definitions as a map json item
 	CMapItemJson *pJsonItem = (CMapItemJson *) pMap->FindItem(MAPITEMTYPE_JSON, 0);
 	if(pJsonItem && pJsonItem->m_Version == CMapItemJson::CURRENT_VERSION && pJsonItem->m_Data > -1)
 	{
@@ -404,9 +425,8 @@ void CGameWorld::InitCollision(IMap *pMap)
 			ParseEntrances(pJsonData);
 	}
 
-	// generated worlds declare their world geometry as a third json item (id 2);
-	// the wrap only changes how tile lookups read, so setting it after Init()
-	// is enough
+	// legacy generated maps declare their world geometry as a third map json
+	// item (id 2); the wrap only changes how tile lookups read
 	CMapItemJson *pWorldItem = (CMapItemJson *) pMap->FindItem(MAPITEMTYPE_JSON, 2);
 	if(pWorldItem && pWorldItem->m_Version == CMapItemJson::CURRENT_VERSION && pWorldItem->m_Data > -1)
 	{
@@ -415,44 +435,8 @@ void CGameWorld::InitCollision(IMap *pMap)
 		{
 			CJsonParser Parser;
 			json_value *pJson = Parser.ParseString(pJsonData, "world");
-			if(pJson && pJson->type == json_object)
-			{
-				const json_value &rWrap = (*pJson)["wrap_x"];
-				const bool Wrap = rWrap.type == json_integer && rWrap.u.integer != 0;
-				m_Collision.SetWrapX(Wrap);
-
-				// a ring instance opens into its neighbours instead of wrapping on
-				// itself; the geometry it records is what resolves a crossing
-				const json_value &rRing = (*pJson)["ring"];
-				m_Ring = rRing.type == json_integer && rRing.u.integer != 0;
-				if(m_Ring)
-				{
-					m_RingSeed = (int) (json_int_t) (*pJson)["ring_seed"];
-					m_RingSize = (int) (json_int_t) (*pJson)["ring_size"];
-					m_SharedMargin = (int) (json_int_t) (*pJson)["shared_margin"];
-					m_OffsetX = (int) (json_int_t) (*pJson)["offset_x"];
-					m_Period = (int) (json_int_t) (*pJson)["period"];
-					m_Stride = m_Collision.GetWidth() - m_SharedMargin;
-					// A stale or hand edited metadata set must not leave the world in a
-					// state where the two triggers overlap or the ring cannot close;
-					// fall back to a plain map instead.
-					if(m_Stride <= 0 || m_SharedMargin <= 0 || m_RingSize < 2 || m_Period <= 0)
-					{
-						dbg_msg("game", "ignoring invalid ring geometry (%d/%d, margin %d, stride %d, period %d)",
-							m_RingSeed, m_RingSize, m_SharedMargin, m_Stride, m_Period);
-						m_Ring = false;
-					}
-					else
-					{
-						dbg_msg("game", "world ring %d/%d, shared margin %d, stride %d, period %d",
-							m_RingSeed, m_RingSize, m_SharedMargin, m_Stride, m_Period);
-					}
-				}
-				else
-				{
-					dbg_msg("game", "world wrap_x = %d", Wrap ? 1 : 0);
-				}
-			}
+			if(pJson)
+				ApplyWorldJson(*pJson);
 		}
 	}
 
@@ -467,15 +451,55 @@ void CGameWorld::InitCollision(IMap *pMap)
 	}
 }
 
-void CGameWorld::SpawnResources(const char *pJsonData)
+void CGameWorld::ApplyWorldJson(const json_value &rWorld)
 {
-	CJsonParser Parser;
-	json_value *pJson = Parser.ParseString(pJsonData, "resources");
-	if(!pJson || pJson->type != json_array)
+	if(rWorld.type != json_object)
 		return;
-	for(unsigned i = 0; i < pJson->u.array.length; i++)
+
+	const json_value &rWrap = rWorld["wrap_x"];
+	const bool Wrap = rWrap.type == json_integer && rWrap.u.integer != 0;
+	m_Collision.SetWrapX(Wrap);
+
+	// a ring instance opens into its neighbours instead of wrapping on itself;
+	// the geometry it records is what resolves a crossing
+	const json_value &rRing = rWorld["ring"];
+	m_Ring = rRing.type == json_integer && rRing.u.integer != 0;
+	if(m_Ring)
 	{
-		const json_value &rRes = (*pJson)[i];
+		m_RingSeed = (int) (json_int_t) rWorld["ring_seed"];
+		m_RingSize = (int) (json_int_t) rWorld["ring_size"];
+		m_SharedMargin = (int) (json_int_t) rWorld["shared_margin"];
+		m_OffsetX = (int) (json_int_t) rWorld["offset_x"];
+		m_Period = (int) (json_int_t) rWorld["period"];
+		m_Stride = m_Collision.GetWidth() - m_SharedMargin;
+		// A stale or hand edited metadata set must not leave the world in a
+		// state where the two triggers overlap or the ring cannot close;
+		// fall back to a plain map instead.
+		if(m_Stride <= 0 || m_SharedMargin <= 0 || m_RingSize < 2 || m_Period <= 0)
+		{
+			dbg_msg("game", "ignoring invalid ring geometry (%d/%d, margin %d, stride %d, period %d)",
+				m_RingSeed, m_RingSize, m_SharedMargin, m_Stride, m_Period);
+			m_Ring = false;
+		}
+		else
+		{
+			dbg_msg("game", "world ring %d/%d, shared margin %d, stride %d, period %d",
+				m_RingSeed, m_RingSize, m_SharedMargin, m_Stride, m_Period);
+		}
+	}
+	else
+	{
+		dbg_msg("game", "world wrap_x = %d", Wrap ? 1 : 0);
+	}
+}
+
+void CGameWorld::SpawnResources(const json_value &rResources)
+{
+	if(rResources.type != json_array)
+		return;
+	for(unsigned i = 0; i < rResources.u.array.length; i++)
+	{
+		const json_value &rRes = rResources[i];
 		if(rRes.type != json_object)
 			continue;
 		const json_value &rId = rRes["res_id"];
@@ -493,15 +517,21 @@ void CGameWorld::SpawnResources(const char *pJsonData)
 	}
 }
 
-void CGameWorld::ParseEntrances(const char *pJsonData)
+void CGameWorld::SpawnResources(const char *pJsonData)
 {
 	CJsonParser Parser;
-	json_value *pJson = Parser.ParseString(pJsonData, "entrances");
-	if(!pJson || pJson->type != json_array)
+	json_value *pJson = Parser.ParseString(pJsonData, "resources");
+	if(pJson)
+		SpawnResources(*pJson);
+}
+
+void CGameWorld::ParseEntrances(const json_value &rEntrances)
+{
+	if(rEntrances.type != json_array)
 		return;
-	for(unsigned i = 0; i < pJson->u.array.length; i++)
+	for(unsigned i = 0; i < rEntrances.u.array.length; i++)
 	{
-		const json_value &rEntrance = (*pJson)[i];
+		const json_value &rEntrance = rEntrances[i];
 		if(rEntrance.type != json_object)
 			continue;
 		const json_value &rTarget = rEntrance["entrance"];
@@ -541,6 +571,14 @@ void CGameWorld::ParseEntrances(const char *pJsonData)
 			str_copy(Entrance.m_aTargetMap, rTarget.u.string.ptr, sizeof(Entrance.m_aTargetMap));
 		}
 	}
+}
+
+void CGameWorld::ParseEntrances(const char *pJsonData)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(pJsonData, "entrances");
+	if(pJson)
+		ParseEntrances(*pJson);
 }
 
 CGameWorld::TypeRange CGameWorld::DoTypeRange(int Type)

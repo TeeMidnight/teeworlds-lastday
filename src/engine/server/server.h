@@ -14,6 +14,9 @@
 #include <engine/shared/legacy/network_translator.h>
 #include <engine/shared/memheap.h>
 
+struct _json_value;
+typedef struct _json_value json_value;
+
 class CSnapIDPool
 {
 	enum
@@ -293,6 +296,7 @@ public:
 	int LoadMap(unsigned MapID);
 	int LoadMap(CMapInfo *pInfo);
 	void RegisterMapEntrances(const char *pJsonData);
+	void RegisterMapEntrances(const json_value &rEntrances);
 
 	void InitRegister(class IEngine *pEngine, class CConfig *pConfig, class IConsole *pConsole, TOKEN SecurityToken);
 	void InitInterfaces(IKernel *pKernel);

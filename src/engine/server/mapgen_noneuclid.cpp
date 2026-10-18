@@ -679,8 +679,17 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed)
 
 	char aOutName[64];
 	str_format(aOutName, sizeof(aOutName), "%s_%d", pFloorName, Seed);
-	Creator.AddJsonData(lEntranceJson.base_ptr(), lEntranceJson.size(), 0);
-	Creator.AddJsonData(lResourceJson.base_ptr(), lResourceJson.size(), 1);
+
+	// write the metadata sidecar first: a map must never exist without it,
+	// because the map no longer carries the json itself
+	if(!SaveGeneratedWorldMeta(Storage(), aOutName,
+		lEntranceJson.base_ptr(), lEntranceJson.size(),
+		lResourceJson.base_ptr(), lResourceJson.size(),
+		nullptr, 0))
+	{
+		dbg_msg("mapgen", "failed to save the world metadata for '%s'", aOutName);
+		return false;
+	}
 
 	if(!Creator.SaveMap(EMapType::MAPTYPE_NORMAL, aOutName))
 	{

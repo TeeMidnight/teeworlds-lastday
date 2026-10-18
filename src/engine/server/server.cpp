@@ -1452,21 +1452,28 @@ unsigned CServer::PushMapList(const char *pMapName)
 	return MapID;
 }
 
-void CServer::RegisterMapEntrances(const char *pJsonData)
+void CServer::RegisterMapEntrances(const json_value &rEntrances)
 {
-	// the map info's MapVersion contains the entrance json of a generated
-	// world; register every entrance target map so the players can switch
-	CJsonParser Parser;
-	json_value *pJson = Parser.ParseString(pJsonData, "entrances");
-	if(!pJson || pJson->type != json_array)
+	// register every entrance target map so the players can switch to it
+	if(rEntrances.type != json_array)
 		return;
-	for(unsigned i = 0; i < pJson->u.array.length; i++)
+	for(unsigned i = 0; i < rEntrances.u.array.length; i++)
 	{
-		const json_value &rEntrance = (*pJson)[i];
+		const json_value &rEntrance = rEntrances[i];
+		if(rEntrance.type != json_object)
+			continue;
 		const json_value &rTarget = rEntrance["entrance"];
 		if(rTarget.type == json_string)
 			PushMapList(rTarget.u.string.ptr);
 	}
+}
+
+void CServer::RegisterMapEntrances(const char *pJsonData)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(pJsonData, "entrances");
+	if(pJson)
+		RegisterMapEntrances(*pJson);
 }
 
 int CServer::LoadMap(unsigned MapID)
@@ -1583,6 +1590,17 @@ int CServer::LoadMap(CMapInfo *pInfo)
 
 	pInfo->m_Loaded = true;
 
+	// Generated maps keep their metadata in a sidecar file next to the map
+	// ("generatedmaps/<name>.json") instead of embedding json items, so the map
+	// clients download only carries what they render. Older generated maps
+	// still embed it; the map item reads below are the fallback.
+	array<char> aMeta;
+	CJsonParser MetaParser;
+	json_value *pMeta = nullptr;
+	if(LoadGeneratedWorldMeta(Storage(), pInfo->m_aName, aMeta))
+		pMeta = MetaParser.ParseString(aMeta.base_ptr(), "world meta");
+	const bool HasMeta = pMeta && pMeta->type == json_object;
+
 	CMapItemInfo *pItem = (CMapItemInfo *) m_pMap->FindItem(MAPITEMTYPE_INFO, 0);
 	if(pItem && pItem->m_Version == 1)
 	{
@@ -1600,42 +1618,60 @@ int CServer::LoadMap(CMapInfo *pInfo)
 		}
 	}
 
-	// generated worlds register their entrance targets from the
-	// MAPITEMTYPE_JSON item
-	CMapItemJson *pJsonItem = (CMapItemJson *) m_pMap->FindItem(MAPITEMTYPE_JSON, 0);
-	if(pJsonItem && pJsonItem->m_Version == CMapItemJson::CURRENT_VERSION && pJsonItem->m_Data > -1)
+	if(HasMeta)
 	{
-		const char *pJsonData = (const char *) m_pMap->GetData(pJsonItem->m_Data);
-		if(pJsonData)
-			RegisterMapEntrances(pJsonData);
+		const json_value &rEntrances = (*pMeta)["entrances"];
+		if(rEntrances.type == json_array)
+			RegisterMapEntrances(rEntrances);
+	}
+	else
+	{
+		// legacy generated maps register their entrance targets from a map item
+		CMapItemJson *pJsonItem = (CMapItemJson *) m_pMap->FindItem(MAPITEMTYPE_JSON, 0);
+		if(pJsonItem && pJsonItem->m_Version == CMapItemJson::CURRENT_VERSION && pJsonItem->m_Data > -1)
+		{
+			const char *pJsonData = (const char *) m_pMap->GetData(pJsonItem->m_Data);
+			if(pJsonData)
+				RegisterMapEntrances(pJsonData);
+		}
 	}
 
-	// Generated worlds record their ring geometry in a third json item (id 2).
 	// A ring switch continues the same world, so the client must not fade the
 	// old map over the new one, and the two view positions differ by the ring
 	// offset.
 	pInfo->m_Ring = false;
 	pInfo->m_RingOffsetX = 0;
 	pInfo->m_RingPeriod = 0;
-	CMapItemJson *pWorldItem = (CMapItemJson *) m_pMap->FindItem(MAPITEMTYPE_JSON, 2);
-	if(pWorldItem && pWorldItem->m_Version == CMapItemJson::CURRENT_VERSION && pWorldItem->m_Data > -1)
-	{
-		const char *pJsonData = (const char *) m_pMap->GetData(pWorldItem->m_Data);
-		if(pJsonData)
+	auto ApplyWorld = [&](const json_value &rWorld) {
+		if(rWorld.type != json_object)
+			return;
+		const json_value &rRing = rWorld["ring"];
+		pInfo->m_Ring = rRing.type == json_integer && rRing.u.integer != 0;
+		if(pInfo->m_Ring)
 		{
-			CJsonParser Parser;
-			json_value *pJson = Parser.ParseString(pJsonData, "world");
-			if(pJson && pJson->type == json_object)
+			pInfo->m_RingOffsetX = (int) (json_int_t) rWorld["offset_x"];
+			pInfo->m_RingPeriod = (int) (json_int_t) rWorld["period"];
+			if(pInfo->m_RingPeriod <= 0)
+				pInfo->m_Ring = false;
+		}
+	};
+	if(HasMeta)
+	{
+		ApplyWorld((*pMeta)["world"]);
+	}
+	else
+	{
+		// legacy generated maps record their ring geometry in a map item (id 2)
+		CMapItemJson *pWorldItem = (CMapItemJson *) m_pMap->FindItem(MAPITEMTYPE_JSON, 2);
+		if(pWorldItem && pWorldItem->m_Version == CMapItemJson::CURRENT_VERSION && pWorldItem->m_Data > -1)
+		{
+			const char *pJsonData = (const char *) m_pMap->GetData(pWorldItem->m_Data);
+			if(pJsonData)
 			{
-				const json_value &rRing = (*pJson)["ring"];
-				pInfo->m_Ring = rRing.type == json_integer && rRing.u.integer != 0;
-				if(pInfo->m_Ring)
-				{
-					pInfo->m_RingOffsetX = (int) (json_int_t) (*pJson)["offset_x"];
-					pInfo->m_RingPeriod = (int) (json_int_t) (*pJson)["period"];
-					if(pInfo->m_RingPeriod <= 0)
-						pInfo->m_Ring = false;
-				}
+				CJsonParser Parser;
+				json_value *pJson = Parser.ParseString(pJsonData, "world");
+				if(pJson)
+					ApplyWorld(*pJson);
 			}
 		}
 	}

@@ -1183,9 +1183,18 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 
 	char aOutName[64];
 	str_format(aOutName, sizeof(aOutName), "%s_%d", pFloorName, Seed);
-	Creator.AddJsonData(lEntranceJson.base_ptr(), lEntranceJson.size(), 0);
-	Creator.AddJsonData(lResourceJson.base_ptr(), lResourceJson.size(), 1);
-	Creator.AddJsonData(lWorldJson.base_ptr(), lWorldJson.size(), 2);
+
+	// write the metadata sidecar first: a map must never exist without it,
+	// because the map no longer carries the json itself
+	if(!SaveGeneratedWorldMeta(Storage(), aOutName,
+		lEntranceJson.base_ptr(), lEntranceJson.size(),
+		lResourceJson.base_ptr(), lResourceJson.size(),
+		lWorldJson.base_ptr(), lWorldJson.size()))
+	{
+		dbg_msg("mapgen", "failed to save the world metadata for '%s'", aOutName);
+		delete pWorld;
+		return false;
+	}
 
 	const bool Saved = Creator.SaveMap(EMapType::MAPTYPE_NORMAL, aOutName);
 	delete pWorld;

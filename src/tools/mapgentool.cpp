@@ -139,20 +139,42 @@ bool RingCheck(IStorage *pStorage, CMapGen &rGen, const char *pFloor)
 		return false;
 	}
 
-	// the shared margin and the ring flag come from the world json
+	// the shared margin and the ring flag come from the world metadata sidecar
 	int SharedMargin = 0, Ring = 0;
 	{
-		CMapItemJson *pJson = (CMapItemJson *) A.FindItem(MAPITEMTYPE_JSON, 2);
-		const char *pData = pJson ? (const char *) A.GetData(pJson->m_Data) : nullptr;
-		if(!pData)
+		const json_value *pWorld = nullptr;
+		char aMetaName[64];
+		str_format(aMetaName, sizeof(aMetaName), "%s_1", pFloor);
+		array<char> aMeta;
+		CJsonParser MetaParser;
+		if(LoadGeneratedWorldMeta(pStorage, aMetaName, aMeta))
 		{
-			dbg_msg("mapgentool", "ringcheck: %s has no world json", pFloor);
+			json_value *pMeta = MetaParser.ParseString(aMeta.base_ptr(), "world meta");
+			if(pMeta && pMeta->type == json_object)
+			{
+				const json_value &rWorld = (*pMeta)["world"];
+				if(rWorld.type == json_object)
+					pWorld = &rWorld;
+			}
+		}
+		// old maps still embed the world json in the map file
+		CJsonParser LegacyParser;
+		if(!pWorld)
+		{
+			CMapItemJson *pJson = (CMapItemJson *) A.FindItem(MAPITEMTYPE_JSON, 2);
+			const char *pData = pJson ? (const char *) A.GetData(pJson->m_Data) : nullptr;
+			if(pData)
+			{
+				json_value *pOldWorld = LegacyParser.ParseString(pData, "world");
+				if(pOldWorld && pOldWorld->type == json_object)
+					pWorld = pOldWorld;
+			}
+		}
+		if(!pWorld)
+		{
+			dbg_msg("mapgentool", "ringcheck: %s has no world metadata", pFloor);
 			return false;
 		}
-		CJsonParser Parser;
-		json_value *pWorld = Parser.ParseString(pData, "world");
-		if(!pWorld || pWorld->type != json_object)
-			return false;
 		Ring = (int) (json_int_t) (*pWorld)["ring"];
 		SharedMargin = (int) (json_int_t) (*pWorld)["shared_margin"];
 	}
@@ -204,6 +226,32 @@ bool RingCheck(IStorage *pStorage, CMapGen &rGen, const char *pFloor)
 // wrote without decoding the map by hand.
 bool DumpWorldJson(IStorage *pStorage, const char *pMap)
 {
+	// current maps keep the world geometry in the metadata sidecar
+	array<char> aMeta;
+	CJsonParser MetaParser;
+	if(LoadGeneratedWorldMeta(pStorage, pMap, aMeta))
+	{
+		json_value *pMeta = MetaParser.ParseString(aMeta.base_ptr(), "world meta");
+		if(pMeta && pMeta->type == json_object)
+		{
+			const json_value &rWorld = (*pMeta)["world"];
+			if(rWorld.type == json_object)
+			{
+				dbg_msg("mapgentool", "world json of %s: wrap_x=%d ring=%d ring_seed=%d ring_size=%d shared_margin=%d offset_x=%d period=%d",
+					pMap,
+					(int) (json_int_t) rWorld["wrap_x"],
+					(int) (json_int_t) rWorld["ring"],
+					(int) (json_int_t) rWorld["ring_seed"],
+					(int) (json_int_t) rWorld["ring_size"],
+					(int) (json_int_t) rWorld["shared_margin"],
+					(int) (json_int_t) rWorld["offset_x"],
+					(int) (json_int_t) rWorld["period"]);
+				return true;
+			}
+		}
+	}
+
+	// fallback: older maps embed the world geometry as a map item
 	char aPath[128];
 	str_format(aPath, sizeof(aPath), "generatedmaps/%s.map", pMap);
 	CDataFileReader Reader;

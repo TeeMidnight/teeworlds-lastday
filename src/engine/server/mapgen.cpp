@@ -10,6 +10,7 @@
 
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
+#include <engine/storage.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
 
@@ -20,6 +21,85 @@
 #include "mapgen.h"
 #include "noise.h"
 #include "worldgen.h"
+
+void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size)
+{
+	str_format(pBuf, Size, "generatedmaps/%s.json", pMapName);
+}
+
+bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
+	const char *pEntrances, int EntrancesSize,
+	const char *pResources, int ResourcesSize,
+	const char *pWorld, int WorldSize)
+{
+	if(!pStorage || !pMapName || !pMapName[0])
+		return false;
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	GeneratedWorldMetaPath(pMapName, aPath, sizeof(aPath));
+	IOHANDLE File = pStorage->OpenFile(aPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
+	if(!File)
+		return false;
+
+	bool Ok = true;
+	auto WritePart = [&](const char *pData, int Size) {
+		if(Size <= 0)
+			return;
+		if(io_write(File, pData, (unsigned) Size) != (unsigned) Size)
+			Ok = false;
+	};
+	// the blobs are null terminated (and may carry more than one trailing
+	// terminator); write only the JSON itself
+	auto TrimSize = [](const char *pData, int Size) {
+		if(!pData)
+			return 0;
+		while(Size > 0 && (pData[Size - 1] == '\0' || pData[Size - 1] == '\n' || pData[Size - 1] == '\r'))
+			Size--;
+		return Size;
+	};
+	auto WriteBlob = [&](const char *pData, int Size) {
+		const int Len = TrimSize(pData, Size);
+		if(Len > 0)
+			WritePart(pData, Len);
+		else
+			WritePart("[]", 2);
+	};
+
+	WritePart("{\"entrances\":", (int) (sizeof("{\"entrances\":") - 1));
+	WriteBlob(pEntrances, EntrancesSize);
+	WritePart(",\"resources\":", (int) (sizeof(",\"resources\":") - 1));
+	WriteBlob(pResources, ResourcesSize);
+	const int WorldLen = TrimSize(pWorld, WorldSize);
+	if(WorldLen > 0)
+	{
+		WritePart(",\"world\":", (int) (sizeof(",\"world\":") - 1));
+		WritePart(pWorld, WorldLen);
+	}
+	WritePart("}", 1);
+	io_close(File);
+	return Ok;
+}
+
+bool LoadGeneratedWorldMeta(IStorage *pStorage, const char *pMapName, array<char> &OutJson)
+{
+	OutJson.clear();
+	if(!pStorage || !pMapName || !pMapName[0])
+		return false;
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	GeneratedWorldMetaPath(pMapName, aPath, sizeof(aPath));
+
+	void *pData = nullptr;
+	unsigned Size = 0;
+	if(!pStorage->ReadFile(aPath, IStorage::TYPE_ALL, &pData, &Size) || !pData || Size == 0)
+		return false;
+
+	OutJson.set_size((int) Size + 1);
+	mem_copy(OutJson.base_ptr(), pData, Size);
+	OutJson[Size] = 0;
+	mem_free(pData);
+	return true;
+}
 
 const char *WorldKindName(EWorldKind Kind)
 {
