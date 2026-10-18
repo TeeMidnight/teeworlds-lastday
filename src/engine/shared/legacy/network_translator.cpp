@@ -406,7 +406,11 @@ namespace legacy
 				protocol7::CNetObj_GameDataPrediction *pPrediction = (protocol7::CNetObj_GameDataPrediction *) Builder.NewItem(protocol7::NETOBJTYPE_GAMEDATAPREDICTION, 0, sizeof(protocol7::CNetObj_GameDataPrediction));
 				if(!pPrediction)
 					return -1;
-				pPrediction->m_PredictionFlags = pIn->m_PredictionFlags;
+				pPrediction->m_PredictionFlags = 0;
+				if(pIn->m_PredictionFlags & GAMEPREDICTIONFLAG_EVENT)
+					pPrediction->m_PredictionFlags |= protocol7::GAMEPREDICTIONFLAG_EVENT;
+				if(pIn->m_PredictionFlags & GAMEPREDICTIONFLAG_INPUT)
+					pPrediction->m_PredictionFlags |= protocol7::GAMEPREDICTIONFLAG_INPUT;
 				continue;
 			}
 

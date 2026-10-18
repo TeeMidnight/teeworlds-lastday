@@ -323,7 +323,7 @@ void CGameController::Snap(int SnappingClient)
 
 	// 0.8: prediction flags moved from the removed CNetObj_GameDataPrediction
 	// object into CNetObj_GameData::m_PredictionFlags.
-	pGameData->m_PredictionFlags = GAMEPREDICTIONFLAG_EVENT | GAMEPREDICTIONFLAG_INPUT;
+	pGameData->m_PredictionFlags = GAMEPREDICTIONFLAG_EVENT | GAMEPREDICTIONFLAG_INPUT | GAMEPREDICTIONFLAG_NO_SMOOTH_CAMERA;
 
 	// 0.8: the De_GameInfo demo object is gone; game info is delivered by the
 	// Sv_GameInfo message via SendGameInfo() (see OnPlayerConnect / CheckGameInfo).
