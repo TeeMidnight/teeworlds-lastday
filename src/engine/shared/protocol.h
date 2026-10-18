@@ -82,6 +82,9 @@ enum
 	// the switch without entering its loading state, answering NETMSG_READY,
 	// or changing its connection state. Must match the client's value.
 	MAP_CHANGE_FLAG_SILENT = 0x1,
+	// The new map belongs to a ring, so the world on both sides of the switch
+	// is continuous: the client should not fade the old map out over it.
+	MAP_CHANGE_FLAG_NO_FADE = 0x2,
 };
 
 // this should be revised

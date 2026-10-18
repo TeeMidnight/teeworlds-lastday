@@ -743,7 +743,7 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 	return 0;
 }
 
-void CServer::SendMap(int ClientID, bool Silent)
+void CServer::SendMap(int ClientID, bool Silent, bool NoFade)
 {
 	CMapInfo *pInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
 	// Never announce a map that cannot be loaded: doing so hands the client
@@ -761,7 +761,13 @@ void CServer::SendMap(int ClientID, bool Silent)
 	Msg.AddInt(m_MapChunksPerRequest);
 	Msg.AddInt(CMapInfo::MAP_CHUNK_SIZE);
 	Msg.AddRaw(&pInfo->m_Sha256, sizeof(pInfo->m_Sha256));
-	Msg.AddInt(Silent ? MAP_CHANGE_FLAG_SILENT : 0);
+	int Flags = Silent ? MAP_CHANGE_FLAG_SILENT : 0;
+	// A switch between two ring instances continues the same world on the other
+	// side of the seam, so the client must not fade the map it is leaving. A
+	// ring and any other map are separate worlds and still need the fade.
+	if(NoFade)
+		Flags |= MAP_CHANGE_FLAG_NO_FADE;
+	Msg.AddInt(Flags);
 	SendMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_FLUSH, ClientID);
 }
 
@@ -1598,6 +1604,26 @@ int CServer::LoadMap(CMapInfo *pInfo)
 			RegisterMapEntrances(pJsonData);
 	}
 
+	// Generated worlds record their ring geometry in a third json item (id 2).
+	// A ring switch continues the same world, so the client must not fade the
+	// old map over the new one.
+	pInfo->m_Ring = false;
+	CMapItemJson *pWorldItem = (CMapItemJson *) m_pMap->FindItem(MAPITEMTYPE_JSON, 2);
+	if(pWorldItem && pWorldItem->m_Version == CMapItemJson::CURRENT_VERSION && pWorldItem->m_Data > -1)
+	{
+		const char *pJsonData = (const char *) m_pMap->GetData(pWorldItem->m_Data);
+		if(pJsonData)
+		{
+			CJsonParser Parser;
+			json_value *pJson = Parser.ParseString(pJsonData, "world");
+			if(pJson && pJson->type == json_object)
+			{
+				const json_value &rRing = (*pJson)["ring"];
+				pInfo->m_Ring = rRing.type == json_integer && rRing.u.integer != 0;
+			}
+		}
+	}
+
 	GameServer()->RequestLoadWorld(pInfo->m_MapID);
 
 	return 1;
@@ -2068,6 +2094,12 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 		m_aClients[ClientID].m_State == CClient::STATE_INGAME &&
 		!m_NetServer.ClientIsLegacy(ClientID);
 
+	// Only two ring instances are continuous across the seam. Entering a ring
+	// from the hub or any other non-ring map is a real map change and keeps the
+	// normal fade.
+	CMapInfo *pOldInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
+	const bool NoFade = pOldInfo && pOldInfo->m_Ring && pInfo->m_Ring;
+
 	if(Silent)
 	{
 		m_aClients[ClientID].m_MapID = MapID;
@@ -2077,14 +2109,14 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 		m_aClients[ClientID].m_SilentMapSwitch = true;
 		if(pSilent)
 			*pSilent = true;
-		SendMap(ClientID, true);
+		SendMap(ClientID, true, NoFade);
 		return true;
 	}
 
 	m_aClients[ClientID].Reset(false);
 	m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 	m_aClients[ClientID].m_MapID = MapID;
-	SendMap(ClientID);
+	SendMap(ClientID, false, NoFade);
 	return true;
 }
 
