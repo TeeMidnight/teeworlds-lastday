@@ -986,6 +986,48 @@ CEntity *CGameWorld::ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pN
 	return pClosest;
 }
 
+CResourceEntity *CGameWorld::ClosestResource(vec2 Pos, float Radius)
+{
+	float ClosestDist = Radius * 100.0f;
+	CResourceEntity *pClosest = nullptr;
+
+	for(auto &pEnt : m_alpEntityLists[ENTTYPE_RESOURCE])
+	{
+		CResourceEntity *pRes = static_cast<CResourceEntity *>(pEnt);
+		if(pRes->IsRespawning() || pRes->IsMarkedForDestroy())
+			continue;
+		const float Dist = distance(pRes->GetPos(), Pos);
+		if(Dist < pRes->GetProximityRadius() + Radius && Dist < ClosestDist)
+		{
+			ClosestDist = Dist;
+			pClosest = pRes;
+		}
+	}
+
+	// Like FindEntities: a node in the shared strip is owned by a live ring
+	// neighbour, so compare it in this world's frame.
+	SRingNeighbour aNeighbours[2];
+	const int Neighbours = CollectRingNeighbours(aNeighbours, 2);
+	for(int n = 0; n < Neighbours; n++)
+	{
+		const vec2 Offset = aNeighbours[n].m_Offset;
+		for(auto &pEnt : aNeighbours[n].m_pWorld->m_alpEntityLists[ENTTYPE_RESOURCE])
+		{
+			CResourceEntity *pRes = static_cast<CResourceEntity *>(pEnt);
+			if(pRes->IsRespawning() || pRes->IsMarkedForDestroy())
+				continue;
+			const float Dist = distance(pRes->GetPos() + Offset, Pos);
+			if(Dist < pRes->GetProximityRadius() + Radius && Dist < ClosestDist)
+			{
+				ClosestDist = Dist;
+				pClosest = pRes;
+			}
+		}
+	}
+
+	return pClosest;
+}
+
 CEntity *CGameWorld::ClosestFlagEntity(vec2 Pos, float Radius, int Flag, CEntity *pNotThis)
 {
 	CFlagCheck Check(Flag);

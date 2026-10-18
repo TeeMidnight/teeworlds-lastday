@@ -26,6 +26,7 @@
 #include "entities/dropped_pickup.h"
 #include "entities/laser.h"
 #include "entities/projectile.h"
+#include "entities/resource.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "item.h"
@@ -44,6 +45,10 @@ enum
 	NO_RESET
 };
 
+// how far from the pointed-at position a resource still counts as hovered;
+// the node's own proximity radius is added on top of this
+constexpr float CursorResourceRadius = 20.0f;
+
 void CGameContext::Construct(int Resetting)
 {
 	m_Resetting = 0;
@@ -60,6 +65,9 @@ void CGameContext::Construct(int Resetting)
 	m_pNpcSystem = 0;
 	m_MainWorldID = 0;
 	m_LockTeams = 0;
+
+	for(int i = 0; i < MAX_CLIENTS; i++)
+		ResetBroadcastState(i);
 
 	if(Resetting == NO_RESET)
 	{
@@ -218,11 +226,138 @@ void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *p
 	}
 }
 
-void CGameContext::SendBroadcast(int ClientID, const char *pText)
+void CGameContext::ResetBroadcastState(int ClientID)
 {
-	CNetMsg_Sv_Broadcast Msg;
-	Msg.m_pMessage = pText;
-	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientID);
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return;
+	CBroadcastState &State = m_aBroadcastStates[ClientID];
+	State.m_NoChangeTick = 0;
+	State.m_Priority = BROADCAST_PRIORITY_LOWEST;
+	State.m_aPrevMessage[0] = '\0';
+	State.m_aNextMessage[0] = '\0';
+	State.m_LifeSpanTick = 0;
+	State.m_TimedPriority = BROADCAST_PRIORITY_LOWEST;
+	State.m_aTimedMessage[0] = '\0';
+}
+
+void CGameContext::AddBroadcast(int ClientID, const char *pText, int Priority, int LifeSpan)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return;
+	CBroadcastState &State = m_aBroadcastStates[ClientID];
+	if(LifeSpan > 0)
+	{
+		// a timed message only replaces an equal or lower priority one
+		if(State.m_TimedPriority > Priority)
+			return;
+		str_copy(State.m_aTimedMessage, pText, sizeof(State.m_aTimedMessage));
+		State.m_LifeSpanTick = LifeSpan;
+		State.m_TimedPriority = Priority;
+	}
+	else
+	{
+		// a realtime message is submitted every tick; the highest one wins
+		if(State.m_Priority > Priority)
+			return;
+		str_copy(State.m_aNextMessage, pText, sizeof(State.m_aNextMessage));
+		State.m_Priority = Priority;
+	}
+}
+
+void CGameContext::SendBroadcast(int ClientID, const char *pText, int Priority, int LifeSpan)
+{
+	if(ClientID < -1 || ClientID >= MAX_CLIENTS)
+		return;
+
+	const int Start = ClientID < 0 ? 0 : ClientID;
+	const int End = ClientID < 0 ? MAX_CLIENTS : ClientID + 1;
+
+	// record a global announcement once; the per-client messages below are
+	// transient (and a realtime message repeats) and must not bloat the demo
+	if(ClientID < 0)
+	{
+		CNetMsg_Sv_Broadcast Msg;
+		Msg.m_pMessage = pText;
+		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_NOSEND, -1);
+	}
+
+	for(int i = Start; i < End; i++)
+	{
+		if(m_apPlayers[i])
+			AddBroadcast(i, pText, Priority, LifeSpan);
+	}
+}
+
+void CGameContext::ClearBroadcast(int ClientID, int Priority)
+{
+	SendBroadcast(ClientID, "", Priority, BROADCAST_DURATION_REALTIME);
+}
+
+void CGameContext::FlushBroadcasts()
+{
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(!m_apPlayers[i])
+		{
+			ResetBroadcastState(i);
+			continue;
+		}
+
+		CBroadcastState &State = m_aBroadcastStates[i];
+
+		// a timed announcement wins over the realtime hint of this tick
+		if(State.m_LifeSpanTick > 0 && State.m_TimedPriority > State.m_Priority)
+			str_copy(State.m_aNextMessage, State.m_aTimedMessage, sizeof(State.m_aNextMessage));
+
+		// Send only on change, or once a second to fight the client's auto fade
+		if(str_comp(State.m_aPrevMessage, State.m_aNextMessage) != 0 ||
+			State.m_NoChangeTick > Server()->TickSpeed())
+		{
+			CNetMsg_Sv_Broadcast Msg;
+			Msg.m_pMessage = State.m_aNextMessage;
+			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_NORECORD, i);
+
+			str_copy(State.m_aPrevMessage, State.m_aNextMessage, sizeof(State.m_aPrevMessage));
+			State.m_NoChangeTick = 0;
+		}
+		else
+			State.m_NoChangeTick++;
+
+		if(State.m_LifeSpanTick > 0)
+			State.m_LifeSpanTick--;
+		if(State.m_LifeSpanTick <= 0)
+		{
+			State.m_aTimedMessage[0] = '\0';
+			State.m_TimedPriority = BROADCAST_PRIORITY_LOWEST;
+		}
+		State.m_aNextMessage[0] = '\0';
+		State.m_Priority = BROADCAST_PRIORITY_LOWEST;
+	}
+}
+
+void CGameContext::UpdateCursorResourceBroadcast(int ClientID)
+{
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	if(!pPlayer || pPlayer->IsDummy() || pPlayer->m_MapLoading)
+		return;
+	CCharacter *pChar = pPlayer->GetCharacter();
+	if(!pChar)
+		return;
+	CGameWorld *pWorld = pPlayer->GameWorld();
+	if(!pWorld)
+		return;
+
+	// the cursor's world position, the same point the drill aims at
+	const vec2 CursorPos = pChar->GetPos() + pChar->AimVector();
+	CResourceEntity *pRes = pWorld->ClosestResource(CursorPos, CursorResourceRadius);
+	if(!pRes)
+		return;
+
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "%s %d/%d",
+		ItemIDDisplayName(pRes->Item()), pRes->RemainingHardness(), pRes->MaxHardness());
+	AddBroadcast(ClientID, aBuf, BROADCAST_PRIORITY_RESOURCEINFO, BROADCAST_DURATION_REALTIME);
 }
 
 void CGameContext::SendEmoticon(int ClientID, int Emoticon)
@@ -544,6 +679,15 @@ void CGameContext::OnTick()
 		}
 	}
 
+	// The cursor hint is a realtime broadcast: it is submitted again every tick
+	// while the cursor is over a resource, and gone the tick it moves away.
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(m_apPlayers[i])
+			UpdateCursorResourceBroadcast(i);
+	}
+	FlushBroadcasts();
+
 	// update voting
 	GameMenu()->TickVote();
 
@@ -605,6 +749,8 @@ void CGameContext::OnClientPredictedInput(int ClientID, void *pInput)
 void CGameContext::OnClientEnter(int ClientID)
 {
 	CLanguageScope LanguageScope(LanguageOf(ClientID));
+	// a reused slot must not inherit the previous occupant's broadcast queue
+	ResetBroadcastState(ClientID);
 	// send chat commands
 	SendChatCommands(ClientID);
 
@@ -630,7 +776,8 @@ void CGameContext::OnClientEnter(int ClientID)
 	if(!m_apPlayers[ClientID]->m_LoggedIn)
 	{
 		m_apPlayers[ClientID]->SetTeam(TEAM_SPECTATORS);
-		SendBroadcast(ClientID, Localize("You are not logged in. Use /login <username> <password> or /register <username> <password> to join the game.", "Account"));
+		SendBroadcast(ClientID, Localize("You are not logged in. Use /login <username> <password> or /register <username> <password> to join the game.", "Account"),
+			BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE);
 	}
 
 	// the player must log in or register to bind an account; guest players
@@ -760,6 +907,7 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 
 	delete m_apPlayers[ClientID];
 	m_apPlayers[ClientID] = 0;
+	ResetBroadcastState(ClientID);
 
 	GameMenu()->SetVoteUpdate();
 
@@ -1058,7 +1206,7 @@ void CGameContext::ConSay(IConsole::IResult *pResult, void *pUserData)
 void CGameContext::ConBroadcast(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *) pUserData;
-	pSelf->SendBroadcast(-1, pResult->GetString(0));
+	pSelf->SendBroadcast(-1, pResult->GetString(0), BROADCAST_PRIORITY_SERVERANNOUNCE, pSelf->Server()->TickSpeed() * 3);
 }
 
 void CGameContext::ConSetTeam(IConsole::IResult *pResult, void *pUserData)

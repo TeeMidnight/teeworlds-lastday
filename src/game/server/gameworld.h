@@ -11,6 +11,7 @@
 
 class CEntity;
 class CCharacter;
+class CResourceEntity;
 struct _json_value;
 typedef struct _json_value json_value;
 struct SNpcDef;
@@ -228,6 +229,11 @@ public:
 	*/
 	CEntity *ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis, bool AcrossRing = false);
 	CEntity *ClosestFlagEntity(vec2 Pos, float Radius, int Flag, CEntity *pNotThis);
+
+	// The closest harvestable resource to Pos, including nodes owned by a live
+	// ring neighbour. Respawning nodes are invisible, so they never win the
+	// lookup and cannot hide a live node behind them.
+	CResourceEntity *ClosestResource(vec2 Pos, float Radius);
 
 	/*
 		Function: interserct_CEntity

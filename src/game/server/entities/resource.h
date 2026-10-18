@@ -25,6 +25,7 @@ public:
 
 	const CItemID &Item() const { return m_Id; }
 	int RemainingHardness() const { return m_Hardness; }
+	int MaxHardness() const { return m_MaxHardness; }
 	bool IsRespawning() const { return m_RespawnTick > 0; }
 
 private:

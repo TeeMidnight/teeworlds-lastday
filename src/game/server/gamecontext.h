@@ -24,6 +24,26 @@ class CItemSystem;
 class CNpcSystem;
 class CTradeSystem;
 
+// Broadcast life span in ticks. A timed message stays on screen for the whole
+// span; a realtime message (life span 0) is only visible while it is submitted
+// again, which is how a constantly refreshed hint is kept alive.
+#define BROADCAST_DURATION_REALTIME (0)
+#define BROADCAST_DURATION_GAMEANNOUNCE (Server()->TickSpeed() * 2)
+
+// Higher priorities win while their message is active. A realtime message is
+// replaced by a timed message of a higher priority and comes back when that
+// one expires.
+enum
+{
+	BROADCAST_PRIORITY_LOWEST = 0,
+	BROADCAST_PRIORITY_RESOURCEINFO,
+	BROADCAST_PRIORITY_WEAPONSTATE,
+	BROADCAST_PRIORITY_EFFECTSTATE,
+	BROADCAST_PRIORITY_GAMEANNOUNCE,
+	BROADCAST_PRIORITY_SERVERANNOUNCE,
+	BROADCAST_PRIORITY_INTERFACE,
+};
+
 /*
 	Tick
 		Game Context (CGameContext::tick)
@@ -71,6 +91,31 @@ class CGameContext : public IGameServer
 
 	static void NewCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
 	static void RemoveCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
+
+	// One client's broadcast queue. The message currently on screen is kept so
+	// a repeated realtime message is only resent when it changes (or once a
+	// second, to fight the client's auto fade); a timed message has a life span
+	// and is restored when it expires.
+	class CBroadcastState
+	{
+	public:
+		int m_NoChangeTick;
+		char m_aPrevMessage[1024];
+
+		int m_Priority;
+		char m_aNextMessage[1024];
+
+		int m_LifeSpanTick;
+		int m_TimedPriority;
+		char m_aTimedMessage[1024];
+	};
+	CBroadcastState m_aBroadcastStates[MAX_CLIENTS];
+
+	void AddBroadcast(int ClientID, const char *pText, int Priority, int LifeSpan);
+	void ResetBroadcastState(int ClientID);
+	void FlushBroadcasts();
+	// submit the resource under this client's cursor as a realtime broadcast
+	void UpdateCursorResourceBroadcast(int ClientID);
 
 	CGameContext(int Resetting);
 	void Construct(int Resetting);
@@ -180,7 +225,11 @@ public:
 
 	// ----- send functions -----
 	void SendChat(int ChatterClientID, int Mode, int To, const char *pText);
-	void SendBroadcast(int ClientID, const char *pText);
+	// ClientID == -1 sends to every player. A timed message (LifeSpan > 0)
+	// expires on its own; a realtime message (LifeSpan == 0) lasts until it is
+	// replaced, so it must be submitted again when it should stay on screen.
+	void SendBroadcast(int ClientID, const char *pText, int Priority, int LifeSpan);
+	void ClearBroadcast(int ClientID, int Priority);
 	void SendEmoticon(int ClientID, int Emoticon);
 	void SendWeaponPickup(int ClientID, int Weapon);
 	void SendMotd(int ClientID);
