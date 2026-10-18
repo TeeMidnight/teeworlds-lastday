@@ -206,9 +206,12 @@ public:
 		// engine/server/mapgen.h EWorldKind of this map, -1 when unknown
 		int m_WorldKind;
 
-		// Whether this map is an instance of a generated ring, read from its
-		// world json. A ring switch is continuous and must not fade the old map.
+		// Ring geometry of a generated instance, read from its world json. When
+		// enabled, offset_x is the global column of this instance's local x = 0
+		// and period is the circumference of the whole ring, both in tiles.
 		bool m_Ring;
+		int m_RingOffsetX;
+		int m_RingPeriod;
 
 		const char *GetMapName();
 		static void Clean(CMapInfo &This, void *pUser);
@@ -266,7 +269,7 @@ public:
 	static int NewClientCallback(int ClientID, void *pUser);
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);
 
-	void SendMap(int ClientID, bool Silent = false, bool NoFade = false);
+	void SendMap(int ClientID, bool Silent = false, bool NoFade = false, int ViewPosOffsetX = 0, int ViewPosOffsetY = 0);
 	void SendConnectionReady(int ClientID);
 	void SendRconLine(int ClientID, const char *pLine);
 	static void SendRconLineAuthed(const char *pLine, void *pUser, bool Highlighted);

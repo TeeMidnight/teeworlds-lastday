@@ -38,6 +38,7 @@
 #include "mapgen.h"
 #include "register.h"
 #include "server.h"
+#include "worldgen.h"
 
 #include <signal.h>
 
@@ -743,7 +744,7 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 	return 0;
 }
 
-void CServer::SendMap(int ClientID, bool Silent, bool NoFade)
+void CServer::SendMap(int ClientID, bool Silent, bool NoFade, int ViewPosOffsetX, int ViewPosOffsetY)
 {
 	CMapInfo *pInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
 	// Never announce a map that cannot be loaded: doing so hands the client
@@ -768,6 +769,11 @@ void CServer::SendMap(int ClientID, bool Silent, bool NoFade)
 	if(NoFade)
 		Flags |= MAP_CHANGE_FLAG_NO_FADE;
 	Msg.AddInt(Flags);
+	// The new map's local view position minus the old map's, in game world
+	// pixels (not tiles): oldView = newView - offset. This lets the client keep
+	// the view it is leaving in the new frame while the old map fades out.
+	Msg.AddInt(ViewPosOffsetX);
+	Msg.AddInt(ViewPosOffsetY);
 	SendMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_FLUSH, ClientID);
 }
 
@@ -1606,8 +1612,11 @@ int CServer::LoadMap(CMapInfo *pInfo)
 
 	// Generated worlds record their ring geometry in a third json item (id 2).
 	// A ring switch continues the same world, so the client must not fade the
-	// old map over the new one.
+	// old map over the new one, and the two view positions differ by the ring
+	// offset.
 	pInfo->m_Ring = false;
+	pInfo->m_RingOffsetX = 0;
+	pInfo->m_RingPeriod = 0;
 	CMapItemJson *pWorldItem = (CMapItemJson *) m_pMap->FindItem(MAPITEMTYPE_JSON, 2);
 	if(pWorldItem && pWorldItem->m_Version == CMapItemJson::CURRENT_VERSION && pWorldItem->m_Data > -1)
 	{
@@ -1620,6 +1629,13 @@ int CServer::LoadMap(CMapInfo *pInfo)
 			{
 				const json_value &rRing = (*pJson)["ring"];
 				pInfo->m_Ring = rRing.type == json_integer && rRing.u.integer != 0;
+				if(pInfo->m_Ring)
+				{
+					pInfo->m_RingOffsetX = (int) (json_int_t) (*pJson)["offset_x"];
+					pInfo->m_RingPeriod = (int) (json_int_t) (*pJson)["period"];
+					if(pInfo->m_RingPeriod <= 0)
+						pInfo->m_Ring = false;
+				}
 			}
 		}
 	}
@@ -2075,6 +2091,28 @@ void CServer::SnapSetStaticsize(int ItemType, int Size)
 	m_SnapshotDelta.SetStaticsize(ItemType, Size);
 }
 
+// Generated map names are "<floor>_<seed>". Two instances share a ring only
+// when their floor part matches; an entrance between different floors must not
+// reuse the neighbour shift, since their axes are unrelated.
+static bool SameRingFloor(CServer::CMapInfo *pA, CServer::CMapInfo *pB)
+{
+	const char *pNameA = pA->GetMapName();
+	const char *pNameB = pB->GetMapName();
+	const char *pSeedA = 0;
+	const char *pSeedB = 0;
+	for(const char *p = pNameA; *p; p++)
+		if(*p == '_')
+			pSeedA = p;
+	for(const char *p = pNameB; *p; p++)
+		if(*p == '_')
+			pSeedB = p;
+	if(!pSeedA || !pSeedB)
+		return false;
+	const int LenA = (int) (pSeedA - pNameA);
+	const int LenB = (int) (pSeedB - pNameB);
+	return LenA == LenB && str_comp_num(pNameA, pNameB, LenA) == 0;
+}
+
 bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 {
 	if(pSilent)
@@ -2094,14 +2132,27 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 		m_aClients[ClientID].m_State == CClient::STATE_INGAME &&
 		!m_NetServer.ClientIsLegacy(ClientID);
 
-	// Only two ring instances are continuous across the seam. Entering a ring
-	// from the hub or any other non-ring map is a real map change and keeps the
-	// normal fade.
+	// Only a switch between two ring instances is exempt from the fade.
+	// Entering a ring from the hub or any other non-ring map is a real map
+	// change and keeps the normal fade.
 	CMapInfo *pOldInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
 	const bool NoFade = pOldInfo && pOldInfo->m_Ring && pInfo->m_Ring;
 
 	if(Silent)
 	{
+		// The two maps share an axis only when they are instances of the same
+		// ring floor. RingNeighbourShift works in tiles and gives the new
+		// origin minus the old one; the view position delta is the other way
+		// round, so negate it and convert to game world pixels.
+		int ViewPosOffsetX = 0;
+		int ViewPosOffsetY = 0;
+		if(pOldInfo && pOldInfo->m_Ring && pInfo->m_Ring && pOldInfo->m_RingPeriod > 0 &&
+			pOldInfo->m_RingPeriod == pInfo->m_RingPeriod && SameRingFloor(pOldInfo, pInfo))
+		{
+			const int Shift = RingNeighbourShift(pOldInfo->m_RingOffsetX, pInfo->m_RingOffsetX, pOldInfo->m_RingPeriod);
+			ViewPosOffsetX = -Shift * 32;
+		}
+
 		m_aClients[ClientID].m_MapID = MapID;
 		// Only drop the transfer state: CClient::Reset() would also zero the
 		// score, so every seam crossing would cost the player their points.
@@ -2109,7 +2160,7 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 		m_aClients[ClientID].m_SilentMapSwitch = true;
 		if(pSilent)
 			*pSilent = true;
-		SendMap(ClientID, true, NoFade);
+		SendMap(ClientID, true, NoFade, ViewPosOffsetX, ViewPosOffsetY);
 		return true;
 	}
 

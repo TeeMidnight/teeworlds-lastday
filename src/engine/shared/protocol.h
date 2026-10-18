@@ -87,6 +87,10 @@ enum
 	MAP_CHANGE_FLAG_NO_FADE = 0x2,
 };
 
+// NETMSG_MAP_CHANGE ends with the flags above followed by two ints: the new
+// map's local view position minus the old map's, in game world units (not map
+// tiles). Ordinary map changes send zero for both.
+
 // this should be revised
 enum
 {
