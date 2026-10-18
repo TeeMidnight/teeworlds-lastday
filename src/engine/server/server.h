@@ -145,9 +145,14 @@ public:
 		bool m_NoRconNote;
 		bool m_Quitting;
 		// Set by a silent map switch: the client kept STATE_INGAME but may not
-		// have the map, in which case its map-data request falls back to the
-		// regular download handshake. Cleared when that happens (or on reset).
+		// have the map, in which case its map-data request resumes the regular
+		// download handshake. The game layer is told so it can re-enter its
+		// loading state. Cleared when that happens (or on reset).
 		bool m_SilentMapSwitch;
+		// Tick of that silent switch. An input acknowledging a snapshot from
+		// that tick or later proves the client stayed online, so a following
+		// switch can be silent again; until then it must be a regular one.
+		int m_SilentMapSwitchTick;
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
 
 		unsigned m_MapID;
@@ -327,6 +332,7 @@ public:
 	virtual bool SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent = nullptr);
 	virtual const char *GetMapName(unsigned MapID);
 	virtual int GetMapWorldKind(unsigned MapID);
+	virtual bool IsMapInUse(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);
 	virtual bool LoadMapForWorld(unsigned MapID);
 	virtual bool RegisterMapName(const char *pName);

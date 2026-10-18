@@ -469,6 +469,17 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 		return;
 	}
 
+	// The engine must be able to create the game world before the client is
+	// told to switch: announcing a map whose world is missing would leave the
+	// player in the old world while the client loads the new one.
+	CGameWorld *pTargetWorld = EnsureWorld(MapID);
+	if(!pTargetWorld)
+	{
+		pPlayer->m_HasPendingArrival = false;
+		dbg_msg("game", "failed to switch client %d to map %u: missing world", pPlayer->GetCID(), MapID);
+		return;
+	}
+
 	// A ring crossing keeps the mapped column; every other switch falls back to
 	// a spawn once the new map has loaded.
 	pPlayer->m_HasPendingArrival = HasArrival;
@@ -477,10 +488,7 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 	bool Silent = false;
 	if(Server()->SwitchClientMap(pPlayer->GetCID(), MapID, &Silent))
 	{
-		CGameWorld **ppWorld = m_pWorlds[MapID];
-		CGameWorld *pWorld = ppWorld ? *ppWorld : nullptr;
-		if(pWorld)
-			pPlayer->SwitchWorld(pWorld);
+		pPlayer->SwitchWorld(pTargetWorld);
 
 		if(Silent)
 		{
@@ -703,10 +711,10 @@ void CGameContext::OnTick()
 	}
 #endif
 
-	// periodically unload worlds that no player is in anymore, so the
-	// server frees memory while idle (every ~30 seconds). World content
-	// (dropped items etc.) is only persisted when a world is unloaded or
-	// the server shuts down, never while it is loaded.
+	// periodically unload worlds that no player is in and no client is still
+	// attached to, so the server frees memory while idle (every ~30 seconds).
+	// World content (dropped items etc.) is only persisted when a world is
+	// unloaded or the server shuts down, never while it is loaded.
 	if(Server()->Tick() % (Server()->TickSpeed() * 30) == 0)
 	{
 		UnloadIdleWorlds();
@@ -785,22 +793,52 @@ void CGameContext::OnClientEnter(int ClientID)
 	Server()->ExpireServerInfo();
 }
 
+void CGameContext::OnClientMapDataRequest(int ClientID)
+{
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	if(!pPlayer || pPlayer->m_MapLoading)
+		return;
+
+	CGameWorld *pWorld = WorldByID(Server()->GetClientMapID(ClientID));
+	if(!pWorld || pPlayer->GameWorld() != pWorld)
+		return;
+
+	// The silent switch already moved the character into the new world. Keep
+	// that position for the READY migration, which would otherwise send the
+	// character to a spawn.
+	pPlayer->m_HasPendingArrival = false;
+	if(CCharacter *pChr = pPlayer->GetCharacter())
+	{
+		pPlayer->m_HasPendingArrival = true;
+		pPlayer->m_PendingArrivalPos = pChr->GetPos();
+	}
+	pPlayer->m_MapLoading = true;
+}
+
 void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 {
 	// The slot must be free, or belong to a player that is still loading its
 	// new map. A stale or duplicated callback is ignored instead of trapping.
 	if(m_apPlayers[ClientID] && !m_apPlayers[ClientID]->m_MapLoading)
 	{
+		// A silent switch already migrated this player. A READY that follows
+		// its map-data request is therefore not a busy slot; there is nothing
+		// left to migrate and the join UI was already sent.
+		CGameWorld *pCurrentWorld = m_apPlayers[ClientID]->GameWorld();
+		if(pCurrentWorld && pCurrentWorld->WorldID() == Server()->GetClientMapID(ClientID))
+			return;
 		dbg_msg("game", "client %d connected on a busy slot, ignoring", ClientID);
 		return;
 	}
-	CGameWorld **ppWorld = m_pWorlds.get(Server()->GetClientMapID(ClientID));
-	if(!ppWorld || !*ppWorld)
+	// A world can be missing if it was unloaded before the client attached to
+	// it; recreate it instead of leaving the client waiting forever.
+	CGameWorld *pWorld = EnsureWorld(Server()->GetClientMapID(ClientID));
+	if(!pWorld)
 	{
 		dbg_msg("game", "client %d connected to a missing world, ignoring", ClientID);
 		return;
 	}
-	CGameWorld *pWorld = *ppWorld;
+
 
 	if(!m_apPlayers[ClientID])
 	{
@@ -1855,6 +1893,12 @@ bool CGameContext::UnloadWorld(unsigned MapID)
 
 	// never unload the main world
 	if(MapID == m_MainWorldID)
+		return false;
+
+	// keep the world while any client is still attached to it. A client can
+	// be downloading the map or waiting for READY before its player has been
+	// moved into the world, and OnClientConnected still needs that world.
+	if(Server()->IsMapInUse(MapID))
 		return false;
 
 	// keep the world while a player is still inside it

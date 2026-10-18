@@ -73,10 +73,11 @@ public:
 
 	virtual void ExpireServerInfo() = 0;
 
-	// Switches the client to MapID. pSilent (optional) reports that the client
-	// kept its connection state and only needs the new world's snapshots; the
-	// game layer must then move the player immediately instead of waiting for
-	// OnClientConnected.
+	// Switches the client to MapID, loading the map and making sure its game
+	// world exists before the switch is announced. pSilent (optional) reports
+	// that the client kept its connection state and only needs the new world's
+	// snapshots; the game layer must then move the player immediately instead
+	// of waiting for OnClientConnected.
 	virtual bool SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent = nullptr) = 0;
 
 	// canonical map name of a loaded/known map, or "" when unknown
@@ -86,6 +87,11 @@ public:
 	// or -1 when unknown. The game layer uses this to decide whether a world
 	// may contain bots at all and whether they are hostile or peaceful NPCs.
 	virtual int GetMapWorldKind(unsigned MapID) { return -1; }
+
+	// whether a connected client is still attached to MapID, either using it
+	// or downloading it. Such a map and its world must stay alive until the
+	// client finishes its transition.
+	virtual bool IsMapInUse(unsigned MapID) = 0;
 
 	// releases the cached map data of a map that no client needs anymore
 	// (the map can be re-loaded on demand if a client switches to it again)
@@ -120,6 +126,10 @@ public:
 	virtual void OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID) = 0;
 
 	virtual void OnClientConnected(int ClientID, bool AsSpec) = 0;
+	// A client that was switched silently could not load the map and asked
+	// for its data instead. The game layer must re-enter its loading state so
+	// the regular READY -> OnClientConnected path migrates the player.
+	virtual void OnClientMapDataRequest(int ClientID) = 0;
 	virtual void OnClientEnter(int ClientID) = 0;
 	virtual void OnClientDrop(int ClientID, const char *pReason) = 0;
 	virtual void OnClientDirectInput(int ClientID, void *pInput) = 0;

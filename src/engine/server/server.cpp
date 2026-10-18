@@ -262,6 +262,7 @@ void CServer::CClient::Reset(bool ResetInput)
 	ResetMapTransfer();
 	m_Score = 0;
 	m_SilentMapSwitch = false;
+	m_SilentMapSwitchTick = 0;
 }
 
 CServer::CServer() // : m_DemoRecorder(&m_SnapshotDelta)
@@ -354,6 +355,7 @@ int CServer::Init()
 		m_aClients[i].m_aClan[0] = 0;
 		m_aClients[i].m_Country = -1;
 		m_aClients[i].m_SilentMapSwitch = false;
+		m_aClients[i].m_SilentMapSwitchTick = 0;
 		m_aClients[i].m_Snapshots.Init();
 	}
 
@@ -884,23 +886,22 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 			const bool Vital = (pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0;
 			// A client that received a silent map switch but does not have the
 			// map asks for its data while it is still INGAME on our side. It
-			// now needs the regular loading handshake, so fall back to it and
-			// let the following READY -> OnClientConnected path finish the
-			// transition. Reset() leaves the target map id untouched and, like
-			// the original switch, drops the inputs and the score.
+			// already knows the map from the silent announcement and entered its
+			// own loading state, so resume the transfer here without announcing
+			// the map a second time. Reset() leaves the target map id untouched
+			// and, like the original switch, drops the inputs and the score; the
+			// following READY -> OnClientConnected path finishes the transition.
 			if(Vital && m_aClients[ClientID].m_State == CClient::STATE_INGAME && m_aClients[ClientID].m_SilentMapSwitch)
 			{
-				// The client asked for the map of a silent switch it could not load.
-				// Restart the switch as a regular one and re-announce the map that is
-				// current *now*: a second switch may have happened while the request
-				// was in flight, and serving chunks for a map the client is not
-				// expecting leaves both sides waiting for each other.
+				// The silent switch already migrated the player in the game layer.
+				// Put it back into the loading state so the READY below goes through
+				// the normal migration instead of being rejected as a busy slot.
+				GameServer()->OnClientMapDataRequest(ClientID);
 				const bool ConnectAsSpec = GameServer()->IsClientSpectator(ClientID);
 				m_aClients[ClientID].Reset(true);
-				m_aClients[ClientID].m_SilentMapSwitch = false;
 				m_aClients[ClientID].m_State = ConnectAsSpec ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;
-				SendMap(ClientID, false);
-				return;
+				// Fall through to serve this first request's chunks; the client
+				// is waiting for data, not for another map change.
 			}
 
 			if(Vital && (m_aClients[ClientID].m_State == CClient::STATE_CONNECTING || m_aClients[ClientID].m_State == CClient::STATE_CONNECTING_AS_SPEC))
@@ -983,6 +984,13 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 			// check for errors
 			if(Unpacker.Error() || Size / 4 > MAX_INPUT_SIZE)
 				return;
+
+			// A snapshot from the switch tick or later can only be acknowledged
+			// if the client stayed online after the silent switch. Otherwise it
+			// is downloading the map and must not receive another silent one.
+			if(m_aClients[ClientID].m_SilentMapSwitch &&
+				m_aClients[ClientID].m_LastAckedSnapshot >= m_aClients[ClientID].m_SilentMapSwitchTick)
+				m_aClients[ClientID].m_SilentMapSwitch = false;
 
 			if(m_aClients[ClientID].m_LastAckedSnapshot > 0)
 				m_aClients[ClientID].m_SnapRate = CClient::SNAPRATE_FULL;
@@ -2155,18 +2163,24 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 	if(pSilent)
 		*pSilent = false;
 
-	CMapInfo *pInfo = m_MapInfos[MapID];
-	// An unloadable map must not become the client's map: the game world
-	// would switch under it while the client cannot obtain the map data.
-	if(!pInfo || !LoadMap(pInfo))
+	// An unloadable map, or one whose game world cannot be created, must not
+	// become the client's map: the client cannot obtain the map data and the
+	// player would have nowhere to go while the switch is already announced.
+	if(!LoadMapForWorld(MapID))
 		return false;
+	CMapInfo *pInfo = m_MapInfos[MapID];
 
 	// A 0.8 client that is already in the game can carry its connection over
 	// to the new map: it keeps STATE_INGAME and only waits for the new world's
-	// snapshot. It falls back to the download path below by itself if it does
-	// not have the map cached (NETMSG_REQUEST_MAP_DATA).
+	// snapshot. It asks for the map data by itself if it does not have the map
+	// cached (NETMSG_REQUEST_MAP_DATA); the game layer then re-enters its
+	// loading state for the regular READY handshake.
+	// A silent switch is only safe once the previous one is confirmed: if it
+	// is still pending the client may be loading that map, and another silent
+	// flag would be interpreted as a regular change anyway.
 	const bool Silent = m_aClients[ClientID].m_Version >= 0x0800 &&
 		m_aClients[ClientID].m_State == CClient::STATE_INGAME &&
+		!m_aClients[ClientID].m_SilentMapSwitch &&
 		!m_NetServer.ClientIsLegacy(ClientID);
 
 	// Only a switch between two ring instances is exempt from the fade.
@@ -2195,6 +2209,7 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 		// score, so every seam crossing would cost the player their points.
 		m_aClients[ClientID].ResetMapTransfer();
 		m_aClients[ClientID].m_SilentMapSwitch = true;
+		m_aClients[ClientID].m_SilentMapSwitchTick = Tick();
 		if(pSilent)
 			*pSilent = true;
 		SendMap(ClientID, true, NoFade, ViewPosOffsetX, ViewPosOffsetY);
@@ -2239,6 +2254,16 @@ int CServer::GetMapWorldKind(unsigned MapID)
 	return pInfo ? pInfo->m_WorldKind : -1;
 }
 
+bool CServer::IsMapInUse(unsigned MapID)
+{
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(m_aClients[i].m_State != CClient::STATE_EMPTY && m_aClients[i].m_MapID == MapID)
+			return true;
+	}
+	return false;
+}
+
 void CServer::UnloadMap(unsigned MapID)
 {
 	// never unload the main map
@@ -2251,11 +2276,8 @@ void CServer::UnloadMap(unsigned MapID)
 
 	// keep the map while a client is still connected to it (it may be
 	// downloading the map data or currently using it)
-	for(int i = 0; i < MAX_CLIENTS; i++)
-	{
-		if(m_aClients[i].m_State != CClient::STATE_EMPTY && m_aClients[i].m_MapID == MapID)
-			return;
-	}
+	if(IsMapInUse(MapID))
+		return;
 
 	if(pInfo->m_pData)
 	{
