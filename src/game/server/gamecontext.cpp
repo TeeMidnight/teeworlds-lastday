@@ -207,6 +207,11 @@ void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *p
 		// pack one for the recording only
 		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_NOSEND, -1);
 
+		// team chat always comes from a real player; without one there is no
+		// team to deliver to, and the recording already has the message
+		if(ChatterClientID < 0 || ChatterClientID >= MAX_CLIENTS || !m_apPlayers[ChatterClientID])
+			return;
+
 		To = m_apPlayers[ChatterClientID]->GetTeam();
 
 		// send to the clients
@@ -912,6 +917,14 @@ void CGameContext::OnClientMapDataRequest(int ClientID)
 
 void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 {
+	// The engine only calls this with a real slot, but a stale or duplicated
+	// callback must not index the player array out of bounds.
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+	{
+		dbg_msg("game", "client %d connected outside the player slots, ignoring", ClientID);
+		return;
+	}
+
 	// The slot must be free, or belong to a player that is still loading its
 	// new map. A stale or duplicated callback is ignored instead of trapping.
 	if(m_apPlayers[ClientID] && !m_apPlayers[ClientID]->m_MapLoading)
