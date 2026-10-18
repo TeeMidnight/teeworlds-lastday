@@ -9,9 +9,17 @@
 
 #include <game/server/bot.h>
 
-#include <set>
+#include <base/tl/array.h>
 
 namespace {
+
+bool UsedContains(const array<int> &Used, int Id)
+{
+	for(int i = 0; i < Used.size(); i++)
+		if(Used[i] == Id)
+			return true;
+	return false;
+}
 
 Uuid MakeBot(int Index)
 {
@@ -35,29 +43,30 @@ TEST(BotIdentity, SameBotKeepsItsTeeID)
 
 TEST(BotIdentity, AllocationsStayDistinctWhileTheRangeHasRoom)
 {
-	std::set<int> Used;
+	array<int> Used;
 	for(int i = 0; i < 1024; i++)
 	{
-		const int TeeID = PickBotTeeID(MakeBot(i), [&Used](int Id) { return Used.count(Id) != 0; });
+		const int TeeID = PickBotTeeID(MakeBot(i), [&Used](int Id) { return UsedContains(Used, Id); });
 		ASSERT_GE(TeeID, BOT_TEEID_07_MIN);
 		ASSERT_LE(TeeID, BOT_TEEID_08_MAX);
-		EXPECT_TRUE(Used.insert(TeeID).second) << "id " << TeeID << " handed out twice";
+		EXPECT_FALSE(UsedContains(Used, TeeID)) << "id " << TeeID << " handed out twice";
+		Used.add(TeeID);
 	}
 }
 
 TEST(BotIdentity, ProbesPastUsedIDsAndGivesUpWhenFull)
 {
 	// fill everything except one id; the allocator has to land on exactly it
-	std::set<int> Used;
+	array<int> Used;
 	const int Kept = 4321;
 	for(int Id = BOT_TEEID_07_MIN; Id <= BOT_TEEID_08_MAX; Id++)
 		if(Id != Kept)
-			Used.insert(Id);
+			Used.add(Id);
 
 	const Uuid Bot = MakeBot(7);
-	EXPECT_EQ(PickBotTeeID(Bot, [&Used](int Id) { return Used.count(Id) != 0; }), Kept);
+	EXPECT_EQ(PickBotTeeID(Bot, [&Used](int Id) { return UsedContains(Used, Id); }), Kept);
 
 	// a fully used range has no answer
-	Used.insert(Kept);
-	EXPECT_EQ(PickBotTeeID(Bot, [&Used](int Id) { return Used.count(Id) != 0; }), -1);
+	Used.add(Kept);
+	EXPECT_EQ(PickBotTeeID(Bot, [&Used](int Id) { return UsedContains(Used, Id); }), -1);
 }

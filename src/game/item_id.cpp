@@ -7,7 +7,8 @@
 
 #include <game/localization_format.h>
 
-#include <map>
+#include <base/tl/hashtable.h>
+
 #include <string>
 
 // ---------------------------------------------------------------------------
@@ -25,31 +26,35 @@ struct SItemIdName
 	std::string m_Display;
 };
 
-struct UuidLess
+hash_table<Uuid, SItemIdName, 64, uuid_table_function> &NameRegistry()
 {
-	bool operator()(const Uuid &A, const Uuid &B) const { return uuid_comp(A, B) < 0; }
-};
-
-std::map<Uuid, SItemIdName, UuidLess> &NameRegistry()
-{
-	static std::map<Uuid, SItemIdName, UuidLess> s_Registry;
+	static hash_table<Uuid, SItemIdName, 64, uuid_table_function> s_Registry;
 	return s_Registry;
+}
+
+SItemIdName &NameSlot(const Uuid &Id)
+{
+	SItemIdName *pName = NameRegistry().get(Id);
+	if(!pName)
+	{
+		SItemIdName Name;
+		pName = NameRegistry().set(Id, Name);
+	}
+	return *pName;
 }
 
 const SItemIdName *FindName(const Uuid &Id)
 {
-	const auto &Registry = NameRegistry();
-	auto It = Registry.find(Id);
-	return It == Registry.end() ? nullptr : &It->second;
+	return NameRegistry().get(Id);
 }
 
 // The name a non-parsed but known item keeps: the registry may already hold the
 // display name even for an id that was created from a UUID alone.
 void RememberSource(const CItemID &Id, const char *pSourceName)
 {
-	if (Id.IsZero() || !pSourceName || !pSourceName[0])
+	if(Id.IsZero() || !pSourceName || !pSourceName[0])
 		return;
-	NameRegistry()[Id.Value()].m_Source = pSourceName;
+	NameSlot(Id.Value()).m_Source = pSourceName;
 }
 } // namespace
 
@@ -117,7 +122,7 @@ void ItemIDRegisterName(const CItemID &Id, const char *pSourceName, const char *
 {
 	if(Id.IsZero())
 		return;
-	SItemIdName &Name = NameRegistry()[Id.Value()];
+	SItemIdName &Name = NameSlot(Id.Value());
 	if(pSourceName && pSourceName[0])
 		Name.m_Source = pSourceName;
 	if(pDisplayName && pDisplayName[0])

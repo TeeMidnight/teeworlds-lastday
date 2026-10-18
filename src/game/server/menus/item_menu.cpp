@@ -1,8 +1,8 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <algorithm>
-#include <vector>
+#include <base/tl/algorithm.h>
+#include <base/tl/array.h>
 
 #include <game/localization_format.h>
 
@@ -271,8 +271,8 @@ static int CraftCategoryRank(const char *pCategory)
 
 static void CollectCraftCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 {
-	auto *pCrafts = static_cast<std::vector<CItemSystem::SCraftDef *> *>(pUser);
-	pCrafts->push_back(&Craft);
+	auto *pCrafts = static_cast<array<CItemSystem::SCraftDef *> *>(pUser);
+	pCrafts->add(&Craft);
 }
 
 // data threaded through CItemSystem::ForEachCraft
@@ -421,9 +421,9 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 
 	// group the recipes by their category folder, keeping the known categories
 	// in a fixed order and sorting the recipes inside each group by id
-	std::vector<CItemSystem::SCraftDef *> Crafts;
+	array<CItemSystem::SCraftDef *> Crafts;
 	pItem->ForEachCraft(CollectCraftCallback, &Crafts);
-	std::sort(Crafts.begin(), Crafts.end(), [](const CItemSystem::SCraftDef *pA, const CItemSystem::SCraftDef *pB) {
+	sort(Crafts.all(), [](const CItemSystem::SCraftDef *pA, const CItemSystem::SCraftDef *pB) {
 		const int RankA = CraftCategoryRank(pA->m_aCategory);
 		const int RankB = CraftCategoryRank(pB->m_aCategory);
 		if(RankA != RankB)

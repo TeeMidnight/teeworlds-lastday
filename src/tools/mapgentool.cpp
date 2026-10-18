@@ -33,7 +33,7 @@
 #include <engine/storage.h>
 #include <game/mapitems.h>
 
-#include <vector>
+#include <base/tl/array.h>
 
 namespace {
 
@@ -200,9 +200,13 @@ bool RingCheck(IStorage *pStorage, CMapGen &rGen, const char *pFloor)
 		const int Stride = W - SharedMargin;
 		if(pB->m_Width != W || pB->m_Height != H || Stride <= 0)
 			continue;
-		std::vector<unsigned char> TA((size_t) W * H * 4), TB((size_t) W * H * 4);
-		DecodeTiles(A, pA->m_Data, W * H, TA.data());
-		DecodeTiles(B, pB->m_Data, W * H, TB.data());
+		array<unsigned char> TA, TB;
+		TA.set_size(W * H * 4);
+		TB.set_size(W * H * 4);
+		mem_zero(TA.base_ptr(), TA.size());
+		mem_zero(TB.base_ptr(), TB.size());
+		DecodeTiles(A, pA->m_Data, W * H, TA.base_ptr());
+		DecodeTiles(B, pB->m_Data, W * H, TB.base_ptr());
 		for(int y = 0; y < H; y++)
 		{
 			for(int x = EDGE; x < SharedMargin - EDGE; x++)

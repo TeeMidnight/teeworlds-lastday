@@ -5,7 +5,8 @@
 
 #include <base/system.h>
 
-#include <map>
+#include <base/tl/hashtable.h>
+
 #include <string>
 
 // ---------------------------------------------------------------------------
@@ -21,29 +22,33 @@ struct SNpcIdName
 	std::string m_Display;
 };
 
-struct UuidLess
+hash_table<Uuid, SNpcIdName, 64, uuid_table_function> &NameRegistry()
 {
-	bool operator()(const Uuid &A, const Uuid &B) const { return uuid_comp(A, B) < 0; }
-};
-
-std::map<Uuid, SNpcIdName, UuidLess> &NameRegistry()
-{
-	static std::map<Uuid, SNpcIdName, UuidLess> s_Registry;
+	static hash_table<Uuid, SNpcIdName, 64, uuid_table_function> s_Registry;
 	return s_Registry;
+}
+
+SNpcIdName &NameSlot(const Uuid &Id)
+{
+	SNpcIdName *pName = NameRegistry().get(Id);
+	if(!pName)
+	{
+		SNpcIdName Name;
+		pName = NameRegistry().set(Id, Name);
+	}
+	return *pName;
 }
 
 const SNpcIdName *FindName(const Uuid &Id)
 {
-	const auto &Registry = NameRegistry();
-	auto It = Registry.find(Id);
-	return It == Registry.end() ? nullptr : &It->second;
+	return NameRegistry().get(Id);
 }
 
 void RememberSource(const CNpcID &Id, const char *pSourceName)
 {
 	if(Id.IsZero() || !pSourceName || !pSourceName[0])
 		return;
-	NameRegistry()[Id.Value()].m_Source = pSourceName;
+	NameSlot(Id.Value()).m_Source = pSourceName;
 }
 } // namespace
 
@@ -111,7 +116,7 @@ void NpcIDRegisterName(const CNpcID &Id, const char *pSourceName, const char *pD
 {
 	if(Id.IsZero())
 		return;
-	SNpcIdName &Name = NameRegistry()[Id.Value()];
+	SNpcIdName &Name = NameSlot(Id.Value());
 	if(pSourceName && pSourceName[0])
 		Name.m_Source = pSourceName;
 	if(pDisplayName && pDisplayName[0])

@@ -15,8 +15,7 @@
 #include "gameworld.h"
 #include "player.h"
 
-#include <algorithm>
-#include <vector>
+#include <base/tl/algorithm.h>
 
 CConfig *CBotManager::Config() const { return m_pGameServer->Config(); }
 CGameController *CBotManager::GameController() const { return m_pGameServer->m_pController; }
@@ -122,9 +121,15 @@ void CBotManager::ClearBots(CGameWorld *pWorld)
 	}
 }
 
-bool DistanceCompare(const std::pair<float, Uuid> &a, const std::pair<float, Uuid> &b)
+struct SBotDistance
 {
-	return a.first < b.first;
+	float m_Distance;
+	Uuid m_Id;
+};
+
+bool DistanceCompare(const SBotDistance &a, const SBotDistance &b)
+{
+	return a.m_Distance < b.m_Distance;
 }
 
 int CBotManager::PickTeeID(Uuid BotID) const
@@ -364,8 +369,8 @@ void CBotManager::UpdatePlayerMap(int ClientID)
 	}
 
 	// rank every live visible bot by distance to this client's view position
-	std::vector<std::pair<float, Uuid>> Distances;
-	Distances.reserve(m_lBotOrder.size());
+	array<SBotDistance> Distances;
+	Distances.hint_size(m_lBotOrder.size());
 	for(int i = 0; i < m_lBotOrder.size(); i++)
 	{
 		IBotEntity *pBot = BotByID(m_lBotOrder[i]);
@@ -382,10 +387,10 @@ void CBotManager::UpdatePlayerMap(int ClientID)
 		if(World < 0)
 			continue;
 
-		Distances.emplace_back(distance(pPlayer->m_ViewPos, pBot->GetPos() + aOffsets[World]), m_lBotOrder[i]);
+		Distances.add({distance(pPlayer->m_ViewPos, pBot->GetPos() + aOffsets[World]), m_lBotOrder[i]});
 	}
-	std::sort(Distances.begin(), Distances.end(), DistanceCompare);
-	Distances.resize(minimum((int) Distances.size(), (int) BOT_MAX_PER_CLIENT));
+	sort(Distances.all(), DistanceCompare);
+	Distances.set_size(minimum(Distances.size(), (int) BOT_MAX_PER_CLIENT));
 
 	// keep the slots that are still among the nearest bots; free the rest
 	for(int i = 0; i < BOT_MAX_PER_CLIENT; i++)
@@ -396,10 +401,10 @@ void CBotManager::UpdatePlayerMap(int ClientID)
 		bool Found = false;
 		for(int j = 0; j < (int) Distances.size(); j++)
 		{
-			if(Distances[j].second == pMap[i])
+			if(Distances[j].m_Id == pMap[i])
 			{
 				Found = true;
-				Distances.erase(Distances.begin() + j);
+				Distances.remove_index(j);
 				break;
 			}
 		}
@@ -416,7 +421,7 @@ void CBotManager::UpdatePlayerMap(int ClientID)
 			break;
 
 		if(pMap[i] == UUID_ZEROED)
-			pMap[i] = Distances[Index++].second;
+			pMap[i] = Distances[Index++].m_Id;
 	}
 
 	// tell the client about every slot that changed. The identity itself is

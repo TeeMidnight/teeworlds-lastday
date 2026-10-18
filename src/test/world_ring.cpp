@@ -12,10 +12,10 @@
 #include <engine/server/mapgen.h>
 #include <engine/server/worldgen.h>
 
+#include <base/tl/array.h>
+
 #include <game/collision.h>
 #include <game/gamecore.h>
-
-#include <vector>
 
 namespace {
 
@@ -91,7 +91,7 @@ struct SRes
 	int m_X, m_Y, m_Hardness, m_RespawnTime;
 };
 
-void CollectResources(const CGeneratedWorld *pWorld, int X0, int X1, std::vector<SRes> &lOut)
+void CollectResources(const CGeneratedWorld *pWorld, int X0, int X1, array<SRes> &lOut)
 {
 	for(int i = 0; i < pWorld->m_lResources.size(); i++)
 	{
@@ -99,7 +99,7 @@ void CollectResources(const CGeneratedWorld *pWorld, int X0, int X1, std::vector
 		if(R.m_X < X0 || R.m_X >= X1)
 			continue;
 		SRes Out = {R.m_X - X0, R.m_Y, R.m_Hardness, R.m_RespawnTime};
-		lOut.push_back(Out);
+		lOut.add(Out);
 	}
 }
 
@@ -166,11 +166,11 @@ TEST(WorldRing, NeighboursShareTheirTerrainAndResources)
 	// node where its local column is at least one shared margin in, so its left
 	// strip is empty and its right strip carries the nodes the next instance
 	// skips. A physical node therefore exists exactly once across the ring.
-	std::vector<SRes> lOwned, lSkipped;
+	array<SRes> lOwned, lSkipped;
 	CollectResources(pA, S + EDGE, W - EDGE, lOwned);
 	CollectResources(pB, EDGE, M - EDGE, lSkipped);
-	EXPECT_FALSE(lOwned.empty());
-	EXPECT_TRUE(lSkipped.empty());
+	EXPECT_FALSE(lOwned.size() == 0);
+	EXPECT_TRUE(lSkipped.size() == 0);
 	for(int i = 0; i < pA->m_lResources.size(); i++)
 		EXPECT_GE(pA->m_lResources[i].m_X, M) << "slice 1 node in its left strip";
 	for(int i = 0; i < pB->m_lResources.size(); i++)
@@ -298,9 +298,11 @@ TEST(WorldRing, NeighbourSeedWrapsAroundTheRing)
 TEST(RingProxy, HookGrabsACoreBoundAtATranslatedColumn)
 {
 	const int CW = 64, CH = 16;
-	std::vector<int> aTiles((size_t) CW * CH, 0);
+	array<int> aTiles;
+	aTiles.set_size(CW * CH);
+	mem_zero(aTiles.base_ptr(), sizeof(int) * CW * CH);
 	CCollision Coll;
-	Coll.InitForTesting(CW, CH, aTiles.data(), false);
+	Coll.InitForTesting(CW, CH, aTiles.base_ptr(), false);
 
 	CWorldCore World;
 	CCharacterCore Hooker, Proxy;
@@ -331,9 +333,11 @@ TEST(RingProxy, HookGrabsACoreBoundAtATranslatedColumn)
 TEST(RingProxy, HookGrabsABotCoreBoundUnderItsPrivateID)
 {
 	const int CW = 64, CH = 16;
-	std::vector<int> aTiles((size_t) CW * CH, 0);
+	array<int> aTiles;
+	aTiles.set_size(CW * CH);
+	mem_zero(aTiles.base_ptr(), sizeof(int) * CW * CH);
 	CCollision Coll;
-	Coll.InitForTesting(CW, CH, aTiles.data(), false);
+	Coll.InitForTesting(CW, CH, aTiles.base_ptr(), false);
 
 	CWorldCore World;
 	CCharacterCore Hooker, Proxy;

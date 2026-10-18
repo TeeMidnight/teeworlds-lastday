@@ -13,9 +13,7 @@
 
 #include "localization.h"
 
-#include <algorithm>
 #include <string>
-#include <vector>
 
 namespace {
 void LanguageCodeFromFilename(const char *pFilename, char *pOut, int OutSize)
@@ -37,7 +35,7 @@ void LanguageCodeFromFilename(const char *pFilename, char *pOut, int OutSize)
 
 struct SListLanguagesContext
 {
-	std::vector<std::string> *m_pFiles;
+	array<std::string> *m_pFiles;
 };
 
 int ListLanguageFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
@@ -51,7 +49,7 @@ int ListLanguageFilesCallback(const char *pFilename, int IsDir, int StorageType,
 	if(str_comp_nocase(pFilename, "index.json") == 0)
 		return 0;
 	SListLanguagesContext *pContext = static_cast<SListLanguagesContext *>(pUser);
-	pContext->m_pFiles->push_back(pFilename);
+	pContext->m_pFiles->add(pFilename);
 	return 0;
 }
 } // namespace
@@ -250,13 +248,13 @@ bool CLocalizationDatabase::LoadAll(const char *pDefaultFilename, IStorage *pSto
 	// every JSON file in languages/ becomes a selectable language. The default
 	// file above is skipped when it loaded successfully; if it did not, the scan
 	// gives it a second chance.
-	std::vector<std::string> Files;
+	array<std::string> Files;
 	if(pStorage)
 	{
 		SListLanguagesContext Context = {&Files};
 		pStorage->ListDirectory(IStorage::TYPE_ALL, "languages", ListLanguageFilesCallback, &Context);
 	}
-	std::sort(Files.begin(), Files.end());
+	sort(Files.all());
 	for(const std::string &File : Files)
 	{
 		char aCode[16];
