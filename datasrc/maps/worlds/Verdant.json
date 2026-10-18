@@ -2,7 +2,7 @@
     "kind": "euclid",
     "comment": "Procedurally generated floor. It reads no base map: the terrain comes from the noise settings below and the look from tileset/background/ruleset.",
     "generation": {
-        "width": 450,
+        "width": 1000,
         "height": 200,
         "surface_level": 96,
         "surface_amplitude": 40,
