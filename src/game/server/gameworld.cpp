@@ -1325,7 +1325,7 @@ void CGameWorld::RestoreFromDatabase()
 				Dir = normalize(Stored);
 		}
 
-		CDrillEntity *pDrill = new CDrillEntity(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY), DrillId, Def.m_MaxLength, -1);
+		CDrillEntity *pDrill = new CDrillEntity(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY), DrillId, Def.m_MaxLength, Def.m_Power, -1);
 		pDrill->SetDirection(Dir);
 	}
 }

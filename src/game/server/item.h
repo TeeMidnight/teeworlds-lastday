@@ -68,10 +68,14 @@ public:
 	struct SDrill
 	{
 		int m_MaxLength;
+		// hardness removed from a resource node per boring pass. Different
+		// materials bore at different rates (iron 1, steel 3, ...).
+		int m_Power;
 		bool m_HasDrill; // whether a "drill" object was declared
 
 		SDrill() :
 			m_MaxLength(0),
+			m_Power(1),
 			m_HasDrill(false)
 		{
 		}

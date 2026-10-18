@@ -404,18 +404,18 @@
 		},
 		{
 			"context": "Item Desc: Iron Drill",
-			"or": "A laser tripod drill. Place it, then hold the scoreboard beside it to bore up to 10 tiles into the rock.",
-			"tr": "激光三脚钻。放置后站在旁边按住计分板，可向岩层钻探 10 格。"
+			"or": "A laser tripod drill. Place it, then hold the scoreboard beside it to bore up to 10 tiles into the rock. Each pass chips 1 hardness.",
+			"tr": "激光三脚钻。放置后站在旁边按住计分板，可向岩层钻探 10 格，每次钻探削去 1 点硬度。"
 		},
 		{
 			"context": "Item Desc: Steel Drill",
-			"or": "A reinforced laser tripod. Reaches 20 tiles into the rock and still winds back on its own.",
-			"tr": "加固的激光三脚钻。可向岩层钻探 20 格，并会自动收回。"
+			"or": "A reinforced laser tripod. Reaches 20 tiles into the rock and chips 3 hardness per pass.",
+			"tr": "加固的激光三脚钻。可向岩层钻探 20 格，每次钻探削去 3 点硬度。"
 		},
 		{
 			"context": "Item Desc: Heaven Drill",
-			"or": "A drill carrying a sliver of heaven. Its beam reaches 30 tiles before it retracts.",
-			"tr": "带着一线天堂之力的钻头。光束可延伸 30 格后收回。"
+			"or": "A drill carrying a sliver of heaven. Its beam reaches 30 tiles and chips 9 hardness per pass.",
+			"tr": "带着一线天堂之力的钻头。光束可延伸 30 格，每次钻探削去 9 点硬度。"
 		}
 	],
 	"server strings": [

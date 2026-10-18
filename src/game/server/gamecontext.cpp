@@ -450,7 +450,7 @@ bool CGameContext::PlaceDrill(int ClientID, const CItemID &ItemId)
 	if(!Item()->RemoveItem(ClientID, ItemId, 1))
 		return false;
 
-	new CDrillEntity(pWorld, pChr->GetPos(), ItemId, Drill.m_MaxLength, ClientID);
+	new CDrillEntity(pWorld, pChr->GetPos(), ItemId, Drill.m_MaxLength, Drill.m_Power, ClientID);
 	SavePlayerData(m_apPlayers[ClientID]);
 	SendChat(-1, CHAT_WHISPER, ClientID,
 		Localize("Drill placed. Hold the scoreboard next to it to take control; jump to let go.", "Drill"));

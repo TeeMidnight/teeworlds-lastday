@@ -1,11 +1,12 @@
 {
     "name": "Steel Drill",
-    "desc": "A reinforced laser tripod. Reaches 20 tiles into the rock and still winds back on its own.",
+    "desc": "A reinforced laser tripod. Reaches 20 tiles into the rock and chips 3 hardness per pass.",
     "item_type": [
         "tool",
         "drill"
     ],
     "drill": {
-        "max_length": 640
+        "max_length": 640,
+        "power": 3
     }
 }

@@ -519,9 +519,14 @@ void CCharacter::TeleTo(vec2 Pos, bool KeepSpeed)
 	m_Core.m_Pos = Pos;
 }
 
+vec2 CCharacter::AimVector() const
+{
+	return vec2(m_LatestInput.m_TargetX, m_LatestInput.m_TargetY);
+}
+
 vec2 CCharacter::AimDirection() const
 {
-	vec2 Dir(m_LatestInput.m_TargetX, m_LatestInput.m_TargetY);
+	vec2 Dir = AimVector();
 	if(length(Dir) < 0.0001f)
 		Dir = vec2(1.0f, 0.0f);
 	return normalize(Dir);

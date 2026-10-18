@@ -11,8 +11,9 @@
 // short fixed beams as legs, and one beam that follows the controller's cursor
 // and bores outward while fire is held. It retracts at its maximum length, when
 // the player lets go, or when it touches a resource node; a contact harvests
-// one hardness from that node. The beam deliberately ignores terrain, so it can
-// reach ore that a hammer cannot.
+// its rated hardness (power) from that node, so better drill materials strip a
+// node in fewer passes. The beam deliberately ignores terrain, so it can reach
+// ore that a hammer cannot.
 class CDrillEntity : public CHitableEntity
 {
 public:
@@ -25,7 +26,7 @@ public:
 	static constexpr float EXTEND_SPEED = 6.0f;
 	static constexpr float RETRACT_SPEED = 12.0f;
 
-	CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &ItemId, int MaxLength, int Owner);
+	CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &ItemId, int MaxLength, int Power, int Owner);
 	~CDrillEntity() override;
 
 	void Tick() override;
@@ -57,6 +58,8 @@ private:
 	int m_Owner; // client that placed it, for returning the item on dismantle
 	int m_Controller; // client currently steering, -1 = none
 	int m_MaxLength;
+	// hardness removed from a resource node per boring pass
+	int m_Power;
 	float m_Length;
 	vec2 m_Dir;
 	EState m_State;

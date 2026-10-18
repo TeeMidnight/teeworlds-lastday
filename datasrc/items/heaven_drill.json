@@ -1,11 +1,12 @@
 {
     "name": "Heaven Drill",
-    "desc": "A drill carrying a sliver of heaven. Its beam reaches 30 tiles before it retracts.",
+    "desc": "A drill carrying a sliver of heaven. Its beam reaches 30 tiles and chips 9 hardness per pass.",
     "item_type": [
         "tool",
         "drill"
     ],
     "drill": {
-        "max_length": 960
+        "max_length": 960,
+        "power": 9
     }
 }

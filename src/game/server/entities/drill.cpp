@@ -13,13 +13,14 @@
 #include "dropped_pickup.h"
 #include "resource.h"
 
-CDrillEntity::CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &ItemId, int MaxLength, int Owner) :
+CDrillEntity::CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &ItemId, int MaxLength, int Power, int Owner) :
 	CHitableEntity(pGameWorld, CGameWorld::ENTTYPE_DRILL, 0, Pos, 24)
 {
 	m_ItemId = ItemId;
 	m_Owner = Owner;
 	m_Controller = -1;
 	m_MaxLength = maximum(64, MaxLength);
+	m_Power = maximum(1, Power);
 	m_Length = 0.0f;
 	m_Dir = vec2(0.0f, 1.0f);
 	m_State = STATE_IDLE;
@@ -69,11 +70,42 @@ CResourceEntity *CDrillEntity::FindResource(vec2 *pOutPos)
 	if(m_Length <= 1.0f)
 		return nullptr;
 
-	vec2 HitPos = Tip();
-	CEntity *pEnt = GameWorld()->IntersectEntity(m_Pos, Tip(), 8.0f, HitPos, CGameWorld::ENTTYPE_RESOURCE);
+	// Collect the nodes around the whole beam, then keep the nearest one that
+	// is actually harvestable. Respawning nodes are invisible but still exist,
+	// so letting them win the "nearest hit" race would make a live node behind
+	// one look unreachable until the drill is moved and the line changes.
+	const vec2 TipPos = Tip();
+	array<CEntity *> lCandidates;
+	const int Num = GameWorld()->FindEntities(m_Pos, distance(m_Pos, TipPos) + 32.0f, lCandidates, CGameWorld::ENTTYPE_RESOURCE);
+
+	float ClosestLen = distance(m_Pos, TipPos) * 100.0f;
+	CResourceEntity *pClosest = nullptr;
+	vec2 ClosestHit = TipPos;
+	for(int i = 0; i < Num; i++)
+	{
+		CResourceEntity *pRes = static_cast<CResourceEntity *>(lCandidates[i]);
+		if(pRes->IsRespawning())
+			continue;
+
+		// FindEntities also sees a live ring neighbour, where the entity needs
+		// the boundary offset applied before its position can be compared
+		const vec2 ResPos = GameWorld()->PosInFrame(pRes);
+		const vec2 IntersectPos = closest_point_on_line(m_Pos, TipPos, ResPos);
+		if(distance(ResPos, IntersectPos) >= pRes->GetProximityRadius() + 16.0f)
+			continue;
+
+		const float Len = distance(m_Pos, IntersectPos);
+		if(Len < ClosestLen)
+		{
+			ClosestLen = Len;
+			pClosest = pRes;
+			ClosestHit = IntersectPos;
+		}
+	}
+
 	if(pOutPos)
-		*pOutPos = HitPos;
-	return static_cast<CResourceEntity *>(pEnt);
+		*pOutPos = ClosestHit;
+	return pClosest;
 }
 
 void CDrillEntity::Harvest(CResourceEntity *pRes, vec2 HitPos)
@@ -87,19 +119,21 @@ void CDrillEntity::Harvest(CResourceEntity *pRes, vec2 HitPos)
 	if(Collector < 0)
 		return;
 
-	const bool Depleted = pRes->RemainingHardness() <= 1;
+	// a stronger drill removes more hardness per pass; a node is depleted when
+	// this pass will take its last point, so the drop is banked before it goes
+	const bool Depleted = pRes->RemainingHardness() <= m_Power;
 	if(Depleted)
 	{
 		// bank the drop first: a full inventory must not consume the node for
 		// an item nobody receives
 		if(!GameServer()->Item()->AddItem(Collector, pRes->Item(), 1))
 			return;
-		pRes->TakeHit(1);
+		pRes->TakeHit(m_Power);
 		GameWorld()->CreateSound(HitPos, SOUND_PICKUP_ARMOR);
 	}
 	else
 	{
-		pRes->TakeHit(1);
+		pRes->TakeHit(m_Power);
 		GameWorld()->CreateHammerHit(HitPos);
 	}
 }
@@ -115,8 +149,18 @@ void CDrillEntity::Tick()
 		}
 		else
 		{
-			// the cursor aims the beam; the fire button bores
-			m_Dir = pChr->AimDirection();
+			// The cursor aims the beam, but the control target is expressed
+			// relative to the character while the beam starts at the drill. The
+			// player may stand up to CONTROL_RADIUS away, so using the tee-relative
+			// direction would skew the beam and leave a resource that is in reach
+			// and under the cursor out of the beam's grasp. Aim at the cursor's
+			// actual world position instead.
+			const vec2 CursorPos = pChr->GetPos() + pChr->AimVector();
+			const vec2 ToCursor = CursorPos - m_Pos;
+			if(length(ToCursor) > 0.0001f)
+				m_Dir = normalize(ToCursor);
+			else
+				m_Dir = pChr->AimDirection();
 			const bool Firing = pChr->IsFiring();
 			// after an automatic retraction the player has to let go before the
 			// next pass, otherwise holding fire would chain boring runs forever
@@ -147,7 +191,7 @@ void CDrillEntity::Tick()
 		CResourceEntity *pRes = FindResource(&HitPos);
 		if(pRes && !pRes->IsRespawning())
 		{
-			// touching ore mines one hardness and pulls the beam back
+			// touching ore mines this drill's power and pulls the beam back
 			Harvest(pRes, HitPos);
 			m_State = STATE_RETRACTING;
 			m_WaitRelease = true;

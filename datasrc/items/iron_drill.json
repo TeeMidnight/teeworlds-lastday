@@ -1,11 +1,12 @@
 {
     "name": "Iron Drill",
-    "desc": "A laser tripod drill. Place it, then hold the scoreboard beside it to bore up to 10 tiles into the rock.",
+    "desc": "A laser tripod drill. Place it, then hold the scoreboard beside it to bore up to 10 tiles into the rock. Each pass chips 1 hardness.",
     "item_type": [
         "tool",
         "drill"
     ],
     "drill": {
-        "max_length": 320
+        "max_length": 320,
+        "power": 1
     }
 }

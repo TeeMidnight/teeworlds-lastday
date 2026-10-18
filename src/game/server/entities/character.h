@@ -134,6 +134,8 @@ public:
 	// need this hook for gamecontroller
 	void TeleTo(vec2 Pos, bool KeepSpeed);
 
+	// the raw cursor vector relative to the character (client target input)
+	vec2 AimVector() const;
 	// the normalized direction the player is currently aiming at
 	// (e.g. used to throw dropped items)
 	vec2 AimDirection() const;

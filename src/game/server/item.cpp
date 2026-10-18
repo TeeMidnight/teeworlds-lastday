@@ -232,6 +232,12 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath)
 		const json_value &Length = Drill["max_length"];
 		if(Length.type == json_integer || Length.type == json_double)
 			Item.m_Drill.m_MaxLength = clamp((int) (json_int_t) Length, 64, 2048);
+		// how much hardness one boring pass removes; clamped so a data pack
+		// cannot one-shot every node on the map
+		Item.m_Drill.m_Power = 1;
+		const json_value &Power = Drill["power"];
+		if(Power.type == json_integer || Power.type == json_double)
+			Item.m_Drill.m_Power = clamp((int) (json_int_t) Power, 1, 100);
 	}
 
 	// a UUID collision is astronomically unlikely, but a duplicated id must not
