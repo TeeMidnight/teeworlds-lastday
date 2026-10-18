@@ -67,12 +67,12 @@ void MakeInstruction(CInstruction &Inst, bool Ring)
 	Ore.m_Threshold = 0.68f;
 	Ore.m_MinDepth = 12;
 	Ore.m_Probes = 2;
-	Ore.m_Proba = 100;
+	Ore.m_Proba = 1.0f;
 	Ore.m_HardnessMin = 1;
 	Ore.m_HardnessMax = 5;
 	Ore.m_RespawnTimeMin = 60;
 	Ore.m_RespawnTimeMax = 120;
-	Ore.m_SurfaceProba = 30;
+	Ore.m_SurfaceProba = 0.30f;
 	str_copy(Ore.m_aResId, "iron_ore", sizeof(Ore.m_aResId));
 	str_copy(Ore.m_aDisplay, "armor", sizeof(Ore.m_aDisplay));
 

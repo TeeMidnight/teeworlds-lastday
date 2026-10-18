@@ -177,7 +177,7 @@
             {
                 "res_id": "stone",
                 "display": "armor",
-                "proba": 34,
+                "proba": 0.34,
                 "hardness_min": 1,
                 "hardness_max": 6,
                 "respawntime_min": 60,
@@ -230,7 +230,7 @@
         {
             "res_id": "grass",
             "display": "health",
-            "proba": 4,
+            "proba": 0.04,
             "hardness_min": 1,
             "hardness_max": 1,
             "respawntime_min": 45,

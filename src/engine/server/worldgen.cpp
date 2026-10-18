@@ -472,7 +472,7 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 				for(int p = 0; p < Ore.m_Probes; p++)
 				{
 					const unsigned Hash = TileHash((int) Ring.m_NoiseSeed + o * 7919, (Ring.m_OffsetX + x) * 31 + p, y);
-					if(Ore.m_Proba < 100 && (int) (Hash % 100u) >= Ore.m_Proba)
+					if(HashToUnitFloat(Hash) >= Ore.m_Proba)
 						continue;
 
 					// Ring: the left shared strip is the previous instance's right
@@ -495,8 +495,8 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 		// Surface deposits: a small share of the ore stands in the open air on
 		// the ground line, visible and reachable without digging. The deep vein
 		// pass above is untouched; this only scatters a few nodes on the
-		// surface. m_SurfaceProba is the chance, in percent, for one eligible
-		// column to carry a node.
+		// surface. m_SurfaceProba is the 0..1 chance for one eligible column to
+		// carry a node.
 		int SurfaceCount = 0;
 		if(Ore.m_SurfaceProba > 0)
 		{
@@ -516,7 +516,7 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 					continue;
 
 				const unsigned Hash = TileHash((int) Ring.m_NoiseSeed + o * 104729 + 17, Ring.m_OffsetX + x, StandY);
-				if((int) (Hash % 100u) >= Ore.m_SurfaceProba)
+				if(HashToUnitFloat(Hash) >= Ore.m_SurfaceProba)
 					continue;
 
 				// see the deep vein pass: the left strip belongs to the neighbour

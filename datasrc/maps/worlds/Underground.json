@@ -16,7 +16,7 @@
                     "entrance": "Verdant"
                 }
             ],
-            "proba": 50
+            "proba": 0.50
         },
         {
             "base": "Underground_Left",
@@ -33,12 +33,12 @@
                     "entrance": "Highlands"
                 }
             ],
-            "proba": 50,
+            "proba": 0.50,
             "resources": [
                 {
                     "res_id": "heaven_ore",
                     "display": "armor",
-                    "proba": 10,
+                    "proba": 0.10,
                     "hardness_min": 5,
                     "hardness_max": 10,
                     "respawntime_min": 120,
@@ -64,7 +64,7 @@
         {
             "res_id": "stone",
             "display": "armor",
-            "proba": 30,
+            "proba": 0.30,
             "hardness_min": 1,
             "hardness_max": 5,
             "respawntime_min": 60,
@@ -73,7 +73,7 @@
         {
             "res_id": "lastday:iron_ore",
             "display": "armor",
-            "proba": 20,
+            "proba": 0.20,
             "hardness_min": 2,
             "hardness_max": 6,
             "respawntime_min": 90,

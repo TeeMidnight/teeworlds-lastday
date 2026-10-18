@@ -3,12 +3,12 @@
     "structs": [
         {
             "base": "Wonderland_Post",
-            "proba": 25,
+            "proba": 0.25,
             "resources": [
                 {
                     "res_id": "grass",
                     "display": "health",
-                    "proba": 70,
+                    "proba": 0.70,
                     "hardness_min": 1,
                     "hardness_max": 1,
                     "respawntime_min": 30,
@@ -18,12 +18,12 @@
         },
         {
             "base": "Wonderland_Post2",
-            "proba": 25,
+            "proba": 0.25,
             "resources": [
                 {
                     "res_id": "stone",
                     "display": "armor",
-                    "proba": 40,
+                    "proba": 0.40,
                     "hardness_min": 1,
                     "hardness_max": 4,
                     "respawntime_min": 45,
@@ -60,7 +60,7 @@
         {
             "res_id": "grass",
             "display": "health",
-            "proba": 55,
+            "proba": 0.55,
             "hardness_min": 1,
             "hardness_max": 1,
             "respawntime_min": 45,
@@ -69,7 +69,7 @@
         {
             "res_id": "heaven_ore",
             "display": "armor",
-            "proba": 10,
+            "proba": 0.10,
             "hardness_min": 5,
             "hardness_max": 10,
             "respawntime_min": 120,

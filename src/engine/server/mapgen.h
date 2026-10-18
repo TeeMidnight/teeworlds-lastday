@@ -12,6 +12,16 @@ struct _json_value;
 typedef struct _json_value json_value;
 struct CStructEntrance;
 
+// Maps a deterministic 32-bit hash onto [0,1). Probabilities in the floor
+// configs are fractions of this range (0.25 = 25%), which gives content far
+// finer control than whole percentages.
+inline float HashToUnitFloat(unsigned Hash)
+{
+	// 24 bits are exactly representable in a float, so the result is always
+	// strictly below 1.0 and never rounds up to a guaranteed success.
+	return (float) (Hash & 0xffffffu) / 16777216.0f;
+}
+
 // The kind of space a floor represents. The three kinds are generated and
 // traversed in fundamentally different ways, so this is a first class concept
 // rather than a set of optional config fields.
@@ -76,17 +86,17 @@ struct CInstruction
 		float m_Threshold; // noise above this becomes a vein
 		int m_MinDepth; // veins only below this depth
 		int m_Probes; // resource entities rolled per vein tile
-		int m_Proba;
+		float m_Proba; // 0..1 chance that a vein tile spawns resources
 		int m_HardnessMin;
 		int m_HardnessMax;
 		int m_RespawnTimeMin;
 		int m_RespawnTimeMax;
 
 		// Surface nodes: a few resources stand in the open air on the ground
-		// line so a player can see and reach them. m_SurfaceProba is the chance
-		// in percent for one eligible column; 0 disables the pass. The deep
-		// veins above are always generated.
-		int m_SurfaceProba;
+		// line so a player can see and reach them. m_SurfaceProba is the 0..1
+		// chance for one eligible column; 0 disables the pass. The deep veins
+		// above are always generated.
+		float m_SurfaceProba;
 	};
 
 	// A surface opening: a visible cave mouth cut into the terrain that carries
@@ -329,7 +339,7 @@ struct CInstruction
 	struct CStruct
 	{
 		char m_aBaseMap[64];
-		int m_GenerateProba;
+		float m_GenerateProba; // 0..1 chance to paste this struct
 		bool m_PasteAir; // whether empty struct tiles overwrite the base (default true)
 		array<char> m_EntrancesJson; // serialized entrances json of this struct (optional)
 		array<char> m_ResourcesJson; // serialized resources json of this struct (optional)

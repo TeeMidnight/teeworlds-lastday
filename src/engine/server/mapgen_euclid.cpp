@@ -76,7 +76,7 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 				continue;
 
 			const unsigned Hash = DeterministicHash((int) Ring.m_NoiseSeed + c * 104729 + 17, Ring.m_OffsetX + x);
-			if((int) (Hash % 100u) >= Config.m_Proba)
+			if(HashToUnitFloat(Hash) >= Config.m_Proba)
 				continue;
 
 			int Hardness = Config.m_HardnessMin;

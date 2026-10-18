@@ -3,7 +3,7 @@
     "structs": [
         {
             "base": "Darkness_Platform",
-            "proba": 20
+            "proba": 0.20
         }
     ],
     "entrances": [

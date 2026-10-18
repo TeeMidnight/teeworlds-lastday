@@ -326,8 +326,8 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed)
 			if(lPlacementsPerStruct[s] <= 0)
 				continue;
 			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
-			dbg_msg("mapgen", "  %2d x '%s' (proba %3d%%, paste_air=%s)",
-				lPlacementsPerStruct[s], Struct.m_aBaseMap, Struct.m_GenerateProba,
+			dbg_msg("mapgen", "  %2d x '%s' (proba %3.0f%%, paste_air=%s)",
+				lPlacementsPerStruct[s], Struct.m_aBaseMap, Struct.m_GenerateProba * 100.0f,
 				Struct.m_PasteAir ? "true" : "false");
 		}
 	}

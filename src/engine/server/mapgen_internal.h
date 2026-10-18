@@ -317,12 +317,12 @@ static inline void ParseGeneration(const json_value &rValue, CInstruction::CGene
 		Ore.m_Threshold = JsonFloat(rOre["threshold"], 0.78f);
 		Ore.m_MinDepth = JsonInt(rOre["min_depth"], 12);
 		Ore.m_Probes = JsonInt(rOre["probes"], 1);
-		Ore.m_Proba = JsonInt(rOre["proba"], 30);
+		Ore.m_Proba = clamp(JsonFloat(rOre["proba"], 0.30f), 0.0f, 1.0f);
 		Ore.m_HardnessMin = JsonInt(rOre["hardness_min"], 1);
 		Ore.m_HardnessMax = JsonInt(rOre["hardness_max"], 5);
 		Ore.m_RespawnTimeMin = JsonInt(rOre["respawntime_min"], 60);
 		Ore.m_RespawnTimeMax = JsonInt(rOre["respawntime_max"], 120);
-		Ore.m_SurfaceProba = JsonInt(rOre["surface_proba"], 0);
+		Ore.m_SurfaceProba = clamp(JsonFloat(rOre["surface_proba"], 0.0f), 0.0f, 1.0f);
 	}
 
 	const json_value &rEntrances = rValue["surface_entrances"];
@@ -490,7 +490,7 @@ static inline void ScanStructTiles(const CTile *pTiles, int Width, int Height, i
 	}
 }
 
-// deterministic probability roll in percent
+// deterministic hash used by the probability rolls
 static inline unsigned DeterministicHash(int Seed, int Salt)
 {
 	unsigned h = (unsigned) Seed * 0x9E3779B1u;
@@ -501,13 +501,14 @@ static inline unsigned DeterministicHash(int Seed, int Salt)
 	return h;
 }
 
-static inline bool RollChance(int Seed, int Salt, int Probability)
+// deterministic probability roll; Probability is a fraction in 0..1
+static inline bool RollChance(int Seed, int Salt, float Probability)
 {
-	if(Probability <= 0)
+	if(Probability <= 0.0f)
 		return false;
-	if(Probability >= 100)
+	if(Probability >= 1.0f)
 		return true;
-	return (DeterministicHash(Seed, Salt) % 100) < (unsigned) Probability;
+	return HashToUnitFloat(DeterministicHash(Seed, Salt)) < Probability;
 }
 
 // deterministic 1-in-N roll, matching the "random" field of the automapper
@@ -523,7 +524,7 @@ struct CResourceConfig
 {
 	char m_aResId[32];
 	char m_aDisplay[32];
-	int m_Proba;
+	float m_Proba; // 0..1 chance for an eligible spawn point
 	int m_HardnessMin;
 	int m_HardnessMax;
 	int m_RespawnTimeMin;
@@ -559,7 +560,7 @@ static inline void ParseResources(const char *pJsonData, array<CResourceConfig> 
 		CResourceConfig &Config = lOut.emplace();
 		str_copy(Config.m_aResId, rId.u.string.ptr, sizeof(Config.m_aResId));
 		str_copy(Config.m_aDisplay, rRes["display"], sizeof(Config.m_aDisplay));
-		Config.m_Proba = (int) (json_int_t) rRes["proba"];
+		Config.m_Proba = clamp(JsonFloat(rRes["proba"], 0.0f), 0.0f, 1.0f);
 		Config.m_HardnessMin = (int) (json_int_t) rRes["hardness_min"];
 		Config.m_HardnessMax = (int) (json_int_t) rRes["hardness_max"];
 		Config.m_RespawnTimeMin = (int) (json_int_t) rRes["respawntime_min"];

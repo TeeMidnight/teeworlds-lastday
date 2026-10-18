@@ -177,7 +177,7 @@
             {
                 "res_id": "stone",
                 "display": "armor",
-                "proba": 30,
+                "proba": 0.30,
                 "hardness_min": 1,
                 "hardness_max": 5,
                 "respawntime_min": 60,
@@ -194,7 +194,7 @@
             {
                 "res_id": "heaven_ore",
                 "display": "armor",
-                "proba": 10,
+                "proba": 0.10,
                 "hardness_min": 5,
                 "hardness_max": 10,
                 "respawntime_min": 120,
@@ -211,7 +211,7 @@
             {
                 "res_id": "silver_ore",
                 "display": "armor",
-                "proba": 18,
+                "proba": 0.18,
                 "hardness_min": 3,
                 "hardness_max": 7,
                 "respawntime_min": 100,
@@ -264,7 +264,7 @@
         {
             "res_id": "stone",
             "display": "armor",
-            "proba": 6,
+            "proba": 0.06,
             "hardness_min": 1,
             "hardness_max": 5,
             "respawntime_min": 60,
@@ -273,7 +273,7 @@
         {
             "res_id": "grass",
             "display": "health",
-            "proba": 4,
+            "proba": 0.04,
             "hardness_min": 1,
             "hardness_max": 1,
             "respawntime_min": 45,

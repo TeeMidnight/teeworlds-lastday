@@ -220,7 +220,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 			continue;
 		CInstruction::CStruct &Struct = pFloor->m_Structs.emplace();
 		str_copy(Struct.m_aBaseMap, rStruct["base"], sizeof(Struct.m_aBaseMap));
-		Struct.m_GenerateProba = (int) (json_int_t) rStruct["proba"];
+		Struct.m_GenerateProba = clamp(JsonFloat(rStruct["proba"], 0.0f), 0.0f, 1.0f);
 
 		// whether empty struct tiles overwrite the base map inside the struct
 		// region (default true, matching the previous hardcoded behavior)
