@@ -111,12 +111,18 @@ void sort_quick(R range)
 template<class R, class Cmp>
 void sort(R range, Cmp cmp)
 {
+	// an empty range has no front()/back() to take the bounds from; sorting
+	// nothing is a no-op, not an error (this mirrored std::sort(begin, end))
+	if(range.empty())
+		return;
 	std::stable_sort(&range.front(), &range.back() + 1, cmp);
 }
 
 template<class R>
 void sort(R range)
 {
+	if(range.empty())
+		return;
 	std::stable_sort(&range.front(), &range.back() + 1);
 }
 
