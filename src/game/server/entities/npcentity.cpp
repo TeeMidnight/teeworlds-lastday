@@ -462,6 +462,7 @@ void CNpcEntity::TickInteract()
 		// tell the player once, when they first step into range
 		if(InRange && !m_aClientInRange[i])
 		{
+			CLanguageScope LanguageScope(GameServer()->LanguageOf(i));
 			const std::string Msg = LocalizeFormat("NPC", "You unlocked the shop of {}.", NpcIDDisplayName(m_pDef->m_Id));
 			GameServer()->SendChat(-1, CHAT_WHISPER, i, Msg.c_str());
 		}

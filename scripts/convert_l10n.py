@@ -12,6 +12,7 @@ format = "{0:40} {1:8} {2:8} {3:8}".format
 SOURCE_EXTS = [".c", ".cpp", ".h"]
 
 JSON_KEY_AUTHORS="authors"
+JSON_KEY_NAME="name"
 JSON_KEY_CLIENT="client strings"
 JSON_KEY_SERVER="server strings"
 JSON_KEY_ITEM="item strings"
@@ -21,6 +22,10 @@ JSON_KEY_OR="or"
 JSON_KEY_TR="tr"
 
 SOURCE_LOCALIZE_RE=re.compile(br'Localize\("(?P<str>([^"\\]|\\.)*)"(, ?"(?P<ctxt>([^"\\]|\\.)*)")?\)')
+# LocalizeFormat("context", "format") -- the context comes first
+SOURCE_LOCALIZE_FORMAT_RE=re.compile(br'LocalizeFormat\("(?P<ctxt>([^"\\]|\\.)*)"\s*,\s*"(?P<str>([^"\\]|\\.)*)"')
+# SendSystemChat(client, "context", "text") -- the helper localizes internally
+SOURCE_SEND_SYSTEM_CHAT_RE=re.compile(br'SendSystemChat\([^,]+,\s*"(?P<ctxt>([^"\\]|\\.)*)"\s*,\s*"(?P<str>([^"\\]|\\.)*)"')
 
 # contexts used for item names and descriptions in the inventory menu
 ITEM_NAME_CTXT = "Item Name"
@@ -68,13 +73,20 @@ def parse_source():
 	l10n_client = defaultdict(lambda: str)
 	l10n_server = defaultdict(lambda: str)
 
+	def add_match(match, l10n):
+		str_ = match.group('str').decode()
+		ctxt = match.group('ctxt')
+		if ctxt is not None:
+			ctxt = ctxt.decode()
+		l10n[(str_, ctxt)] = ""
+
 	def process_line(line, l10n):
 		for match in SOURCE_LOCALIZE_RE.finditer(line):
-			str_ = match.group('str').decode()
-			ctxt = match.group('ctxt')
-			if ctxt is not None:
-				ctxt = ctxt.decode()
-			l10n[(str_, ctxt)] = ""
+			add_match(match, l10n)
+		for match in SOURCE_LOCALIZE_FORMAT_RE.finditer(line):
+			add_match(match, l10n)
+		for match in SOURCE_SEND_SYSTEM_CHAT_RE.finditer(line):
+			add_match(match, l10n)
 
 	for root, dirs, files in os.walk("src"):
 		for name in files:
@@ -128,6 +140,9 @@ def write_languagefile(outputfilename, l10n_client_src, l10n_server_src, l10n_it
 		JSON_KEY_ITEM: build_array(merge_old(JSON_KEY_ITEM, l10n_item_src)),
 		JSON_KEY_AUTHORS: old_l10n_data.get(JSON_KEY_AUTHORS),
 	}
+	# a language's display name is metadata, not extracted from the source
+	if old_l10n_data.get(JSON_KEY_NAME):
+		result[JSON_KEY_NAME] = old_l10n_data[JSON_KEY_NAME]
 
 	for key in (JSON_KEY_CLIENT, JSON_KEY_SERVER, JSON_KEY_ITEM):
 		# sort by context first, then by the original string within a context

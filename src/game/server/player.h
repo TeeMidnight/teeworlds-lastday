@@ -148,6 +148,8 @@ public:
 	struct CStatus
 	{
 		bool m_HideTip; // game menu
+		// UI language code ("zh", "en", ...); "" follows the server default
+		char m_aLanguage[16];
 		// mercury chapter (forgetting): 0..100, 0 = clear mind, 100 = total
 		// amnesia. rises on death, sinks through recall items / quiet time
 		int m_Forgetting;
@@ -165,6 +167,11 @@ public:
 	// account (bound on login / register)
 	Uuid m_AccountUuid;
 	bool m_LoggedIn;
+
+	// localization language selected by this player; unknown/empty falls back
+	// to the server default
+	int Language() const;
+	bool SetLanguage(const char *pCode);
 
 	// persist the player status (forgetting, inventory, loadout) to/from the
 	// database; each field is accessed individually through its json

@@ -910,6 +910,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     jsonparser.cpp
     jsonwriter.cpp
     legacy_compat.cpp
+    localization.cpp
     packer.cpp
     partial_array.cpp
     silent_step.cpp

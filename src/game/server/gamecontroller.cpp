@@ -7,6 +7,7 @@
 #include <engine/shared/config.h>
 #include <cmath>
 
+#include <game/localization_format.h>
 #include <game/mapitems.h>
 #include <game/version.h>
 #include <generated/server_data.h>
@@ -124,6 +125,7 @@ int CGameController::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, int
 	CPlayer *pVictimPlayer = pVictim->GetPlayer();
 	if(pVictimPlayer)
 	{
+		CLanguageScope LanguageScope(pVictimPlayer->Language());
 		const int OldForgetting = pVictimPlayer->m_Status.m_Forgetting;
 		int NewForgetting = clamp(OldForgetting + 20, 0, 100);
 		if(NewForgetting >= 100)
@@ -310,7 +312,10 @@ void CGameController::OnPlayerReadyChange(CPlayer *pPlayer)
 {
 	// change players ready state
 	pPlayer->m_IsReadyToPlay ^= 1;
-	SendSystemChat(pPlayer->GetCID(), pPlayer->m_IsReadyToPlay ? "行动状态：奔跑" : "行动状态：静步");
+	CLanguageScope LanguageScope(pPlayer->Language());
+	SendSystemChat(pPlayer->GetCID(), pPlayer->m_IsReadyToPlay
+		? Localize("Action state: running", "Action")
+		: Localize("Action state: silent", "Action"));
 }
 
 // general
@@ -657,17 +662,17 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 		return;
 	if(!pDB)
 	{
-		pSelf->SendSystemChat(ClientID, Localize("The database is not available.", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "The database is not available.");
 		return;
 	}
 	if(pResult->NumArguments() < 2)
 	{
-		pSelf->SendSystemChat(ClientID, Localize("Usage: /register <username> <password>", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "Usage: /register <username> <password>");
 		return;
 	}
 	if(pPlayer->m_LoggedIn)
 	{
-		pSelf->SendSystemChat(ClientID, Localize("You are already logged in.", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "You are already logged in.");
 		return;
 	}
 
@@ -677,7 +682,7 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	CDatabase::SPlayerData Row;
 	if(pDB->FindByName(pUsername, Row))
 	{
-		pSelf->SendSystemChat(ClientID, Localize("This username is already taken.", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "This username is already taken.");
 		return;
 	}
 
@@ -689,7 +694,7 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 
 	if(!pDB->InsertPlayer(Row))
 	{
-		pSelf->SendSystemChat(ClientID, Localize("Failed to create the account.", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "Failed to create the account.");
 		return;
 	}
 
@@ -710,7 +715,7 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	pItem->AddItem(ClientID, "bandage", 3, true);
 
 	pPlayer->SaveStatus(pDB); // persist the initial status fields
-	pSelf->SendSystemChat(ClientID, Localize("Account created. You are now logged in.", "Account"));
+	pSelf->SendSystemChat(ClientID, "Account", "Account created. You are now logged in.");
 }
 
 void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
@@ -725,17 +730,17 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 		return;
 	if(!pDB)
 	{
-		pSelf->SendSystemChat(ClientID, Localize("The database is not available.", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "The database is not available.");
 		return;
 	}
 	if(pResult->NumArguments() < 2)
 	{
-		pSelf->SendSystemChat(ClientID, Localize("Usage: /login <username> <password>", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "Usage: /login <username> <password>");
 		return;
 	}
 	if(pPlayer->m_LoggedIn)
 	{
-		pSelf->SendSystemChat(ClientID, Localize("You are already logged in.", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "You are already logged in.");
 		return;
 	}
 
@@ -745,12 +750,12 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 	CDatabase::SPlayerData Row;
 	if(!pDB->FindByName(pUsername, Row))
 	{
-		pSelf->SendSystemChat(ClientID, Localize("No such account.", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "No such account.");
 		return;
 	}
 	if(!VerifyPassword(Row.m_aPasswordHash, pPassword))
 	{
-		pSelf->SendSystemChat(ClientID, Localize("Wrong password.", "Account"));
+		pSelf->SendSystemChat(ClientID, "Account", "Wrong password.");
 		return;
 	}
 
@@ -762,7 +767,44 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
 	pPlayer->TryRespawn();
 	pPlayer->LoadStatus(pDB);
-	pSelf->SendSystemChat(ClientID, Localize("Logged in.", "Account"));
+	pSelf->SendSystemChat(ClientID, "Account", "Logged in.");
+}
+
+void CGameController::ComLanguage(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	const int ClientID = pCmdContext->m_ClientID;
+	CPlayer *pPlayer = pSelf->GameServer()->m_apPlayers[ClientID];
+
+	if(!pPlayer)
+		return;
+
+	if(pResult->NumArguments() == 0)
+	{
+		pSelf->SendSystemChat(ClientID, "Language", "Available languages:");
+		for(int i = 0; i < g_Localization.NumLanguages(); i++)
+		{
+			char aBuf[128];
+			str_format(aBuf, sizeof(aBuf), "%s%s (%s)", i == pPlayer->Language() ? "* " : "  ",
+				g_Localization.LanguageName(i), g_Localization.LanguageCode(i));
+			pSelf->SendSystemChat(ClientID, aBuf);
+		}
+		pSelf->SendSystemChat(ClientID, "Language", "Usage: /lang <code>");
+		return;
+	}
+
+	if(!pPlayer->SetLanguage(pResult->GetString(0)))
+	{
+		pSelf->SendSystemChat(ClientID, "Language", "Unknown language. Use /lang to list available languages.");
+		return;
+	}
+
+	pSelf->GameServer()->SavePlayerData(pPlayer);
+
+	CLanguageScope LanguageScope(pPlayer->Language());
+	const std::string Msg = LocalizeFormat("Language", "Language set to {}.", g_Localization.LanguageName(pPlayer->Language()));
+	pSelf->GameServer()->SendChat(-1, CHAT_ALL, ClientID, Msg.c_str());
 }
 
 void CGameController::RegisterChatCommands(CCommandManager *pManager)
@@ -771,9 +813,16 @@ void CGameController::RegisterChatCommands(CCommandManager *pManager)
 	pManager->AddCommand("info", "About the mod", "", Com_About, this);
 	pManager->AddCommand("register", "Register a new account", "s[username] s[password]", ComRegister, this);
 	pManager->AddCommand("login", "Log in to an account", "s[username] s[password]", ComLogin, this);
+	pManager->AddCommand("lang", "Set your language", "?s[code]", ComLanguage, this);
 }
 
 void CGameController::SendSystemChat(int TargetID, const char *pMsg)
 {
 	GameServer()->SendChat(-1, CHAT_ALL, TargetID, pMsg);
+}
+
+void CGameController::SendSystemChat(int TargetID, const char *pContext, const char *pText)
+{
+	CLanguageScope LanguageScope(GameServer()->LanguageOf(TargetID));
+	GameServer()->SendChat(-1, CHAT_ALL, TargetID, Localize(pText, pContext));
 }

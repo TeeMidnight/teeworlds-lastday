@@ -246,6 +246,8 @@ public:
 
 	// display name of the item (localized), or the source/id fallback
 	const char *GetName(const CItemID &Id) const;
+	// untranslated display name, used as the description's translation context
+	const char *GetRawName(const CItemID &Id) const;
 	// description of the item, or "" when unknown
 	const char *GetDesc(const CItemID &Id) const;
 	// whether an item definition exists for this id

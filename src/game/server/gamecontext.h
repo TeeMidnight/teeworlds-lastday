@@ -167,6 +167,8 @@ public:
 
 	// helper functions
 	class CCharacter *GetPlayerChar(int ClientID);
+	// localization language of a client, or the server default
+	int LanguageOf(int ClientID) const;
 
 	int m_LockTeams;
 

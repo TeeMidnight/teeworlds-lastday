@@ -14,6 +14,7 @@ void CPlayer::CaptureStatus(CDbJob &Job)
 	DbSet(Job, CJsonPath().Key("forgetting"), m_Status.m_Forgetting);
 	DbSet(Job, CJsonPath().Key("level"), m_Status.m_Level);
 	DbSet(Job, CJsonPath().Key("hide_tip"), m_Status.m_HideTip);
+	DbSet(Job, CJsonPath().Key("language"), m_Status.m_aLanguage);
 
 	// characters
 	if(m_pCharacter)
@@ -159,6 +160,11 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 	}
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("level"), &m_Status.m_Level);
 	GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("hide_tip"), &m_Status.m_HideTip);
+	// an account-level language overrides the session choice; no saved value
+	// keeps whatever the player selected before logging in
+	char aLanguage[16] = "";
+	if(GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("language"), aLanguage, sizeof(aLanguage)) && aLanguage[0])
+		SetLanguage(aLanguage);
 
 	// character infos: a player may log in while dead or spectating, when
 	// there is no character to write the saved health back into

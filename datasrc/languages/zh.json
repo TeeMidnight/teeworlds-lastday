@@ -1,5 +1,6 @@
 {
 	"authors": [],
+	"name": "简体中文",
 	"client strings": [],
 	"item strings": [
 		{
@@ -1078,6 +1079,61 @@
 			"context": "Drill",
 			"or": "Drill engaged. Aim with the cursor, hold fire to bore, jump to let go.",
 			"tr": "已接入钻头。用准星瞄准，按住开火开始钻探，跳跃退出。"
+		},
+		{
+			"or": "Action state: running",
+			"tr": "行动状态：奔跑",
+			"context": "Action"
+		},
+		{
+			"or": "Action state: silent",
+			"tr": "行动状态：静步",
+			"context": "Action"
+		},
+		{
+			"or": "Language",
+			"tr": "语言",
+			"context": "LANG"
+		},
+		{
+			"or": "Available languages:",
+			"tr": "可用语言：",
+			"context": "Language"
+		},
+		{
+			"or": "Language set.",
+			"tr": "语言已设置。",
+			"context": "Language"
+		},
+		{
+			"or": "Language set to {}.",
+			"tr": "语言已设置为 {}。",
+			"context": "Language"
+		},
+		{
+			"or": "Unknown language. Use /lang to list available languages.",
+			"tr": "未知语言。使用 /lang 查看可用语言。",
+			"context": "Language"
+		},
+		{
+			"or": "Usage: /lang <code>",
+			"tr": "用法：/lang <语言代码>",
+			"context": "Language"
+		},
+		{
+			"or": "Choose your language:",
+			"tr": "选择你的语言：",
+			"context": "Menu Language"
+		},
+		{
+			"or": "Language",
+			"tr": "语言",
+			"context": "Menu Main"
+		},
+		{
+			"or": "Bought {} x{} from {}",
+			"tr": "从 {2} 购买了 {0} x{1}",
+			"context": "Trade"
 		}
 	]
 }

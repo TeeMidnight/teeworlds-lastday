@@ -136,6 +136,7 @@ public:
 	static void Com_About(IConsole::IResult *pResult, void *pContext);
 	static void ComRegister(IConsole::IResult *pResult, void *pContext);
 	static void ComLogin(IConsole::IResult *pResult, void *pContext);
+	static void ComLanguage(IConsole::IResult *pResult, void *pContext);
 	void RegisterChatCommands(CCommandManager *pManager);
 
 	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }
@@ -145,6 +146,8 @@ public:
 	bool IsUsingBot() const;
 
 	void SendSystemChat(int TargetID, const char *pMsg);
+	// translate pText into the target's language before sending it
+	void SendSystemChat(int TargetID, const char *pContext, const char *pText);
 	bool IsCharacterSnapable(int SnappingClient, int ClientID) const { return true; }
 };
 

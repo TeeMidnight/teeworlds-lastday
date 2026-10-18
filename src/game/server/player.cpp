@@ -3,6 +3,8 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
+#include <game/localization.h>
+
 #include "entities/character.h"
 #include "entities/drill.h"
 #include "gamecontext.h"
@@ -42,6 +44,7 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	mem_zero(&m_Latency, sizeof(m_Latency));
 
 	m_Status.m_HideTip = false;
+	m_Status.m_aLanguage[0] = '\0';
 	m_Status.m_Forgetting = 0; // mercury chapter: start with a clear mind
 	m_Status.m_Level = 0;
 	m_Status.m_LoadoutSet = false;
@@ -58,6 +61,26 @@ CPlayer::~CPlayer()
 {
 	delete m_pCharacter;
 	m_pCharacter = 0;
+}
+
+int CPlayer::Language() const
+{
+	const int Language = g_Localization.FindLanguage(m_Status.m_aLanguage);
+	return Language >= 0 ? Language : g_Localization.DefaultLanguage();
+}
+
+bool CPlayer::SetLanguage(const char *pCode)
+{
+	if(!pCode || !pCode[0])
+	{
+		m_Status.m_aLanguage[0] = '\0';
+		return true;
+	}
+	const int Language = g_Localization.FindLanguage(pCode);
+	if(Language < 0)
+		return false;
+	str_copy(m_Status.m_aLanguage, g_Localization.LanguageCode(Language), sizeof(m_Status.m_aLanguage));
+	return true;
 }
 
 void CPlayer::Tick()
@@ -526,6 +549,7 @@ void CPlayer::UpdateDrillControl()
 	if(!pBest)
 		return;
 
+	CLanguageScope LanguageScope(Language());
 	pBest->SetController(m_ClientID);
 	m_DrillControlID = pBest->GetID();
 	m_pCharacter->SetDrillControl(true);

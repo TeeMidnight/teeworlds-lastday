@@ -40,6 +40,7 @@ int CTradeSystem::AddListing(int Seller, const CItemID &OfferItem, int OfferCoun
 {
 	if(!m_pGameServer || Seller < 0 || Seller >= MAX_CLIENTS)
 		return -1;
+	CLanguageScope LanguageScope(m_pGameServer->LanguageOf(Seller));
 	if(OfferItem.IsZero() || PriceItem.IsZero() || OfferCount <= 0 || PriceCount <= 0)
 	{
 		m_pGameServer->SendChat(-1, CHAT_WHISPER, Seller, Localize("Invalid listing.", "Trade"));
@@ -84,6 +85,7 @@ bool CTradeSystem::RemoveListing(int ListingId, int ByClient, bool Force)
 	const int Index = FindIndex(ListingId);
 	if(Index < 0)
 		return false;
+	CLanguageScope LanguageScope(m_pGameServer->LanguageOf(ByClient));
 	const SListing Listing = m_lListings[Index];
 	if(!Force && Listing.m_Seller != ByClient)
 	{
@@ -120,6 +122,7 @@ void CTradeSystem::RemoveListingsOf(int ClientID)
 
 bool CTradeSystem::Buy(int Buyer, int ListingId)
 {
+	CLanguageScope BuyerLanguageScope(m_pGameServer->LanguageOf(Buyer));
 	const int Index = FindIndex(ListingId);
 	if(Index < 0)
 	{
@@ -169,9 +172,12 @@ bool CTradeSystem::Buy(int Buyer, int ListingId)
 
 	const std::string ToBuyer = LocalizeFormat("Trade", "Bought #{}: {} x{}", ListingId, Listing.m_OfferItem, Listing.m_OfferCount);
 	m_pGameServer->SendChat(-1, CHAT_WHISPER, Buyer, ToBuyer.c_str());
-	const std::string ToSeller = LocalizeFormat("Trade", "Sold #{}: {} x{} for {} x{}",
-		ListingId, Listing.m_OfferItem, Listing.m_OfferCount, Listing.m_PriceItem, Listing.m_PriceCount);
-	m_pGameServer->SendChat(-1, CHAT_WHISPER, Listing.m_Seller, ToSeller.c_str());
+	{
+		CLanguageScope SellerLanguageScope(m_pGameServer->LanguageOf(Listing.m_Seller));
+		const std::string ToSeller = LocalizeFormat("Trade", "Sold #{}: {} x{} for {} x{}",
+			ListingId, Listing.m_OfferItem, Listing.m_OfferCount, Listing.m_PriceItem, Listing.m_PriceCount);
+		m_pGameServer->SendChat(-1, CHAT_WHISPER, Listing.m_Seller, ToSeller.c_str());
+	}
 	return true;
 }
 

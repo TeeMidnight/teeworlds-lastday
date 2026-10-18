@@ -146,6 +146,13 @@ class CCharacter *CGameContext::GetPlayerChar(int ClientID)
 	return m_apPlayers[ClientID]->GetCharacter();
 }
 
+int CGameContext::LanguageOf(int ClientID) const
+{
+	if(ClientID >= 0 && ClientID < MAX_CLIENTS && m_apPlayers[ClientID])
+		return m_apPlayers[ClientID]->Language();
+	return g_Localization.DefaultLanguage();
+}
+
 // ----- send functions -----
 void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *pText)
 {
@@ -235,6 +242,7 @@ void CGameContext::SendWeaponPickup(int ClientID, int Weapon)
 
 void CGameContext::SendMotd(int ClientID)
 {
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
 	CNetMsg_Sv_Motd Msg;
 	Msg.m_pMessage = Config()->m_SvMotd;
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientID);
@@ -372,6 +380,7 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 
 bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction)
 {
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
 	CPlayer *pPlayer = m_apPlayers[ClientID];
 	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
 	if(!pChr)
@@ -420,6 +429,7 @@ bool CGameContext::PlaceDrill(int ClientID, const CItemID &ItemId)
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || !m_apPlayers[ClientID])
 		return false;
 
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
 	CCharacter *pChr = GetPlayerChar(ClientID);
 	if(!pChr)
 	{
@@ -594,6 +604,7 @@ void CGameContext::OnClientPredictedInput(int ClientID, void *pInput)
 
 void CGameContext::OnClientEnter(int ClientID)
 {
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
 	// send chat commands
 	SendChatCommands(ClientID);
 
@@ -862,6 +873,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			}
 			else if(pMsg->m_Team != TEAM_SPECTATORS && !pPlayer->m_LoggedIn)
 			{
+				CLanguageScope LanguageScope(LanguageOf(ClientID));
 				SendChat(-1, CHAT_ALL, ClientID, Localize("You must be logged in to join the game. Use /login <username> <password>.", "Account"));
 			}
 		}
@@ -1128,7 +1140,7 @@ void CGameContext::ConchainLanguageUpdate(IConsole::IResult *pResult, void *pUse
 	if(pResult->NumArguments())
 	{
 		CGameContext *pSelf = (CGameContext *) pUserData;
-		g_Localization.Load(pSelf->Config()->m_SvLanguagefile, pSelf->Storage(), pSelf->Console(), true);
+		g_Localization.LoadAll(pSelf->Config()->m_SvLanguagefile, pSelf->Storage(), pSelf->Console(), true);
 	}
 }
 
@@ -1183,7 +1195,7 @@ void CGameContext::OnInit()
 
 	m_CommandManager.Init(m_pConsole, this, NewCommandHook, RemoveCommandHook);
 
-	g_Localization.Load(Config()->m_SvLanguagefile, Storage(), Console(), true);
+	g_Localization.LoadAll(Config()->m_SvLanguagefile, Storage(), Console(), true);
 
 	// HACK: only set static size for items, which were available in the first 0.7 release
 	// so new items don't break the snapshot delta
@@ -1284,6 +1296,7 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 {
 	if(!m_pNpcSystem || ClientID < 0 || ClientID >= MAX_CLIENTS || !m_apPlayers[ClientID])
 		return false;
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
 	const SNpcDef *pDef = m_pNpcSystem->DefAt(DefIndex);
 	if(!pDef || SellIndex < 0 || SellIndex >= pDef->m_lSells.size())
 		return false;
@@ -1330,7 +1343,7 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 		return false;
 	}
 
-	const std::string Msg = std::format("Bought {} x{} from {}", pItems->GetName(Sell.m_Item), Sell.m_Count, NpcIDDisplayName(pDef->m_Id));
+	const std::string Msg = LocalizeFormat("Trade", "Bought {} x{} from {}", pItems->GetName(Sell.m_Item), Sell.m_Count, NpcIDDisplayName(pDef->m_Id));
 	SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
 
 	// other players looking at the shop must see the stock drop too; the caller

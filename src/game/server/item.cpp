@@ -293,6 +293,8 @@ bool CItemSystem::AddItem(int ClientID, const CItemID &Id, int Count, bool Silen
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
 		return false;
 
+	CLanguageScope LanguageScope(m_pGameServer->LanguageOf(ClientID));
+
 	// never insert a zeroed, unknown or negative stack: the id can come from map
 	// data or a database row, and an unknown id is unrenderable and unmatchable
 	if(Id.IsZero() || Count <= 0 || !IsKnownItem(Id))
@@ -323,6 +325,12 @@ bool CItemSystem::AddItem(int ClientID, const char *pId, int Count, bool SilentF
 const char *CItemSystem::GetName(const CItemID &Id) const
 {
 	return ItemIDDisplayName(Id);
+}
+
+const char *CItemSystem::GetRawName(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem ? pItem->m_aName : "";
 }
 
 const char *CItemSystem::GetDesc(const CItemID &Id) const

@@ -207,8 +207,11 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		const char *pDesc = pItem->GetDesc(Id);
 		if(pDesc && pDesc[0])
 		{
+			// the context is keyed by the untranslated display name, even when
+			// the player sees the localized one
+			const char *pRawName = pItem->GetRawName(Id);
 			char aCtx[128];
-			str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pName);
+			str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pRawName[0] ? pRawName : pName);
 			pMenu->AddWrappedLinesOption(Localize(pDesc, aCtx));
 		}
 	}

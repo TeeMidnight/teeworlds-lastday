@@ -85,6 +85,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	Register("TRADE_SELL_PRICE_COUNT", "Price Amount", MenuTradeSellPriceCount, nullptr, "TRADE_SELL_PRICE"); // Localize("Price Amount", "TRADE_SELL_PRICE_COUNT")
 	Register("TRADE_MINE", "My Listings", MenuTradeMine, nullptr, "TRADE"); // Localize("My Listings", "TRADE_MINE")
 	Register("VOTE", "Server Vote", MenuVote, nullptr); // Localize("Server Vote", "VOTE")
+	Register("LANG", "Language", MenuLanguage, nullptr); // Localize("Language", "LANG")
 }
 
 void CGameMenu::Register(const char *pPageName, const char *pTitle, FMenuCallback pfnFunc, void *pUser, const char *pParent)
@@ -122,6 +123,9 @@ void CGameMenu::OnMenuVote(int ClientID, CCallVoteStatus &VoteStatus, bool Sound
 		return;
 
 	m_CurrentClientID = ClientID;
+	// every Localize() in the page callback, including nested item names in
+	// std::format, resolves against this player's language
+	CLanguageScope LanguageScope(GameServer()->LanguageOf(ClientID));
 
 	unsigned &CurrentPage = m_aPlayerData[ClientID].m_CurrentPage;
 	if(!m_MenuPages.get(CurrentPage))
@@ -291,6 +295,11 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->SetPlayerPage(ClientID, "TRADE");
 			return false;
 		}
+		else if(str_comp(VoteStatus.m_aCmd, "PAGE LANG") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "LANG");
+			return false;
+		}
 		else if(str_comp(VoteStatus.m_aCmd, "HIDDEN") == 0)
 		{
 			pMenu->GameServer()->m_apPlayers[ClientID]->m_Status.m_HideTip = true;
@@ -329,8 +338,44 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
+		pMenu->AddOption(Localize("Language", "Menu Main"), "PAGE LANG", "★");
 	}
 
+	return true;
+}
+
+// static
+bool CGameMenu::MenuLanguage(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	if(str_startswith(VoteStatus.m_aCmd, "SETLANG "))
+	{
+		const char *pCode = VoteStatus.m_aCmd + str_length("SETLANG ");
+		if(pPlayer->SetLanguage(pCode))
+		{
+			pMenu->GameServer()->SavePlayerData(pPlayer);
+			CLanguageScope LanguageScope(pPlayer->Language());
+			pMenu->GameServer()->SendChat(-1, CHAT_ALL, ClientID, Localize("Language set.", "Language"));
+		}
+		pMenu->SetPlayerPage(ClientID, "LANG");
+		return false;
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	pMenu->AddOption(Localize("Choose your language:", "Menu Language"), "DISPLAY", "-");
+	for(int i = 0; i < g_Localization.NumLanguages(); i++)
+	{
+		char aCmd[32];
+		str_format(aCmd, sizeof(aCmd), "SETLANG %s", g_Localization.LanguageCode(i));
+		char aDesc[128];
+		str_format(aDesc, sizeof(aDesc), "%s (%s)", g_Localization.LanguageName(i), g_Localization.LanguageCode(i));
+		pMenu->AddOption(aDesc, aCmd, i == pPlayer->Language() ? "★" : "");
+	}
 	return true;
 }
 
