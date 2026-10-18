@@ -308,6 +308,13 @@ struct CInstruction
 		};
 		CRingConfig m_Ring;
 
+		// The anchor of the generated background scenery: the highest ground
+		// (smallest tile y) anywhere on the ring. All instances of a ring have
+		// to agree on it or the clouds and mountains jump vertically when a
+		// player crosses into the neighbour. Cached because every instance
+		// would otherwise scan the whole ring again; -1 while unknown.
+		mutable int m_RingBackgroundGroundY;
+
 		// every layer to emit, in the order they are written out
 		array<CLayerConfig> m_Layers;
 

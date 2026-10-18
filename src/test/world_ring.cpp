@@ -46,6 +46,7 @@ void MakeInstruction(CInstruction &Inst, bool Ring)
 	Inst.m_Generation.m_Ring.m_Size = 1024;
 	Inst.m_Generation.m_Ring.m_SharedMargin = M;
 	Inst.m_Generation.m_Ring.m_BaseSeed = 1234;
+	Inst.m_Generation.m_RingBackgroundGroundY = -1;
 
 	Inst.m_Generation.m_Caves.m_Enabled = true;
 	Inst.m_Generation.m_Caves.m_Noise.m_Octaves = 3;
@@ -174,6 +175,35 @@ TEST(WorldRing, NeighboursShareTheirTerrainAndResources)
 		EXPECT_GE(pA->m_lResources[i].m_X, M) << "slice 1 node in its left strip";
 	for(int i = 0; i < pB->m_lResources.size(); i++)
 		EXPECT_GE(pB->m_lResources[i].m_X, M) << "slice 2 node in its left strip";
+
+	delete pA;
+	delete pB;
+}
+
+TEST(WorldRing, BackgroundAnchorsToTheWholeRing)
+{
+	// Every instance of a ring has to anchor its clouds and mountains to the
+	// same ground line, otherwise the scenery jumps vertically on a crossing.
+	// The anchor is the highest ground of the whole ring, so it also has to sit
+	// at or above (a smaller y than) the highest ground of each instance.
+	CInstruction Inst;
+	MakeInstruction(Inst, true);
+	CGeneratedWorld *pA = GenerateEuclideanWorld(&Inst, 1);
+	CGeneratedWorld *pB = GenerateEuclideanWorld(&Inst, 2);
+	ASSERT_NE(pA, nullptr);
+	ASSERT_NE(pB, nullptr);
+
+	const auto HighestGround = [](const CGeneratedWorld *pWorld) {
+		int Y = pWorld->m_Surface[0];
+		for(int i = 1; i < pWorld->m_Surface.size(); i++)
+			Y = minimum(Y, pWorld->m_Surface[i]);
+		return Y;
+	};
+	const int HighestA = HighestGround(pA);
+	const int HighestB = HighestGround(pB);
+	EXPECT_EQ(pA->m_BackgroundGroundY, pB->m_BackgroundGroundY);
+	EXPECT_LE(pA->m_BackgroundGroundY, HighestA);
+	EXPECT_LE(pA->m_BackgroundGroundY, HighestB);
 
 	delete pA;
 	delete pB;

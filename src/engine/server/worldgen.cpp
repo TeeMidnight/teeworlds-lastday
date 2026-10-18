@@ -26,6 +26,7 @@
 CGeneratedWorld::CGeneratedWorld()
 {
 	m_Surface.clear();
+	m_BackgroundGroundY = -1;
 	m_lLayers.clear();
 	m_lResources.clear();
 	m_lEntrances.clear();
@@ -139,6 +140,45 @@ static int RollRange(unsigned Hash, int Min, int Max)
 // terrain
 // ---------------------------------------------------------------------------
 
+// The two fractal fields that make the ground line. Built once per instance
+// instead of once per sampled column.
+struct SHeightField
+{
+	noise::CFractalParams m_Surface;
+	noise::CFractalParams m_Warp;
+};
+
+static SHeightField MakeHeightField(const CInstruction::CGeneration &rGen)
+{
+	SHeightField Field;
+	Field.m_Surface = ToNoiseParams(rGen.m_Surface);
+
+	// a second, much lower frequency field warps the height so the world gets
+	// continents instead of a uniform ripple
+	Field.m_Warp = Field.m_Surface;
+	Field.m_Warp.m_Frequency = Field.m_Surface.m_Frequency * 0.25f;
+	Field.m_Warp.m_Octaves = maximum(1, Field.m_Surface.m_Octaves - 2);
+	return Field;
+}
+
+// The height in tile y of one global column of the ring. Every instance samples
+// the same field at the same global columns, which is what makes the terrain
+// continue across a seam.
+static int SurfaceYAt(const CInstruction::CGeneration &rGen, const CWorldRing &Ring, const SHeightField &Field, int GlobalX)
+{
+	const float X = (float) GlobalX;
+	const float Base = noise::Fractal2DPeriodic((unsigned) (Ring.m_NoiseSeed + (unsigned) rGen.m_Surface.m_SeedOffset), Field.m_Surface,
+		X, 0.0f, (float) Ring.m_Period);
+	const float Warp = noise::Fractal2DPeriodic((unsigned) (Ring.m_NoiseSeed * 3u + 77u + (unsigned) rGen.m_Surface.m_SeedOffset), Field.m_Warp,
+		X, 1000.0f, (float) Ring.m_Period);
+	const float Height = Base + Warp * 0.5f;
+
+	int Y = rGen.m_SurfaceLevel - (int) (Height * rGen.m_SurfaceAmplitude);
+	// keep the ground line inside the map, clear of the sealed top and bottom
+	// leave room for the open sky above and the sealed floor below
+	return clamp(Y, 16, rGen.m_Height - rGen.m_EdgeWall - 8);
+}
+
 // Builds the surface height of every column.
 //
 // The world is a cylinder, so the field is sampled periodically: that makes the
@@ -149,15 +189,7 @@ static int RollRange(unsigned Hash, int Min, int Max)
 // tiles in, which is worse.
 static void GenerateHeightmap(const CInstruction::CGeneration &rGen, int Seed, array<int> &lSurface)
 {
-	const noise::CFractalParams SurfaceParams = ToNoiseParams(rGen.m_Surface);
-
-	// a second, much lower frequency field warps the height so the world gets
-	// continents instead of a uniform ripple
-	const noise::CFractalParams WarpParams = ToNoiseParams(rGen.m_Surface);
-	noise::CFractalParams LowWarp = WarpParams;
-	LowWarp.m_Frequency = WarpParams.m_Frequency * 0.25f;
-	LowWarp.m_Octaves = maximum(1, WarpParams.m_Octaves - 2);
-
+	const SHeightField Field = MakeHeightField(rGen);
 	const CWorldRing Ring = RingFromGeneration(rGen, Seed);
 
 	lSurface.clear();
@@ -167,18 +199,7 @@ static void GenerateHeightmap(const CInstruction::CGeneration &rGen, int Seed, a
 		// Sample the ring's shared field at this instance's global column: two
 		// overlapping instances read the same value, so the strip they share is
 		// identical in both and the field closes after Ring.m_Period tiles.
-		const float GlobalX = (float) (Ring.m_OffsetX + x);
-		const float Base = noise::Fractal2DPeriodic((unsigned) (Ring.m_NoiseSeed + (unsigned) rGen.m_Surface.m_SeedOffset), SurfaceParams,
-			GlobalX, 0.0f, (float) Ring.m_Period);
-		const float Warp = noise::Fractal2DPeriodic((unsigned) (Ring.m_NoiseSeed * 3u + 77u + (unsigned) rGen.m_Surface.m_SeedOffset), LowWarp,
-			GlobalX, 1000.0f, (float) Ring.m_Period);
-		const float Height = Base + Warp * 0.5f;
-
-		int Y = rGen.m_SurfaceLevel - (int) (Height * rGen.m_SurfaceAmplitude);
-		// keep the ground line inside the map, clear of the sealed top and bottom
-		// leave room for the open sky above and the sealed floor below
-		Y = clamp(Y, 16, rGen.m_Height - rGen.m_EdgeWall - 8);
-		lSurface.add(Y);
+		lSurface.add(SurfaceYAt(rGen, Ring, Field, Ring.m_OffsetX + x));
 	}
 
 	// A ring instance has no seam of its own: its edges are interior terrain
@@ -225,6 +246,22 @@ static void GenerateHeightmap(const CInstruction::CGeneration &rGen, int Seed, a
 
 		lSurface[x] = (int) ((float) Seam + ((float) lSurface[x] - (float) Seam) * W + 0.5f);
 	}
+}
+
+// The highest ground of the whole ring (the smallest tile y), used to anchor
+// the background scenery. Sampling every column would be far more work than
+// the map itself, so the field is sampled at a fraction of its wavelength: the
+// noise is smooth, a missed peak differs by at most a couple of tiles, and the
+// result is cached in the instruction for every following instance.
+static int RingBackgroundGroundY(const CInstruction::CGeneration &rGen, const CWorldRing &Ring)
+{
+	const SHeightField Field = MakeHeightField(rGen);
+	const int Step = clamp((int) (0.25f / maximum(0.0001f, rGen.m_Surface.m_Frequency)), 4, 64);
+	int GroundY = rGen.m_Height;
+	for(int GlobalX = 0; GlobalX < Ring.m_Period; GlobalX += Step)
+		GroundY = minimum(GroundY, SurfaceYAt(rGen, Ring, Field, GlobalX));
+	GroundY = minimum(GroundY, SurfaceYAt(rGen, Ring, Field, Ring.m_Period - 1));
+	return GroundY;
 }
 
 // Biomes used to pick a tileset per column here. The automapper does that now
@@ -904,6 +941,20 @@ CGeneratedWorld *GenerateEuclideanWorld(const CInstruction *pInstruction, int Se
 	// the surface first: every later step needs the ground line
 	pWorld->m_Surface.clear();
 	GenerateHeightmap(Gen, Seed, pWorld->m_Surface);
+
+	// The background scenery is anchored to the highest ground. On a ring that
+	// must be the highest ground of every instance, otherwise the clouds sit a
+	// few tiles higher or lower in each window and visibly jump on a crossing.
+	pWorld->m_BackgroundGroundY = Gen.m_SurfaceLevel;
+	for(int x = 0; x < pWorld->m_Surface.size(); x++)
+		pWorld->m_BackgroundGroundY = minimum(pWorld->m_BackgroundGroundY, pWorld->m_Surface[x]);
+	const CWorldRing Ring = RingFromGeneration(Gen, Seed);
+	if(Ring.m_Enabled)
+	{
+		if(Gen.m_RingBackgroundGroundY < 0)
+			Gen.m_RingBackgroundGroundY = RingBackgroundGroundY(Gen, Ring);
+		pWorld->m_BackgroundGroundY = Gen.m_RingBackgroundGroundY;
+	}
 
 	FillTerrain(Gen, Seed, pWorld);
 	CarveSky(Gen, pWorld);

@@ -327,16 +327,21 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 
 	const int Width = pInstruction->m_Generation.m_Width;
 
-	// The ground line the scenery is anchored to: the highest ground in the
-	// world, not the average. Scenery is drawn behind the terrain, so anchoring
-	// at the average would let mountains poke through wherever the ground dips
-	// below it.
-	int GroundY = pInstruction->m_Generation.m_SurfaceLevel;
-	if(pWorld->m_Surface.size())
+	// The ground line the scenery is anchored to: the highest ground, not the
+	// average. Scenery is drawn behind the terrain, so anchoring at the average
+	// would let mountains poke through wherever the ground dips below it. On a
+	// ring the generator supplies the highest ground of the whole ring, so
+	// neighbouring instances put their scenery at the same screen height.
+	int GroundY = pWorld->m_BackgroundGroundY;
+	if(GroundY < 0)
 	{
-		GroundY = pWorld->m_Surface[0];
-		for(int i = 1; i < pWorld->m_Surface.size(); i++)
-			GroundY = minimum(GroundY, pWorld->m_Surface[i]);
+		GroundY = pInstruction->m_Generation.m_SurfaceLevel;
+		if(pWorld->m_Surface.size())
+		{
+			GroundY = pWorld->m_Surface[0];
+			for(int i = 1; i < pWorld->m_Surface.size(); i++)
+				GroundY = minimum(GroundY, pWorld->m_Surface[i]);
+		}
 	}
 
 	const CInstruction::CGeneration &Gen = pInstruction->m_Generation;
@@ -808,7 +813,15 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 			return;
 
 		CCreatorGroupInfo *pGroup = Creator.AddGroup(Layer.m_aName);
-		pGroup->m_ParallaxX = Layer.m_ParallaxX;
+		// On a ring the decorative layers are identical in every instance. A
+		// horizontal parallax would shift that identical picture by
+		// stride * parallax / 100 on each crossing, which is the visible jump:
+		// pinning it to the screen makes the neighbours line up exactly. The
+		// vertical parallax is kept (a crossing does not change y) and the
+		// cloud drift still animates the layer.
+		const bool ScreenAnchored = Ring.m_Enabled && !Layer.m_IsTerrain;
+		const int ParallaxX = ScreenAnchored ? 0 : Layer.m_ParallaxX;
+		pGroup->m_ParallaxX = ParallaxX;
 		pGroup->m_ParallaxY = Layer.m_ParallaxY;
 		// group offsets are fixed point pixels (value / 32 is the tile count),
 		// which is how the official maps store them
@@ -889,7 +902,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 			float ScatterSpanTiles = (float) Width;
 			if(Pass.m_Band)
 			{
-				const float GroupSpanPx = (float) Width * 32.0f * (float) maximum(1, Layer.m_ParallaxX) / 100.0f;
+				const float GroupSpanPx = (float) Width * 32.0f * (float) maximum(1, ParallaxX) / 100.0f;
 				const float ViewMarginPx = 2048.0f;
 				ScatterStartTiles = -ViewMarginPx / 32.0f;
 				ScatterSpanTiles = (GroupSpanPx + 2.0f * ViewMarginPx) / 32.0f;

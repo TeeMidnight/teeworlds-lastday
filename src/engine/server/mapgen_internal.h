@@ -80,6 +80,7 @@ static inline void ParseNoise(const json_value &rValue, CInstruction::CNoiseConf
 static inline void ParseGeneration(const json_value &rValue, CInstruction::CGeneration &rOut)
 {
 	mem_zero(&rOut, sizeof(rOut));
+	rOut.m_RingBackgroundGroundY = -1;
 	rOut.m_Enabled = rValue.type == json_object;
 	if(!rOut.m_Enabled)
 		return;

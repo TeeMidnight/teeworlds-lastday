@@ -70,6 +70,11 @@ public:
 	// the surface height (tile y of the first solid tile) per column, kept so
 	// the entrance carving and any later feature can reuse it
 	array<int> m_Surface;
+
+	// The ground line the decorative background is anchored to. On a ring this
+	// is the highest ground of every instance, not just this one, so the
+	// scenery stays at the same screen height across a seam.
+	int m_BackgroundGroundY;
 	array<CLayer> m_lLayers;
 	array<CResource> m_lResources;
 	array<CEntrance> m_lEntrances;
