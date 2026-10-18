@@ -67,31 +67,79 @@ void LocalItemName(const char *pId, char *pOut, int OutSize)
 		pName = pSlash + 1;
 	str_copy(pOut, pName, OutSize);
 }
-} // namespace
 
-int CItemSystem::ListItemsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+// data threaded through the category-folder listings of items and recipes
+struct CJsonListData
 {
-	CItemSystem *pSelf = static_cast<CItemSystem *>(pUser);
-	if(IsDir)
-		return 0;
+	CItemSystem *m_pSelf;
+	char m_aCategory[32];
+	char m_aPath[IO_MAX_PATH_LENGTH];
+};
 
+bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
+{
 	const int Len = str_length(pFilename);
 	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
+		return false;
+	if(Len - 5 >= Size)
+		return false;
+	str_copy(pId, pFilename, Size);
+	pId[Len - 5] = '\0';
+	return true;
+}
+} // namespace
+
+// items are grouped by one level of folders under data/items, mirroring the
+// crafting categories. the folder name is the item's category (weapon, tool,
+// survival, misc...); items directly in items/ fall back to misc.
+int CItemSystem::ListItemDirsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+{
+	(void) StorageType;
+	CItemSystem *pSelf = static_cast<CItemSystem *>(pUser);
+	CJsonListData Data;
+	mem_zero(&Data, sizeof(Data));
+	Data.m_pSelf = pSelf;
+
+	if(IsDir)
+	{
+		// fs_listdir also reports "." and ".."
+		if(!pFilename[0] || str_comp(pFilename, ".") == 0 || str_comp(pFilename, "..") == 0)
+			return 0;
+		if(str_length(pFilename) >= (int) sizeof(Data.m_aCategory))
+			return 0;
+		str_copy(Data.m_aCategory, pFilename, sizeof(Data.m_aCategory));
+		str_format(Data.m_aPath, sizeof(Data.m_aPath), "items/%s", pFilename);
+		pSelf->m_pStorage->ListDirectory(IStorage::TYPE_ALL, Data.m_aPath, ListItemFilesCallback, &Data);
 		return 0;
+	}
 
 	char aDefaultId[64];
-	if(Len - 5 >= (int) sizeof(aDefaultId))
+	if(!JsonIdFromFilename(pFilename, aDefaultId, sizeof(aDefaultId)))
 		return 0;
-	str_copy(aDefaultId, pFilename, sizeof(aDefaultId));
-	aDefaultId[Len - 5] = '\0';
-
 	char aPath[IO_MAX_PATH_LENGTH];
 	str_format(aPath, sizeof(aPath), "items/%s", pFilename);
-	pSelf->LoadItem(aDefaultId, aPath);
+	pSelf->LoadItem(aDefaultId, aPath, "misc");
 	return 0;
 }
 
-void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath)
+int CItemSystem::ListItemFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+{
+	(void) StorageType;
+	CJsonListData *pData = static_cast<CJsonListData *>(pUser);
+	if(IsDir)
+		return 0;
+
+	char aDefaultId[64];
+	if(!JsonIdFromFilename(pFilename, aDefaultId, sizeof(aDefaultId)))
+		return 0;
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), "%s/%s", pData->m_aPath, pFilename);
+	pData->m_pSelf->LoadItem(aDefaultId, aPath, pData->m_aCategory);
+	return 0;
+}
+
+void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath, const char *pCategory)
 {
 	CJsonParser Parser;
 	json_value *pJson = Parser.ParseFile(pFilePath, m_pStorage, IStorage::TYPE_ALL);
@@ -106,6 +154,7 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath)
 
 	SItemDef Item;
 	mem_zero(&Item, sizeof(Item));
+	str_copy(Item.m_aCategory, pCategory && pCategory[0] ? pCategory : "misc", sizeof(Item.m_aCategory));
 	Item.m_Id = CItemID::FromName(pIdName);
 	str_copy(Item.m_aIdString, Item.m_Id.SourceName(), sizeof(Item.m_aIdString));
 	if(!Item.m_aIdString[0])
@@ -251,7 +300,7 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath)
 	m_Items.set(Item.m_Id.Value(), Item);
 	// make the id printable even before the item system is queried
 	ItemIDRegisterName(Item.m_Id, Item.m_aIdString, Item.m_aName);
-	dbg_msg("items", "loaded item '%s' ('%s')", Item.m_aIdString, Item.m_aName);
+	dbg_msg("items", "loaded item '%s' ('%s') [%s]", Item.m_aIdString, Item.m_aName, Item.m_aCategory);
 }
 
 void CItemSystem::Init(CGameContext *pGameServer, IStorage *pStorage)
@@ -265,8 +314,8 @@ void CItemSystem::Load(IStorage *pStorage)
 	m_pStorage = pStorage;
 	m_Items.clear();
 	m_Crafts.clear();
-	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "items", ListItemsCallback, this);
-	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "craft", ListCraftsCallback, this);
+	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "items", ListItemDirsCallback, this);
+	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "craft", ListCraftDirsCallback, this);
 }
 
 bool CItemSystem::AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef)
@@ -337,6 +386,12 @@ const char *CItemSystem::GetDesc(const CItemID &Id) const
 {
 	const SItemDef *pItem = m_Items.get(Id.Value());
 	return pItem ? pItem->m_aDesc : "";
+}
+
+const char *CItemSystem::GetCategory(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem ? pItem->m_aCategory : "";
 }
 
 const char *CItemSystem::GetWeaponName(const CItemID &Id) const
@@ -566,29 +621,57 @@ void CItemSystem::AddAmmoForWeapon(int ClientID, const char *pWeaponName, int Co
 // ---------------------------------------------------------------
 // craft loading
 // ---------------------------------------------------------------
-int CItemSystem::ListCraftsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+// recipes are grouped by one level of folders under data/craft: the folder
+// name is the category shown (and translated) in the crafting menu
+int CItemSystem::ListCraftDirsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
 {
+	(void) StorageType;
 	CItemSystem *pSelf = static_cast<CItemSystem *>(pUser);
+	CJsonListData Data;
+	mem_zero(&Data, sizeof(Data));
+	Data.m_pSelf = pSelf;
+
 	if(IsDir)
+	{
+		// fs_listdir also reports "." and ".."
+		if(!pFilename[0] || str_comp(pFilename, ".") == 0 || str_comp(pFilename, "..") == 0)
+			return 0;
+		if(str_length(pFilename) >= (int) sizeof(Data.m_aCategory))
+			return 0;
+		str_copy(Data.m_aCategory, pFilename, sizeof(Data.m_aCategory));
+		str_format(Data.m_aPath, sizeof(Data.m_aPath), "craft/%s", pFilename);
+		pSelf->m_pStorage->ListDirectory(IStorage::TYPE_ALL, Data.m_aPath, ListCraftFilesCallback, &Data);
 		return 0;
+	}
 
-	const int Len = str_length(pFilename);
-	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
+	// a recipe directly in craft/ has no category folder; treat it as misc
+	char aCraftId[32];
+	if(!JsonIdFromFilename(pFilename, aCraftId, sizeof(aCraftId)))
 		return 0;
-
-	char aCraftId[64];
-	if(Len - 5 >= (int) sizeof(aCraftId))
-		return 0;
-	str_copy(aCraftId, pFilename, sizeof(aCraftId));
-	aCraftId[Len - 5] = '\0';
-
 	char aPath[IO_MAX_PATH_LENGTH];
 	str_format(aPath, sizeof(aPath), "craft/%s", pFilename);
-	pSelf->LoadCraft(aCraftId, aPath);
+	pSelf->LoadCraft(aCraftId, aPath, "misc");
 	return 0;
 }
 
-void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath)
+int CItemSystem::ListCraftFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+{
+	(void) StorageType;
+	CJsonListData *pData = static_cast<CJsonListData *>(pUser);
+	if(IsDir)
+		return 0;
+
+	char aCraftId[32];
+	if(!JsonIdFromFilename(pFilename, aCraftId, sizeof(aCraftId)))
+		return 0;
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), "%s/%s", pData->m_aPath, pFilename);
+	pData->m_pSelf->LoadCraft(aCraftId, aPath, pData->m_aCategory);
+	return 0;
+}
+
+void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath, const char *pCategory)
 {
 	CJsonParser Parser;
 	json_value *pJson = Parser.ParseFile(pFilePath, m_pStorage, IStorage::TYPE_ALL);
@@ -598,6 +681,7 @@ void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath)
 	SCraftDef Craft;
 	mem_zero(&Craft, sizeof(Craft));
 	str_copy(Craft.m_aCraftId, pCraftId, sizeof(Craft.m_aCraftId));
+	str_copy(Craft.m_aCategory, pCategory && pCategory[0] ? pCategory : "misc", sizeof(Craft.m_aCategory));
 
 	// results: either a single "result" object, or a "gives" array, or both
 	auto AddGive = [&](const json_value &rGive) {
@@ -661,5 +745,5 @@ void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath)
 		return;
 	}
 	m_Crafts.set(CraftHash, Craft);
-	dbg_msg("craft", "loaded craft '%s' (%d ingredient(s), %d result(s))", pCraftId, Craft.m_NumNeeded, Craft.m_NumGives);
+	dbg_msg("craft", "loaded craft '%s' [%s] (%d ingredient(s), %d result(s))", pCraftId, Craft.m_aCategory, Craft.m_NumNeeded, Craft.m_NumGives);
 }

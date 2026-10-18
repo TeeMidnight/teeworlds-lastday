@@ -1,6 +1,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
+#include <algorithm>
+#include <vector>
+
 #include <game/localization_format.h>
 
 #include <game/server/entities/character.h>
@@ -216,6 +219,11 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		}
 	}
 
+	// the item's category folder (weapon, tool, survival, misc...), localized
+	const char *pCategory = pItem->GetCategory(Id);
+	if(pCategory && pCategory[0])
+		pMenu->AddWrappedLinesOption(LocalizeFormat("Menu Inventory", "Category: {}", Localize(pCategory, "Item Category")).c_str());
+
 	// item types (e.g. "weapon"), localized, listed below the description
 	SItemTypeLineData TypeLine = {{'\0'}, 0, 0};
 	pItem->ForEachItemType(Id, ItemTypeLineCallback, &TypeLine);
@@ -247,6 +255,25 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 }
 
 // -- crafting menu -------------------------------------------------------
+
+// known categories keep a stable menu order; unknown folders (and top-level
+// recipes, which are loaded as "misc") follow alphabetically
+static int CraftCategoryRank(const char *pCategory)
+{
+	static const char *s_apOrder[] = {"weapon", "tool", "survival", "misc"};
+	for(int i = 0; i < (int) (sizeof(s_apOrder) / sizeof(s_apOrder[0])); i++)
+	{
+		if(str_comp(pCategory, s_apOrder[i]) == 0)
+			return i;
+	}
+	return (int) (sizeof(s_apOrder) / sizeof(s_apOrder[0]));
+}
+
+static void CollectCraftCallback(CItemSystem::SCraftDef &Craft, void *pUser)
+{
+	auto *pCrafts = static_cast<std::vector<CItemSystem::SCraftDef *> *>(pUser);
+	pCrafts->push_back(&Craft);
+}
 
 // data threaded through CItemSystem::ForEachCraft
 struct CCraftMenuData
@@ -392,8 +419,38 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 	pMenu->AddOption(Localize("Click a recipe to see how to craft it. Tools are not consumed.", "Menu Craft"), "DISPLAY", "-");
 	pMenu->AddHorizontalRule();
 
+	// group the recipes by their category folder, keeping the known categories
+	// in a fixed order and sorting the recipes inside each group by id
+	std::vector<CItemSystem::SCraftDef *> Crafts;
+	pItem->ForEachCraft(CollectCraftCallback, &Crafts);
+	std::sort(Crafts.begin(), Crafts.end(), [](const CItemSystem::SCraftDef *pA, const CItemSystem::SCraftDef *pB) {
+		const int RankA = CraftCategoryRank(pA->m_aCategory);
+		const int RankB = CraftCategoryRank(pB->m_aCategory);
+		if(RankA != RankB)
+			return RankA < RankB;
+		const int CategoryCompare = str_comp(pA->m_aCategory, pB->m_aCategory);
+		if(CategoryCompare != 0)
+			return CategoryCompare < 0;
+		return str_comp(pA->m_aCraftId, pB->m_aCraftId) < 0;
+	});
+
 	CCraftMenuData Data = {pItem, pMenu, ClientID, Forgetting, 0, pMenu->m_aCraftOpen[ClientID]};
-	pItem->ForEachCraft(CraftListCallback, &Data);
+	const char *pLastCategory = "";
+	for(CItemSystem::SCraftDef *pCraft : Crafts)
+	{
+		if(pItem->IsRecipeForgotten(Forgetting, pCraft->m_aCraftId))
+			continue;
+
+		// one translated header per folder: weapon, tool, survival, misc...
+		if(str_comp(pLastCategory, pCraft->m_aCategory) != 0)
+		{
+			if(pLastCategory[0])
+				pMenu->AddSpace();
+			pMenu->AddOption(Localize(pCraft->m_aCategory, "Craft Category"), "NONE", "=");
+			pLastCategory = pCraft->m_aCategory;
+		}
+		CraftListCallback(*pCraft, &Data);
+	}
 	if(Data.m_Index == 0)
 		pMenu->AddOption(Localize("You can't remember any crafting recipes.", "Menu Craft"), "DISPLAY", "-");
 

@@ -4,6 +4,46 @@
 	"client strings": [],
 	"item strings": [
 		{
+			"context": "Craft Category",
+			"or": "misc",
+			"tr": "杂项"
+		},
+		{
+			"context": "Craft Category",
+			"or": "survival",
+			"tr": "生存"
+		},
+		{
+			"context": "Craft Category",
+			"or": "tool",
+			"tr": "工具"
+		},
+		{
+			"context": "Craft Category",
+			"or": "weapon",
+			"tr": "武器"
+		},
+		{
+			"context": "Item Category",
+			"or": "misc",
+			"tr": "杂项"
+		},
+		{
+			"context": "Item Category",
+			"or": "survival",
+			"tr": "生存"
+		},
+		{
+			"context": "Item Category",
+			"or": "tool",
+			"tr": "工具"
+		},
+		{
+			"context": "Item Category",
+			"or": "weapon",
+			"tr": "武器"
+		},
+		{
 			"context": "Item Desc: Crude Grenade",
 			"or": "A hand-made explosive. Not very refined, but it gets the job done.",
 			"tr": "手工制作的爆炸物。不太精致，但能完成任务。"
@@ -639,6 +679,11 @@
 			"context": "Menu Inventory",
 			"or": "Used: {} x{}",
 			"tr": "已使用：{} x{}"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Category: {}",
+			"tr": "分类：{}"
 		},
 		{
 			"context": "Menu Inventory",

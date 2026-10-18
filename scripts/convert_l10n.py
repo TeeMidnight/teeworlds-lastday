@@ -32,6 +32,9 @@ ITEM_NAME_CTXT = "Item Name"
 ITEM_DESC_CTXT = "Item Desc"
 # context used for item types shown in the crafting menu
 ITEM_TYPE_CTXT = "Item Type"
+# contexts used for the folder-derived categories in the crafting and inventory menus
+CRAFT_CATEGORY_CTXT = "Craft Category"
+ITEM_CATEGORY_CTXT = "Item Category"
 
 def item_types_of(item):
 	"""Normalizes the item_type field (a single string or a list) to a list of types."""
@@ -43,7 +46,7 @@ def item_types_of(item):
 	return []
 
 def parse_item_names():
-	"""Collects the item names and descriptions from datasrc/items/*.json so
+	"""Collects the item names and descriptions from datasrc/items/**.json so
 	they can be translated in the inventory menu."""
 	l10n = defaultdict(lambda: str)
 
@@ -51,22 +54,37 @@ def parse_item_names():
 	if not os.path.isdir(items_dir):
 		return l10n
 
-	for filename in sorted(os.listdir(items_dir)):
-		if not filename.endswith(".json"):
-			continue
-		with open(os.path.join(items_dir, filename), encoding='utf-8') as f:
-			item = json.load(f)
-		if not isinstance(item, dict):
-			continue
-		if item.get("name"):
-			l10n[(item["name"], ITEM_NAME_CTXT)] = ""
-		desc = item.get("desc") or item.get("Desc")
-		if desc:
-			# the description context carries the item name so that two items
-			# sharing the same description text get separate translations
-			l10n[(desc, ITEM_DESC_CTXT + ": " + item["name"])] = ""
-		for type_id in item_types_of(item):
-			l10n[(type_id, ITEM_TYPE_CTXT)] = ""
+	# items live in category sub-folders, so walk the whole tree
+	for root, dirs, files in os.walk(items_dir):
+		dirs.sort()
+		for filename in sorted(files):
+			if not filename.endswith(".json"):
+				continue
+			with open(os.path.join(root, filename), encoding='utf-8') as f:
+				item = json.load(f)
+			if not isinstance(item, dict):
+				continue
+			if item.get("name"):
+				l10n[(item["name"], ITEM_NAME_CTXT)] = ""
+			desc = item.get("desc") or item.get("Desc")
+			if desc:
+				# the description context carries the item name so that two items
+				# sharing the same description text get separate translations
+				l10n[(desc, ITEM_DESC_CTXT + ": " + item["name"])] = ""
+			for type_id in item_types_of(item):
+				l10n[(type_id, ITEM_TYPE_CTXT)] = ""
+	return l10n
+
+def parse_category_folders(directory, context):
+	"""Collects the category folder names under a data directory so menus can
+	translate each folder name (weapon, tool, survival, misc...)."""
+	l10n = {}
+	if not os.path.isdir(directory):
+		return l10n
+
+	for name in sorted(os.listdir(directory)):
+		if os.path.isdir(os.path.join(directory, name)):
+			l10n[(name, context)] = ""
 	return l10n
 
 def parse_source():
@@ -160,8 +178,11 @@ def write_languagefile(outputfilename, l10n_client_src, l10n_server_src, l10n_it
 if __name__ == '__main__':
 	l10n_client, l10n_server = parse_source()
 
-	# item names, descriptions and types live in their own "item strings" section
+	# item names, descriptions and types live in their own "item strings" section;
+	# categories are folder names, so they are collected the same way
 	l10n_item = parse_item_names()
+	l10n_item.update(parse_category_folders("datasrc/craft", CRAFT_CATEGORY_CTXT))
+	l10n_item.update(parse_category_folders("datasrc/items", ITEM_CATEGORY_CTXT))
 
 	for filename in os.listdir("datasrc/languages"):
 		try:

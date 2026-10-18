@@ -96,6 +96,8 @@ private:
 		char m_aIdString[64]; // normalized namespaced source ("lastday:stone")
 		char m_aName[64];
 		char m_aDesc[256];
+		// the item's folder under data/items, e.g. "weapon"
+		char m_aCategory[32];
 		// the weapon this item equips as, or "" when it is not a weapon
 		char m_aWeapon[32];
 		// an item can belong to several types (e.g. an ore is both "ore" and
@@ -115,8 +117,9 @@ private:
 	};
 	hash_table<Uuid, SItemDef, 16, uuid_table_function> m_Items;
 
-	static int ListItemsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
-	void LoadItem(const char *pDefaultId, const char *pFilePath);
+	static int ListItemDirsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
+	static int ListItemFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
+	void LoadItem(const char *pDefaultId, const char *pFilePath, const char *pCategory);
 
 	// scans every item definition for one usable as ammo for a weapon
 	static void AmmoScanCallback(SItemDef &Item, void *pUser);
@@ -141,8 +144,9 @@ private:
 	// add to an inventory without any chat / logging, used by craft simulation
 	static bool AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef);
 
-	static int ListCraftsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
-	void LoadCraft(const char *pCraftId, const char *pFilePath);
+	static int ListCraftDirsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
+	static int ListCraftFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
+	void LoadCraft(const char *pCraftId, const char *pFilePath, const char *pCategory);
 
 public:
 	// ------- crafting -------
@@ -175,6 +179,9 @@ public:
 			MAX_GIVES = 8,
 		};
 		char m_aCraftId[32];
+		// the recipe's folder under data/craft, e.g. "weapon"; this doubles as
+		// the localized category header in the crafting menu
+		char m_aCategory[32];
 		SResult m_aGives[MAX_GIVES];
 		int m_NumGives;
 		SIngredient m_aNeeded[MAX_NEEDED];
@@ -250,6 +257,8 @@ public:
 	const char *GetRawName(const CItemID &Id) const;
 	// description of the item, or "" when unknown
 	const char *GetDesc(const CItemID &Id) const;
+	// the item's category folder ("weapon", "tool", ...), or "" when unknown
+	const char *GetCategory(const CItemID &Id) const;
 	// whether an item definition exists for this id
 	bool IsKnownItem(const CItemID &Id) const { return m_Items.get(Id.Value()) != 0; }
 	bool IsKnownItem(const char *pId) const { return IsKnownItem(CItemID::FromName(pId)); }
