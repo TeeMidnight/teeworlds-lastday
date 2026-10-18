@@ -11,6 +11,7 @@
 #include <base/vmath.h>
 #include <climits>
 
+#include <engine/map/generatedmaps.h>
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
 #include <engine/shared/jsonparser.h>
@@ -675,7 +676,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed)
 	// ---------------------------------------------------------------
 	// write the generated map: "<base>_<seed>.map"
 	// ---------------------------------------------------------------
-	Storage()->CreateFolder("generatedmaps", IStorage::TYPE_SAVE);
+	EnsureGeneratedMapsDir(Storage());
 
 	char aOutName[64];
 	str_format(aOutName, sizeof(aOutName), "%s_%d", pFloorName, Seed);
@@ -697,6 +698,6 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed)
 		return false;
 	}
 
-	dbg_msg("mapgen", "generated map 'generatedmaps/%s.map' from base '%s'", aOutName, pInstruction->m_aBaseMap);
+	dbg_msg("mapgen", "generated map '" GENERATED_MAPS_DIR "/%s.map' from base '%s'", aOutName, pInstruction->m_aBaseMap);
 	return true;
 }

@@ -9,9 +9,9 @@
 // file lands somewhere the caller has to look up. This tool drives the same
 // CMapGen the server uses, against the same data directory and the same
 // storage.cfg, and writes the very same
-// "generatedmaps/<floor>_<seed>.map". It reports the absolute path of every map
-// it writes, so a headless renderer (for example Uniteed's render.map) can be
-// pointed straight at the result.
+// "<GENERATED_MAPS_DIR>/<floor>_<seed>.map". It reports the absolute path of
+// every map it writes, so a headless renderer (for example Uniteed's
+// render.map) can be pointed straight at the result.
 //
 // Usage:
 //   mapgentool list               list the generated floors and their kind
@@ -25,6 +25,7 @@
 
 #include <engine/console.h>
 #include <engine/kernel.h>
+#include <engine/map/generatedmaps.h>
 #include <engine/server/mapgen.h>
 #include <engine/shared/config.h>
 #include <engine/shared/datafile.h>
@@ -78,11 +79,11 @@ bool GenerateFloor(CMapGen &rGen, IStorage *pStorage, const char *pFloor, int Se
 		return false;
 	}
 
-	// the generator always writes under generatedmaps/ on the save path; report
-	// where that really is so a renderer can open it without guessing
+	// the generator always writes under GENERATED_MAPS_DIR on the save path;
+	// report where that really is so a renderer can open it without guessing
 	char aRelative[128];
 	char aAbsolute[IO_MAX_PATH_LENGTH];
-	str_format(aRelative, sizeof(aRelative), "generatedmaps/%s_%d.map", pFloor, Seed);
+	str_format(aRelative, sizeof(aRelative), GENERATED_MAPS_DIR "/%s_%d.map", pFloor, Seed);
 	pStorage->GetCompletePath(IStorage::TYPE_SAVE, aRelative, aAbsolute, sizeof(aAbsolute));
 	dbg_msg("mapgentool", "MAP %s", aAbsolute);
 	return true;
@@ -131,8 +132,8 @@ bool RingCheck(IStorage *pStorage, CMapGen &rGen, const char *pFloor)
 
 	CDataFileReader A, B;
 	char aPathA[IO_MAX_PATH_LENGTH], aPathB[IO_MAX_PATH_LENGTH];
-	str_format(aPathA, sizeof(aPathA), "generatedmaps/%s_1.map", pFloor);
-	str_format(aPathB, sizeof(aPathB), "generatedmaps/%s_2.map", pFloor);
+	str_format(aPathA, sizeof(aPathA), GENERATED_MAPS_DIR "/%s_1.map", pFloor);
+	str_format(aPathB, sizeof(aPathB), GENERATED_MAPS_DIR "/%s_2.map", pFloor);
 	if(!A.Open(pStorage, aPathA, IStorage::TYPE_SAVE) || !B.Open(pStorage, aPathB, IStorage::TYPE_SAVE))
 	{
 		dbg_msg("mapgentool", "ringcheck: could not open the generated maps of %s", pFloor);
@@ -253,7 +254,7 @@ bool DumpWorldJson(IStorage *pStorage, const char *pMap)
 
 	// fallback: older maps embed the world geometry as a map item
 	char aPath[128];
-	str_format(aPath, sizeof(aPath), "generatedmaps/%s.map", pMap);
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", pMap);
 	CDataFileReader Reader;
 	if(!Reader.Open(pStorage, aPath, IStorage::TYPE_SAVE))
 	{
@@ -291,7 +292,7 @@ void PrintUsage(const char *pProgram)
 	dbg_msg("mapgentool", "       %s ringcheck <floor...>", pProgram);
 	dbg_msg("mapgentool", "       %s worldjson <map...>", pProgram);
 	dbg_msg("mapgentool", "runs the mapgen world generator without the server and writes");
-	dbg_msg("mapgentool", "generatedmaps/<floor>_<seed>.map into the storage save path");
+	dbg_msg("mapgentool", GENERATED_MAPS_DIR "/<floor>_<seed>.map into the storage save path");
 }
 
 } // namespace

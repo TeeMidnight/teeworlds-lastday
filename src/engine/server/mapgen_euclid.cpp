@@ -10,6 +10,7 @@
 #include <base/vmath.h>
 #include <climits>
 
+#include <engine/map/generatedmaps.h>
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
 #include <engine/shared/jsonparser.h>
@@ -1149,7 +1150,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 		lResourceJson.add(0);
 	}
 
-	Storage()->CreateFolder("generatedmaps", IStorage::TYPE_SAVE);
+	EnsureGeneratedMapsDir(Storage());
 
 	// The world geometry, as a third json item. The horizontal wrap is a
 	// property of the world: a generated floor is a cylinder, a hand drawn map
@@ -1205,6 +1206,6 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 		return false;
 	}
 
-	dbg_msg("mapgen", "generated euclidean map 'generatedmaps/%s.map' from base '%s'", aOutName, pInstruction->m_aBaseMap);
+	dbg_msg("mapgen", "generated euclidean map '" GENERATED_MAPS_DIR "/%s.map' from base '%s'", aOutName, pInstruction->m_aBaseMap);
 	return true;
 }

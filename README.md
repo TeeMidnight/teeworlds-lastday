@@ -33,9 +33,11 @@ Enable it in `datasrc/maps/worlds/<Floor>.json`:
         "ring": { "enabled": true, "size": 1024, "shared_margin": 75, "base_seed": 1101 }
     }
 
-Generated maps are cached by name: after changing a floor's generation settings,
-delete `generatedmaps/<Floor>_<Seed>.map` from the storage save path so the next
-request regenerates it. `mapgentool worldjson <Map>` prints the ring geometry a
+Generated maps are cached by name and mod version: they live under
+`generatedmaps/LastDay/<MOD_VERSION>/` in the storage save path. After changing
+a floor's generation settings, delete
+`generatedmaps/LastDay/<MOD_VERSION>/<Floor>_<Seed>.map` so the next request
+regenerates it. `mapgentool worldjson <Map>` prints the ring geometry a
 generated map carries.
 
 Cross-boundary hooks and player collisions work through proxy cores: each ring

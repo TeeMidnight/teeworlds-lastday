@@ -26,8 +26,8 @@ inline float HashToUnitFloat(unsigned Hash)
 
 // The server-side metadata of a generated map: entrance regions, resource
 // placements and world geometry. It is written next to the map as
-// "generatedmaps/<map>.json" instead of being embedded as map items, so the
-// map clients download contains only what they render.
+// "<GENERATED_MAPS_DIR>/<map>.json" instead of being embedded as map items, so
+// the map clients download contains only what they render.
 void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size);
 bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
 	const char *pEntrances, int EntrancesSize,
@@ -408,7 +408,7 @@ public:
 	// name prefix "<FloorName>_<Seed>"). The floor's instruction carries the
 	// actual base map file to load and the world kind, which selects the
 	// generation strategy. The result is written to
-	// "generatedmaps/<FloorName>_<Seed>.map". Returns true on success.
+	// "<GENERATED_MAPS_DIR>/<FloorName>_<Seed>.map". Returns true on success.
 	bool RequestNewMap(const char *pFloorName, int Seed);
 
 	// the kind of a floor, or false when the floor is unknown. Used by the

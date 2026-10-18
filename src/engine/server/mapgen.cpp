@@ -8,6 +8,7 @@
 #include <base/vmath.h>
 #include <climits>
 
+#include <engine/map/generatedmaps.h>
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
 #include <engine/storage.h>
@@ -24,7 +25,7 @@
 
 void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size)
 {
-	str_format(pBuf, Size, "generatedmaps/%s.json", pMapName);
+	str_format(pBuf, Size, GENERATED_MAPS_DIR "/%s.json", pMapName);
 }
 
 bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,

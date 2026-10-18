@@ -396,8 +396,8 @@ void CGameWorld::InitCollision(IMap *pMap)
 	}
 
 	// Generated maps keep their metadata in a sidecar file next to the map
-	// ("generatedmaps/<name>.json") instead of embedding json items, so the map
-	// clients download only carries what they render. Older generated maps
+	// ("<GENERATED_MAPS_DIR>/<name>.json") instead of embedding json items, so
+	// the map clients download only carries what they render. Older generated maps
 	// still embed it; the item reads below are the fallback.
 	bool HasMeta = false;
 	array<char> aMeta;

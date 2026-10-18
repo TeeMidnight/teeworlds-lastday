@@ -10,6 +10,7 @@
 #include <engine/console.h>
 #include <engine/engine.h>
 #include <engine/map.h>
+#include <engine/map/generatedmaps.h>
 #include <engine/masterserver.h>
 #include <engine/server.h>
 #include <engine/storage.h>
@@ -1508,13 +1509,13 @@ int CServer::LoadMap(CMapInfo *pInfo)
 			str_copy(aBaseMap, pInfo->m_aName, BaseLen + 1);
 			const int Seed = str_toint(pUnderscore + 1);
 
-			// the generated map file is generatedmaps/<name>.map
+			// the generated map file is <mod>/<version>/<name>.map
 			char aGenPath[IO_MAX_PATH_LENGTH];
-			str_format(aGenPath, sizeof(aGenPath), "generatedmaps/%s.map", pInfo->m_aName);
+			str_format(aGenPath, sizeof(aGenPath), GENERATED_MAPS_DIR "/%s.map", pInfo->m_aName);
 			char aMapFile[64];
 			str_format(aMapFile, sizeof(aMapFile), "%s.map", pInfo->m_aName);
 			char aFoundPath[IO_MAX_PATH_LENGTH];
-			if(!Storage()->FindFile(aMapFile, "generatedmaps", IStorage::TYPE_ALL, aFoundPath, sizeof(aFoundPath)))
+			if(!Storage()->FindFile(aMapFile, GENERATED_MAPS_DIR, IStorage::TYPE_ALL, aFoundPath, sizeof(aFoundPath)))
 			{
 				// the map has not been generated yet — generate it now
 				if(!m_pMapGen || !m_pMapGen->RequestNewMap(aBaseMap, Seed))
@@ -1591,8 +1592,8 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	pInfo->m_Loaded = true;
 
 	// Generated maps keep their metadata in a sidecar file next to the map
-	// ("generatedmaps/<name>.json") instead of embedding json items, so the map
-	// clients download only carries what they render. Older generated maps
+	// ("<GENERATED_MAPS_DIR>/<name>.json") instead of embedding json items, so
+	// the map clients download only carries what they render. Older generated maps
 	// still embed it; the map item reads below are the fallback.
 	array<char> aMeta;
 	CJsonParser MetaParser;

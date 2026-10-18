@@ -14,6 +14,7 @@
 #include <game/layers.h>
 #include <game/mapitems.h>
 
+#include "generatedmaps.h"
 #include "mapcreator.h"
 
 #include "mapitems.h"
@@ -614,7 +615,7 @@ static const char *GetMapByMapType(EMapType MapType)
 {
 	switch(MapType)
 	{
-		case EMapType::MAPTYPE_NORMAL: return "generatedmaps";
+		case EMapType::MAPTYPE_NORMAL: return GENERATED_MAPS_DIR;
 	}
 	return "maps";
 }

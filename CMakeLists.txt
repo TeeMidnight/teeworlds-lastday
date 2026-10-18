@@ -620,6 +620,7 @@ set_src(ENGINE_INTERFACE GLOB src/engine
   uuid.h
 )
 set_src(ENGINE_MAP GLOB src/engine/map
+  generatedmaps.h
   mapcreator.cpp
   mapcreator.h
   mapitems.h
