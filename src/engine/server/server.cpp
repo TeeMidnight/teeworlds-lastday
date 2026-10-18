@@ -237,6 +237,15 @@ void CServerBan::ConBanExt(IConsole::IResult *pResult, void *pUser)
 		ConBan(pResult, pUser);
 }
 
+void CServer::CClient::ResetMapTransfer()
+{
+	m_Snapshots.PurgeAll();
+	m_LastAckedSnapshot = -1;
+	m_LastInputTick = -1;
+	m_SnapRate = CClient::SNAPRATE_INIT;
+	m_MapChunk = 0;
+}
+
 void CServer::CClient::Reset(bool ResetInput)
 {
 	// reset input
@@ -248,12 +257,9 @@ void CServer::CClient::Reset(bool ResetInput)
 		mem_zero(&m_LatestInput, sizeof(m_LatestInput));
 	}
 
-	m_Snapshots.PurgeAll();
-	m_LastAckedSnapshot = -1;
-	m_LastInputTick = -1;
-	m_SnapRate = CClient::SNAPRATE_INIT;
+	ResetMapTransfer();
 	m_Score = 0;
-	m_MapChunk = 0;
+	m_SilentMapSwitch = false;
 }
 
 CServer::CServer() // : m_DemoRecorder(&m_SnapshotDelta)
@@ -345,6 +351,7 @@ int CServer::Init()
 		m_aClients[i].m_aName[0] = 0;
 		m_aClients[i].m_aClan[0] = 0;
 		m_aClients[i].m_Country = -1;
+		m_aClients[i].m_SilentMapSwitch = false;
 		m_aClients[i].m_Snapshots.Init();
 	}
 
@@ -736,7 +743,7 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 	return 0;
 }
 
-void CServer::SendMap(int ClientID)
+void CServer::SendMap(int ClientID, bool Silent)
 {
 	CMapInfo *pInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
 	// Never announce a map that cannot be loaded: doing so hands the client
@@ -754,6 +761,7 @@ void CServer::SendMap(int ClientID)
 	Msg.AddInt(m_MapChunksPerRequest);
 	Msg.AddInt(CMapInfo::MAP_CHUNK_SIZE);
 	Msg.AddRaw(&pInfo->m_Sha256, sizeof(pInfo->m_Sha256));
+	Msg.AddInt(Silent ? MAP_CHANGE_FLAG_SILENT : 0);
 	SendMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_FLUSH, ClientID);
 }
 
@@ -860,7 +868,29 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 		}
 		else if(Unpacker.Type() == NETMSG_REQUEST_MAP_DATA)
 		{
-			if((pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0 && (m_aClients[ClientID].m_State == CClient::STATE_CONNECTING || m_aClients[ClientID].m_State == CClient::STATE_CONNECTING_AS_SPEC))
+			const bool Vital = (pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0;
+			// A client that received a silent map switch but does not have the
+			// map asks for its data while it is still INGAME on our side. It
+			// now needs the regular loading handshake, so fall back to it and
+			// let the following READY -> OnClientConnected path finish the
+			// transition. Reset() leaves the target map id untouched and, like
+			// the original switch, drops the inputs and the score.
+			if(Vital && m_aClients[ClientID].m_State == CClient::STATE_INGAME && m_aClients[ClientID].m_SilentMapSwitch)
+			{
+				// The client asked for the map of a silent switch it could not load.
+				// Restart the switch as a regular one and re-announce the map that is
+				// current *now*: a second switch may have happened while the request
+				// was in flight, and serving chunks for a map the client is not
+				// expecting leaves both sides waiting for each other.
+				const bool ConnectAsSpec = GameServer()->IsClientSpectator(ClientID);
+				m_aClients[ClientID].Reset(true);
+				m_aClients[ClientID].m_SilentMapSwitch = false;
+				m_aClients[ClientID].m_State = ConnectAsSpec ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;
+				SendMap(ClientID, false);
+				return;
+			}
+
+			if(Vital && (m_aClients[ClientID].m_State == CClient::STATE_CONNECTING || m_aClients[ClientID].m_State == CClient::STATE_CONNECTING_AS_SPEC))
 			{
 				int ChunkSize = CMapInfo::MAP_CHUNK_SIZE;
 				CMapInfo *pInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
@@ -2019,13 +2049,38 @@ void CServer::SnapSetStaticsize(int ItemType, int Size)
 	m_SnapshotDelta.SetStaticsize(ItemType, Size);
 }
 
-bool CServer::SwitchClientMap(int ClientID, unsigned MapID)
+bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 {
+	if(pSilent)
+		*pSilent = false;
+
 	CMapInfo *pInfo = m_MapInfos[MapID];
 	// An unloadable map must not become the client's map: the game world
 	// would switch under it while the client cannot obtain the map data.
 	if(!pInfo || !LoadMap(pInfo))
 		return false;
+
+	// A 0.8 client that is already in the game can carry its connection over
+	// to the new map: it keeps STATE_INGAME and only waits for the new world's
+	// snapshot. It falls back to the download path below by itself if it does
+	// not have the map cached (NETMSG_REQUEST_MAP_DATA).
+	const bool Silent = m_aClients[ClientID].m_Version >= 0x0800 &&
+		m_aClients[ClientID].m_State == CClient::STATE_INGAME &&
+		!m_NetServer.ClientIsLegacy(ClientID);
+
+	if(Silent)
+	{
+		m_aClients[ClientID].m_MapID = MapID;
+		// Only drop the transfer state: CClient::Reset() would also zero the
+		// score, so every seam crossing would cost the player their points.
+		m_aClients[ClientID].ResetMapTransfer();
+		m_aClients[ClientID].m_SilentMapSwitch = true;
+		if(pSilent)
+			*pSilent = true;
+		SendMap(ClientID, true);
+		return true;
+	}
+
 	m_aClients[ClientID].Reset(false);
 	m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 	m_aClients[ClientID].m_MapID = MapID;

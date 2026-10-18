@@ -141,11 +141,18 @@ public:
 		int m_MapChunk;
 		bool m_NoRconNote;
 		bool m_Quitting;
+		// Set by a silent map switch: the client kept STATE_INGAME but may not
+		// have the map, in which case its map-data request falls back to the
+		// regular download handshake. Cleared when that happens (or on reset).
+		bool m_SilentMapSwitch;
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
 
 		unsigned m_MapID;
 
 		void Reset(bool ResetInput = true);
+		// Clears only the map transfer/snapshot state, keeping the score and the
+		// connection state. Used by the silent map switch.
+		void ResetMapTransfer();
 	};
 
 	CClient m_aClients[MAX_CLIENTS];
@@ -255,7 +262,7 @@ public:
 	static int NewClientCallback(int ClientID, void *pUser);
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);
 
-	void SendMap(int ClientID);
+	void SendMap(int ClientID, bool Silent = false);
 	void SendConnectionReady(int ClientID);
 	void SendRconLine(int ClientID, const char *pLine);
 	static void SendRconLineAuthed(const char *pLine, void *pUser, bool Highlighted);
@@ -306,7 +313,7 @@ public:
 	virtual void *SnapNewItem(int Type, int ID, int Size);
 	void SnapSetStaticsize(int ItemType, int Size);
 
-	virtual bool SwitchClientMap(int ClientID, unsigned MapID);
+	virtual bool SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent = nullptr);
 	virtual const char *GetMapName(unsigned MapID);
 	virtual int GetMapWorldKind(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);

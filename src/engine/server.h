@@ -73,7 +73,11 @@ public:
 
 	virtual void ExpireServerInfo() = 0;
 
-	virtual bool SwitchClientMap(int ClientID, unsigned MapID) = 0;
+	// Switches the client to MapID. pSilent (optional) reports that the client
+	// kept its connection state and only needs the new world's snapshots; the
+	// game layer must then move the player immediately instead of waiting for
+	// OnClientConnected.
+	virtual bool SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent = nullptr) = 0;
 
 	// canonical map name of a loaded/known map, or "" when unknown
 	virtual const char *GetMapName(unsigned MapID) = 0;

@@ -330,12 +330,37 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 	pPlayer->m_HasPendingArrival = HasArrival;
 	pPlayer->m_PendingArrivalPos = ArrivalPos;
 
-	if(Server()->SwitchClientMap(pPlayer->GetCID(), MapID))
+	bool Silent = false;
+	if(Server()->SwitchClientMap(pPlayer->GetCID(), MapID, &Silent))
 	{
 		CGameWorld **ppWorld = m_pWorlds[MapID];
 		CGameWorld *pWorld = ppWorld ? *ppWorld : nullptr;
 		if(pWorld)
 			pPlayer->SwitchWorld(pWorld);
+
+		if(Silent)
+		{
+			// No READY follows a silent switch, so the regular migration in
+			// OnClientConnected never runs. Move the character into the new
+			// world now and clear the loading flag, otherwise OnSnap would
+			// skip this player and its world (empty snapshots).
+			if(CCharacter *pChr = pPlayer->GetCharacter())
+			{
+				// A ring crossing supplies the mapped arrival column; every
+				// other switch still lands on a regular spawn like the old
+				// READY path did instead of falling through to (0, 0).
+				vec2 Pos = ArrivalPos;
+				if(!HasArrival)
+				{
+					vec2 SpawnPos;
+					if(m_pController->CanSpawn(pPlayer->GameWorld(), pPlayer->GetTeam(), &SpawnPos))
+						Pos = SpawnPos;
+				}
+				pChr->MoveTo(pPlayer->GameWorld(), Pos);
+			}
+			pPlayer->m_HasPendingArrival = false;
+			pPlayer->m_MapLoading = false;
+		}
 	}
 	else
 	{

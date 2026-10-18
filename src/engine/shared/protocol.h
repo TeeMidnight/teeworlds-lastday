@@ -76,6 +76,14 @@ enum
 	NETMSG_MAPLIST_ENTRY_REM,
 };
 
+enum
+{
+	// NETMSG_MAP_CHANGE flag: the client already owns the map, so it applies
+	// the switch without entering its loading state, answering NETMSG_READY,
+	// or changing its connection state. Must match the client's value.
+	MAP_CHANGE_FLAG_SILENT = 0x1,
+};
+
 // this should be revised
 enum
 {
