@@ -335,11 +335,6 @@
 			"tr": "建造"
 		},
 		{
-			"context": "Character died",
-			"or": "YOU CANNOT ESCAPE.",
-			"tr": "你 无 法 逃 离"
-		},
-		{
 			"context": "INVENTORY",
 			"or": "Inventory",
 			"tr": "背包"

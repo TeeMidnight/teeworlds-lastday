@@ -669,7 +669,6 @@ void CCharacter::Die(int Killer, int Weapon)
 		m_Alive = true;
 		m_Pos = vec2(0, 0);
 		GameServer()->SwitchPlayerWorld(m_pPlayer, GameServer()->m_MainWorldID);
-		GameServer()->SendChat(-1, CHAT_WHISPER, m_pPlayer->GetCID(), Localize("YOU CANNOT ESCAPE.", "Character died"));
 	}
 }
 
