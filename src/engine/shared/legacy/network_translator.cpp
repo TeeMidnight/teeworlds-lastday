@@ -428,8 +428,8 @@ namespace legacy
 				// armor and so on. Copy the shared core, then the tail field by
 				// field.
 				mem_copy((CNetObj_CharacterCore *) pOut, (const CNetObj_CharacterCore *) pIn, sizeof(protocol7::CNetObj_CharacterCore));
-				pOut->m_Health = pIn->m_Health;
-				pOut->m_Armor = pIn->m_Armor;
+				pOut->m_Health = (int) (pIn->m_Health / (float) pIn->m_MaxHealth * 10.0f);
+				pOut->m_Armor = (int) (pIn->m_Armor / (float) pIn->m_MaxArmor * 10.0f);
 				pOut->m_AmmoCount = pIn->m_AmmoCount;
 				pOut->m_Weapon = pIn->m_Weapon;
 				pOut->m_Emote = pIn->m_Emote;

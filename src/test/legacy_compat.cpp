@@ -831,8 +831,8 @@ TEST(LegacyCompat, OutboundCharacterFieldsAreNotShifted)
 	EXPECT_EQ(pOut->m_HookDy, 222);
 
 	// The tail must land on the 0.7 field names, not shifted by two.
-	EXPECT_EQ(pOut->m_Health, 1001);
-	EXPECT_EQ(pOut->m_Armor, 1002);
+	EXPECT_EQ(pOut->m_Health, 1);
+	EXPECT_EQ(pOut->m_Armor, 1);
 	EXPECT_EQ(pOut->m_AmmoCount, 1003) << "a prefix copy would put MaxHealth here";
 	EXPECT_EQ(pOut->m_Weapon, 4) << "a prefix copy would put MaxArmor here";
 	EXPECT_EQ(pOut->m_Emote, 5);
