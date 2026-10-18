@@ -1,0 +1,21 @@
+{
+    "craft_id": "steel_drill",
+    "needed": [
+        {
+            "item_id": "addon:steel_ingot",
+            "count": 2
+        },
+        {
+            "item_id": "silver_ingot",
+            "count": 1
+        },
+        {
+            "item_id": "iron_drill",
+            "count": 1
+        }
+    ],
+    "result": {
+        "item_id": "steel_drill",
+        "count": 1
+    }
+}

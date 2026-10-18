@@ -113,3 +113,42 @@ TEST(SilentStep, ResetClearsTheFlag)
 	Core.Reset();
 	EXPECT_FALSE(Core.m_SilentStep);
 }
+
+// ---- accessory speed bonus -------------------------------------------------
+
+// An accessory raises the horizontal control speed cap. The client receives a
+// tuning scaled by the same factor, so its prediction uses this same cap.
+TEST(AccessorySpeed, ScalesTheControlSpeed)
+{
+	int aTiles[W * H];
+	MakeFloor(aTiles);
+	CCollision Coll;
+	Coll.InitForTesting(W, H, aTiles, false);
+	CWorldCore World;
+
+	CCharacterCore Normal;
+	InitCore(Normal, World, Coll);
+
+	CCharacterCore Fast;
+	InitCore(Fast, World, Coll);
+	Fast.m_SpeedScale = 1.25f;
+
+	StepN(Normal, 50);
+	StepN(Fast, 50);
+
+	EXPECT_FLOAT_EQ(Normal.m_Vel.x, 10.0f);
+	EXPECT_FLOAT_EQ(Fast.m_Vel.x, 12.5f);
+}
+
+// Reset returns a core to the unmodified speed, so a recycled core (or a bot's
+// core) never inherits another character's bonus.
+TEST(AccessorySpeed, ResetClearsTheScale)
+{
+	CCharacterCore Core;
+	Core.Reset();
+	EXPECT_FLOAT_EQ(Core.m_SpeedScale, 1.0f);
+
+	Core.m_SpeedScale = 1.5f;
+	Core.Reset();
+	EXPECT_FLOAT_EQ(Core.m_SpeedScale, 1.0f);
+}

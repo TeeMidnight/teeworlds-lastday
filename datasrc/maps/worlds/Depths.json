@@ -207,6 +207,23 @@
                     "octaves": 3,
                     "frequency": 0.055
                 }
+            },
+            {
+                "res_id": "silver_ore",
+                "display": "armor",
+                "proba": 18,
+                "hardness_min": 3,
+                "hardness_max": 7,
+                "respawntime_min": 100,
+                "respawntime_max": 200,
+                "threshold": 0.82,
+                "min_depth": 28,
+                "probes": 1,
+                "noise": {
+                    "seed_offset": 13500,
+                    "octaves": 3,
+                    "frequency": 0.055
+                }
             }
         ],
         "surface_entrances": {

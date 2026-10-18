@@ -26,6 +26,14 @@ enum
 	WEAPON_WORLD = -1, // death tiles etc
 };
 
+// accessory loadout slots: passive items worn alongside the weapon slots.
+// they are independent of NUM_WEAPONS, which is a protocol limit, so content
+// can grow without touching the snapshot layout.
+enum
+{
+	NUM_ACCESSORY_SLOTS = 3,
+};
+
 struct CTeeInfos
 {
 	char m_aaSkinPartNames[NUM_SKINPARTS][MAX_SKIN_ARRAY_SIZE];
@@ -150,6 +158,8 @@ public:
 		// through the character.
 		bool m_LoadoutSet; // true once the player customized the loadout
 		CItemID m_aLoadout[NUM_WEAPONS];
+		// accessory slots (persisted like the weapon layout)
+		CItemID m_aAccessories[NUM_ACCESSORY_SLOTS];
 	} m_Status;
 
 	// account (bound on login / register)
@@ -172,6 +182,18 @@ public:
 	// item the player still owns (missing items leave the slot empty)
 	void ApplyLoadout();
 
+	// capture the current character's accessory layout into m_Status
+	void CaptureAccessories();
+	// apply m_Status.m_aAccessories onto the character: equip every slot whose
+	// item the player still owns (missing items leave the slot empty)
+	void ApplyAccessories();
+
+	// drill control: opening the scoreboard next to a drill freezes the
+	// character and hands the cursor to it; a jump press releases the drill
+	void UpdateDrillControl();
+	// release the controlled drill (if any) and unfreeze the character
+	void ExitDrillControl();
+
 private:
 	CCharacter *m_pCharacter;
 	CGameWorld *m_pWorld;
@@ -184,6 +206,11 @@ private:
 	int m_ClientID;
 	int m_Team;
 	bool m_Dummy;
+
+	// snapshot id of the drill this player is steering, or -1
+	int m_DrillControlID;
+	// previous state of the scoreboard flag, for edge detection
+	bool m_ScoreboardHeld;
 
 	// used for spectator mode
 	int m_SpecMode;

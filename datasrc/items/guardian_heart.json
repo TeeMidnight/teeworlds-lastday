@@ -1,0 +1,11 @@
+{
+    "name": "Guardian Heart",
+    "desc": "A steel-caged heart that refuses to stop. Worn in an accessory slot.",
+    "item_type": [
+        "accessory",
+        "charm"
+    ],
+    "accessory": {
+        "health": 6
+    }
+}

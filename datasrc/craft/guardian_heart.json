@@ -1,0 +1,21 @@
+{
+    "craft_id": "guardian_heart",
+    "needed": [
+        {
+            "item_id": "addon:steel_ingot",
+            "count": 2
+        },
+        {
+            "item_id": "silver_ingot",
+            "count": 2
+        },
+        {
+            "item_id": "heart_charm",
+            "count": 1
+        }
+    ],
+    "result": {
+        "item_id": "guardian_heart",
+        "count": 1
+    }
+}

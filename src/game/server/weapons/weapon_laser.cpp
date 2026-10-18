@@ -26,7 +26,7 @@ public:
 		const int ClientID = pChr->GetCID();
 		const vec2 ChrPos = pChr->GetPos();
 		const int Damage = Ammo.m_Damage ? Ammo.m_Damage : g_pData->m_Weapons.m_aId[SnapStyle()].m_Damage;
-		const float Reach = pChr->GameServer()->Tuning()->m_LaserReach * Ammo.m_Speed;
+		const float Reach = pChr->GameServer()->Tuning()->m_LaserReach * Ammo.m_Speed * pChr->RangeScale();
 
 		new CLaser(pWorld, ChrPos, Direction, Reach, ClientID, Damage);
 		pWorld->CreateSound(ChrPos, SOUND_LASER_FIRE);

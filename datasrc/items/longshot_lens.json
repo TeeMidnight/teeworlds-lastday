@@ -1,0 +1,11 @@
+{
+    "name": "Longshot Lens",
+    "desc": "A ground silver lens that stretches the reach of every weapon. Worn in an accessory slot.",
+    "item_type": [
+        "accessory",
+        "charm"
+    ],
+    "accessory": {
+        "range": 0.4
+    }
+}

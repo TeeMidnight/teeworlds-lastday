@@ -49,6 +49,12 @@ CCharacter::CCharacter(CGameWorld *pWorld) : CHitableEntity(pWorld, CGameWorld::
 	m_Oxygen = 10;
 	m_OxygenTick = 0;
 	m_TriggeredEvents = 0;
+	m_MaxHealth = MAX_HEALTH;
+	m_RangeScale = 1.0f;
+	m_SpeedScale = 1.0f;
+	m_DrillControl = false;
+	m_DrillExitRequest = false;
+	mem_zero(m_aAccessories, sizeof(m_aAccessories));
 }
 
 void CCharacter::Reset()
@@ -72,6 +78,14 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	// player owns as items; clear any stale state from a previous life
 	for(int i = 0; i < NUM_WEAPONS; i++)
 		m_aWeapons[i] = CItemID();
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+		m_aAccessories[i] = CItemID();
+	// no accessories are worn yet; the game controller applies the player's
+	// saved layout later in OnCharacterSpawn (once m_pPlayer is set)
+	m_MaxHealth = MAX_HEALTH;
+	m_RangeScale = 1.0f;
+	m_SpeedScale = 1.0f;
+	m_Core.m_SpeedScale = 1.0f;
 
 	m_pPlayer = pPlayer;
 	m_Pos = Pos;
@@ -367,6 +381,136 @@ bool CCharacter::UnequipMissingWeapons()
 	return Changed;
 }
 
+// ---- accessory loadout ----------------------------------------------------
+
+bool CCharacter::EquipAccessorySlot(int Slot, const CItemID &Id)
+{
+	if(Slot < 0 || Slot >= NUM_ACCESSORY_SLOTS)
+		return false;
+
+	if(!Id.IsZero())
+	{
+		// only a declared accessory can be worn, and it must still be owned
+		if(!GameServer()->Item()->IsAccessory(Id))
+			return false;
+		if(!GameServer()->Item()->HasItem(GetCID(), Id))
+			return false;
+
+		// one physical item cannot be worn in two slots at once
+		for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+			if(i != Slot && m_aAccessories[i] == Id)
+				m_aAccessories[i] = CItemID();
+	}
+
+	m_aAccessories[Slot] = Id;
+	const int OldMaxHealth = m_MaxHealth;
+	RefreshAccessoryEffects();
+	// wearing a health accessory immediately grants the extra capacity, so the
+	// HUD does not show a hole that the player has to heal into
+	if(m_MaxHealth > OldMaxHealth)
+		m_Health = clamp(m_Health + (m_MaxHealth - OldMaxHealth), 0, m_MaxHealth);
+	return true;
+}
+
+CItemID CCharacter::AccessoryAtSlot(int Slot) const
+{
+	if(Slot < 0 || Slot >= NUM_ACCESSORY_SLOTS)
+		return CItemID();
+	return m_aAccessories[Slot];
+}
+
+void CCharacter::ClearAccessories()
+{
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+		m_aAccessories[i] = CItemID();
+	RefreshAccessoryEffects();
+}
+
+void CCharacter::SetAccessoryLayout(const CItemID *pIds)
+{
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+		m_aAccessories[i] = pIds ? pIds[i] : CItemID();
+	RefreshAccessoryEffects();
+}
+
+bool CCharacter::UnequipMissingAccessories()
+{
+	bool Changed = false;
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+	{
+		const CItemID &Id = m_aAccessories[i];
+		if(Id.IsZero())
+			continue;
+		if(!GameServer()->Item()->HasItem(GetCID(), Id) || !GameServer()->Item()->IsAccessory(Id))
+		{
+			m_aAccessories[i] = CItemID();
+			Changed = true;
+		}
+	}
+	if(Changed)
+		RefreshAccessoryEffects();
+	return Changed;
+}
+
+void CCharacter::RefreshAccessoryEffects()
+{
+	int Health = MAX_HEALTH;
+	float Range = 1.0f;
+	float Speed = 1.0f;
+
+	CItemSystem *pItem = GameServer()->Item();
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+	{
+		const CItemID &Id = m_aAccessories[i];
+		if(Id.IsZero() || !pItem->HasItem(GetCID(), Id))
+			continue;
+		const CItemSystem::SAccessory Acc = pItem->GetAccessory(Id);
+		if(!Acc.m_HasAccessory)
+			continue;
+		Health += Acc.m_Health;
+		Range += Acc.m_Range;
+		Speed += Acc.m_Speed;
+	}
+
+	// clamp the combined bonuses so content cannot unboundedly break the game
+	m_MaxHealth = clamp(Health, MAX_HEALTH, MAX_HEALTH * 2);
+	m_RangeScale = clamp(Range, 1.0f, 2.0f);
+	m_SpeedScale = clamp(Speed, 1.0f, 1.5f);
+
+	// losing a health accessory can drop the player's maximum below the
+	// current value; never leave them above it
+	if(m_Health > m_MaxHealth)
+		m_Health = m_MaxHealth;
+	m_Core.m_SpeedScale = m_SpeedScale;
+}
+
+void CCharacter::SetDrillControl(bool Control)
+{
+	m_DrillControl = Control;
+	m_DrillExitRequest = false;
+	if(!Control)
+		return;
+
+	// pin the tee where it stands and drop any hook it still holds; the
+	// client's prediction is frozen through the per-client tuning
+	m_Core.m_Vel = vec2(0.0f, 0.0f);
+	m_Core.m_HookState = HOOK_IDLE;
+	m_Core.m_HookedPlayer = -1;
+	m_Core.m_HookDragVel = vec2(0.0f, 0.0f);
+	m_Core.m_HookPos = m_Core.m_Pos;
+	m_Core.m_TriggeredEvents = 0;
+	m_Input.m_Direction = 0;
+	m_Input.m_Jump = 0;
+	m_Input.m_Hook = 0;
+}
+
+bool CCharacter::ConsumeDrillExitRequest()
+{
+	const bool Request = m_DrillExitRequest;
+	m_DrillExitRequest = false;
+	return Request;
+}
+
 void CCharacter::TeleTo(vec2 Pos, bool KeepSpeed)
 {
 	if(!KeepSpeed)
@@ -407,6 +551,17 @@ void CCharacter::OnDirectInput(CNetObj_PlayerInput *pNewInput)
 	if(m_LatestInput.m_TargetX == 0 && m_LatestInput.m_TargetY == 0)
 		m_LatestInput.m_TargetY = -1;
 
+	// steering a drill: the aim and fire button still update (the drill reads
+	// them), but the player must not also swing or fire their weapon. A jump
+	// press is the exit request, handled by the owning CPlayer.
+	if(m_DrillControl)
+	{
+		if(CountInput(m_LatestPrevInput.m_Jump, m_LatestInput.m_Jump).m_Presses)
+			m_DrillExitRequest = true;
+		mem_copy(&m_LatestPrevInput, &m_LatestInput, sizeof(m_LatestInput));
+		return;
+	}
+
 	if(m_NumInputs > 2 && m_pPlayer->GetTeam() != TEAM_SPECTATORS)
 	{
 		HandleWeaponSwitch();
@@ -433,9 +588,27 @@ void CCharacter::Tick()
 	// the player's ready state is the silent-step toggle: while it is clear
 	// the character creeps at half speed and its jumps make no sound
 	m_Core.m_SilentStep = !m_pPlayer->m_IsReadyToPlay;
+	// accessory speed bonus; the client is sent a matching tuning so its local
+	// prediction agrees with the server simulation
+	m_Core.m_SpeedScale = m_SpeedScale;
 
 	m_Core.m_Input = m_Input;
-	m_Core.Tick(true, true);
+	if(m_DrillControl)
+	{
+		// steering a drill: freeze the core in place. The client receives zeroed
+		// control speeds in its tuning, so its local prediction stays still too.
+		m_Core.m_Input.m_Direction = 0;
+		m_Core.m_Input.m_Jump = 0;
+		m_Core.m_Input.m_Hook = 0;
+		m_Core.m_Vel = vec2(0.0f, 0.0f);
+		m_Core.m_SpeedScale = 0.0f;
+		m_Core.m_TriggeredEvents = 0;
+		m_Core.m_Angle = (int) (angle(vec2(m_Input.m_TargetX, m_Input.m_TargetY)) * 256.0f);
+	}
+	else
+	{
+		m_Core.Tick(true, true);
+	}
 
 	// handle leaving gamelayer
 	if(GameLayerClipped(m_Pos))
@@ -472,7 +645,8 @@ void CCharacter::Tick()
 	}
 
 	// handle Weapons
-	HandleWeapons();
+	if(!m_DrillControl)
+		HandleWeapons();
 }
 
 bool CCharacter::InWater()
@@ -596,9 +770,9 @@ void CCharacter::TickPaused()
 
 bool CCharacter::IncreaseHealth(int Amount)
 {
-	if(m_Health >= MAX_HEALTH)
+	if(m_Health >= m_MaxHealth)
 		return false;
-	m_Health = clamp(m_Health + Amount, 0, MAX_HEALTH);
+	m_Health = clamp(m_Health + Amount, 0, m_MaxHealth);
 	return true;
 }
 
@@ -854,10 +1028,10 @@ void CCharacter::Snap(int SnappingClient)
 	pCharacter->m_Health = 0;
 	pCharacter->m_Armor = 0;
 	// 0.8: the maximum values are public and always sent, so that the client can
-	// scale the health/armor bars without knowing the server's tuning. They must
-	// be valid for every character; lastday caps health and armor at 10 (see
-	// IncreaseHealth/IncreaseArmor), so that is the value the HUD has to use.
-	pCharacter->m_MaxHealth = MAX_HEALTH;
+	// scale the health/armor bars without knowing the server's tuning. m_MaxHealth
+	// includes the accessory health bonus, so a 0.8 HUD scales correctly. Legacy
+	// 0.7 clients get their value normalised to 10 by the snapshot translator.
+	pCharacter->m_MaxHealth = m_MaxHealth;
 	pCharacter->m_MaxArmor = MAX_ARMOR;
 	// a silent step leaves no trace: its jumps are not announced to anyone
 	int TriggeredEvents = m_TriggeredEvents;

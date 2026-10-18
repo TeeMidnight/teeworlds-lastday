@@ -1,0 +1,11 @@
+{
+    "name": "Wind Charm",
+    "desc": "Amber and grass spun into a light step. Worn in an accessory slot.",
+    "item_type": [
+        "accessory",
+        "charm"
+    ],
+    "accessory": {
+        "speed": 0.1
+    }
+}

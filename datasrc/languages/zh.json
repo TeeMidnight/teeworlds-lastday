@@ -266,6 +266,156 @@
 			"context": "Item Type",
 			"or": "metal",
 			"tr": "金属"
+		},
+		{
+			"context": "Item Type",
+			"or": "accessory",
+			"tr": "配饰"
+		},
+		{
+			"context": "Item Type",
+			"or": "charm",
+			"tr": "护符"
+		},
+		{
+			"context": "Item Type",
+			"or": "gem",
+			"tr": "宝石"
+		},
+		{
+			"context": "Item Type",
+			"or": "organic",
+			"tr": "有机"
+		},
+		{
+			"context": "Item Name",
+			"or": "Silver Ore",
+			"tr": "银矿石"
+		},
+		{
+			"context": "Item Name",
+			"or": "Amber",
+			"tr": "琥珀"
+		},
+		{
+			"context": "Item Name",
+			"or": "Silver Ingot",
+			"tr": "银锭"
+		},
+		{
+			"context": "Item Name",
+			"or": "Heart Charm",
+			"tr": "心之护符"
+		},
+		{
+			"context": "Item Name",
+			"or": "Hawk Eye",
+			"tr": "鹰眼"
+		},
+		{
+			"context": "Item Name",
+			"or": "Wind Charm",
+			"tr": "疾风护符"
+		},
+		{
+			"context": "Item Name",
+			"or": "Guardian Heart",
+			"tr": "守护之心"
+		},
+		{
+			"context": "Item Name",
+			"or": "Longshot Lens",
+			"tr": "远视透镜"
+		},
+		{
+			"context": "Item Name",
+			"or": "Storm Charm",
+			"tr": "风暴护符"
+		},
+		{
+			"context": "Item Desc: Silver Ore",
+			"or": "A pale metal vein, cold to the touch.",
+			"tr": "苍白的金属矿脉，触手冰凉。"
+		},
+		{
+			"context": "Item Desc: Amber",
+			"or": "Fossil resin that hums with old, stored motion.",
+			"tr": "树脂化石，低鸣着被封存已久的律动。"
+		},
+		{
+			"context": "Item Desc: Silver Ingot",
+			"or": "Refined silver, bright enough to ward off the dark.",
+			"tr": "精炼的银，明亮得足以驱散黑暗。"
+		},
+		{
+			"context": "Item Desc: Heart Charm",
+			"or": "A silver charm that steadies the heartbeat. Worn in an accessory slot.",
+			"tr": "稳住心跳的银质护符。装备于配饰栏。"
+		},
+		{
+			"context": "Item Desc: Hawk Eye",
+			"or": "An amber lens that lengthens every shot. Worn in an accessory slot.",
+			"tr": "拉长每次射击距离的琥珀镜片。装备于配饰栏。"
+		},
+		{
+			"context": "Item Desc: Wind Charm",
+			"or": "Amber and grass spun into a light step. Worn in an accessory slot.",
+			"tr": "琥珀与草叶编织出的轻盈脚步。装备于配饰栏。"
+		},
+		{
+			"context": "Item Desc: Guardian Heart",
+			"or": "A steel-caged heart that refuses to stop. Worn in an accessory slot.",
+			"tr": "囚于钢笼之中、拒绝停歇的心脏。装备于配饰栏。"
+		},
+		{
+			"context": "Item Desc: Longshot Lens",
+			"or": "A ground silver lens that stretches the reach of every weapon. Worn in an accessory slot.",
+			"tr": "打磨过的银镜，延展所有武器的射程。装备于配饰栏。"
+		},
+		{
+			"context": "Item Desc: Storm Charm",
+			"or": "A storm caught in steel and amber. Worn in an accessory slot.",
+			"tr": "被封入钢铁与琥珀中的风暴。装备于配饰栏。"
+		},
+		{
+			"context": "Item Type",
+			"or": "tool",
+			"tr": "工具"
+		},
+		{
+			"context": "Item Type",
+			"or": "drill",
+			"tr": "钻头"
+		},
+		{
+			"context": "Item Name",
+			"or": "Iron Drill",
+			"tr": "铁钻"
+		},
+		{
+			"context": "Item Name",
+			"or": "Steel Drill",
+			"tr": "钢钻"
+		},
+		{
+			"context": "Item Name",
+			"or": "Heaven Drill",
+			"tr": "天钻"
+		},
+		{
+			"context": "Item Desc: Iron Drill",
+			"or": "A laser tripod drill. Place it, then hold the scoreboard beside it to bore up to 10 tiles into the rock.",
+			"tr": "激光三脚钻。放置后站在旁边按住计分板，可向岩层钻探 10 格。"
+		},
+		{
+			"context": "Item Desc: Steel Drill",
+			"or": "A reinforced laser tripod. Reaches 20 tiles into the rock and still winds back on its own.",
+			"tr": "加固的激光三脚钻。可向岩层钻探 20 格，并会自动收回。"
+		},
+		{
+			"context": "Item Desc: Heaven Drill",
+			"or": "A drill carrying a sliver of heaven. Its beam reaches 30 tiles before it retracts.",
+			"tr": "带着一线天堂之力的钻头。光束可延伸 30 格后收回。"
 		}
 	],
 	"server strings": [
@@ -530,6 +680,21 @@
 			"tr": "选择要放入此槽位的物品。"
 		},
 		{
+			"context": "Menu Loadout",
+			"or": "Select an accessory to wear on this slot.",
+			"tr": "选择要装备到此栏位的配饰。"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "{}. (empty accessory slot)",
+			"tr": "{}. (空配饰栏)"
+		},
+		{
+			"context": "Menu Loadout",
+			"or": "Clear this slot",
+			"tr": "清空此栏位"
+		},
+		{
 			"context": "Menu Main",
 			"or": "(Click this to hide this tip)",
 			"tr": "(点击此处隐藏提示)"
@@ -593,6 +758,11 @@
 			"context": "WEAPONPICK",
 			"or": "Choose Weapon",
 			"tr": "选择武器"
+		},
+		{
+			"context": "ACCESSORYPICK",
+			"or": "Choose Accessory",
+			"tr": "选择配饰"
 		},
 		{
 			"context": "Trade",
@@ -873,6 +1043,41 @@
 			"context": "Item Type",
 			"or": "medicine",
 			"tr": "药物"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Place drill",
+			"tr": "放置钻头"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Hold the scoreboard next to it to control the drill. Jump to exit.",
+			"tr": "站在旁边按住计分板即可控制钻头，跳跃退出。"
+		},
+		{
+			"context": "Drill",
+			"or": "You have to be alive to place a drill.",
+			"tr": "你必须活着才能放置钻头。"
+		},
+		{
+			"context": "Drill",
+			"or": "Stand on the ground to place a drill.",
+			"tr": "请站在地面上放置钻头。"
+		},
+		{
+			"context": "Drill",
+			"or": "There is already a drill here.",
+			"tr": "这里已经有一个钻头了。"
+		},
+		{
+			"context": "Drill",
+			"or": "Drill placed. Hold the scoreboard next to it to take control; jump to let go.",
+			"tr": "钻头已放置。站在旁边按住计分板即可控制，跳跃退出。"
+		},
+		{
+			"context": "Drill",
+			"or": "Drill engaged. Aim with the cursor, hold fire to bore, jump to let go.",
+			"tr": "已接入钻头。用准星瞄准，按住开火开始钻探，跳跃退出。"
 		}
 	]
 }

@@ -1,0 +1,11 @@
+{
+    "name": "Heart Charm",
+    "desc": "A silver charm that steadies the heartbeat. Worn in an accessory slot.",
+    "item_type": [
+        "accessory",
+        "charm"
+    ],
+    "accessory": {
+        "health": 3
+    }
+}

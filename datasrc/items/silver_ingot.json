@@ -1,0 +1,8 @@
+{
+    "name": "Silver Ingot",
+    "desc": "Refined silver, bright enough to ward off the dark.",
+    "item_type": [
+        "ingot",
+        "metal"
+    ]
+}

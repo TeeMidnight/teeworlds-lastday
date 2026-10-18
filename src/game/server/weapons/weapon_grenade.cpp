@@ -26,7 +26,7 @@ public:
 		const int ClientID = pChr->GetCID();
 		const vec2 ProjStartPos = pChr->GetPos() + Direction * pChr->GetProximityRadius() * 0.75f;
 		const int Damage = Ammo.m_Damage ? Ammo.m_Damage : g_pData->m_Weapons.m_aId[SnapStyle()].m_Damage;
-		const int Span = (int) (pChr->Server()->TickSpeed() * pChr->GameServer()->Tuning()->m_GrenadeLifetime * Ammo.m_Lifetime);
+		const int Span = (int) (pChr->Server()->TickSpeed() * pChr->GameServer()->Tuning()->m_GrenadeLifetime * Ammo.m_Lifetime * pChr->RangeScale());
 
 		new CProjectile(pWorld, SnapStyle(), ClientID, ProjStartPos, Direction * Ammo.m_Speed,
 			Span, Damage, true, 0, SOUND_GRENADE_EXPLODE, SnapStyle());

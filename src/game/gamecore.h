@@ -265,6 +265,11 @@ public:
 	// half speed and jumps are snapped without their sound events
 	bool m_SilentStep;
 
+	// Accessory speed bonus: scales the horizontal control speed cap. The
+	// server applies it while the client, which does not send this field, is
+	// sent a tuning with the same speed so its local prediction agrees.
+	float m_SpeedScale;
+
 	void Init(CWorldCore *pWorld, CCollision *pCollision);
 	void Reset();
 	void Tick(bool UseInput, bool LastDay);

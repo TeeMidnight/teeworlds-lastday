@@ -4,6 +4,7 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
 #include "entities/character.h"
+#include "entities/drill.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "player.h"
@@ -29,6 +30,8 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_TeamChangeTick = Server()->Tick();
 	m_InactivityTickCounter = 0;
 	m_Dummy = Dummy;
+	m_DrillControlID = -1;
+	m_ScoreboardHeld = false;
 	m_IsReadyToPlay = true;
 	m_RespawnDisabled = GameServer()->m_pController->GetStartRespawnState();
 	m_DeadSpecMode = false;
@@ -44,6 +47,8 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_Status.m_LoadoutSet = false;
 	for(int i = 0; i < NUM_WEAPONS; i++)
 		m_Status.m_aLoadout[i] = CItemID();
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+		m_Status.m_aAccessories[i] = CItemID();
 
 	m_AccountUuid = UUID_ZEROED;
 	m_LoggedIn = false;
@@ -112,6 +117,8 @@ void CPlayer::Tick()
 	}
 	else if(m_Spawning && m_RespawnTick <= Server()->Tick())
 		TryRespawn();
+
+	UpdateDrillControl();
 
 	if(!m_DeadSpecMode && m_LastActionTick != Server()->Tick())
 		++m_InactivityTickCounter;
@@ -198,6 +205,7 @@ void CPlayer::Snap(int SnappingClient)
 
 void CPlayer::OnDisconnect()
 {
+	ExitDrillControl();
 	KillCharacter();
 
 	if(m_Team != TEAM_SPECTATORS)
@@ -298,6 +306,8 @@ CCharacter *CPlayer::GetCharacter()
 
 void CPlayer::KillCharacter(int Weapon, bool Clean)
 {
+	ExitDrillControl();
+
 	if(m_pCharacter)
 	{
 		m_pCharacter->Die(m_ClientID, Weapon);
@@ -443,6 +453,8 @@ void CPlayer::TryRespawn()
 
 void CPlayer::SwitchWorld(CGameWorld *pWorld)
 {
+	ExitDrillControl();
+
 	if(m_pCharacter)
 	{
 		m_pCharacter->Remove();
@@ -454,4 +466,84 @@ void CPlayer::SwitchWorld(CGameWorld *pWorld)
 	m_pWorld = pWorld;
 	m_IsReadyToEnter = false;
 	m_MapLoading = true;
+}
+
+// the drill with the given snapshot id in this world, or null
+static CDrillEntity *FindDrillByID(CGameWorld *pWorld, int ID)
+{
+	if(!pWorld || ID < 0)
+		return nullptr;
+	for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_DRILL); !r.empty(); r.pop_front())
+	{
+		if(r.front()->GetID() == ID)
+			return static_cast<CDrillEntity *>(r.front());
+	}
+	return nullptr;
+}
+
+void CPlayer::UpdateDrillControl()
+{
+	const bool Scoreboard = (m_PlayerFlags & TEEFLAG_SCOREBOARD) != 0;
+	const bool ScoreboardPressed = Scoreboard && !m_ScoreboardHeld;
+	m_ScoreboardHeld = Scoreboard;
+
+	// already steering: a jump press releases the drill. The scoreboard no
+	// longer has to stay held, so the player can see the field while aiming.
+	if(m_DrillControlID >= 0)
+	{
+		if(m_pCharacter && m_pCharacter->ConsumeDrillExitRequest())
+		{
+			ExitDrillControl();
+			return;
+		}
+		CGameWorld *pWorld = m_pCharacter ? m_pCharacter->GameWorld() : m_pWorld;
+		CDrillEntity *pDrill = FindDrillByID(pWorld, m_DrillControlID);
+		if(!pDrill || pDrill->Controller() != m_ClientID || !m_pCharacter || !m_pCharacter->IsAlive())
+			ExitDrillControl();
+		return;
+	}
+
+	// entering needs a fresh scoreboard press while standing next to a free drill
+	if(!ScoreboardPressed || !m_pCharacter || !m_pCharacter->IsAlive())
+		return;
+
+	CGameWorld *pWorld = m_pCharacter->GameWorld();
+	CDrillEntity *pBest = nullptr;
+	float BestDistance = (float) CDrillEntity::CONTROL_RADIUS;
+	for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_DRILL); !r.empty(); r.pop_front())
+	{
+		CDrillEntity *pDrill = static_cast<CDrillEntity *>(r.front());
+		if(pDrill->Controller() >= 0)
+			continue;
+		const float Distance = distance(pDrill->GetPos(), m_pCharacter->GetPos());
+		if(Distance <= BestDistance)
+		{
+			BestDistance = Distance;
+			pBest = pDrill;
+		}
+	}
+
+	if(!pBest)
+		return;
+
+	pBest->SetController(m_ClientID);
+	m_DrillControlID = pBest->GetID();
+	m_pCharacter->SetDrillControl(true);
+	GameServer()->SendChat(-1, CHAT_WHISPER, m_ClientID,
+		Localize("Drill engaged. Aim with the cursor, hold fire to bore, jump to let go.", "Drill"));
+}
+
+void CPlayer::ExitDrillControl()
+{
+	if(m_DrillControlID >= 0)
+	{
+		CGameWorld *pWorld = m_pCharacter ? m_pCharacter->GameWorld() : m_pWorld;
+		CDrillEntity *pDrill = FindDrillByID(pWorld, m_DrillControlID);
+		if(pDrill && pDrill->Controller() == m_ClientID)
+			pDrill->SetController(-1);
+		m_DrillControlID = -1;
+	}
+
+	if(m_pCharacter)
+		m_pCharacter->SetDrillControl(false);
 }

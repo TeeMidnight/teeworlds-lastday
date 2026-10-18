@@ -85,6 +85,7 @@ void CCharacterCore::Reset()
 	m_Jumped = 0;
 	m_TriggeredEvents = 0;
 	m_SilentStep = false;
+	m_SpeedScale = 1.0f;
 	m_Death = false;
 }
 
@@ -112,7 +113,7 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 	// It is a LastDay-only rule: the dead-reckoning / legacy prediction path
 	// passes LastDay false, so it keeps the vanilla speed and stays in sync.
 	const float SilentStepScale = (m_SilentStep && LastDay) ? 0.5f : 1.0f;
-	float MaxSpeed = (Grounded ? m_pWorld->m_Tuning.m_GroundControlSpeed : m_pWorld->m_Tuning.m_AirControlSpeed) * SilentStepScale * (InWater ? WaterFrictionX : 1.0f);
+	float MaxSpeed = (Grounded ? m_pWorld->m_Tuning.m_GroundControlSpeed : m_pWorld->m_Tuning.m_AirControlSpeed) * SilentStepScale * m_SpeedScale * (InWater ? WaterFrictionX : 1.0f);
 	float Accel = (Grounded ? m_pWorld->m_Tuning.m_GroundControlAccel : m_pWorld->m_Tuning.m_AirControlAccel) * SilentStepScale * (InWater ? WaterFrictionX : 1.0f);
 	float Friction = (Grounded ? m_pWorld->m_Tuning.m_GroundFriction : m_pWorld->m_Tuning.m_AirFriction) * (InWater ? WaterFrictionX : 1.0f);
 	

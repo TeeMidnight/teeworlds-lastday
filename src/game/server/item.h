@@ -43,6 +43,40 @@ public:
 		}
 	};
 
+	// passive effects of an accessory. an item that declares an "accessory"
+	// json object can be worn in one of the character's accessory slots instead
+	// of being fired or used, and grants these bonuses while worn.
+	struct SAccessory
+	{
+		int m_Health; // extra maximum health
+		float m_Range; // bonus attack range multiplier (0.20 = +20%)
+		float m_Speed; // bonus movement speed multiplier (0.10 = +10%)
+		bool m_HasAccessory; // whether an "accessory" object was declared
+
+		SAccessory() :
+			m_Health(0),
+			m_Range(0.0f),
+			m_Speed(0.0f),
+			m_HasAccessory(false)
+		{
+		}
+	};
+
+	// placement effect of a drill item: a drill can be put down as a building
+	// and controlled from the scoreboard. m_MaxLength is how far (in world
+	// units) its beam can bore into the rock.
+	struct SDrill
+	{
+		int m_MaxLength;
+		bool m_HasDrill; // whether a "drill" object was declared
+
+		SDrill() :
+			m_MaxLength(0),
+			m_HasDrill(false)
+		{
+		}
+	};
+
 private:
 	class CGameContext *m_pGameServer;
 	class IStorage *m_pStorage;
@@ -72,6 +106,8 @@ private:
 		// the ammo's effect (see SAmmoEffect); free form tags a weapon may use
 		SAmmoEffect m_AmmoEffect;
 		SUse m_Use;
+		SAccessory m_Accessory;
+		SDrill m_Drill;
 	};
 	hash_table<Uuid, SItemDef, 16, uuid_table_function> m_Items;
 
@@ -217,6 +253,14 @@ public:
 	SUse GetUse(const CItemID &Id) const;
 	// the weapon name this item equips as, or "" when it is not a weapon
 	const char *GetWeaponName(const CItemID &Id) const;
+	// whether the item is an accessory (declares an "accessory" object)
+	bool IsAccessory(const CItemID &Id) const;
+	// the item's accessory effects; m_HasAccessory false when it is not one
+	SAccessory GetAccessory(const CItemID &Id) const;
+	// whether the item can be placed as a drill building
+	bool IsDrill(const CItemID &Id) const;
+	// the item's drill data; m_HasDrill false when it is not a drill
+	SDrill GetDrill(const CItemID &Id) const;
 
 	// consume up to Count items and apply their "use" effects to the player
 	int UseItem(int ClientID, const CItemID &Id, int Count = 1);

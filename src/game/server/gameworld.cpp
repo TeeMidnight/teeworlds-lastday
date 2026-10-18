@@ -17,6 +17,7 @@
 #include "botmanager.h"
 #include "entities/botentity.h"
 #include "entities/character.h"
+#include "entities/drill.h"
 #include "entities/dropped_pickup.h"
 #include "entities/resource.h"
 #include "entity.h"
@@ -1120,6 +1121,15 @@ void CGameWorld::SaveToDatabase()
 			lDrops.add(pPickup);
 	}
 
+	// collect the placed drills
+	array<CDrillEntity *> lDrills;
+	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_DRILL); !r.empty(); r.pop_front())
+	{
+		CDrillEntity *pDrill = static_cast<CDrillEntity *>(r.front());
+		if(!pDrill->IsMarkedForDestroy())
+			lDrills.add(pDrill);
+	}
+
 	// build the whole world document from scratch
 	array<char> lJson;
 	memory_stream<char> Stream(&lJson);
@@ -1144,6 +1154,30 @@ void CGameWorld::SaveToDatabase()
 		JsonWriter.EndObject();
 	}
 	JsonWriter.EndArray();
+
+	// placed drills: the item, its position and the last beam direction
+	JsonWriter.WriteAttribute("drill");
+	JsonWriter.BeginArray();
+	for(int i = 0; i < lDrills.size(); i++)
+	{
+		const CDrillEntity *pDrill = lDrills[i];
+		char aUuid[UUID_MAXSTRSIZE];
+		pDrill->ItemId().FormatUuid(aUuid, sizeof(aUuid));
+		const vec2 Dir = pDrill->Dir();
+		JsonWriter.BeginObject();
+		JsonWriter.WriteAttribute("item");
+		JsonWriter.WriteStrValue(aUuid);
+		JsonWriter.WriteAttribute("x");
+		JsonWriter.WriteIntValue(round_to_int(pDrill->GetPos().x));
+		JsonWriter.WriteAttribute("y");
+		JsonWriter.WriteIntValue(round_to_int(pDrill->GetPos().y));
+		JsonWriter.WriteAttribute("dx");
+		JsonWriter.WriteIntValue(round_to_int(Dir.x * 1000.0f));
+		JsonWriter.WriteAttribute("dy");
+		JsonWriter.WriteIntValue(round_to_int(Dir.y * 1000.0f));
+		JsonWriter.EndObject();
+	}
+	JsonWriter.EndArray();
 	// future world attributes get their own fields of this object here
 	JsonWriter.EndObject();
 	lJson.add(0);
@@ -1152,7 +1186,7 @@ void CGameWorld::SaveToDatabase()
 	// were snapshotted above, so the job never touches the live world and the
 	// world may be unloaded right after this returns. An empty world still
 	// queues a job: it deletes the row.
-	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0);
+	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0);
 }
 
 void CGameWorld::RestoreFromDatabase()
@@ -1177,12 +1211,9 @@ void CGameWorld::RestoreFromDatabase()
 	if(!pJson || pJson->type != json_object)
 		return;
 
-	const json_value &rDrops = (*pJson)["drop"];
-	if(rDrops.type != json_array)
-		return;
-
 	CItemSystem *pItems = GameServer()->Item();
-	for(unsigned i = 0; i < rDrops.u.array.length; i++)
+	const json_value &rDrops = (*pJson)["drop"];
+	for(unsigned i = 0; rDrops.type == json_array && i < rDrops.u.array.length; i++)
 	{
 		const json_value &rDrop = rDrops[i];
 		if(rDrop.type != json_object)
@@ -1223,5 +1254,40 @@ void CGameWorld::RestoreFromDatabase()
 			continue;
 
 		new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f), DropId, Count);
+	}
+
+	// placed drills: item id, position and the last beam direction
+	const json_value &rDrills = (*pJson)["drill"];
+	for(unsigned i = 0; rDrills.type == json_array && i < rDrills.u.array.length; i++)
+	{
+		const json_value &rDrill = rDrills[i];
+		if(rDrill.type != json_object)
+			continue;
+		const json_value &rItem = rDrill["item"];
+		const json_value &rX = rDrill["x"];
+		const json_value &rY = rDrill["y"];
+		if(rItem.type != json_string || rX.type != json_integer || rY.type != json_integer)
+			continue;
+
+		CItemID DrillId;
+		if(!CItemID::Parse(rItem.u.string.ptr, &DrillId) || DrillId.IsZero())
+			continue;
+		const CItemSystem::SDrill Def = pItems->GetDrill(DrillId);
+		if(!Def.m_HasDrill)
+			continue;
+
+		// the stored direction is a scaled unit vector; fall back to "down"
+		vec2 Dir(0.0f, 1.0f);
+		const json_value &rDx = rDrill["dx"];
+		const json_value &rDy = rDrill["dy"];
+		if(rDx.type == json_integer && rDy.type == json_integer)
+		{
+			const vec2 Stored((float) (json_int_t) rDx / 1000.0f, (float) (json_int_t) rDy / 1000.0f);
+			if(length(Stored) > 0.0001f)
+				Dir = normalize(Stored);
+		}
+
+		CDrillEntity *pDrill = new CDrillEntity(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY), DrillId, Def.m_MaxLength, -1);
+		pDrill->SetDirection(Dir);
 	}
 }

@@ -1,0 +1,21 @@
+{
+    "craft_id": "hawk_eye",
+    "needed": [
+        {
+            "item_id": "amber",
+            "count": 2
+        },
+        {
+            "item_id": "iron_ingot",
+            "count": 1
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 1
+        }
+    ],
+    "result": {
+        "item_id": "hawk_eye",
+        "count": 1
+    }
+}

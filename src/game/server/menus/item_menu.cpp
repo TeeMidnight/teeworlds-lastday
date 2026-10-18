@@ -130,6 +130,14 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	const char *pName = Forgotten ? "???" : pItem->GetName(Id);
 	const char *pLocalizedName = Localize(pName, "Item Name");
 
+	// place a drill as a building (the item is consumed by PlaceDrill)
+	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "PLACE") == 0)
+	{
+		pMenu->GameServer()->PlaceDrill(ClientID, Id);
+		pMenu->SetPlayerPage(ClientID, "INVENTORY");
+		return false;
+	}
+
 	// "use" the item; the vote reason box can carry how many to use
 	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "USE") == 0)
 	{
@@ -223,6 +231,11 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	{
 		pMenu->AddOption(Localize("Use", "Menu Inventory"), "USE", "★");
 		pMenu->AddOption(Localize("Use a number as the vote reason to use that many.", "Menu Inventory"), "DISPLAY", "-");
+	}
+	if(pItem->IsDrill(Id))
+	{
+		pMenu->AddOption(Localize("Place drill", "Menu Inventory"), "PLACE", "★");
+		pMenu->AddOption(Localize("Hold the scoreboard next to it to control the drill. Jump to exit.", "Menu Inventory"), "DISPLAY", "-");
 	}
 	pMenu->AddOption(Localize("Drop", "Menu Inventory"), "DROP", "★");
 	pMenu->AddOption(Localize("Use a number as the vote reason to drop that many.", "Menu Inventory"), "DISPLAY", "-");

@@ -159,10 +159,13 @@ int CGameController::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, int
 
 void CGameController::OnCharacterSpawn(CCharacter *pChr)
 {
-	// default health
-	pChr->IncreaseHealth(10);
-
 	CPlayer *pPlayer = pChr->GetPlayer();
+	// wear the player's saved accessories first: they raise the health cap, so
+	// the initial heal below fills the boosted maximum
+	if(pPlayer)
+		pPlayer->ApplyAccessories();
+	pChr->IncreaseHealth(pChr->MaxHealth());
+
 	if(pChr->NumWeaponsHeld() == 0)
 	{
 		if(pPlayer && pPlayer->m_Status.m_LoadoutSet)

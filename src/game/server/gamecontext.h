@@ -157,6 +157,10 @@ public:
 	// (units per tick). Returns false (with a chat message) on failure.
 	bool DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction);
 
+	// place a drill item as a building at the player's position. consumes one
+	// item; returns false (with a chat message) when it cannot be placed.
+	bool PlaceDrill(int ClientID, const CItemID &ItemId);
+
 	CCommandManager m_CommandManager;
 
 	CCommandManager *CommandManager() { return &m_CommandManager; }

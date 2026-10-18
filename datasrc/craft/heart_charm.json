@@ -1,0 +1,17 @@
+{
+    "craft_id": "heart_charm",
+    "needed": [
+        {
+            "item_id": "silver_ingot",
+            "count": 2
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 2
+        }
+    ],
+    "result": {
+        "item_id": "heart_charm",
+        "count": 1
+    }
+}

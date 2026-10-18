@@ -1,0 +1,11 @@
+{
+    "name": "Hawk Eye",
+    "desc": "An amber lens that lengthens every shot. Worn in an accessory slot.",
+    "item_type": [
+        "accessory",
+        "charm"
+    ],
+    "accessory": {
+        "range": 0.2
+    }
+}

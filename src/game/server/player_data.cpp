@@ -50,6 +50,16 @@ void CPlayer::CaptureStatus(CDbJob &Job)
 			m_Status.m_aLoadout[i].FormatUuid(aUuid, sizeof(aUuid));
 		DbSet(Job, CJsonPath().Key("loadout").Index(i), aUuid);
 	}
+
+	// store the accessory layout the same way (uuid per slot, "" for empty)
+	DbDel(Job, CJsonPath().Key("accessories"));
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+	{
+		char aUuid[UUID_MAXSTRSIZE] = "";
+		if(!m_Status.m_aAccessories[i].IsZero())
+			m_Status.m_aAccessories[i].FormatUuid(aUuid, sizeof(aUuid));
+		DbSet(Job, CJsonPath().Key("accessories").Index(i), aUuid);
+	}
 }
 
 void CPlayer::SaveStatus(CDatabase *pDB)
@@ -95,6 +105,33 @@ void CPlayer::ApplyLoadout()
 	}
 }
 
+void CPlayer::CaptureAccessories()
+{
+	if(!m_pCharacter)
+		return;
+
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+		m_Status.m_aAccessories[i] = m_pCharacter->AccessoryAtSlot(i);
+}
+
+void CPlayer::ApplyAccessories()
+{
+	if(!m_pCharacter)
+		return;
+
+	// (re)build the layout from scratch; only owned accessories are worn
+	CItemID aLayout[NUM_ACCESSORY_SLOTS];
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+	{
+		if(m_Status.m_aAccessories[i].IsZero())
+			continue;
+		if(!GameServer()->Item()->HasItem(GetCID(), m_Status.m_aAccessories[i]))
+			continue;
+		aLayout[i] = m_Status.m_aAccessories[i];
+	}
+	m_pCharacter->SetAccessoryLayout(aLayout);
+}
+
 void CPlayer::LoadStatus(CDatabase *pDB)
 {
 	if(!pDB || m_AccountUuid == UUID_ZEROED)
@@ -106,6 +143,8 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 	m_Status.m_LoadoutSet = false;
 	for(int i = 0; i < NUM_WEAPONS; i++)
 		m_Status.m_aLoadout[i] = CItemID();
+	for(int i = 0; i < NUM_ACCESSORY_SLOTS; i++)
+		m_Status.m_aAccessories[i] = CItemID();
 	CItemSystem::CInventory &Inventory = GameServer()->Item()->GetInventory(GetCID());
 	mem_zero(Inventory.m_aItems, sizeof(Inventory.m_aItems));
 
@@ -143,6 +182,22 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 			CItemID Id;
 			if(CItemID::Parse(aSlot, &Id))
 				m_Status.m_aLoadout[i] = Id;
+		}
+	}
+
+	// accessory layout (uuid per slot, "" = empty). A profile saved before
+	// accessories existed simply has no "accessories" array.
+	int NumAccessories = 0;
+	if(pDB->GetJsonLength(m_AccountUuid, CJsonPath().Key("accessories"), &NumAccessories))
+	{
+		char aSlot[UUID_MAXSTRSIZE];
+		for(int i = 0; i < NumAccessories && i < NUM_ACCESSORY_SLOTS; i++)
+		{
+			if(!GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("accessories").Index(i), aSlot, sizeof(aSlot)))
+				continue;
+			CItemID Id;
+			if(CItemID::Parse(aSlot, &Id))
+				m_Status.m_aAccessories[i] = Id;
 		}
 	}
 
@@ -187,6 +242,7 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 	}
 
 	ApplyLoadout();
+	ApplyAccessories();
 	// refresh menu
 	GameServer()->GameMenu()->RefreshMenu(m_ClientID);
 }

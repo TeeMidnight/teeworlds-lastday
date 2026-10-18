@@ -32,7 +32,7 @@ int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Am
 	// melee hit
 	array<CEntity *> lpEnts;
 	lpEnts.hint_size(8);
-	const int Num = pWorld->FindFlagEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
+	const int Num = pWorld->FindFlagEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f * pChr->RangeScale(), lpEnts, CGameWorld::ENTFLAG_HITABLE);
 	for(int i = 0; i < Num; ++i)
 	{
 		// every ENTFLAG_HITABLE entity is a CHitableEntity, not necessarily a
@@ -66,7 +66,7 @@ int CWeaponMelee::OnFire(CCharacter *pChr, vec2 Direction, const SAmmoEffect &Am
 	if(CanPickResource())
 	{
 		array<CEntity *> lpResEnts;
-		const int NumRes = pWorld->FindEntities(ProjStartPos, pChr->GetProximityRadius() * 0.5f + 20.0f, lpResEnts, CGameWorld::ENTTYPE_RESOURCE);
+		const int NumRes = pWorld->FindEntities(ProjStartPos, (pChr->GetProximityRadius() * 0.5f + 20.0f) * pChr->RangeScale(), lpResEnts, CGameWorld::ENTTYPE_RESOURCE);
 		for(int i = 0; i < NumRes; ++i)
 		{
 			CResourceEntity *pRes = static_cast<CResourceEntity *>(lpResEnts[i]);

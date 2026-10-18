@@ -1,0 +1,21 @@
+{
+    "craft_id": "wind_charm",
+    "needed": [
+        {
+            "item_id": "amber",
+            "count": 1
+        },
+        {
+            "item_id": "grass",
+            "count": 4
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 2
+        }
+    ],
+    "result": {
+        "item_id": "wind_charm",
+        "count": 1
+    }
+}

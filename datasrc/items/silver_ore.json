@@ -1,0 +1,8 @@
+{
+    "name": "Silver Ore",
+    "desc": "A pale metal vein, cold to the touch.",
+    "item_type": [
+        "ore",
+        "metal"
+    ]
+}

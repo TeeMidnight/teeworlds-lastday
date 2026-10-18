@@ -1,0 +1,21 @@
+{
+    "craft_id": "longshot_lens",
+    "needed": [
+        {
+            "item_id": "silver_ingot",
+            "count": 1
+        },
+        {
+            "item_id": "amber",
+            "count": 3
+        },
+        {
+            "item_id": "hawk_eye",
+            "count": 1
+        }
+    ],
+    "result": {
+        "item_id": "longshot_lens",
+        "count": 1
+    }
+}

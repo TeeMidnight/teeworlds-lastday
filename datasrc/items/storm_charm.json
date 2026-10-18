@@ -1,0 +1,11 @@
+{
+    "name": "Storm Charm",
+    "desc": "A storm caught in steel and amber. Worn in an accessory slot.",
+    "item_type": [
+        "accessory",
+        "charm"
+    ],
+    "accessory": {
+        "speed": 0.2
+    }
+}

@@ -202,6 +202,38 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath)
 			Item.m_Use.m_Forgetting = (int) (json_int_t) Forgetting;
 	}
 
+	// accessory effect: an optional "accessory" object. only items that declare
+	// one can be worn in the character's accessory loadout slots. the values are
+	// deliberately clamped: content should never be able to grant an unbounded
+	// health or speed bonus.
+	const json_value &Accessory = (*pJson)["accessory"];
+	if(Accessory.type == json_object)
+	{
+		auto ReadAccessoryFloat = [&](const char *pKey, float Default) -> float {
+			const json_value &Value = Accessory[pKey];
+			if(Value.type == json_integer || Value.type == json_double)
+				return (float) (double) Value;
+			return Default;
+		};
+		Item.m_Accessory.m_HasAccessory = true;
+		Item.m_Accessory.m_Health = clamp((int) ReadAccessoryFloat("health", 0), 0, 10);
+		Item.m_Accessory.m_Range = clamp(ReadAccessoryFloat("range", 0.0f), 0.0f, 1.0f);
+		Item.m_Accessory.m_Speed = clamp(ReadAccessoryFloat("speed", 0.0f), 0.0f, 0.5f);
+	}
+
+	// drill placement: an optional "drill" object. the stored length is the
+	// furthest the beam may bore, clamped so a data pack cannot reach across the
+	// whole map.
+	const json_value &Drill = (*pJson)["drill"];
+	if(Drill.type == json_object)
+	{
+		Item.m_Drill.m_HasDrill = true;
+		Item.m_Drill.m_MaxLength = 320;
+		const json_value &Length = Drill["max_length"];
+		if(Length.type == json_integer || Length.type == json_double)
+			Item.m_Drill.m_MaxLength = clamp((int) (json_int_t) Length, 64, 2048);
+	}
+
 	// a UUID collision is astronomically unlikely, but a duplicated id must not
 	// silently replace an unrelated item
 	const SItemDef *pExisting = m_Items.get(Item.m_Id.Value());
@@ -297,6 +329,30 @@ const char *CItemSystem::GetWeaponName(const CItemID &Id) const
 {
 	const SItemDef *pItem = m_Items.get(Id.Value());
 	return pItem ? pItem->m_aWeapon : "";
+}
+
+bool CItemSystem::IsAccessory(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem && pItem->m_Accessory.m_HasAccessory;
+}
+
+CItemSystem::SAccessory CItemSystem::GetAccessory(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem ? pItem->m_Accessory : SAccessory();
+}
+
+bool CItemSystem::IsDrill(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem && pItem->m_Drill.m_HasDrill;
+}
+
+CItemSystem::SDrill CItemSystem::GetDrill(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem ? pItem->m_Drill : SDrill();
 }
 
 bool CItemSystem::HasItemType(const CItemID &Id, const char *pType) const

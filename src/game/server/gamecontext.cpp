@@ -22,6 +22,7 @@
 #include "botmanager.h"
 #include "entities/botentity.h"
 #include "entities/character.h"
+#include "entities/drill.h"
 #include "entities/dropped_pickup.h"
 #include "entities/laser.h"
 #include "entities/projectile.h"
@@ -411,6 +412,48 @@ bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 D
 	const char *pName = pItems->GetName(Id);
 	const std::string Msg = LocalizeFormat("Item Drop", "You dropped: {} x{}", Localize(pName, "Item Name"), Count);
 	SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
+	return true;
+}
+
+bool CGameContext::PlaceDrill(int ClientID, const CItemID &ItemId)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || !m_apPlayers[ClientID])
+		return false;
+
+	CCharacter *pChr = GetPlayerChar(ClientID);
+	if(!pChr)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You have to be alive to place a drill.", "Drill"));
+		return false;
+	}
+	if(!pChr->IsGrounded())
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("Stand on the ground to place a drill.", "Drill"));
+		return false;
+	}
+
+	const CItemSystem::SDrill Drill = Item()->GetDrill(ItemId);
+	if(!Drill.m_HasDrill || Item()->GetItemCount(ClientID, ItemId) <= 0)
+		return false;
+
+	CGameWorld *pWorld = pChr->GameWorld();
+	// one drill per spot, so a stack of items cannot pile entities onto one tile
+	for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_DRILL); !r.empty(); r.pop_front())
+	{
+		if(distance(r.front()->GetPos(), pChr->GetPos()) < 40.0f)
+		{
+			SendChat(-1, CHAT_WHISPER, ClientID, Localize("There is already a drill here.", "Drill"));
+			return false;
+		}
+	}
+
+	if(!Item()->RemoveItem(ClientID, ItemId, 1))
+		return false;
+
+	new CDrillEntity(pWorld, pChr->GetPos(), ItemId, Drill.m_MaxLength, ClientID);
+	SavePlayerData(m_apPlayers[ClientID]);
+	SendChat(-1, CHAT_WHISPER, ClientID,
+		Localize("Drill placed. Hold the scoreboard next to it to take control; jump to let go.", "Drill"));
 	return true;
 }
 
@@ -1389,7 +1432,36 @@ void CGameContext::OnSnap(int ClientID)
 	// delta makes it free in the common case and demos record it for free.
 	CNetObj_Tuning *pTuning = static_cast<CNetObj_Tuning *>(Server()->SnapNewItem(NETOBJTYPE_TUNING, 0, sizeof(CNetObj_Tuning)));
 	if(pTuning)
-		mem_copy(pTuning->m_aTuneParams, &m_Tuning, sizeof(pTuning->m_aTuneParams));
+	{
+		// The client predicts its own movement with these tuning values, so a
+		// character with an accessory speed bonus must receive a matching
+		// control speed. The server applies the same scale in
+		// CCharacterCore::Tick, so prediction and simulation stay in step.
+		CTuningParams Tuning = m_Tuning;
+		CPlayer *pPlayer = (ClientID >= 0 && ClientID < MAX_CLIENTS) ? m_apPlayers[ClientID] : nullptr;
+		CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
+		if(pChr && pChr->IsDrillControl())
+		{
+			// steering a drill: the client's local prediction must keep the tee
+			// completely still while the server pins it in place
+			Tuning.m_GroundControlSpeed = 0.0f;
+			Tuning.m_AirControlSpeed = 0.0f;
+			Tuning.m_GroundJumpImpulse = 0.0f;
+			Tuning.m_AirJumpImpulse = 0.0f;
+			Tuning.m_PlayerHooking = 0.0f;
+			Tuning.m_Gravity = 0.0f;
+		}
+		else if(pChr)
+		{
+			const float SpeedScale = pChr->SpeedScale();
+			if(SpeedScale > 0.0f && SpeedScale != 1.0f)
+			{
+				Tuning.m_GroundControlSpeed = (float) Tuning.m_GroundControlSpeed * SpeedScale;
+				Tuning.m_AirControlSpeed = (float) Tuning.m_AirControlSpeed * SpeedScale;
+			}
+		}
+		mem_copy(pTuning->m_aTuneParams, &Tuning, sizeof(pTuning->m_aTuneParams));
+	}
 
 	m_pController->Snap(ClientID);
 	if(m_apPlayers[ClientID] && !m_apPlayers[ClientID]->m_MapLoading)

@@ -1,0 +1,21 @@
+{
+    "craft_id": "heaven_drill",
+    "needed": [
+        {
+            "item_id": "heaven_ore",
+            "count": 2
+        },
+        {
+            "item_id": "addon:steel_ingot",
+            "count": 2
+        },
+        {
+            "item_id": "steel_drill",
+            "count": 1
+        }
+    ],
+    "result": {
+        "item_id": "heaven_drill",
+        "count": 1
+    }
+}

@@ -774,6 +774,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/botentity.h
   entities/character.cpp
   entities/character.h
+  entities/drill.cpp
+  entities/drill.h
   entities/dropped_pickup.cpp
   entities/dropped_pickup.h
   entities/laser.cpp

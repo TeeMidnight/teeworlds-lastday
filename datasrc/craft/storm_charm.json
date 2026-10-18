@@ -1,0 +1,21 @@
+{
+    "craft_id": "storm_charm",
+    "needed": [
+        {
+            "item_id": "addon:steel_ingot",
+            "count": 1
+        },
+        {
+            "item_id": "amber",
+            "count": 2
+        },
+        {
+            "item_id": "wind_charm",
+            "count": 1
+        }
+    ],
+    "result": {
+        "item_id": "storm_charm",
+        "count": 1
+    }
+}

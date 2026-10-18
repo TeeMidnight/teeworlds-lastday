@@ -1,0 +1,13 @@
+{
+    "craft_id": "silver_ingot",
+    "needed": [
+        {
+            "item_id": "silver_ore",
+            "count": 2
+        }
+    ],
+    "result": {
+        "item_id": "silver_ingot",
+        "count": 1
+    }
+}

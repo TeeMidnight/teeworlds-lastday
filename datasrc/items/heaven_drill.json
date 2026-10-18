@@ -1,0 +1,11 @@
+{
+    "name": "Heaven Drill",
+    "desc": "A drill carrying a sliver of heaven. Its beam reaches 30 tiles before it retracts.",
+    "item_type": [
+        "tool",
+        "drill"
+    ],
+    "drill": {
+        "max_length": 960
+    }
+}

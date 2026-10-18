@@ -102,6 +102,35 @@ public:
 	// was unequipped
 	bool UnequipMissingWeapons();
 
+	// accessory loadout helpers; Slot is 0-based (0..NUM_ACCESSORY_SLOTS-1).
+	// an accessory stays in the inventory and grants a passive effect while
+	// worn. EquipAccessorySlot(Slot, CItemID()) clears the slot.
+	bool EquipAccessorySlot(int Slot, const CItemID &Id);
+	CItemID AccessoryAtSlot(int Slot) const; // zeroed id = empty
+	void ClearAccessories();
+	// replace the whole accessory layout at once (validated by the caller).
+	// this refreshes the cached effects only after every slot is set, so the
+	// intermediate maximum never clamps the player's current health.
+	void SetAccessoryLayout(const CItemID *pIds);
+	bool UnequipMissingAccessories();
+	// recompute the cached health/range/speed bonuses from the worn items
+	void RefreshAccessoryEffects();
+
+	// derived stats granted by the worn accessories
+	int MaxHealth() const { return m_MaxHealth; }
+	float RangeScale() const { return m_RangeScale; }
+	float SpeedScale() const { return m_SpeedScale; }
+
+	// drill control: while set, the character is pinned in place, ignores its
+	// movement input and stays silent; the player steers a nearby drill instead.
+	void SetDrillControl(bool Control);
+	bool IsDrillControl() const { return m_DrillControl; }
+	// a jump press while steering asks the player loop to release the drill;
+	// returns true once and clears the request
+	bool ConsumeDrillExitRequest();
+	// whether the fire button is currently held (read by the drill)
+	bool IsFiring() const { return (m_LatestInput.m_Fire & 1) != 0; }
+
 	// need this hook for gamecontroller
 	void TeleTo(vec2 Pos, bool KeepSpeed);
 
@@ -118,6 +147,10 @@ private:
 	class CPlayer *m_pPlayer;
 
 	bool m_Alive;
+	// pinned while the player steers a drill (see SetDrillControl)
+	bool m_DrillControl;
+	// a jump press while steering, consumed by the owning CPlayer
+	bool m_DrillExitRequest;
 
 	// weapon info: entities already hit during the current ninja swing, by
 	// their unique server id rather than a raw pointer so a destroyed entity
@@ -127,6 +160,14 @@ private:
 	// loadout: NUM_WEAPONS fixed slots, each holds the item placed on it.
 	// slot order matches the client's weapon selection keys (1..NUM_WEAPONS).
 	CItemID m_aWeapons[NUM_WEAPONS]; // zeroed id = empty
+
+	// accessory loadout: passive items, independent of the weapon slots
+	CItemID m_aAccessories[NUM_ACCESSORY_SLOTS];
+	// cached accessory effects: base max health plus the health bonus, and the
+	// range/speed multipliers (1.0 = no bonus)
+	int m_MaxHealth;
+	float m_RangeScale;
+	float m_SpeedScale;
 
 	int m_ActiveWeapon; // slot index of the currently held weapon (0..NUM_WEAPONS-1)
 	int m_QueuedWeapon; // slot index to switch to, or -1
