@@ -5,6 +5,7 @@
 #ifndef GAME_SERVER_GAMECONTEXT_H
 #define GAME_SERVER_GAMECONTEXT_H
 
+#include <base/tl/array.h>
 #include <base/tl/hashtable.h>
 #include <base/tl/sorted_array.h>
 #include <base/uuid.h>
@@ -14,6 +15,8 @@
 
 #include <game/commands.h>
 #include <game/voting.h>
+
+#include <string>
 
 #include "gamemenu.h"
 #include "gameworld.h"
@@ -110,6 +113,14 @@ class CGameContext : public IGameServer
 		char m_aTimedMessage[1024];
 	};
 	CBroadcastState m_aBroadcastStates[MAX_CLIENTS];
+
+	// loaded from data/tips.json; the strings are localization keys
+	array<std::string> m_lTips;
+	int m_TipTimer;
+	int m_LastTip;
+
+	void LoadTips();
+	void TickTips();
 
 	void AddBroadcast(int ClientID, const char *pText, int Priority, int LifeSpan);
 	void ResetBroadcastState(int ClientID);

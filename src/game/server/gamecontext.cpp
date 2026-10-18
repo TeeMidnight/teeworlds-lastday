@@ -8,6 +8,7 @@
 #include <engine/map.h>
 #include <engine/server/mapgen.h>
 #include <engine/shared/config.h>
+#include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
 #include <engine/shared/memheap.h>
 #include <engine/storage.h>
@@ -65,6 +66,8 @@ void CGameContext::Construct(int Resetting)
 	m_pNpcSystem = 0;
 	m_MainWorldID = 0;
 	m_LockTeams = 0;
+	m_TipTimer = 0;
+	m_LastTip = -1;
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		ResetBroadcastState(i);
@@ -333,6 +336,95 @@ void CGameContext::FlushBroadcasts()
 		State.m_aNextMessage[0] = '\0';
 		State.m_Priority = BROADCAST_PRIORITY_LOWEST;
 	}
+}
+
+void CGameContext::LoadTips()
+{
+	m_lTips.clear();
+
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseFile("tips.json", Storage(), IStorage::TYPE_ALL);
+	if(!pJson || pJson->type != json_object)
+	{
+		dbg_msg("tips", "failed to load tips.json: %s", Parser.Error());
+		return;
+	}
+
+	const json_value &Tips = (*pJson)["tips"];
+	if(Tips.type != json_array)
+	{
+		dbg_msg("tips", "tips.json has no 'tips' array");
+		return;
+	}
+
+	for(unsigned i = 0; i < Tips.u.array.length; i++)
+	{
+		if(Tips[i].type != json_string)
+			continue;
+		const char *pText = (const char *) Tips[i];
+		if(!pText[0])
+			continue;
+		// a chat line is not a place for an essay; keep the message bounded
+		if(str_length(pText) > 512)
+		{
+			dbg_msg("tips", "tip %u is too long, skipping", i);
+			continue;
+		}
+		m_lTips.add(pText);
+	}
+
+	dbg_msg("tips", "loaded %d tip(s) from tips.json", m_lTips.size());
+}
+
+void CGameContext::TickTips()
+{
+	const int Interval = maximum(1, Config()->m_SvTipInterval) * Server()->TickSpeed();
+	if(!Config()->m_SvTips || m_lTips.size() == 0)
+	{
+		m_TipTimer = Interval;
+		return;
+	}
+
+	// bots keep the server busy but they do not need to be told anything
+	bool HasPlayer = false;
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(m_apPlayers[i] && !m_apPlayers[i]->IsDummy())
+		{
+			HasPlayer = true;
+			break;
+		}
+	}
+	if(!HasPlayer)
+	{
+		// start the countdown when somebody joins, not while the server is empty
+		m_TipTimer = Interval;
+		return;
+	}
+
+	if(m_TipTimer > 0)
+	{
+		m_TipTimer--;
+		if(m_TipTimer > 0)
+			return;
+	}
+
+	int TipIndex = random_int() % m_lTips.size();
+	if(m_lTips.size() > 1 && TipIndex == m_LastTip)
+		TipIndex = (TipIndex + 1) % m_lTips.size();
+	m_LastTip = TipIndex;
+	const std::string &Tip = m_lTips[TipIndex];
+
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(!m_apPlayers[i] || m_apPlayers[i]->IsDummy())
+			continue;
+		// a tip list can be localized like any other system message
+		CLanguageScope LanguageScope(LanguageOf(i));
+		SendChat(-1, CHAT_ALL, i, Localize(Tip.c_str(), "Tip"));
+	}
+
+	m_TipTimer = Interval;
 }
 
 void CGameContext::UpdateCursorResourceBroadcast(int ClientID)
@@ -695,6 +787,9 @@ void CGameContext::OnTick()
 			UpdateCursorResourceBroadcast(i);
 	}
 	FlushBroadcasts();
+
+	// a short chat hint every sv_tip_interval seconds while somebody is online
+	TickTips();
 
 	// update voting
 	GameMenu()->TickVote();
@@ -1426,6 +1521,9 @@ void CGameContext::OnInit()
 	// the configured NPCs (datasrc/bots/npc/*.json)
 	m_pNpcSystem = new CNpcSystem();
 	m_pNpcSystem->Init(this, Storage());
+
+	// periodic chat tips (datasrc/tips.json)
+	LoadTips();
 
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 

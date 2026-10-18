@@ -15,6 +15,8 @@ MACRO_CONFIG_STR(SvDbPath, sv_db_path, 255, "database/lastday.db", CFGFLAG_SAVE 
 MACRO_CONFIG_STR(SvDbConnstring, sv_db_connstring, 255, "", CFGFLAG_SAVE | CFGFLAG_SERVER, "PostgreSQL connection string (for the postgres backend)")
 
 MACRO_CONFIG_STR(SvMotd, sv_motd, 900, "", CFGFLAG_SAVE | CFGFLAG_SERVER, "Message of the day to display for the clients")
+MACRO_CONFIG_INT(SvTips, sv_tips, 1, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Show periodic tips in chat while players are online")
+MACRO_CONFIG_INT(SvTipInterval, sv_tip_interval, 60, 10, 3600, CFGFLAG_SAVE | CFGFLAG_SERVER, "Seconds between periodic chat tips")
 MACRO_CONFIG_INT(SvTeamdamage, sv_teamdamage, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Team damage")
 MACRO_CONFIG_INT(SvSpamprotection, sv_spamprotection, 1, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Spam protection")
 

@@ -1179,6 +1179,46 @@
 			"or": "Bought {} x{} from {}",
 			"tr": "从 {2} 购买了 {0} x{1}",
 			"context": "Trade"
+		},
+		{
+			"or": "Is switching worlds taking too long? Try Teeworlds: Archive!",
+			"tr": "觉得世界切入太慢？试试Teeworlds: Archive！",
+			"context": "Tip"
+		},
+		{
+			"or": "Medic won't hate you.",
+			"tr": "Medic不会讨厌你的。",
+			"context": "Tip"
+		},
+		{
+			"or": "Did you know? You don't. Neither do I.",
+			"tr": "你知道么？你不知道。我也不知道。",
+			"context": "Tip"
+		},
+		{
+			"or": "Hover the cursor over a resource to see how much is left.",
+			"tr": "把准星移到资源上，就能看到它还剩多少。",
+			"context": "Tip"
+		},
+		{
+			"or": "Hold the scoreboard next to a drill to control it. Jump to let go.",
+			"tr": "站在钻头旁按住计分板即可控制它，跳跃即可松开。",
+			"context": "Tip"
+		},
+		{
+			"or": "Log in with /login or /register to keep your progress.",
+			"tr": "使用 /login 或 /register 登录，才能保存你的进度。",
+			"context": "Tip"
+		},
+		{
+			"or": "Cross the edge of a world to reach the next ring.",
+			"tr": "穿过世界边缘，就能进入相邻的环。",
+			"context": "Tip"
+		},
+		{
+			"or": "The menu shows what you can craft and what it needs.",
+			"tr": "菜单里能查看你可以制作什么，以及需要哪些材料。",
+			"context": "Tip"
 		}
 	]
 }
