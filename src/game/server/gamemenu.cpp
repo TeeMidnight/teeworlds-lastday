@@ -376,30 +376,39 @@ bool CGameMenu::MenuTravel(int ClientID, CCallVoteStatus &VoteStatus, class CGam
 	if(str_startswith(VoteStatus.m_aCmd, "TRAIN "))
 	{
 		const char *pName = VoteStatus.m_aCmd + str_length("TRAIN ");
-		int Chunks = 0;
+		bool Known = false;
 		for(int i = 0; i < pGameServer->Server()->GetTrainDestinationCount(); i++)
 		{
 			const char *pDestination = nullptr;
-			int DestinationChunks = 0;
-			if(pGameServer->Server()->GetTrainDestination(i, &pDestination, &DestinationChunks) &&
+			if(pGameServer->Server()->GetTrainDestination(i, &pDestination, nullptr) &&
 				pDestination && str_comp(pDestination, pName) == 0)
 			{
-				Chunks = maximum(1, DestinationChunks);
+				Known = true;
 				break;
 			}
 		}
 
 		// The platform and the destination list can change while the menu is
 		// open, so re-check both instead of trusting the clicked command.
-		if(!OnStation || Chunks <= 0)
+		if(!OnStation || !Known)
 		{
 			pMenu->SetPlayerPage(ClientID, "TRAVEL");
 			return false;
 		}
 
-		const int Seed = 1 + random_int() % Chunks;
+		// The engine consumed the chunk prepared for this trip and started
+		// building the one for the following trip. A false result means that
+		// chunk is still being generated; the player can board again shortly.
 		char aMapName[64];
-		str_format(aMapName, sizeof(aMapName), "%s_%d", pName, Seed);
+		if(!pGameServer->Server()->TakeTrainDestinationChunk(pName, aMapName, sizeof(aMapName)))
+		{
+			pMenu->SetPlayerPage(ClientID, "TRAVEL");
+			CLanguageScope LanguageScope(pPlayer->Language());
+			pGameServer->SendChat(-1, CHAT_ALL, ClientID,
+				Localize("The train is still being prepared. Try again in a moment.", "Menu Travel"));
+			return false;
+		}
+
 		// the engine only switches to a map name it knows; a chunk that has
 		// never been visited is registered here
 		pGameServer->Server()->RegisterMapName(aMapName);

@@ -90,9 +90,16 @@ public:
 
 	// The euclidean floors whose config allows arriving by train, in name
 	// order. The game menu lists exactly these. GetTrainDestination fills the
-	// floor name and the number of chunks (instances) the train may pick from.
+	// floor name and the number of chunks (instances) the train may pick from;
+	// TakeTrainDestinationChunk supplies the chunk prepared for the next trip.
 	virtual int GetTrainDestinationCount() { return 0; }
 	virtual bool GetTrainDestination(int Index, const char **ppName, int *pRingSize) { return false; }
+
+	// Consumes the pre-generated chunk for a train destination and queues the
+	// chunk for its following trip. pOutMapName receives "<floor>_<seed>".
+	// Returns false when no chunk is ready yet (the caller should ask the player
+	// to try again) or the floor is not a train destination.
+	virtual bool TakeTrainDestinationChunk(const char *pFloorName, char *pOutMapName, int OutSize) { return false; }
 
 	// whether a connected client is still attached to MapID, either using it
 	// or downloading it. Such a map and its world must stay alive until the

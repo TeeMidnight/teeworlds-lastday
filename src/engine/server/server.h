@@ -341,6 +341,7 @@ public:
 	virtual int GetMapWorldKind(unsigned MapID);
 	virtual int GetTrainDestinationCount();
 	virtual bool GetTrainDestination(int Index, const char **ppName, int *pRingSize);
+	virtual bool TakeTrainDestinationChunk(const char *pFloorName, char *pOutMapName, int OutSize);
 	virtual bool IsMapInUse(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);
 	virtual bool LoadMapForWorld(unsigned MapID);

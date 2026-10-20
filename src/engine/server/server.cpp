@@ -1573,17 +1573,12 @@ int CServer::LoadMap(CMapInfo *pInfo)
 			// the generated map file is <mod>/<version>/<name>.map
 			char aGenPath[IO_MAX_PATH_LENGTH];
 			str_format(aGenPath, sizeof(aGenPath), GENERATED_MAPS_DIR "/%s.map", pInfo->m_aName);
-			char aMapFile[64];
-			str_format(aMapFile, sizeof(aMapFile), "%s.map", pInfo->m_aName);
-			char aFoundPath[IO_MAX_PATH_LENGTH];
-			if(!Storage()->FindFile(aMapFile, GENERATED_MAPS_DIR, IStorage::TYPE_ALL, aFoundPath, sizeof(aFoundPath)))
+			// Generate it only when the file is missing, and reuse a map the
+			// train worker is already building instead of generating it twice.
+			if(!m_pMapGen || !m_pMapGen->EnsureNewMap(aBaseMap, Seed))
 			{
-				// the map has not been generated yet — generate it now
-				if(!m_pMapGen || !m_pMapGen->RequestNewMap(aBaseMap, Seed))
-				{
-					Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "mapgen", "failed to generate the map");
-					return 0;
-				}
+				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "mapgen", "failed to generate the map");
+				return 0;
 			}
 			str_copy(aBuf, aGenPath, sizeof(aBuf));
 			IsGenerated = true;
@@ -1757,6 +1752,9 @@ void CServer::InitInterfaces(IKernel *pKernel)
 	m_pMapChecker = pKernel->RequestInterface<IMapChecker>();
 	m_pStorage = pKernel->RequestInterface<IStorage>();
 	m_pMapGen = new CMapGen(m_pStorage, m_pConsole);
+	// Build one chunk per train destination in the engine's thread pool now,
+	// so the first player to board does not wait for a floor to be generated.
+	m_pMapGen->StartPreGeneration(pKernel->RequestInterface<IEngine>());
 }
 
 int CServer::Run()
@@ -1891,6 +1889,11 @@ int CServer::Run()
 				}
 
 				GameServer()->OnTick();
+
+				// reap finished map-generation jobs and submit the queue when
+				// the train prepared more work
+				if(m_pMapGen)
+					m_pMapGen->UpdateBackgroundGeneration();
 			}
 
 			// snap game
@@ -2328,6 +2331,11 @@ bool CServer::GetTrainDestination(int Index, const char **ppName, int *pRingSize
 	if(pRingSize)
 		*pRingSize = m_pMapGen->TrainDestinationRingSize(Index);
 	return true;
+}
+
+bool CServer::TakeTrainDestinationChunk(const char *pFloorName, char *pOutMapName, int OutSize)
+{
+	return m_pMapGen && m_pMapGen->TakeTrainChunk(pFloorName, pOutMapName, OutSize);
 }
 
 bool CServer::IsMapInUse(unsigned MapID)

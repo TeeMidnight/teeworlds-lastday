@@ -1237,6 +1237,11 @@
 		},
 		{
 			"context": "Menu Travel",
+			"or": "The train is still being prepared. Try again in a moment.",
+			"tr": "火车正在准备中，请稍后再试。"
+		},
+		{
+			"context": "Menu Travel",
 			"or": "The train takes you to {}.",
 			"tr": "火车将你送往{}。"
 		},

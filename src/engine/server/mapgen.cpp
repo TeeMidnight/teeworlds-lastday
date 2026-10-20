@@ -9,6 +9,7 @@
 #include <base/vmath.h>
 #include <climits>
 
+#include <engine/engine.h>
 #include <engine/map/generatedmaps.h>
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
@@ -213,12 +214,29 @@ CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 {
 	m_pStorage = pStorage;
 	m_pConsole = pConsole;
+	m_pEngine = nullptr;
+	m_pGenHead = nullptr;
+	m_pGenTail = nullptr;
+	m_pWorkerJobs = nullptr;
+	m_GenStarted = false;
+	m_GenShutdown = false;
+	m_GenWorkerActive = false;
 
 	// load the floor instructions from the "maps/worlds" directory; each
 	// "<floorname>.json" file holds the config of one generated floor
 	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "maps/worlds", ListWorldsCallback, this);
 	RebuildFloorLists();
 }
+
+// One submitted engine-pool job. The wrapper is kept in CMapGen's list until
+// the pool reports the embedded CJob as done, because the pool writes the job's
+// final status after the entry point returns.
+struct CMapGen::CWorkerJob
+{
+	CJob m_Job;
+	CMapGen *m_pSelf;
+	CWorkerJob *m_pNext;
+};
 
 int CMapGen::ListWorldsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
 {
@@ -440,8 +458,309 @@ void CMapGen::ResolveEntranceTarget(const CInstruction *pSource, int Seed, int E
 		EntranceIndex, pSource->m_aFloorName, Seed, pOut);
 }
 
+// ---------------------------------------------------------------------------
+// background train chunk generation
+// ---------------------------------------------------------------------------
+
+int CMapGen::FindTrainFloor(const char *pFloorName) const
+{
+	if(!pFloorName || !pFloorName[0])
+		return -1;
+	for(int i = 0; i < m_lTrainFloors.size(); i++)
+	{
+		if(str_comp(m_lTrainFloors[i]->m_aFloorName, pFloorName) == 0)
+			return i;
+	}
+	return -1;
+}
+
+int CMapGen::RollTrainSeed(int Index)
+{
+	const int Chunks = maximum(1, TrainDestinationRingSize(Index));
+	// Match the old menu roll: the chunk numbers are 1..Chunks.
+	return 1 + (int) ((unsigned) random_int() % (unsigned) Chunks);
+}
+
+bool CMapGen::GeneratedMapExists(const char *pFloorName, int Seed) const
+{
+	if(!m_pStorage || !pFloorName || !pFloorName[0])
+		return false;
+
+	char aMapName[64];
+	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
+	char aMapFile[IO_MAX_PATH_LENGTH];
+	str_format(aMapFile, sizeof(aMapFile), "%s.map", aMapName);
+	char aFound[IO_MAX_PATH_LENGTH];
+	return m_pStorage->FindFile(aMapFile, GENERATED_MAPS_DIR, IStorage::TYPE_ALL, aFound, sizeof(aFound));
+}
+
+void CMapGen::PromoteReadyLocked(int Index)
+{
+	if(Index < 0 || Index >= m_lTrainChunks.size() || Index >= m_lTrainFloors.size())
+		return;
+
+	STrainChunk &Chunk = m_lTrainChunks[Index];
+	if(Chunk.m_ReadySeed || !Chunk.m_PendingSeed)
+		return;
+
+	// The worker renames a completed map into place, so the file appearing
+	// before the worker updates the state is a valid readiness signal.
+	if(!GeneratedMapExists(m_lTrainFloors[Index]->m_aFloorName, Chunk.m_PendingSeed))
+		return;
+
+	Chunk.m_ReadySeed = Chunk.m_PendingSeed;
+	Chunk.m_PendingSeed = 0;
+}
+
+void CMapGen::QueueChunkLocked(int Index, int Seed)
+{
+	if(Index < 0 || Index >= m_lTrainChunks.size() || Index >= m_lTrainFloors.size())
+		return;
+
+	STrainChunk &Chunk = m_lTrainChunks[Index];
+	if(Chunk.m_PendingSeed)
+		return;
+
+	const char *pFloorName = m_lTrainFloors[Index]->m_aFloorName;
+	if(GeneratedMapExists(pFloorName, Seed))
+	{
+		// the on-disk cache from an earlier run is already a ready chunk
+		Chunk.m_ReadySeed = Seed;
+		return;
+	}
+
+	Chunk.m_PendingSeed = Seed;
+
+	CGenJob *pJob = new CGenJob;
+	mem_zero(pJob, sizeof(*pJob));
+	pJob->m_TrainIndex = Index;
+	pJob->m_Seed = Seed;
+	str_copy(pJob->m_aFloorName, pFloorName, sizeof(pJob->m_aFloorName));
+
+	if(m_pGenTail)
+		m_pGenTail->m_pNext = pJob;
+	else
+		m_pGenHead = pJob;
+	m_pGenTail = pJob;
+	ScheduleWorkerLocked();
+}
+
+void CMapGen::ScheduleWorkerLocked()
+{
+	if(m_GenShutdown || m_GenWorkerActive || !m_pGenHead || !m_pEngine)
+		return;
+
+	// One drain job at a time is enough: it keeps taking entries until the
+	// queue is empty, so the pool never has two threads competing for the
+	// generator's shared state. A fresh wrapper is used for every run so the
+	// previous CJob is never touched while the pool writes its final status.
+	CWorkerJob *pWorker = new CWorkerJob;
+	pWorker->m_pSelf = this;
+	pWorker->m_pNext = m_pWorkerJobs;
+	m_pWorkerJobs = pWorker;
+	m_GenWorkerActive = true;
+	m_pEngine->AddJob(&pWorker->m_Job, GenWorker, pWorker);
+}
+
+void CMapGen::ReapWorkerJobsLocked()
+{
+	CWorkerJob **ppWorker = &m_pWorkerJobs;
+	while(*ppWorker)
+	{
+		CWorkerJob *pWorker = *ppWorker;
+		if(pWorker->m_Job.Status() == CJob::STATE_DONE)
+		{
+			*ppWorker = pWorker->m_pNext;
+			delete pWorker;
+		}
+		else
+			ppWorker = &pWorker->m_pNext;
+	}
+}
+
+int CMapGen::GenWorker(void *pUser)
+{
+	CWorkerJob *pWorker = static_cast<CWorkerJob *>(pUser);
+	CMapGen *pSelf = pWorker->m_pSelf;
+
+	for(;;)
+	{
+		CGenJob *pJob = nullptr;
+		{
+			scope_lock Lock(&pSelf->m_GenLock);
+			if(pSelf->m_GenShutdown)
+				break;
+			pJob = pSelf->m_pGenHead;
+			if(pJob)
+			{
+				pSelf->m_pGenHead = pJob->m_pNext;
+				if(!pSelf->m_pGenHead)
+					pSelf->m_pGenTail = nullptr;
+			}
+		}
+
+		if(!pJob)
+			break;
+
+		bool Generated;
+		{
+			// Only one generation runs at a time: the generator caches ring
+			// geometry inside the instruction and writes one temporary file.
+			scope_lock Lock(&pSelf->m_GenMutex);
+			Generated = pSelf->GenerateNow(pJob->m_aFloorName, pJob->m_Seed);
+		}
+
+		{
+			scope_lock Lock(&pSelf->m_GenLock);
+			if(pJob->m_TrainIndex >= 0 && pJob->m_TrainIndex < pSelf->m_lTrainChunks.size())
+			{
+				STrainChunk &Chunk = pSelf->m_lTrainChunks[pJob->m_TrainIndex];
+				// Do not overwrite a newer seed if the player already consumed
+				// this one and queued the following trip in the meantime.
+				if(Chunk.m_PendingSeed == pJob->m_Seed)
+				{
+					if(Generated)
+						Chunk.m_ReadySeed = pJob->m_Seed;
+					Chunk.m_PendingSeed = 0;
+				}
+			}
+			delete pJob;
+		}
+	}
+
+	{
+		scope_lock Lock(&pSelf->m_GenLock);
+		pSelf->m_GenWorkerActive = false;
+	}
+	return 0;
+}
+
+void CMapGen::StopGeneration()
+{
+	{
+		scope_lock Lock(&m_GenLock);
+		m_GenShutdown = true;
+	}
+
+	// The server frees CMapGen from CServer::Run, before the engine pool is
+	// shut down, so a submitted drain job still gets to run and can be waited
+	// for safely. It exits at the shutdown check without starting more work.
+	for(;;)
+	{
+		bool AnyRunning = false;
+		{
+			scope_lock Lock(&m_GenLock);
+			for(CWorkerJob *pWorker = m_pWorkerJobs; pWorker; pWorker = pWorker->m_pNext)
+			{
+				if(pWorker->m_Job.Status() != CJob::STATE_DONE)
+				{
+					AnyRunning = true;
+					break;
+				}
+			}
+		}
+		if(!AnyRunning)
+			break;
+		thread_sleep(1);
+	}
+
+	// No pool job can touch the queue or the wrappers anymore.
+	CGenJob *pJob = m_pGenHead;
+	while(pJob)
+	{
+		CGenJob *pNext = pJob->m_pNext;
+		delete pJob;
+		pJob = pNext;
+	}
+	m_pGenHead = nullptr;
+	m_pGenTail = nullptr;
+
+	CWorkerJob *pWorker = m_pWorkerJobs;
+	while(pWorker)
+	{
+		CWorkerJob *pNext = pWorker->m_pNext;
+		delete pWorker;
+		pWorker = pNext;
+	}
+	m_pWorkerJobs = nullptr;
+}
+
+void CMapGen::StartPreGeneration(IEngine *pEngine)
+{
+	if(m_GenStarted)
+		return;
+	m_GenStarted = true;
+	m_GenShutdown = false;
+	m_pEngine = pEngine;
+
+	// The state array is sized before the first job can run, so a completion
+	// can never index an empty array.
+	m_lTrainChunks.clear();
+	m_lTrainChunks.set_size(m_lTrainFloors.size());
+	for(int i = 0; i < m_lTrainChunks.size(); i++)
+	{
+		m_lTrainChunks[i].m_ReadySeed = 0;
+		m_lTrainChunks[i].m_PendingSeed = 0;
+	}
+
+	scope_lock Lock(&m_GenLock);
+	for(int i = 0; i < m_lTrainFloors.size(); i++)
+		QueueChunkLocked(i, RollTrainSeed(i));
+}
+
+void CMapGen::UpdateBackgroundGeneration()
+{
+	scope_lock Lock(&m_GenLock);
+	ReapWorkerJobsLocked();
+	ScheduleWorkerLocked();
+}
+
+bool CMapGen::TakeTrainChunk(const char *pFloorName, char *pOutMapName, int OutSize)
+{
+	if(!pFloorName || !pFloorName[0] || !pOutMapName || OutSize <= 0)
+		return false;
+
+	const int Index = FindTrainFloor(pFloorName);
+	if(Index < 0)
+		return false;
+
+	int Seed = 0;
+	{
+		scope_lock Lock(&m_GenLock);
+		if(Index >= m_lTrainChunks.size())
+			return false;
+
+		STrainChunk &Chunk = m_lTrainChunks[Index];
+		PromoteReadyLocked(Index);
+		if(Chunk.m_ReadySeed)
+		{
+			Seed = Chunk.m_ReadySeed;
+			Chunk.m_ReadySeed = 0;
+		}
+		else if(!Chunk.m_PendingSeed)
+		{
+			// Pre-generation never ran or its job failed. Queue a chunk now;
+			// the click is refused once and the next one finds it ready.
+			QueueChunkLocked(Index, RollTrainSeed(Index));
+			return false;
+		}
+
+		// Roll the following trip immediately: its map is built while the
+		// player travels through the one just consumed.
+		if(Seed && !Chunk.m_PendingSeed)
+			QueueChunkLocked(Index, RollTrainSeed(Index));
+	}
+
+	if(!Seed)
+		return false;
+
+	str_format(pOutMapName, OutSize, "%s_%d", pFloorName, Seed);
+	return true;
+}
+
 CMapGen::~CMapGen()
 {
+	StopGeneration();
 	m_lInstructions.for_each(FreeInstruction, nullptr);
 }
 
@@ -451,7 +770,7 @@ void CMapGen::FreeInstruction(CInstruction *&pInstruction, void *pUser)
 	pInstruction = nullptr;
 }
 
-bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
+bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 {
 	CInstruction **ppInstruction = m_lInstructions.get(str_quickhash(pFloorName));
 	CInstruction *pInstruction = ppInstruction ? *ppInstruction : nullptr;
@@ -476,4 +795,30 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 	}
 
 	return false;
+}
+
+bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
+{
+	// Explicit callers (mapgentool, tests) always rebuild the map, even when
+	// an older file with the same name exists.
+	scope_lock Lock(&m_GenMutex);
+	return GenerateNow(pFloorName, Seed);
+}
+
+bool CMapGen::EnsureNewMap(const char *pFloorName, int Seed)
+{
+	if(!pFloorName || !pFloorName[0])
+		return false;
+
+	if(GeneratedMapExists(pFloorName, Seed))
+		return true;
+
+	// A background train job may be writing this very map. Take the generator
+	// lock so we wait for it, then check the disk again: the map file appears
+	// only after it is complete, so the worker's copy is reused instead of
+	// being generated a second time.
+	scope_lock Lock(&m_GenMutex);
+	if(GeneratedMapExists(pFloorName, Seed))
+		return true;
+	return GenerateNow(pFloorName, Seed);
 }

@@ -7,8 +7,10 @@
 #include <base/tl/array.h>
 #include <base/tl/hashtable.h>
 #include <base/tl/string.h>
+#include <base/tl/threading.h>
 
 class CJsonWriter;
+class IEngine;
 class IStorage;
 struct _json_value;
 typedef struct _json_value json_value;
@@ -394,6 +396,60 @@ class CMapGen
 	array<CInstruction *> m_lNonEuclidFloors;
 	void RebuildFloorLists();
 
+	// -----------------------------------------------------------------
+	// background train chunks
+	//
+	// Generating a floor takes long enough to be visible as a hitch, so the
+	// train does not build a map on the tick a player clicks it. The engine
+	// thread pool drains this queue and prepares the chunk for a destination's
+	// next trip while the players are still in their current world. m_GenLock
+	// guards the queue and the per-destination state; m_GenMutex serializes the
+	// generator itself, because it reads shared caches and writes a shared
+	// temporary file.
+	// -----------------------------------------------------------------
+	struct STrainChunk
+	{
+		int m_ReadySeed;   // fully generated, reserved for the next click
+		int m_PendingSeed; // being generated; 0 when idle
+	};
+
+	struct CGenJob
+	{
+		CGenJob *m_pNext;
+		int m_TrainIndex;
+		char m_aFloorName[64];
+		int m_Seed;
+	};
+
+	// one submitted engine job and the bookkeeping that keeps it alive until
+	// the pool reports it done (see mapgen.cpp)
+	struct CWorkerJob;
+
+	class IEngine *m_pEngine;
+	lock m_GenLock;
+	lock m_GenMutex;
+	CGenJob *m_pGenHead;
+	CGenJob *m_pGenTail;
+	CWorkerJob *m_pWorkerJobs;
+	bool m_GenStarted;
+	bool m_GenShutdown;
+	bool m_GenWorkerActive;
+	array<STrainChunk> m_lTrainChunks;
+
+	static int GenWorker(void *pUser);
+	int FindTrainFloor(const char *pFloorName) const;
+	int RollTrainSeed(int Index);
+	bool GeneratedMapExists(const char *pFloorName, int Seed) const;
+	void QueueChunkLocked(int Index, int Seed);
+	void PromoteReadyLocked(int Index);
+	void ScheduleWorkerLocked();
+	void ReapWorkerJobsLocked();
+	void StopGeneration();
+
+	// the synchronous core, called by RequestNewMap, EnsureNewMap and the
+	// worker. The caller holds m_GenMutex.
+	bool GenerateNow(const char *pFloorName, int Seed);
+
 	// Resolves the actual destination of one carved euclidean entrance. It
 	// usually returns pConfigured unchanged and rolls m_NonEuclidProba to
 	// occasionally send the player into a non euclidean world instead.
@@ -431,6 +487,27 @@ public:
 	// generation strategy. The result is written to
 	// "<GENERATED_MAPS_DIR>/<FloorName>_<Seed>.map". Returns true on success.
 	bool RequestNewMap(const char *pFloorName, int Seed);
+
+	// Generates a map only when it is not already on disk, and waits for an
+	// in-flight background generation of the same map instead of building it a
+	// second time. Called by the server when a transition actually loads a map.
+	bool EnsureNewMap(const char *pFloorName, int Seed);
+
+	// Starts using the engine's thread pool and queues one random chunk per
+	// train destination, so the first travel to a world normally finds its map
+	// already generated. Without an engine no job is submitted; only a chunk
+	// that already exists on disk can be taken.
+	void StartPreGeneration(class IEngine *pEngine);
+
+	// Reaps finished pool jobs and schedules the queue when work is waiting.
+	// Called from the main thread once per server tick.
+	void UpdateBackgroundGeneration();
+
+	// Consumes the pre-generated chunk for a train destination and immediately
+	// queues the chunk for its following trip. Returns false when no chunk is
+	// ready yet (the caller should let the player try again) or the floor is not
+	// a train destination.
+	bool TakeTrainChunk(const char *pFloorName, char *pOutMapName, int OutSize);
 
 	// the kind of a floor, or false when the floor is unknown. Used by the
 	// server to decide whether a map should be generated at all.
