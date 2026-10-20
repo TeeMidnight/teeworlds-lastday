@@ -930,6 +930,7 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				// transfer/score state; the following READY -> OnClientConnected
 				// path finishes the migration.
 				GameServer()->OnClientMapDataRequest(ClientID);
+				m_aClients[ClientID].ResetMapTransfer();
 				const bool ConnectAsSpec = GameServer()->IsClientSpectator(ClientID);
 				Client.Reset(true);
 				Client.m_State = ConnectAsSpec ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;
@@ -2269,7 +2270,6 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 		m_aClients[ClientID].m_MapID = MapID;
 		// Only drop the transfer state: CClient::Reset() would also zero the
 		// score, so every seam crossing would cost the player their points.
-		m_aClients[ClientID].ResetMapTransfer();
 		m_aClients[ClientID].m_SilentMapSwitch = true;
 		m_aClients[ClientID].m_SilentMapLoadConfirmed = false;
 		m_aClients[ClientID].m_SilentMapSwitchTick = Tick();
