@@ -52,6 +52,10 @@ enum
 	TILE_DEATH,
 	TILE_UNHOOKABLE,
 	TILE_WATER = 6,
+	// Marks a train platform on the game layer. It carries no collision of its
+	// own; OnExtraTile turns it into COLFLAG_TRAIN_ENTRANCE, which only opens
+	// the travel menu while the player stands on it.
+	TILE_TRAIN_ENTRANCE = 35,
 
 	TILEFLAG_VFLIP = 1,
 	TILEFLAG_HFLIP = 2,

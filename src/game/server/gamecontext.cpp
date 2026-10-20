@@ -554,7 +554,7 @@ void CGameContext::SendRemoveChatCommand(const CCommandManager::CCommand *pComma
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientID);
 }
 
-void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos, bool HasArrival)
+void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos, bool HasArrival, bool TrainArrival)
 {
 	if(pPlayer->GameWorld()->WorldID() == MapID)
 	{
@@ -562,6 +562,11 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 		if(m_pController->CanSpawn(pPlayer->GameWorld(), pPlayer->GetTeam(), &SpawnPos))
 		{
 			pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), SpawnPos);
+		}
+		if(TrainArrival)
+		{
+			pPlayer->QueueTrainProtection();
+			pPlayer->StartQueuedTrainProtection();
 		}
 		return;
 	}
@@ -586,6 +591,8 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 	if(Server()->SwitchClientMap(pPlayer->GetCID(), MapID, &Silent))
 	{
 		pPlayer->SwitchWorld(pTargetWorld);
+		if(TrainArrival)
+			pPlayer->QueueTrainProtection();
 
 		if(Silent)
 		{
@@ -609,6 +616,8 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 			}
 			pPlayer->m_HasPendingArrival = false;
 			pPlayer->m_MapLoading = false;
+			if(TrainArrival)
+				pPlayer->StartQueuedTrainProtection();
 		}
 	}
 	else
@@ -616,6 +625,29 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 		pPlayer->m_HasPendingArrival = false;
 		dbg_msg("game", "failed to switch client %d to map %u", pPlayer->GetCID(), MapID);
 	}
+}
+
+bool CGameContext::IsOnTrainEntrance(CPlayer *pPlayer) const
+{
+	if(!pPlayer)
+		return false;
+	CCharacter *pChr = pPlayer->GetCharacter();
+	if(!pChr)
+		return false;
+	CGameWorld *pWorld = pChr->GameWorld();
+	if(!pWorld)
+		return false;
+
+	// OnExtraTile installs COLFLAG_TRAIN_ENTRANCE on the marker tiles, so the
+	// same collision box checks used for movement can answer this. Sample the
+	// body, its centre and the feet: a one-tile platform can sit just under the
+	// feet and the four box corners alone would miss it.
+	const vec2 Pos = pChr->GetPos();
+	const vec2 Box(CCharacterCore::PHYS_SIZE, CCharacterCore::PHYS_SIZE);
+	CCollision *pCollision = pWorld->Collision();
+	return pCollision->TestBox(Pos, Box, CCollision::COLFLAG_TRAIN_ENTRANCE) ||
+	       pCollision->CheckPoint(Pos, CCollision::COLFLAG_TRAIN_ENTRANCE) ||
+	       pCollision->CheckPoint(Pos + vec2(0.0f, CCharacterCore::PHYS_SIZE * 0.5f - 2.0f), CCollision::COLFLAG_TRAIN_ENTRANCE);
 }
 
 bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction)
@@ -974,6 +1006,9 @@ void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 		}
 	}
 	m_apPlayers[ClientID]->m_MapLoading = false;
+	// the destination map is loaded and the player has entered it: this is
+	// where the short train-arrival invincibility starts
+	m_apPlayers[ClientID]->StartQueuedTrainProtection();
 
 	if(Dummy)
 		return;

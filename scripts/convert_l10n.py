@@ -35,6 +35,10 @@ ITEM_TYPE_CTXT = "Item Type"
 # contexts used for the folder-derived categories in the crafting and inventory menus
 CRAFT_CATEGORY_CTXT = "Craft Category"
 ITEM_CATEGORY_CTXT = "Item Category"
+# context used for the display names of the euclidean floors in the travel menu
+WORLD_NAME_CTXT = "World Name"
+# context used for the periodic chat tips
+TIP_CTXT = "Tip"
 
 def item_types_of(item):
 	"""Normalizes the item_type field (a single string or a list) to a list of types."""
@@ -87,6 +91,50 @@ def parse_category_folders(directory, context):
 			l10n[(name, context)] = ""
 	return l10n
 
+def parse_world_names():
+	"""Collects the display names of the euclidean floors so the travel menu
+	can translate them. The floor name is the JSON file name and the kind is
+	the explicit "kind" field (older files derive it from their generation
+	block)."""
+	l10n = {}
+	worlds_dir = "datasrc/maps/worlds"
+	if not os.path.isdir(worlds_dir):
+		return l10n
+
+	for filename in sorted(os.listdir(worlds_dir)):
+		if not filename.endswith(".json"):
+			continue
+		with open(os.path.join(worlds_dir, filename), encoding='utf-8') as f:
+			world = json.load(f)
+		if not isinstance(world, dict):
+			continue
+		kind = world.get("kind")
+		if kind is None:
+			kind = "euclid" if isinstance(world.get("generation"), dict) else "noneuclid"
+		if kind != "euclid":
+			continue
+		name = os.path.splitext(filename)[0]
+		l10n[(name, WORLD_NAME_CTXT)] = ""
+	return l10n
+
+def parse_tips():
+	"""Collects the periodic chat tips from datasrc/tips.json. The server
+	reads the same file at runtime and looks each entry up with the "Tip"
+	context."""
+	l10n = {}
+	tips_file = "datasrc/tips.json"
+	if not os.path.isfile(tips_file):
+		return l10n
+
+	with open(tips_file, encoding='utf-8') as f:
+		tips = json.load(f)
+	if not isinstance(tips, dict):
+		return l10n
+	for tip in tips.get("tips", []):
+		if isinstance(tip, str) and tip:
+			l10n[(tip, TIP_CTXT)] = ""
+	return l10n
+
 def parse_source():
 	l10n_client = defaultdict(lambda: str)
 	l10n_server = defaultdict(lambda: str)
@@ -129,15 +177,31 @@ def load_languagefile(filename):
 	return json.load(open(filename), strict=False) # accept \t tabs
 
 def write_languagefile(outputfilename, l10n_client_src, l10n_server_src, l10n_item_src, old_l10n_data):
+	# A key can move between sections over time (an item description that was
+	# once extracted from the server sources, for example). Keep the old
+	# translation per section and also build a global fallback, so a move does
+	# not drop the text.
+	old_by_section = {}
+	old_translations = {}
+	for old_key in (JSON_KEY_CLIENT, JSON_KEY_SERVER, JSON_KEY_ITEM):
+		section = {}
+		for entry in old_l10n_data.get(old_key, []):
+			key = (entry[JSON_KEY_OR], entry.get(JSON_KEY_CTXT))
+			if entry[JSON_KEY_TR]:
+				section.setdefault(key, entry[JSON_KEY_TR])
+				old_translations.setdefault(key, entry[JSON_KEY_TR])
+		old_by_section[old_key] = section
+
 	def merge_old(src_key, l10n_src):
 		"""Keep an existing translation only if its key is still present in the
 		newly extracted source for that section."""
 		translations = l10n_src.copy()
-		translations.update({
-			(t[JSON_KEY_OR], t.get(JSON_KEY_CTXT)): t[JSON_KEY_TR]
-			for t in old_l10n_data.get(src_key, [])
-			if t[JSON_KEY_TR] and translations.get((t[JSON_KEY_OR], t.get(JSON_KEY_CTXT))) != None
-		})
+		for key, translation in old_by_section.get(src_key, {}).items():
+			if key in translations and not translations[key]:
+				translations[key] = translation
+		for key, translation in old_translations.items():
+			if key in translations and not translations[key]:
+				translations[key] = translation
 		return translations
 
 	def build_array(translations):
@@ -177,6 +241,11 @@ def write_languagefile(outputfilename, l10n_client_src, l10n_server_src, l10n_it
 
 if __name__ == '__main__':
 	l10n_client, l10n_server = parse_source()
+	# the euclidean world names are data, not source literals: the menu looks
+	# them up by floor name, so extract them from the world configs
+	l10n_server.update(parse_world_names())
+	# tips also live in a json file and are looked up by their text
+	l10n_server.update(parse_tips())
 
 	# item names, descriptions and types live in their own "item strings" section;
 	# categories are folder names, so they are collected the same way

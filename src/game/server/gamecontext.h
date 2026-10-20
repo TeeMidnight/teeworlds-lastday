@@ -261,8 +261,13 @@ public:
 	//
 	// MapID == the current world moves the character to a spawn. ArrivalPos is
 	// only meaningful with HasArrival, which a ring crossing uses to land the
-	// character on the column it left instead of at a spawn.
-	void SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos = vec2(0.0f, 0.0f), bool HasArrival = false);
+	// character on the column it left instead of at a spawn. TrainArrival arms
+	// the short invincibility window that starts once the new map has loaded.
+	void SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos = vec2(0.0f, 0.0f), bool HasArrival = false, bool TrainArrival = false);
+
+	// Whether the player is standing on a TILE_TRAIN_ENTRANCE platform. The
+	// travel menu is only usable there; the tile itself never teleports.
+	bool IsOnTrainEntrance(class CPlayer *pPlayer) const;
 
 	// engine events
 	virtual void OnInit();

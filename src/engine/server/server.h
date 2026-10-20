@@ -332,6 +332,8 @@ public:
 	virtual bool SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent = nullptr);
 	virtual const char *GetMapName(unsigned MapID);
 	virtual int GetMapWorldKind(unsigned MapID);
+	virtual int GetTrainDestinationCount();
+	virtual bool GetTrainDestination(int Index, const char **ppName, int *pRingSize);
 	virtual bool IsMapInUse(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);
 	virtual bool LoadMapForWorld(unsigned MapID);

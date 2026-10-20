@@ -29,9 +29,12 @@ public:
 		COLFLAG_DEATH = 2,
 		COLFLAG_UNHOOKABLE = 4,
 		// water (TILE_WATER): lets entities pass but is detectable, so
-		// swimming and laser reflection/refraction can react to it. bit 4 is
-		// free (the entrance flags moved to bits 16/17)
+		// swimming and laser reflection/refraction can react to it.
 		COLFLAG_WATER = 1 << 4,
+		// a train platform (TILE_TRAIN_ENTRANCE). The tile is a marker: the flag
+		// makes it queryable through the normal collision box checks without
+		// giving it solidity or a teleport of its own.
+		COLFLAG_TRAIN_ENTRANCE = 1 << 16,
 	};
 
 	CCollision();

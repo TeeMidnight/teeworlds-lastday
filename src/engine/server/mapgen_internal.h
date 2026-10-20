@@ -334,6 +334,9 @@ static inline void ParseGeneration(const json_value &rValue, CInstruction::CGene
 	rOut.m_SurfaceEntrances.m_Clearance = JsonInt(rEntrances["clearance"], 2);
 	rOut.m_SurfaceEntrances.m_Frame = JsonInt(rEntrances["frame"], 1);
 	rOut.m_SurfaceEntrances.m_Margin = JsonInt(rEntrances["margin"], 24);
+	// Tiny by default: a normal euclidean exit only rarely leads into one of
+	// the non euclidean worlds.
+	rOut.m_SurfaceEntrances.m_NonEuclidProba = clamp(JsonFloat(rEntrances["non_euclid_proba"], 0.001f), 0.0f, 1.0f);
 }
 
 static inline void WriteJsonValue(CJsonWriter *pWriter, const json_value &rValue);

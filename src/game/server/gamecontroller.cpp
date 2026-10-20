@@ -7,6 +7,7 @@
 #include <engine/shared/config.h>
 #include <cmath>
 
+#include <game/collision.h>
 #include <game/localization_format.h>
 #include <game/mapitems.h>
 #include <game/version.h>
@@ -236,40 +237,16 @@ bool CGameController::OnEntity(CGameWorld *pWorld, int Index, vec2 Pos)
 	return false;
 }
 
-enum
-{
-	TILE_FLOOR_ENTRANCE_1 = 35,
-	TILE_FLOOR_ENTRANCE_2 = 36,
-
-	COLFLAG_ENTRANCE_1_FLAG = 1 << 16,
-	COLFLAG_ENTRANCE_2_FLAG = 1 << 17,
-};
-
 bool CGameController::OnExtraTile(CGameWorld *pWorld, int Index, vec2 Pos)
 {
-	/*
-		Example: Do some thing like:
-
-		int Flag = -1;
-		switch(Index)
-		{
-			case TILE_START: Flag = COLFLAG_START; break;
-			case TILE_FINISH: Flag = COLFLAG_FINISH; break;
-		}
-		if(Flag == -1)
-			return false;
-		pChr->GameWorld()->Collision()->SetFlagFor(Pos, Flag);
-		return true;
-	*/
-
-	int Flag = -1;
-	switch(Index)
+	// A train platform is a marker, not a teleport: it only gets a collision
+	// flag so the travel menu can ask whether the player stands on one. The
+	// fixed floor entrances that installed their own teleport flags are gone.
+	if(Index == TILE_TRAIN_ENTRANCE)
 	{
-		case TILE_FLOOR_ENTRANCE_1: Flag = COLFLAG_ENTRANCE_1_FLAG; break;
-		case TILE_FLOOR_ENTRANCE_2: Flag = COLFLAG_ENTRANCE_2_FLAG; break;
+		pWorld->Collision()->SetFlagFor(Pos, CCollision::COLFLAG_TRAIN_ENTRANCE);
+		return true;
 	}
-	if(Flag != -1)
-		pWorld->Collision()->SetFlagFor(Pos, Flag);
 	return false;
 }
 
@@ -532,7 +509,6 @@ int CGameController::GetStartTeam()
 
 bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 NewPos)
 {
-	static const vec2 ColBox(CCharacterCore::PHYS_SIZE, CCharacterCore::PHYS_SIZE);
 	if(!pChr)
 		return false;
 
@@ -626,19 +602,6 @@ bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 
 		return false;
 	}
 
-	// the main world (e.g. Connector) uses the classic entrance tiles and
-	// the directly named entrance maps from the map info
-	int Flag = pWorld->Collision()->TestBoxMoveAt(LastPos, NewPos, ColBox);
-	if(Flag & COLFLAG_ENTRANCE_1_FLAG)
-	{
-		pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pWorld->m_aEntrances[0]));
-		return true;
-	}
-	if(Flag & COLFLAG_ENTRANCE_2_FLAG)
-	{
-		pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pWorld->m_aEntrances[1]));
-		return true;
-	}
 	return false;
 }
 

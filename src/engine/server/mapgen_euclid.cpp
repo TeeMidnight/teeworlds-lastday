@@ -1112,18 +1112,22 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 			Writer.EndObject();
 			Writer.EndArray();
 			Writer.WriteAttribute("entrance");
-			// a target that is itself a generated floor gets its instance
-			// seed appended, a static map (e.g. the hub Connector) keeps its
-			// plain name
+			// A tiny fraction of the euclidean-to-euclidean openings is
+			// rerouted into a non euclidean world; everything else keeps its
+			// configured target. A target that is itself a generated floor gets
+			// its instance seed appended, a static map (e.g. the hub Connector)
+			// keeps its plain name.
+			char aResolvedTarget[64];
+			ResolveEntranceTarget(pInstruction, Seed, i, Entrance.m_aTarget, aResolvedTarget, sizeof(aResolvedTarget));
 			EWorldKind TargetKind;
-			if(GetFloorKind(Entrance.m_aTarget, &TargetKind) && TargetKind != WORLDKIND_HUB)
+			if(GetFloorKind(aResolvedTarget, &TargetKind) && TargetKind != WORLDKIND_HUB)
 			{
 				char aTarget[64];
-				str_format(aTarget, sizeof(aTarget), "%s_%d", Entrance.m_aTarget, DeriveTargetSeed(Seed, Entrance.m_aTarget));
+				str_format(aTarget, sizeof(aTarget), "%s_%d", aResolvedTarget, DeriveTargetSeed(Seed, aResolvedTarget));
 				Writer.WriteStrValue(aTarget);
 			}
 			else
-				Writer.WriteStrValue(Entrance.m_aTarget);
+				Writer.WriteStrValue(aResolvedTarget);
 			Writer.EndObject();
 		}
 		Writer.EndArray();

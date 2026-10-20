@@ -145,6 +145,13 @@ public:
 	CGameWorld *GameWorld() const { return m_pWorld; }
 	void SwitchWorld(CGameWorld *pWorld);
 
+	// A train arrival is protected for a few seconds once the destination map
+	// has finished loading and the player has entered it. Queue marks the
+	// transition; Start consumes it; the character checks IsTrainProtected.
+	void QueueTrainProtection() { m_TrainProtectionPending = true; }
+	void StartQueuedTrainProtection();
+	bool IsTrainProtected() const;
+
 	struct CStatus
 	{
 		bool m_HideTip; // game menu
@@ -210,6 +217,9 @@ private:
 
 	//
 	bool m_Spawning;
+	// train arrival protection (tick until which incoming damage is ignored)
+	bool m_TrainProtectionPending;
+	int m_TrainProtectionUntil;
 	int m_ClientID;
 	int m_Team;
 	bool m_Dummy;

@@ -2,6 +2,7 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system.h>
+#include <base/tl/algorithm.h>
 #include <base/tl/stream.h>
 
 #include <base/math.h>
@@ -216,6 +217,7 @@ CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 	// load the floor instructions from the "maps/worlds" directory; each
 	// "<floorname>.json" file holds the config of one generated floor
 	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "maps/worlds", ListWorldsCallback, this);
+	RebuildFloorLists();
 }
 
 int CMapGen::ListWorldsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
@@ -260,6 +262,8 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 	mem_zero(pFloor, sizeof(CInstruction));
 	str_copy(pFloor->m_aFloorName, pFloorName, sizeof(pFloor->m_aFloorName));
 	str_copy(pFloor->m_aBaseMap, rBase["base"], sizeof(pFloor->m_aBaseMap));
+	// whether the travel menu may offer this euclidean floor as a train stop
+	pFloor->m_TrainEnabled = JsonBool(rBase["train"], false);
 
 	// the world kind decides which generation path this floor takes. When the
 	// field is missing the kind is derived from the config so that the older
@@ -358,6 +362,84 @@ bool CMapGen::GetFloorKind(const char *pFloorName, EWorldKind *pKind) const
 		*pKind = (*ppInstruction)->m_Kind;
 	return true;
 }
+void CMapGen::RebuildFloorLists()
+{
+	m_lTrainFloors.clear();
+	m_lNonEuclidFloors.clear();
+
+	m_lInstructions.for_each([](CInstruction *&pInstruction, void *pUser) {
+		CMapGen *pSelf = static_cast<CMapGen *>(pUser);
+		if(!pInstruction)
+			return;
+		if(pInstruction->m_Kind == WORLDKIND_EUCLID && pInstruction->m_TrainEnabled)
+			pSelf->m_lTrainFloors.add(pInstruction);
+		else if(pInstruction->m_Kind == WORLDKIND_NONEUCLID)
+			pSelf->m_lNonEuclidFloors.add(pInstruction);
+	}, this);
+
+	const auto CompareName = [](const CInstruction *pA, const CInstruction *pB) {
+		return str_comp(pA->m_aFloorName, pB->m_aFloorName) < 0;
+	};
+	sort(m_lTrainFloors.all(), CompareName);
+	sort(m_lNonEuclidFloors.all(), CompareName);
+}
+
+const char *CMapGen::TrainDestinationName(int Index) const
+{
+	if(Index < 0 || Index >= m_lTrainFloors.size())
+		return "";
+	return m_lTrainFloors[Index]->m_aFloorName;
+}
+
+int CMapGen::TrainDestinationRingSize(int Index) const
+{
+	if(Index < 0 || Index >= m_lTrainFloors.size())
+		return 0;
+	const CInstruction *pFloor = m_lTrainFloors[Index];
+	// The train can stop at any instance of the target floor. A ring names its
+	// instances explicitly; a floor without a ring keeps the historic 1024
+	// instance range that DeriveTargetSeed also uses.
+	if(pFloor->m_Generation.m_Ring.m_Enabled)
+		return maximum(1, pFloor->m_Generation.m_Ring.m_Size);
+	return 1024;
+}
+
+void CMapGen::ResolveEntranceTarget(const CInstruction *pSource, int Seed, int EntranceIndex, const char *pConfigured, char *pOut, int OutSize) const
+{
+	str_copy(pOut, pConfigured, OutSize);
+
+	if(!pSource || pSource->m_Kind != WORLDKIND_EUCLID || !m_lNonEuclidFloors.size())
+		return;
+
+	// Only a euclidean-to-euclidean exit rolls: an exit into the hub keeps
+	// pointing at the hub.
+	EWorldKind TargetKind;
+	if(!GetFloorKind(pConfigured, &TargetKind) || TargetKind != WORLDKIND_EUCLID)
+		return;
+
+	const float Proba = clamp(pSource->m_Generation.m_SurfaceEntrances.m_NonEuclidProba, 0.0f, 1.0f);
+	if(Proba <= 0.0f)
+		return;
+
+	// Deterministic per source instance and opening: regenerating the world
+	// must produce the same exit, and one opening either is or is not the rare
+	// non euclidean one.
+	unsigned Hash = (unsigned) Seed * 0x9E3779B1u;
+	Hash ^= (unsigned) (EntranceIndex + 1) * 0x85EBCA6Bu;
+	Hash ^= Hash >> 16;
+	Hash *= 0x7FEB352Du;
+	Hash ^= Hash >> 15;
+	if(HashToUnitFloat(Hash) >= Proba)
+		return;
+
+	unsigned PickHash = Hash * 0x846CA68Bu;
+	PickHash ^= PickHash >> 16;
+	const int Pick = (int) (PickHash % (unsigned) m_lNonEuclidFloors.size());
+	str_copy(pOut, m_lNonEuclidFloors[Pick]->m_aFloorName, OutSize);
+	dbg_msg("worldgen", "entrance %d of '%s' seed %d leads into the non euclidean world '%s'",
+		EntranceIndex, pSource->m_aFloorName, Seed, pOut);
+}
+
 CMapGen::~CMapGen()
 {
 	m_lInstructions.for_each(FreeInstruction, nullptr);

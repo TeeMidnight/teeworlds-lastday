@@ -867,11 +867,6 @@
 		},
 		{
 			"context": "Trade",
-			"or": "No goods are for sale.",
-			"tr": "没有商品在售。"
-		},
-		{
-			"context": "Trade",
 			"or": "You must be near the merchant.",
 			"tr": "你必须靠近商人才能交易。"
 		},
@@ -894,16 +889,6 @@
 			"context": "Menu Trade",
 			"or": "No goods are for sale.",
 			"tr": "没有商品在售。"
-		},
-		{
-			"context": "Menu Trade",
-			"or": "#{} {}: {} x{} for {} x{}",
-			"tr": "#{} {}：{} x{} 换 {} x{}"
-		},
-		{
-			"context": "Menu Trade",
-			"or": "   {} x{} for {} x{}",
-			"tr": "   {} x{} 换 {} x{}"
 		},
 		{
 			"context": "Menu Trade",
@@ -1219,6 +1204,76 @@
 			"or": "The menu shows what you can craft and what it needs.",
 			"tr": "菜单里能查看你可以制作什么，以及需要哪些材料。",
 			"context": "Tip"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Travel",
+			"tr": "出行"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Travel (stand on a train entrance)",
+			"tr": "出行（请站在火车入口上）"
+		},
+		{
+			"context": "TRAVEL",
+			"or": "Travel",
+			"tr": "出行"
+		},
+		{
+			"context": "Menu Travel",
+			"or": "Choose a destination:",
+			"tr": "选择目的地："
+		},
+		{
+			"context": "Menu Travel",
+			"or": "You must stand on a train entrance to travel.",
+			"tr": "你必须站在火车入口上才能出行。"
+		},
+		{
+			"context": "Menu Travel",
+			"or": "No train destinations are available.",
+			"tr": "当前没有可乘火车抵达的世界。"
+		},
+		{
+			"context": "Menu Travel",
+			"or": "The train takes you to {}.",
+			"tr": "火车将你送往{}。"
+		},
+		{
+			"context": "World Name",
+			"or": "Depths",
+			"tr": "深渊"
+		},
+		{
+			"context": "World Name",
+			"or": "Highlands",
+			"tr": "高原"
+		},
+		{
+			"context": "World Name",
+			"or": "Hollow",
+			"tr": "幽谷"
+		},
+		{
+			"context": "World Name",
+			"or": "Verdant",
+			"tr": "翠原"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "(offline)",
+			"tr": "（离线）"
+		},
+		{
+			"context": "Trade",
+			"or": "The seller is offline.",
+			"tr": "卖家不在线。"
+		},
+		{
+			"context": "Trade",
+			"or": "You have no inventory space.",
+			"tr": "背包空间不足。"
 		}
 	]
 }

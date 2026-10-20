@@ -2254,6 +2254,22 @@ int CServer::GetMapWorldKind(unsigned MapID)
 	return pInfo ? pInfo->m_WorldKind : -1;
 }
 
+int CServer::GetTrainDestinationCount()
+{
+	return m_pMapGen ? m_pMapGen->NumTrainDestinations() : 0;
+}
+
+bool CServer::GetTrainDestination(int Index, const char **ppName, int *pRingSize)
+{
+	if(!m_pMapGen || Index < 0 || Index >= m_pMapGen->NumTrainDestinations())
+		return false;
+	if(ppName)
+		*ppName = m_pMapGen->TrainDestinationName(Index);
+	if(pRingSize)
+		*pRingSize = m_pMapGen->TrainDestinationRingSize(Index);
+	return true;
+}
+
 bool CServer::IsMapInUse(unsigned MapID)
 {
 	for(int i = 0; i < MAX_CLIENTS; i++)

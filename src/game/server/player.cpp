@@ -38,6 +38,8 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_RespawnDisabled = GameServer()->m_pController->GetStartRespawnState();
 	m_DeadSpecMode = false;
 	m_Spawning = false;
+	m_TrainProtectionPending = false;
+	m_TrainProtectionUntil = 0;
 	m_MapLoading = false;
 	m_HasPendingArrival = false;
 	m_PendingArrivalPos = vec2(0.0f, 0.0f);
@@ -340,6 +342,22 @@ void CPlayer::KillCharacter(int Weapon, bool Clean)
 			m_pCharacter = 0;
 		}
 	}
+}
+
+void CPlayer::StartQueuedTrainProtection()
+{
+	if(!m_TrainProtectionPending)
+		return;
+	constexpr int TRAIN_PROTECTION_SECONDS = 3;
+	m_TrainProtectionPending = false;
+	// three seconds after the destination map has loaded and the player has
+	// entered it, not from the moment the travel menu is clicked
+	m_TrainProtectionUntil = Server()->Tick() + Server()->TickSpeed() * TRAIN_PROTECTION_SECONDS;
+}
+
+bool CPlayer::IsTrainProtected() const
+{
+	return Server()->Tick() < m_TrainProtectionUntil;
 }
 
 void CPlayer::Respawn()

@@ -1,5 +1,6 @@
 {
     "kind": "euclid",
+    "train": true,
     "comment": "Procedurally generated floor. It reads no base map: the terrain comes from the noise settings below and the look from tileset/background/ruleset.",
     "generation": {
         "width": 1000,
@@ -246,7 +247,8 @@
             "height": 5,
             "clearance": 2,
             "frame": 1,
-            "margin": 24
+            "margin": 24,
+            "non_euclid_proba": 0.001
         },
         "day_night": {
             "enabled": true,

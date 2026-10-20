@@ -88,6 +88,12 @@ public:
 	// may contain bots at all and whether they are hostile or peaceful NPCs.
 	virtual int GetMapWorldKind(unsigned MapID) { return -1; }
 
+	// The euclidean floors whose config allows arriving by train, in name
+	// order. The game menu lists exactly these. GetTrainDestination fills the
+	// floor name and the number of chunks (instances) the train may pick from.
+	virtual int GetTrainDestinationCount() { return 0; }
+	virtual bool GetTrainDestination(int Index, const char **ppName, int *pRingSize) { return false; }
+
 	// whether a connected client is still attached to MapID, either using it
 	// or downloading it. Such a map and its world must stay alive until the
 	// client finishes its transition.

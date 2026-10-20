@@ -109,6 +109,9 @@ private:
 	static bool MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// the "Server Vote" page (implemented in menus/vote_menu.cpp)
 	static bool MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// the "Travel" page: the configured euclidean floors the train can reach
+	// (implemented in gamemenu.cpp)
+	static bool MenuTravel(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// the "Language" page (implemented in gamemenu.cpp)
 	static bool MenuLanguage(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// loadout (weapon equipment) menu (implemented in menus/loadout_menu.cpp)

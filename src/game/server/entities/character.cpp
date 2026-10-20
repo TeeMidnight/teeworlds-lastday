@@ -880,6 +880,11 @@ void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos)
 
 bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon)
 {
+	// a player that just arrived by train is invincible for three seconds
+	// after entering the destination world
+	if(m_pPlayer && m_pPlayer->IsTrainProtected())
+		return false;
+
 	m_Core.m_Vel += Force;
 
 	if(From >= 0)

@@ -52,9 +52,8 @@ enum EWorldKind
 
 	// A non euclidean world: a hand authored static map whose exits do not
 	// correspond to their entrances, so walking back does not return you where
-	// you came from. Currently disabled at the config level (no floor routes
-	// into it), but the kind is parsed so the world can be re-enabled later
-	// without touching the generator.
+	// you came from. Euclidean surface entrances reach these worlds with a
+	// small probability (see CSurfaceEntranceConfig::m_NonEuclidProba).
 	WORLDKIND_NONEUCLID,
 };
 
@@ -132,6 +131,12 @@ struct CInstruction
 		int m_Clearance; // leave this many tiles of rock between the mouth and the roof
 		int m_Frame; // thickness of the unhookable frame around the mouth
 		int m_Margin; // keep openings this far from the map edges
+
+		// Very small probability (0..1) that one of these openings leads into
+		// a random non euclidean world instead of its configured euclidean
+		// target. This is rolled per opening and per source instance, so an
+		// opening is either a normal exit or a non euclidean one for good.
+		float m_NonEuclidProba;
 	};
 
 	// -----------------------------------------------------------------
@@ -361,6 +366,11 @@ struct CInstruction
 	char m_aFloorName[64]; // unique floor/map name (the file name)
 	EWorldKind m_Kind;
 	char m_aBaseMap[64]; // the base map file to load (the "base" field)
+
+	// Whether a train may pick this euclidean floor as a destination. The
+	// travel menu lists exactly the floors that set this. The static kinds are
+	// reached through their own entrances, so the flag only applies to euclid.
+	bool m_TrainEnabled;
 	CGeneration m_Generation;
 	array<CStruct> m_Structs;
 	array<char> m_DefaultEntrances;
@@ -377,6 +387,17 @@ class CMapGen
 
 	// keyed by str_quickhash of the floor name
 	hash_table<unsigned, CInstruction *, 4> m_lInstructions;
+
+	// Sorted by floor name after loading, so menu order and the random
+	// non euclidean pick do not depend on directory iteration order.
+	array<CInstruction *> m_lTrainFloors;
+	array<CInstruction *> m_lNonEuclidFloors;
+	void RebuildFloorLists();
+
+	// Resolves the actual destination of one carved euclidean entrance. It
+	// usually returns pConfigured unchanged and rolls m_NonEuclidProba to
+	// occasionally send the player into a non euclidean world instead.
+	void ResolveEntranceTarget(const CInstruction *pSource, int Seed, int EntranceIndex, const char *pConfigured, char *pOut, int OutSize) const;
 
 	static void FreeInstruction(CInstruction *&pInstruction, void *pUser);
 
@@ -414,6 +435,12 @@ public:
 	// the kind of a floor, or false when the floor is unknown. Used by the
 	// server to decide whether a map should be generated at all.
 	bool GetFloorKind(const char *pFloorName, EWorldKind *pKind) const;
+
+	// The train destinations, in floor-name order. The game menu lists exactly
+	// these and asks for the instance count to pick a random chunk on arrival.
+	int NumTrainDestinations() const { return m_lTrainFloors.size(); }
+	const char *TrainDestinationName(int Index) const;
+	int TrainDestinationRingSize(int Index) const;
 };
 
 #endif // ENGINE_SERVER_MAPGEN_H

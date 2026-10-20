@@ -382,19 +382,6 @@ void CGameWorld::InitCollision(IMap *pMap)
 		}
 	}
 
-	CMapItemInfo *pItem = (CMapItemInfo *) pMap->FindItem(MAPITEMTYPE_INFO, 0);
-	if(pItem && pItem->m_Version == 1)
-	{
-		if(pItem->m_MapVersion > -1)
-		{
-			// classic mechanism: the MapVersion directly names the entrance
-			// target map (main world, e.g. Connector)
-			str_copy(m_aEntrances[0], (char *) pMap->GetData(pItem->m_MapVersion), sizeof(m_aEntrances[0]));
-		}
-		if(pItem->m_Credits > -1)
-			str_copy(m_aEntrances[1], (char *) pMap->GetData(pItem->m_Credits), sizeof(m_aEntrances[1]));
-	}
-
 	// Generated maps keep their metadata in a sidecar file next to the map
 	// ("<GENERATED_MAPS_DIR>/<name>.json") instead of embedding json items, so
 	// the map clients download only carries what they render. Older generated maps

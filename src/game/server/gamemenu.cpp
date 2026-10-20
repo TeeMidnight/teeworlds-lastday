@@ -1,6 +1,8 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
+#include <base/math.h>
+
 #include <engine/shared/config.h>
 #include <engine/shared/memheap.h>
 
@@ -85,6 +87,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	Register("TRADE_SELL_PRICE_COUNT", "Price Amount", MenuTradeSellPriceCount, nullptr, "TRADE_SELL_PRICE"); // Localize("Price Amount", "TRADE_SELL_PRICE_COUNT")
 	Register("TRADE_MINE", "My Listings", MenuTradeMine, nullptr, "TRADE"); // Localize("My Listings", "TRADE_MINE")
 	Register("VOTE", "Server Vote", MenuVote, nullptr); // Localize("Server Vote", "VOTE")
+	Register("TRAVEL", "Travel", MenuTravel, nullptr); // Localize("Travel", "TRAVEL")
 	Register("LANG", "Language", MenuLanguage, nullptr); // Localize("Language", "LANG")
 }
 
@@ -295,6 +298,11 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->SetPlayerPage(ClientID, "TRADE");
 			return false;
 		}
+		else if(str_comp(VoteStatus.m_aCmd, "PAGE TRAVEL") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "TRAVEL");
+			return false;
+		}
 		else if(str_comp(VoteStatus.m_aCmd, "PAGE LANG") == 0)
 		{
 			pMenu->SetPlayerPage(ClientID, "LANG");
@@ -337,10 +345,99 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
+		// A train only boards from a platform. The page stays listed as a
+		// non-clickable hint elsewhere so the player can see why it is not
+		// usable instead of wondering where it went.
+		CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+		if(pPlayer && pMenu->GameServer()->IsOnTrainEntrance(pPlayer))
+			pMenu->AddOption(Localize("Travel", "Menu Main"), "PAGE TRAVEL", "★");
+		else
+			pMenu->AddOption(Localize("Travel (stand on a train entrance)", "Menu Main"), "DISPLAY", "-");
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
 		pMenu->AddOption(Localize("Language", "Menu Main"), "PAGE LANG", "★");
 	}
 
+	return true;
+}
+
+// static
+bool CGameMenu::MenuTravel(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) pUserData;
+	CGameContext *pGameServer = pMenu->GameServer();
+	CPlayer *pPlayer = pGameServer->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return true;
+
+	const bool OnStation = pGameServer->IsOnTrainEntrance(pPlayer);
+
+	// a destination was clicked: the train leaves at once and drops the player
+	// on a random chunk of that euclidean world
+	if(str_startswith(VoteStatus.m_aCmd, "TRAIN "))
+	{
+		const char *pName = VoteStatus.m_aCmd + str_length("TRAIN ");
+		int Chunks = 0;
+		for(int i = 0; i < pGameServer->Server()->GetTrainDestinationCount(); i++)
+		{
+			const char *pDestination = nullptr;
+			int DestinationChunks = 0;
+			if(pGameServer->Server()->GetTrainDestination(i, &pDestination, &DestinationChunks) &&
+				pDestination && str_comp(pDestination, pName) == 0)
+			{
+				Chunks = maximum(1, DestinationChunks);
+				break;
+			}
+		}
+
+		// The platform and the destination list can change while the menu is
+		// open, so re-check both instead of trusting the clicked command.
+		if(!OnStation || Chunks <= 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "TRAVEL");
+			return false;
+		}
+
+		const int Seed = 1 + random_int() % Chunks;
+		char aMapName[64];
+		str_format(aMapName, sizeof(aMapName), "%s_%d", pName, Seed);
+		// the engine only switches to a map name it knows; a chunk that has
+		// never been visited is registered here
+		pGameServer->Server()->RegisterMapName(aMapName);
+
+		{
+			CLanguageScope LanguageScope(pPlayer->Language());
+			pGameServer->SendChat(-1, CHAT_ALL, ClientID,
+				LocalizeFormat("Menu Travel", "The train takes you to {}.", Localize(pName, "World Name")).c_str());
+		}
+		pGameServer->SwitchPlayerWorld(pPlayer, str_quickhash(aMapName), vec2(0.0f, 0.0f), false, true);
+		return false;
+	}
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+
+	if(!OnStation)
+	{
+		pMenu->AddOption(Localize("You must stand on a train entrance to travel.", "Menu Travel"), "DISPLAY", "-");
+		return true;
+	}
+
+	if(pGameServer->Server()->GetTrainDestinationCount() <= 0)
+	{
+		pMenu->AddOption(Localize("No train destinations are available.", "Menu Travel"), "DISPLAY", "-");
+		return true;
+	}
+
+	pMenu->AddOption(Localize("Choose a destination:", "Menu Travel"), "DISPLAY", "-");
+	for(int i = 0; i < pGameServer->Server()->GetTrainDestinationCount(); i++)
+	{
+		const char *pName = nullptr;
+		if(!pGameServer->Server()->GetTrainDestination(i, &pName, nullptr) || !pName || !pName[0])
+			continue;
+		char aCommand[VOTE_CMD_LENGTH];
+		str_format(aCommand, sizeof(aCommand), "TRAIN %s", pName);
+		pMenu->AddOption(Localize(pName, "World Name"), aCommand, "★");
+	}
 	return true;
 }
 
