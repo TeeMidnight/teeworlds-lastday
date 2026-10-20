@@ -262,6 +262,7 @@ void CServer::CClient::Reset(bool ResetInput)
 	ResetMapTransfer();
 	m_Score = 0;
 	m_SilentMapSwitch = false;
+	m_SilentMapLoadConfirmed = false;
 	m_SilentMapSwitchTick = 0;
 }
 
@@ -354,7 +355,9 @@ int CServer::Init()
 		m_aClients[i].m_aName[0] = 0;
 		m_aClients[i].m_aClan[0] = 0;
 		m_aClients[i].m_Country = -1;
+		m_aClients[i].m_ClientInfoFlags = 0;
 		m_aClients[i].m_SilentMapSwitch = false;
+		m_aClients[i].m_SilentMapLoadConfirmed = false;
 		m_aClients[i].m_SilentMapSwitchTick = 0;
 		m_aClients[i].m_Snapshots.Init();
 	}
@@ -876,32 +879,77 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 
 				m_aClients[ClientID].m_Version = Unpacker.GetInt();
 				m_aClients[ClientID].m_ServerInfoVersion = Unpacker.GetIntOrDefault(SERVERINFO_VERSION_LEGACY);
+				// 0.8 clients append the features they implement to NETMSG_INFO
+				m_aClients[ClientID].m_ClientInfoFlags = Unpacker.GetIntOrDefault(0);
 
 				m_aClients[ClientID].m_State = CClient::STATE_CONNECTING_AS_SPEC;
 				SendMap(ClientID);
 			}
 		}
+		else if(Unpacker.Type() == NETMSG_SILENT_MAP_STATUS)
+		{
+			const bool Vital = (pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0;
+			const int Status = Unpacker.GetInt();
+			const SHA256_DIGEST *pMapSha256 = (const SHA256_DIGEST *) Unpacker.GetRaw(sizeof(*pMapSha256));
+			if(!Vital || Unpacker.Error())
+				return;
+
+			CClient &Client = m_aClients[ClientID];
+			// Only the switch that is currently pending may be answered, and only
+			// by an in-game client that advertised the explicit handshake.
+			if(!Client.m_SilentMapSwitch || Client.m_State != CClient::STATE_INGAME || !Client.SupportsSilentMapStatus())
+				return;
+
+			CMapInfo *pInfo = m_MapInfos[Client.m_MapID];
+			if(!pInfo || mem_comp(&pInfo->m_Sha256, pMapSha256, sizeof(*pMapSha256)) != 0)
+			{
+				// stale answer for a map the client is no longer switching to
+				if(Config()->m_Debug)
+					Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "server", "ignoring stale silent map status");
+				return;
+			}
+
+			if(Config()->m_Debug)
+			{
+				char aBuf[128];
+				str_format(aBuf, sizeof(aBuf), "silent map status %d for map id %u", Status, Client.m_MapID);
+				Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "server", aBuf);
+			}
+
+			if(Status == SILENT_MAP_STATUS_LOADED)
+			{
+				// The explicit answer replaces guessing from snapshots: the map is
+				// applied, the first snapshot ack below retires the silent switch.
+				Client.m_SilentMapLoadConfirmed = true;
+			}
+			else if(Status == SILENT_MAP_STATUS_NEED_DOWNLOAD || Status == SILENT_MAP_STATUS_REGULAR)
+			{
+				// The client explicitly could not apply the switch in place. It
+				// already entered its own loading state, so continue with the
+				// regular handshake. Reset() keeps the map id and only drops the
+				// transfer/score state; the following READY -> OnClientConnected
+				// path finishes the migration.
+				GameServer()->OnClientMapDataRequest(ClientID);
+				const bool ConnectAsSpec = GameServer()->IsClientSpectator(ClientID);
+				Client.Reset(true);
+				Client.m_State = ConnectAsSpec ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;
+			}
+			else if(Config()->m_Debug)
+			{
+				Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "server", "invalid silent map status");
+			}
+		}
 		else if(Unpacker.Type() == NETMSG_REQUEST_MAP_DATA)
 		{
 			const bool Vital = (pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0;
-			// A client that received a silent map switch but does not have the
-			// map asks for its data while it is still INGAME on our side. It
-			// already knows the map from the silent announcement and entered its
-			// own loading state, so resume the transfer here without announcing
-			// the map a second time. Reset() leaves the target map id untouched
-			// and, like the original switch, drops the inputs and the score; the
-			// following READY -> OnClientConnected path finishes the transition.
+			// The client answers a silent switch explicitly before it requests map
+			// data. An INGAME request without that answer is a protocol violation;
+			// the server must not infer the loading handshake on the client's behalf.
 			if(Vital && m_aClients[ClientID].m_State == CClient::STATE_INGAME && m_aClients[ClientID].m_SilentMapSwitch)
 			{
-				// The silent switch already migrated the player in the game layer.
-				// Put it back into the loading state so the READY below goes through
-				// the normal migration instead of being rejected as a busy slot.
-				GameServer()->OnClientMapDataRequest(ClientID);
-				const bool ConnectAsSpec = GameServer()->IsClientSpectator(ClientID);
-				m_aClients[ClientID].Reset(true);
-				m_aClients[ClientID].m_State = ConnectAsSpec ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;
-				// Fall through to serve this first request's chunks; the client
-				// is waiting for data, not for another map change.
+				if(Config()->m_Debug)
+					Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "server", "map data request without silent map status");
+				return;
 			}
 
 			if(Vital && (m_aClients[ClientID].m_State == CClient::STATE_CONNECTING || m_aClients[ClientID].m_State == CClient::STATE_CONNECTING_AS_SPEC))
@@ -985,12 +1033,17 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 			if(Unpacker.Error() || Size / 4 > MAX_INPUT_SIZE)
 				return;
 
-			// A snapshot from the switch tick or later can only be acknowledged
-			// if the client stayed online after the silent switch. Otherwise it
-			// is downloading the map and must not receive another silent one.
+			// The client answers the silent switch explicitly. Only after that
+			// answer does a snapshot acknowledgement prove it is in the new world,
+			// so only then may the next switch be silent again. Without the
+			// answer the client may still be loading the map.
 			if(m_aClients[ClientID].m_SilentMapSwitch &&
+				m_aClients[ClientID].m_SilentMapLoadConfirmed &&
 				m_aClients[ClientID].m_LastAckedSnapshot >= m_aClients[ClientID].m_SilentMapSwitchTick)
+			{
 				m_aClients[ClientID].m_SilentMapSwitch = false;
+				m_aClients[ClientID].m_SilentMapLoadConfirmed = false;
+			}
 
 			if(m_aClients[ClientID].m_LastAckedSnapshot > 0)
 				m_aClients[ClientID].m_SnapRate = CClient::SNAPRATE_FULL;
@@ -2172,14 +2225,20 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 
 	// A 0.8 client that is already in the game can carry its connection over
 	// to the new map: it keeps STATE_INGAME and only waits for the new world's
-	// snapshot. It asks for the map data by itself if it does not have the map
-	// cached (NETMSG_REQUEST_MAP_DATA); the game layer then re-enters its
-	// loading state for the regular READY handshake.
+	// snapshot. It answers NETMSG_SILENT_MAP_STATUS explicitly, either that it
+	// applied the switch or that it needs the map data and entered its loading
+	// state. The server never infers this from the map data request.
 	// A silent switch is only safe once the previous one is confirmed: if it
 	// is still pending the client may be loading that map, and another silent
 	// flag would be interpreted as a regular change anyway.
+	// Clients that do not implement the explicit answer always get a regular
+	// switch, so the server never has to guess on their behalf.
+	// An acknowledged snapshot proves the client reached STATE_ONLINE; before
+	// that it is still in its loading state and cannot apply an in-place switch.
 	const bool Silent = m_aClients[ClientID].m_Version >= 0x0800 &&
+		m_aClients[ClientID].SupportsSilentMapStatus() &&
 		m_aClients[ClientID].m_State == CClient::STATE_INGAME &&
+		m_aClients[ClientID].m_LastAckedSnapshot >= 0 &&
 		!m_aClients[ClientID].m_SilentMapSwitch &&
 		!m_NetServer.ClientIsLegacy(ClientID);
 
@@ -2209,6 +2268,7 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 		// score, so every seam crossing would cost the player their points.
 		m_aClients[ClientID].ResetMapTransfer();
 		m_aClients[ClientID].m_SilentMapSwitch = true;
+		m_aClients[ClientID].m_SilentMapLoadConfirmed = false;
 		m_aClients[ClientID].m_SilentMapSwitchTick = Tick();
 		if(pSilent)
 			*pSilent = true;

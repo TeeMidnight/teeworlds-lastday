@@ -74,6 +74,10 @@ enum
 
 	NETMSG_MAPLIST_ENTRY_ADD, // todo 0.8: move up
 	NETMSG_MAPLIST_ENTRY_REM,
+
+	// sent by client: the outcome of a silent MAP_CHANGE, so the server never
+	// has to infer it from a later map data request
+	NETMSG_SILENT_MAP_STATUS,
 };
 
 enum
@@ -89,7 +93,26 @@ enum
 
 // NETMSG_MAP_CHANGE ends with the flags above followed by two ints: the new
 // map's local view position minus the old map's, in game world units (not map
-// tiles). Ordinary map changes send zero for both.
+// tiles). Ordinary map changes send zero for both. A change with
+// MAP_CHANGE_FLAG_SILENT is answered with NETMSG_SILENT_MAP_STATUS.
+
+// NETMSG_SILENT_MAP_STATUS payload: the result, then the map sha256
+enum
+{
+	// the client loaded the map in place and stayed connected
+	SILENT_MAP_STATUS_LOADED = 0,
+	// the client has no local copy and entered its normal loading state
+	SILENT_MAP_STATUS_NEED_DOWNLOAD = 1,
+	// the client was not online and applies the change through READY instead
+	SILENT_MAP_STATUS_REGULAR = 2,
+};
+
+// optional flags appended to NETMSG_INFO after the server info version
+enum
+{
+	// the client reports NETMSG_SILENT_MAP_STATUS for silent map changes
+	CLIENT_INFO_FLAG_SILENT_MAP_STATUS = 0x1,
+};
 
 // this should be revised
 enum

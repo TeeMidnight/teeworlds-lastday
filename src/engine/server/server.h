@@ -136,6 +136,8 @@ public:
 		char m_aClan[MAX_CLAN_ARRAY_SIZE];
 		int m_ServerInfoVersion;
 		int m_Version;
+		// optional flags from the end of NETMSG_INFO; 0 for older clients
+		int m_ClientInfoFlags;
 		int m_Country;
 		int m_Score;
 		int m_Authed;
@@ -144,15 +146,20 @@ public:
 		int m_MapChunk;
 		bool m_NoRconNote;
 		bool m_Quitting;
-		// Set by a silent map switch: the client kept STATE_INGAME but may not
-		// have the map, in which case its map-data request resumes the regular
-		// download handshake. The game layer is told so it can re-enter its
-		// loading state. Cleared when that happens (or on reset).
+		// Set while a silent map switch waits for NETMSG_SILENT_MAP_STATUS and
+		// then for the first snapshot of the new world. Another switch while it
+		// is set must be regular; the client may still be applying this one.
 		bool m_SilentMapSwitch;
+		// The client explicitly answered SILENT_MAP_STATUS_LOADED for that
+		// switch. Only then may a post-switch snapshot acknowledgement retire
+		// the silent switch above.
+		bool m_SilentMapLoadConfirmed;
 		// Tick of that silent switch. An input acknowledging a snapshot from
-		// that tick or later proves the client stayed online, so a following
-		// switch can be silent again; until then it must be a regular one.
+		// that tick or later proves the client applied the new world, so a
+		// following switch can be silent again; until then it must be regular.
 		int m_SilentMapSwitchTick;
+
+		bool SupportsSilentMapStatus() const { return (m_ClientInfoFlags & CLIENT_INFO_FLAG_SILENT_MAP_STATUS) != 0; }
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
 
 		unsigned m_MapID;
