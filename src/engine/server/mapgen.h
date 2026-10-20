@@ -402,10 +402,12 @@ class CMapGen
 	// Generating a floor takes long enough to be visible as a hitch, so the
 	// train does not build a map on the tick a player clicks it. The engine
 	// thread pool drains this queue and prepares the chunk for a destination's
-	// next trip while the players are still in their current world. m_GenLock
-	// guards the queue and the per-destination state; m_GenMutex serializes the
-	// generator itself, because it reads shared caches and writes a shared
-	// temporary file.
+	// next trip while the players are still in their current world. A prepared
+	// ring chunk also queues its two neighbours: the game layer brings them in
+	// on the first tick after the switch, and generating them there would stall
+	// the whole server. m_GenLock guards the queue and the per-destination
+	// state; m_GenMutex serializes the generator itself, because it reads shared
+	// caches and writes a shared temporary file.
 	// -----------------------------------------------------------------
 	struct STrainChunk
 	{
@@ -430,6 +432,7 @@ class CMapGen
 	lock m_GenMutex;
 	CGenJob *m_pGenHead;
 	CGenJob *m_pGenTail;
+	CGenJob *m_pGenRunning;
 	CWorkerJob *m_pWorkerJobs;
 	bool m_GenStarted;
 	bool m_GenShutdown;
@@ -441,6 +444,9 @@ class CMapGen
 	int RollTrainSeed(int Index);
 	bool GeneratedMapExists(const char *pFloorName, int Seed) const;
 	void QueueChunkLocked(int Index, int Seed);
+	void QueuePrefetchLocked(const char *pFloorName, int Seed);
+	void QueueRingNeighboursLocked(int Index, int Seed);
+	bool RingNeighboursReadyLocked(int Index, int Seed);
 	void PromoteReadyLocked(int Index);
 	void ScheduleWorkerLocked();
 	void ReapWorkerJobsLocked();
@@ -505,8 +511,9 @@ public:
 
 	// Consumes the pre-generated chunk for a train destination and immediately
 	// queues the chunk for its following trip. Returns false when no chunk is
-	// ready yet (the caller should let the player try again) or the floor is not
-	// a train destination.
+	// ready yet, when a ring chunk's two neighbours are still being generated
+	// (the caller should let the player try again), or when the floor is not a
+	// train destination.
 	bool TakeTrainChunk(const char *pFloorName, char *pOutMapName, int OutSize);
 
 	// the kind of a floor, or false when the floor is unknown. Used by the

@@ -217,6 +217,7 @@ CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 	m_pEngine = nullptr;
 	m_pGenHead = nullptr;
 	m_pGenTail = nullptr;
+	m_pGenRunning = nullptr;
 	m_pWorkerJobs = nullptr;
 	m_GenStarted = false;
 	m_GenShutdown = false;
@@ -526,6 +527,7 @@ void CMapGen::QueueChunkLocked(int Index, int Seed)
 	{
 		// the on-disk cache from an earlier run is already a ready chunk
 		Chunk.m_ReadySeed = Seed;
+		QueueRingNeighboursLocked(Index, Seed);
 		return;
 	}
 
@@ -542,7 +544,89 @@ void CMapGen::QueueChunkLocked(int Index, int Seed)
 	else
 		m_pGenHead = pJob;
 	m_pGenTail = pJob;
+
+	// The ring world needs both neighbours live as soon as the player arrives;
+	// queue them behind the center chunk so they are already on disk when the
+	// first tick after the switch asks for them.
+	QueueRingNeighboursLocked(Index, Seed);
 	ScheduleWorkerLocked();
+}
+
+void CMapGen::QueuePrefetchLocked(const char *pFloorName, int Seed)
+{
+	if(!pFloorName || !pFloorName[0] || Seed <= 0)
+		return;
+	if(GeneratedMapExists(pFloorName, Seed))
+		return;
+
+	// already waiting, or being generated right now
+	for(CGenJob *pJob = m_pGenHead; pJob; pJob = pJob->m_pNext)
+	{
+		if(pJob->m_Seed == Seed && str_comp(pJob->m_aFloorName, pFloorName) == 0)
+			return;
+	}
+	if(m_pGenRunning && m_pGenRunning->m_Seed == Seed &&
+		str_comp(m_pGenRunning->m_aFloorName, pFloorName) == 0)
+		return;
+
+	CGenJob *pJob = new CGenJob;
+	mem_zero(pJob, sizeof(*pJob));
+	pJob->m_TrainIndex = -1;
+	pJob->m_Seed = Seed;
+	str_copy(pJob->m_aFloorName, pFloorName, sizeof(pJob->m_aFloorName));
+
+	if(m_pGenTail)
+		m_pGenTail->m_pNext = pJob;
+	else
+		m_pGenHead = pJob;
+	m_pGenTail = pJob;
+	ScheduleWorkerLocked();
+}
+
+void CMapGen::QueueRingNeighboursLocked(int Index, int Seed)
+{
+	if(Index < 0 || Index >= m_lTrainFloors.size() || Seed <= 0)
+		return;
+
+	const CInstruction *pFloor = m_lTrainFloors[Index];
+	const CInstruction::CGeneration::CRingConfig &Ring = pFloor->m_Generation.m_Ring;
+	if(!Ring.m_Enabled || Ring.m_Size < 1)
+		return;
+
+	for(int Direction = -1; Direction <= 1; Direction += 2)
+	{
+		const int Neighbour = RingNeighbourSeed(Seed, Direction, Ring.m_Size);
+		if(Neighbour == Seed)
+			continue;
+		QueuePrefetchLocked(pFloor->m_aFloorName, Neighbour);
+	}
+}
+
+bool CMapGen::RingNeighboursReadyLocked(int Index, int Seed)
+{
+	if(Index < 0 || Index >= m_lTrainFloors.size() || Seed <= 0)
+		return true;
+
+	const CInstruction *pFloor = m_lTrainFloors[Index];
+	const CInstruction::CGeneration::CRingConfig &Ring = pFloor->m_Generation.m_Ring;
+	if(!Ring.m_Enabled || Ring.m_Size < 1)
+		return true;
+
+	// The game layer brings both ring neighbours in on the first tick after the
+	// switch. Generating one of them there blocks the whole server, so boarding
+	// waits until they are all on disk; the click is refused for a moment.
+	bool Ready = true;
+	for(int Direction = -1; Direction <= 1; Direction += 2)
+	{
+		const int Neighbour = RingNeighbourSeed(Seed, Direction, Ring.m_Size);
+		if(Neighbour == Seed)
+			continue;
+		if(GeneratedMapExists(pFloor->m_aFloorName, Neighbour))
+			continue;
+		QueuePrefetchLocked(pFloor->m_aFloorName, Neighbour);
+		Ready = false;
+	}
+	return Ready;
 }
 
 void CMapGen::ScheduleWorkerLocked()
@@ -596,6 +680,7 @@ int CMapGen::GenWorker(void *pUser)
 				pSelf->m_pGenHead = pJob->m_pNext;
 				if(!pSelf->m_pGenHead)
 					pSelf->m_pGenTail = nullptr;
+				pSelf->m_pGenRunning = pJob;
 			}
 		}
 
@@ -624,6 +709,7 @@ int CMapGen::GenWorker(void *pUser)
 					Chunk.m_PendingSeed = 0;
 				}
 			}
+			pSelf->m_pGenRunning = nullptr;
 			delete pJob;
 		}
 	}
@@ -674,6 +760,7 @@ void CMapGen::StopGeneration()
 	}
 	m_pGenHead = nullptr;
 	m_pGenTail = nullptr;
+	m_pGenRunning = nullptr;
 
 	CWorkerJob *pWorker = m_pWorkerJobs;
 	while(pWorker)
@@ -734,6 +821,10 @@ bool CMapGen::TakeTrainChunk(const char *pFloorName, char *pOutMapName, int OutS
 		PromoteReadyLocked(Index);
 		if(Chunk.m_ReadySeed)
 		{
+			// Do not board into a ring until its two neighbours are generated
+			// as well; the game layer needs them live on the next tick.
+			if(!RingNeighboursReadyLocked(Index, Chunk.m_ReadySeed))
+				return false;
 			Seed = Chunk.m_ReadySeed;
 			Chunk.m_ReadySeed = 0;
 		}
