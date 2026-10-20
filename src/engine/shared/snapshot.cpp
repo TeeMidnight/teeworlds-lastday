@@ -721,6 +721,27 @@ int CSnapshotBuilder::Finish(void *pSnapdata)
 	// stable sort by key, O(n log n) instead of the old O(n^2) bubble sort
 	sort(aItems.all(), CItemRefLess());
 
+	// A snapshot must hold at most one item per (type, id) key. The delta writer
+	// emits one update per item and the client's decoder keeps a single builder
+	// item for repeated update keys, so a duplicate key silently loses the other
+	// copy and turns every snapshot into a "snapshot crc error" on the client
+	// instead of failing where the item was added. The list is sorted, so the
+	// duplicates are adjacent. Report a bounded number of them: a real duplicate
+	// repeats on every client and tick and must not flood the log.
+	for(int i = 1; i < NumItems; i++)
+	{
+		if(aItems[i].m_Key != aItems[i - 1].m_Key)
+			continue;
+
+		static int s_DuplicateKeyReports = 0;
+		if(s_DuplicateKeyReports < 32)
+		{
+			dbg_msg("snapshot", "duplicate item key type=%d id=%d, the second copy is lost on the client",
+				aItems[i].m_Key >> 16, aItems[i].m_Key & 0xffff);
+			s_DuplicateKeyReports++;
+		}
+	}
+
 	// copy sorted items
 	int OffsetCur = 0;
 	for(int i = 0; i < NumItems; i++)
