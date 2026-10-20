@@ -870,6 +870,20 @@ void CCharacter::RebindWorld(CGameWorld *pWorld)
 
 void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos)
 {
+	// MoveTo is reached both with a detached character (SwitchWorld removed it and
+	// RebindWorld only repointed it) and with one that is still inserted. The
+	// second case is real: a silent map switch already moves the character here,
+	// and when the client answers NEED_DOWNLOAD its READY fallback runs
+	// OnClientConnected, which moves it again. A same-world respawn
+	// (SwitchPlayerWorld) does the same. Inserting twice leaves two entries for
+	// one object, so the character is ticked twice per frame and the snapshot
+	// carries two items with the same type/id key; the client's delta decoder
+	// keeps only one of them, which makes every snapshot fail its crc check
+	// ("snapshot crc error"). Detach unconditionally first: remove_fast tolerates
+	// an entity that is not in the list at all, so this is safe when SwitchWorld
+	// already detached it.
+	Remove();
+
 	SetGameWorld(pWorld);
 	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
 	m_Core.m_Pos = Pos;
