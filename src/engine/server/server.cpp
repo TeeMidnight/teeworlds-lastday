@@ -2291,21 +2291,23 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 	CMapInfo *pOldInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
 	const bool NoFade = pOldInfo && pOldInfo->m_Ring && pInfo->m_Ring;
 
+	// The two maps share an axis only when they are instances of the same ring
+	// floor. RingNeighbourShift works in tiles and gives the new origin minus
+	// the old one; the view position delta is the other way round, so negate it
+	// and convert to game world pixels. This is independent of the silent
+	// switch: a non-silent ring change still uses no-fade and needs the same
+	// offset, otherwise the camera jumps at the seam.
+	int ViewPosOffsetX = 0;
+	int ViewPosOffsetY = 0;
+	if(NoFade && pOldInfo->m_RingPeriod > 0 &&
+		pOldInfo->m_RingPeriod == pInfo->m_RingPeriod && SameRingFloor(pOldInfo, pInfo))
+	{
+		const int Shift = RingNeighbourShift(pOldInfo->m_RingOffsetX, pInfo->m_RingOffsetX, pOldInfo->m_RingPeriod);
+		ViewPosOffsetX = -Shift * 32;
+	}
+
 	if(Silent)
 	{
-		// The two maps share an axis only when they are instances of the same
-		// ring floor. RingNeighbourShift works in tiles and gives the new
-		// origin minus the old one; the view position delta is the other way
-		// round, so negate it and convert to game world pixels.
-		int ViewPosOffsetX = 0;
-		int ViewPosOffsetY = 0;
-		if(pOldInfo && pOldInfo->m_Ring && pInfo->m_Ring && pOldInfo->m_RingPeriod > 0 &&
-			pOldInfo->m_RingPeriod == pInfo->m_RingPeriod && SameRingFloor(pOldInfo, pInfo))
-		{
-			const int Shift = RingNeighbourShift(pOldInfo->m_RingOffsetX, pInfo->m_RingOffsetX, pOldInfo->m_RingPeriod);
-			ViewPosOffsetX = -Shift * 32;
-		}
-
 		m_aClients[ClientID].m_MapID = MapID;
 		// Only drop the transfer state: CClient::Reset() would also zero the
 		// score, so every seam crossing would cost the player their points.
@@ -2321,7 +2323,7 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 	m_aClients[ClientID].Reset(false);
 	m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 	m_aClients[ClientID].m_MapID = MapID;
-	SendMap(ClientID, false, NoFade);
+	SendMap(ClientID, false, NoFade, ViewPosOffsetX, ViewPosOffsetY);
 	return true;
 }
 
