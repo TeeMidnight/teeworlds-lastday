@@ -452,13 +452,27 @@ void CGameWorld::InitCollision(IMap *pMap)
 		}
 	}
 
-	// Generated maps keep their metadata in a sidecar file next to the map
-	// ("<GENERATED_MAPS_DIR>/<name>.json") instead of embedding json items, so
-	// the map clients download only carries what they render. Older generated maps
-	// still embed it; the item reads below are the fallback.
+	// Generated maps keep their metadata in the map pack (or in a legacy
+	// sidecar file next to the map). The engine hands the pack's JSON over in
+	// memory after LoadMap, so a pack-restored world does not need a duplicate
+	// sidecar just to parse its entrances and ring geometry. Older maps still
+	// embed the same data as map json items; the reads below are the fallback.
 	bool HasMeta = false;
 	array<char> aMeta;
-	if(LoadGeneratedWorldMeta(GameServer()->Storage(), m_aMapName, aMeta))
+	const char *pServerMeta = nullptr;
+	int ServerMetaSize = 0;
+	if(GameServer()->Server() &&
+		GameServer()->Server()->GetMapMeta(m_WorldID, &pServerMeta, &ServerMetaSize) &&
+		pServerMeta && ServerMetaSize > 0)
+	{
+		aMeta.set_size(ServerMetaSize + 1);
+		mem_copy(aMeta.base_ptr(), pServerMeta, ServerMetaSize);
+		aMeta[ServerMetaSize] = '\0';
+	}
+	else
+		LoadGeneratedWorldMeta(GameServer()->Storage(), m_aMapName, aMeta);
+
+	if(aMeta.size() > 0)
 	{
 		CJsonParser MetaParser;
 		json_value *pMeta = MetaParser.ParseString(aMeta.base_ptr(), "world meta");

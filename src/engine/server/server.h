@@ -232,6 +232,17 @@ public:
 		static void Clean(CMapInfo &This, void *pUser);
 	};
 	hash_table<unsigned, CMapInfo, 8> m_MapInfos;
+	// Generated metadata kept in memory after LoadMap. This is the pack's JSON
+	// (or the sidecar's) and saves the game layer from needing a sidecar file.
+	struct SMapMeta
+	{
+		unsigned m_MapID;
+		char *m_pData;
+		int m_Size;
+	};
+	array<SMapMeta> m_lMapMeta;
+	void SetMapMeta(unsigned MapID, const void *pData, int Size);
+	void ClearMapMeta(unsigned MapID);
 	unsigned m_MainMapID;
 
 	int m_MapChunksPerRequest;
@@ -346,6 +357,7 @@ public:
 	virtual void UnloadMap(unsigned MapID);
 	virtual bool LoadMapForWorld(unsigned MapID);
 	virtual bool RegisterMapName(const char *pName);
+	virtual bool GetMapMeta(unsigned MapID, const char **ppData, int *pSize);
 };
 
 #endif

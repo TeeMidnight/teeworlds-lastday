@@ -1758,25 +1758,13 @@ int CServer::LoadMap(CMapInfo *pInfo)
 		}
 	}
 
-	// The game world reads generated metadata from its sidecar path, not from
-	// CMapGen's in-memory instance. A pack-restored map may have no sidecar
-	// (packs are the durable copy), so write it before the instance is freed;
-	// without this CGameWorld::ParseEntrances sees an empty list and ring /
-	// entrance switches have no target geometry.
+	// Hand the metadata to the game layer in memory. The pack (or a legacy
+	// sidecar) is the source of truth; CGameWorld must not require a second
+	// copy of the sidecar on disk just because the map came from a pack.
 	if(HaveInstance && Instance.m_JsonSize > 0 && Instance.m_pJson)
-	{
-		EnsureGeneratedMapsDir(Storage());
-		char aMetaPath[IO_MAX_PATH_LENGTH];
-		GeneratedWorldMetaPath(pInfo->m_aName, aMetaPath, sizeof(aMetaPath));
-		IOHANDLE File = Storage()->OpenFile(aMetaPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
-		if(File)
-		{
-			io_write(File, Instance.m_pJson, Instance.m_JsonSize);
-			io_close(File);
-		}
-		else
-			dbg_msg("mapgen", "cannot write metadata sidecar for '%s'", pInfo->m_aName);
-	}
+		SetMapMeta(pInfo->m_MapID, Instance.m_pJson, Instance.m_JsonSize);
+	else if(HasMeta && aMeta.size() > 0)
+		SetMapMeta(pInfo->m_MapID, aMeta.base_ptr(), aMeta.size());
 
 	CMapGen::FreeInstance(&Instance);
 
@@ -2362,6 +2350,66 @@ const char *CServer::GetMapName(unsigned MapID)
 	return pInfo ? pInfo->GetMapName() : "";
 }
 
+void CServer::SetMapMeta(unsigned MapID, const void *pData, int Size)
+{
+	if(!pData || Size <= 0)
+	{
+		ClearMapMeta(MapID);
+		return;
+	}
+
+	for(int i = 0; i < m_lMapMeta.size(); i++)
+	{
+		if(m_lMapMeta[i].m_MapID != MapID)
+			continue;
+		if(m_lMapMeta[i].m_pData)
+			mem_free(m_lMapMeta[i].m_pData);
+		m_lMapMeta[i].m_pData = (char *) mem_alloc(Size);
+		mem_copy(m_lMapMeta[i].m_pData, pData, Size);
+		m_lMapMeta[i].m_Size = Size;
+		return;
+	}
+
+	SMapMeta Meta;
+	Meta.m_MapID = MapID;
+	Meta.m_pData = (char *) mem_alloc(Size);
+	mem_copy(Meta.m_pData, pData, Size);
+	Meta.m_Size = Size;
+	m_lMapMeta.add(Meta);
+}
+
+void CServer::ClearMapMeta(unsigned MapID)
+{
+	for(int i = 0; i < m_lMapMeta.size(); i++)
+	{
+		if(m_lMapMeta[i].m_MapID != MapID)
+			continue;
+		if(m_lMapMeta[i].m_pData)
+			mem_free(m_lMapMeta[i].m_pData);
+		m_lMapMeta.remove_index(i);
+		return;
+	}
+}
+
+bool CServer::GetMapMeta(unsigned MapID, const char **ppData, int *pSize)
+{
+	if(ppData)
+		*ppData = nullptr;
+	if(pSize)
+		*pSize = 0;
+	for(int i = 0; i < m_lMapMeta.size(); i++)
+	{
+		if(m_lMapMeta[i].m_MapID != MapID || !m_lMapMeta[i].m_pData)
+			continue;
+		if(ppData)
+			*ppData = m_lMapMeta[i].m_pData;
+		if(pSize)
+			*pSize = m_lMapMeta[i].m_Size;
+		return true;
+	}
+	return false;
+}
+
 int CServer::GetMapWorldKind(unsigned MapID)
 {
 	CMapInfo *pInfo = m_MapInfos[MapID];
@@ -2419,6 +2467,7 @@ void CServer::UnloadMap(unsigned MapID)
 		mem_free(pInfo->m_pData);
 		pInfo->m_pData = 0;
 	}
+	ClearMapMeta(MapID);
 	pInfo->m_Loaded = false;
 
 	char aBuf[64];

@@ -83,6 +83,20 @@ public:
 	// canonical map name of a loaded/known map, or "" when unknown
 	virtual const char *GetMapName(unsigned MapID) = 0;
 
+	// Metadata JSON of a generated map, kept in memory when the map came from
+	// a pack (or from its sidecar). The game world uses it instead of relying
+	// on a sidecar file next to the map. Returns false and leaves the outputs
+	// untouched when no metadata is cached for MapID.
+	virtual bool GetMapMeta(unsigned MapID, const char **ppData, int *pSize)
+	{
+		(void) MapID;
+		if(ppData)
+			*ppData = nullptr;
+		if(pSize)
+			*pSize = 0;
+		return false;
+	}
+
 	// The kind of space a map is (a engine/server/mapgen.h EWorldKind value),
 	// or -1 when unknown. The game layer uses this to decide whether a world
 	// may contain bots at all and whether they are hostile or peaceful NPCs.
