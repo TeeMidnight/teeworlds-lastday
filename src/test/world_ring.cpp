@@ -255,6 +255,36 @@ TEST(WorldRing, TransferHysteresis)
 	EXPECT_LT(RingArrivalX(225, -1, Left), Right);
 }
 
+// The crossing is detected after the move, and a switch can also be delayed
+// (the neighbour may still be loading). Either way the source column can end up
+// outside the strip both instances share; only inside that strip is the terrain
+// guaranteed to match. Mapping such an overshoot straight through lands the
+// character on the neighbour's own terrain, which is how a tee ends up inside a
+// hill after a crossing.
+TEST(WorldRing, OvershotArrivalIsClampedIntoTheSharedStrip)
+{
+	const int W = 1000, M = 75;
+	const int S = W - M;
+
+	// a normal crossing at the trigger is unchanged
+	EXPECT_FLOAT_EQ(RingArrivalXClamped(S, W, M, 1, RingTriggerX(W, M, 1)), 50.0f * 32.0f);
+	EXPECT_FLOAT_EQ(RingArrivalXClamped(S, W, M, -1, RingTriggerX(W, M, -1)), 950.0f * 32.0f);
+
+	// drifting past the left edge: the source clamps to column 0, so the
+	// arrival is the first column of the destination's shared strip
+	EXPECT_FLOAT_EQ(RingArrivalXClamped(S, W, M, -1, -500.0f), (float) S * 32.0f);
+	EXPECT_FLOAT_EQ(RingArrivalXClamped(S, W, M, -1, -50.0f * 32.0f), (float) S * 32.0f);
+
+	// drifting past the right edge: the source clamps to the last column, so
+	// the arrival is the last column of the strip
+	EXPECT_FLOAT_EQ(RingArrivalXClamped(S, W, M, 1, (float) W * 32.0f + 500.0f), (float) (M - 1) * 32.0f + 31.0f);
+	EXPECT_FLOAT_EQ(RingArrivalXClamped(S, W, M, 1, (float) W * 32.0f), (float) (M - 1) * 32.0f + 31.0f);
+
+	// a source inside the strip keeps its exact offset
+	EXPECT_FLOAT_EQ(RingArrivalXClamped(S, W, M, 1, (float) (W - 1) * 32.0f + 16.0f), (float) (M - 1) * 32.0f + 16.0f);
+	EXPECT_FLOAT_EQ(RingArrivalXClamped(S, W, M, -1, 16.0f), (float) S * 32.0f + 16.0f);
+}
+
 TEST(WorldRing, CrossDirectionMatchesTheTransferTriggers)
 {
 	const float Right = RingTriggerX(300, 75, 1);

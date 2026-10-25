@@ -598,6 +598,16 @@ void CCharacter::Tick()
 	m_Core.m_SpeedScale = m_SpeedScale;
 
 	m_Core.m_Input = m_Input;
+	// A client that is loading a map sends no more input, so the character
+	// would otherwise keep the last held direction and walk on across the new
+	// world (and past its edge) for the whole download. Only the movement keys
+	// are dropped; aiming stays.
+	if(m_pPlayer->m_MapLoading)
+	{
+		m_Core.m_Input.m_Direction = 0;
+		m_Core.m_Input.m_Jump = 0;
+		m_Core.m_Input.m_Hook = 0;
+	}
 	if(m_DrillControl)
 	{
 		// steering a drill: freeze the core in place. The client receives zeroed
@@ -868,7 +878,7 @@ void CCharacter::RebindWorld(CGameWorld *pWorld)
 	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
 }
 
-void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos)
+void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos, bool KeepMomentum)
 {
 	// MoveTo is reached both with a detached character (SwitchWorld removed it and
 	// RebindWorld only repointed it) and with one that is still inserted. The
@@ -888,6 +898,23 @@ void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos)
 	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
 	m_Core.m_Pos = Pos;
 	m_Core.m_HookState = HOOK_IDLE;
+	if(!KeepMomentum)
+	{
+		// A spawn arrival is not a continuation of the old world. Without this
+		// the tee keeps the velocity it had when it left (running, falling or
+		// being dragged), drives straight into the destination terrain and can
+		// end up stuck in it. A ring seam crossing passes KeepMomentum and is
+		// the one switch where the motion has to carry over.
+		m_Core.m_Vel = vec2(0.0f, 0.0f);
+		m_Core.m_HookDragVel = vec2(0.0f, 0.0f);
+		m_Core.m_HookPos = Pos;
+		m_Core.m_HookedPlayer = -1;
+		m_Core.m_Jumped = 0;
+	}
+	// Keep the entity position in step with the core: GetPos, the view position
+	// and NetworkClipped read m_Pos, and a stale one points into the old world
+	// until the next tick.
+	m_Pos = Pos;
 	GameWorld()->m_Core.SetCharacter(m_pPlayer->GetCID(), &m_Core);
 	GameWorld()->InsertEntity(this);
 }

@@ -92,7 +92,7 @@ bool CGameWorld::RingNeighbour(int Direction, char *pMapName, int MapNameSize, f
 
 	str_format(pMapName, MapNameSize, "%s_%d", aFloor, Target);
 	if(pArrivalX)
-		*pArrivalX = RingArrivalX(m_Stride, Direction, LocalX);
+		*pArrivalX = RingArrivalXClamped(m_Stride, m_Collision.GetWidth(), m_SharedMargin, Direction, LocalX);
 	return true;
 }
 

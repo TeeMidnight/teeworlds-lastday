@@ -133,6 +133,22 @@ inline float RingArrivalX(int StrideTiles, int Direction, float LocalX)
 	return LocalX - (float) Direction * (float) StrideTiles * 32.0f;
 }
 
+// RingArrivalX with the source column clamped into the strip the two instances
+// share. Only that strip has the same terrain on both sides: the crossing test
+// runs after the move, so a fast crossing or a delayed switch can leave LocalX
+// past the trigger, past the map edge (the collision then clamps to the border
+// column), where mapping straight through would land the character on the
+// neighbour's own terrain, which is often solid.
+inline float RingArrivalXClamped(int StrideTiles, int WidthTiles, int SharedMargin, int Direction, float LocalX)
+{
+	float SourceX = LocalX;
+	if(Direction > 0)
+		SourceX = clamp(SourceX, (float) (WidthTiles - SharedMargin) * 32.0f, (float) WidthTiles * 32.0f - 1.0f);
+	else
+		SourceX = clamp(SourceX, 0.0f, (float) SharedMargin * 32.0f - 1.0f);
+	return RingArrivalX(StrideTiles, Direction, SourceX);
+}
+
 // Whether a position (world units) is past one of the two transfer triggers,
 // and which way it leaves the instance. 0 means it is still inside.
 //

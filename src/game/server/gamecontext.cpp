@@ -561,7 +561,8 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 		vec2 SpawnPos;
 		if(m_pController->CanSpawn(pPlayer->GameWorld(), pPlayer->GetTeam(), &SpawnPos))
 		{
-			pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), SpawnPos);
+			// a same-world respawn is a fresh placement, not a continuation
+			pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), SpawnPos, false);
 		}
 		if(TrainArrival)
 		{
@@ -612,7 +613,8 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 					if(m_pController->CanSpawn(pPlayer->GameWorld(), pPlayer->GetTeam(), &SpawnPos))
 						Pos = SpawnPos;
 				}
-				pChr->MoveTo(pPlayer->GameWorld(), Pos);
+				// only a ring seam continues the motion; a spawn arrival drops it
+				pChr->MoveTo(pPlayer->GameWorld(), Pos, HasArrival);
 			}
 			pPlayer->m_HasPendingArrival = false;
 			pPlayer->m_MapLoading = false;
@@ -942,7 +944,12 @@ void CGameContext::OnClientMapDataRequest(int ClientID)
 	if(CCharacter *pChr = pPlayer->GetCharacter())
 	{
 		pPlayer->m_HasPendingArrival = true;
-		pPlayer->m_PendingArrivalPos = pChr->GetPos();
+		// The core is authoritative here: the entity position is only copied
+		// from it in TickDefered, and this packet can be handled in the window
+		// right after a silent switch, before that copy has run. Reading the
+		// stale entity position would anchor the tee to its old-world column,
+		// which in the destination instance can be solid ground.
+		pPlayer->m_PendingArrivalPos = pChr->CorePos();
 	}
 	pPlayer->m_MapLoading = true;
 }
@@ -994,14 +1001,15 @@ void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 			// a ring crossing: land on the column the character left, which the
 			// shared field gives the same terrain in both instances
 			pPlayer->m_HasPendingArrival = false;
-			pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), pPlayer->m_PendingArrivalPos);
+			pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), pPlayer->m_PendingArrivalPos, true);
 		}
 		else
 		{
 			vec2 SpawnPos;
 			if(m_pController->CanSpawn(pPlayer->GameWorld(), pPlayer->GetTeam(), &SpawnPos))
 			{
-				pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), SpawnPos);
+				// a spawn after a map change must not inherit the old momentum
+				pPlayer->GetCharacter()->MoveTo(pPlayer->GameWorld(), SpawnPos, false);
 			}
 		}
 	}

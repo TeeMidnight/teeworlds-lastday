@@ -62,7 +62,11 @@ public:
 	void Die(int Killer, int Weapon);
 	void Remove();
 	void RebindWorld(CGameWorld *pWorld);
-	void MoveTo(CGameWorld *pWorld, vec2 Pos);
+	// Put the character into pWorld at Pos. KeepMomentum is true for a ring
+	// seam crossing, which continues the same motion into the neighbouring
+	// instance; a spawn arrival (train, entrance, respawn) passes false so the
+	// tee does not carry the old world's velocity into the new terrain.
+	void MoveTo(CGameWorld *pWorld, vec2 Pos, bool KeepMomentum = true);
 	bool TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon);
 	virtual bool TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon);
 	int GetHitAttacker() override;
