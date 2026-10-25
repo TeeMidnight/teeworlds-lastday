@@ -29,7 +29,12 @@ inline float HashToUnitFloat(unsigned Hash)
 // The server-side metadata of a generated map: entrance regions, resource
 // placements and world geometry. It is written next to the map as
 // "<GENERATED_MAPS_DIR>/<map>.json" instead of being embedded as map items, so
-// the map clients download contains only what they render.
+// the map clients download contains only what they render. When a map is kept
+// only in a pack the same document is built in memory.
+void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
+	const char *pResources, int ResourcesSize,
+	const char *pWorld, int WorldSize,
+	array<char> &Out);
 void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size);
 bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
 	const char *pEntrances, int EntrancesSize,
@@ -379,8 +384,34 @@ struct CInstruction
 	array<char> m_ResourcesJson; // serialized resources json of this base (optional)
 };
 
+// hash key of an (floor, seed) instance pair for CMapGen's known set
+struct SInstanceKeyHash
+{
+	static unsigned hash(long long Key) { return (unsigned) (Key ^ (Key >> 32)); }
+	static bool equal(long long A, long long B) { return A == B; }
+};
+
 class CMapGen
 {
+	// one append-only pack per floor ("mappacks/<mod>/<version>/<floor>.mappack"),
+	// opened lazily and only touched while m_GenMutex is held
+	struct SFloorPack;
+
+public:
+	// One generated instance handed over in memory, without a cache file.
+	// m_pMap is a complete v4 datafile, m_pJson the world metadata sidecar.
+	// Both are mem_alloc'd and belong to the caller.
+	struct SMapInstance
+	{
+		void *m_pMap;
+		int m_MapSize;
+		void *m_pJson;
+		int m_JsonSize;
+	};
+	static void FreeInstance(SMapInstance *pInstance);
+
+private:
+
 	class IStorage *m_pStorage;
 	class IConsole *m_pConsole;
 
@@ -430,6 +461,40 @@ class CMapGen
 	class IEngine *m_pEngine;
 	lock m_GenLock;
 	lock m_GenMutex;
+
+	// map packs: every generated instance is appended to its floor's pack, and
+	// a missing instance is restored from the pack instead of being generated
+	// again. The readers cache the pack index, so a lookup does not read the
+	// map data. Both are only touched under m_GenMutex.
+	bool m_UseMapPacks;
+	// the server keeps no cache file: a generated instance is packed and the
+	// file the generator wrote is removed again
+	bool m_DeleteGeneratedFiles;
+	array<SFloorPack *> m_lPacks;
+	// Instances known to exist without asking the disk or opening a pack again:
+	// filled when a pack is opened or appended to. Guarded by m_GenLock so the
+	// per tick train code can consult it without waiting for a generation.
+	hash_table<long long, bool, 16, SInstanceKeyHash> m_lKnownInstances;
+	static long long InstanceKey(const char *pFloorName, int Seed);
+	void RememberInstance(const char *pFloorName, int Seed);
+	void RememberPackInstances(SFloorPack *pPack);
+	// caller holds m_GenLock
+	bool KnownInstance(const char *pFloorName, int Seed) const;
+	// caller holds m_GenLock: available on disk or in the floor's pack
+	bool InstanceAvailable(const char *pFloorName, int Seed) const;
+	// caller holds m_GenMutex: open the pack and seed the known set once
+	bool EnsurePackOpen(SFloorPack *pPack);
+	SFloorPack *PackFor(const char *pFloorName);
+	bool PackContains(const char *pFloorName, int Seed);
+	bool ReadFromPack(const char *pFloorName, int Seed, SMapInstance *pOut);
+	bool ExtractFromPack(const char *pFloorName, int Seed);
+	// append bytes that are already in memory
+	void AppendInstanceToPack(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize);
+	// append an instance that exists as files (migration / tooling)
+	void AppendToPack(const char *pFloorName, int Seed);
+	// write the instance as the usual "<name>.map" + ".json" cache files
+	void WriteInstanceFiles(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize);
+	void ClosePacks();
 	CGenJob *m_pGenHead;
 	CGenJob *m_pGenTail;
 	CGenJob *m_pGenRunning;
@@ -477,11 +542,18 @@ class CMapGen
 	// appended as well.
 	void WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEntrances, int Seed, const array<CStructEntrance> &lStructEntrances);
 
+	// one generated instance, entirely in memory
+	struct SGeneratedMap
+	{
+		array<char> m_Map;  // complete v4 datafile
+		array<char> m_Meta; // world metadata sidecar json
+	};
+
 	// build a euclidean floor from noise (see worldgen.h)
-	bool GenerateEuclidean(const CInstruction *pInstruction, int Seed);
+	bool GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGeneratedMap *pOut);
 
 	// paste the structs of a non euclidean floor onto its base map
-	bool GenerateNoneuclid(const CInstruction *pInstruction, int Seed);
+	bool GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGeneratedMap *pOut);
 
 public:
 	CMapGen(class IStorage *pStorage, class IConsole *pConsole);
@@ -497,7 +569,28 @@ public:
 	// Generates a map only when it is not already on disk, and waits for an
 	// in-flight background generation of the same map instead of building it a
 	// second time. Called by the server when a transition actually loads a map.
+	// With map packs enabled the floor's pack is consulted first: a packed
+	// instance is extracted instead of generated, and a disk map that predates
+	// the pack is appended once so the pack converges on the whole floor.
 	bool EnsureNewMap(const char *pFloorName, int Seed);
+
+	// Returns one instance as bytes, without requiring a cache file: from the
+	// floor's pack when it is there, otherwise after generating it. A fresh
+	// generation is packed immediately and its cache file is removed again, so
+	// the pack stays the only durable copy. The server loads maps this way.
+	bool AcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut);
+
+	// Whether generated instances are kept in a per floor append-only pack.
+	// Defaults to on; the server maps sv_mappack onto it.
+	void SetUseMapPacks(bool Use) { m_UseMapPacks = Use; }
+	bool UseMapPacks() const { return m_UseMapPacks; }
+	// Remove a freshly generated instance from the cache after it was packed.
+	// Only meaningful with map packs on, and only for a server that reads the
+	// pack instead of the files.
+	void SetDeleteGeneratedFiles(bool Delete) { m_DeleteGeneratedFiles = Delete; }
+
+	// The pack file of a floor (for tooling and tests).
+	void PackPath(const char *pFloorName, char *pBuf, int Size) const;
 
 	// Starts using the engine's thread pool and queues one random chunk per
 	// train destination, so the first travel to a world normally finds its map

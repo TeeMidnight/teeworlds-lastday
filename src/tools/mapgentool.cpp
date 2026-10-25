@@ -28,9 +28,12 @@
 #include <engine/kernel.h>
 #include <engine/map/generatedmaps.h>
 #include <engine/server/mapgen.h>
+#include <engine/map.h>
 #include <engine/shared/config.h>
 #include <engine/shared/datafile.h>
 #include <engine/shared/jsonparser.h>
+#include <engine/shared/mappack.h>
+#include <engine/shared/worldpack.h>
 #include <engine/storage.h>
 #include <game/mapitems.h>
 
@@ -289,6 +292,243 @@ bool DumpWorldJson(IStorage *pStorage, const char *pMap)
 	return Ok;
 }
 
+// Reads a whole file from the save path into memory.
+bool ReadSaveFile(IStorage *pStorage, const char *pPath, array<char> &Out)
+{
+	void *pData = nullptr;
+	unsigned Size = 0;
+	if(!pStorage->ReadFile(pPath, IStorage::TYPE_SAVE, &pData, &Size))
+		return false;
+	Out.set_size((int) Size);
+	mem_copy(Out.base_ptr(), pData, Size);
+	mem_free(pData);
+	return true;
+}
+
+// Packs one floor's generated instances (map + world json sidecar) into a v5
+// datafile. Each map becomes one item, so the metadata and the terrain travel
+// together and one file replaces a directory of .map/.json pairs.
+bool PackFloor(IStorage *pStorage, CMapGen &rGen, const char *pFloor, const char *pOut, const int *pSeeds, int NumSeeds)
+{
+	CWorldPackWriter Writer;
+	if(!Writer.Open(pStorage, pOut, pFloor, 0, 5))
+	{
+		dbg_msg("mapgentool", "pack: cannot create %s", pOut);
+		return false;
+	}
+
+	int Added = 0;
+	for(int i = 0; i < NumSeeds; i++)
+	{
+		const int Seed = pSeeds[i];
+		if(!rGen.RequestNewMap(pFloor, Seed))
+		{
+			dbg_msg("mapgentool", "pack: FAIL %s_%d", pFloor, Seed);
+			continue;
+		}
+
+		char aName[64];
+		str_format(aName, sizeof(aName), "%s_%d", pFloor, Seed);
+		char aMapPath[128];
+		str_format(aMapPath, sizeof(aMapPath), GENERATED_MAPS_DIR "/%s.map", aName);
+		array<char> lMap;
+		if(!ReadSaveFile(pStorage, aMapPath, lMap))
+		{
+			dbg_msg("mapgentool", "pack: cannot read %s", aMapPath);
+			continue;
+		}
+
+		// the world metadata is optional: an older map may embed it instead
+		char aJsonPath[128];
+		str_format(aJsonPath, sizeof(aJsonPath), GENERATED_MAPS_DIR "/%s.json", aName);
+		array<char> lJson;
+		if(!ReadSaveFile(pStorage, aJsonPath, lJson))
+			lJson.clear();
+
+		if(!Writer.AddMap(aName, Seed, lMap.base_ptr(), lMap.size(), lJson.base_ptr(), lJson.size()))
+		{
+			dbg_msg("mapgentool", "pack: rejected %s", aName);
+			continue;
+		}
+		Added++;
+	}
+
+	if(!Writer.Finish())
+	{
+		dbg_msg("mapgentool", "pack: finish failed");
+		return false;
+	}
+	dbg_msg("mapgentool", "packed %d map(s) into %s", Added, pOut);
+	return Added > 0;
+}
+
+// Extracts every map of a pack back into the generated map directory as a plain
+// v4 map plus its json sidecar, so the existing server path can serve it.
+bool UnpackFloor(IStorage *pStorage, const char *pPack)
+{
+	CWorldPackReader Reader;
+	if(!Reader.Open(pStorage, pPack, IStorage::TYPE_SAVE))
+	{
+		dbg_msg("mapgentool", "unpack: cannot open %s", pPack);
+		return false;
+	}
+
+	int Extracted = 0;
+	for(int i = 0; i < Reader.NumMaps(); i++)
+	{
+		const SWorldPackEntryInfo *pEntry = Reader.Entry(i);
+		if(!Reader.Verify(i))
+			dbg_msg("mapgentool", "unpack: WARNING %s does not match its recorded hash", pEntry->m_aName);
+
+		char aPath[128];
+		str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", pEntry->m_aName);
+		if(!Reader.ExtractMap(i, pStorage, aPath))
+		{
+			dbg_msg("mapgentool", "unpack: failed to write %s", aPath);
+			continue;
+		}
+		Extracted++;
+	}
+	dbg_msg("mapgentool", "unpacked %d map(s) of floor %s into " GENERATED_MAPS_DIR, Extracted, Reader.Floor());
+	Reader.Close();
+	return Extracted > 0;
+}
+
+// Appends generated instances to an append-only pack. Unlike "pack", an
+// existing file is never rewritten: each map is one blob plus one index
+// record, so a running server can add a map while clients read the others.
+bool PackAppend(IStorage *pStorage, CMapGen &rGen, const char *pPack, const char *pFloor, const int *pSeeds, int NumSeeds)
+{
+	CMapPackWriter Writer;
+	if(!Writer.Open(pStorage, pPack))
+	{
+		dbg_msg("mapgentool", "mappack: cannot open %s", pPack);
+		return false;
+	}
+
+	int Added = 0;
+	for(int i = 0; i < NumSeeds; i++)
+	{
+		const int Seed = pSeeds[i];
+		if(!rGen.RequestNewMap(pFloor, Seed))
+		{
+			dbg_msg("mapgentool", "mappack: FAIL %s_%d", pFloor, Seed);
+			continue;
+		}
+		char aName[64];
+		str_format(aName, sizeof(aName), "%s_%d", pFloor, Seed);
+		char aPath[128];
+		str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", aName);
+		array<char> lMap;
+		if(!ReadSaveFile(pStorage, aPath, lMap))
+		{
+			dbg_msg("mapgentool", "mappack: cannot read %s", aPath);
+			continue;
+		}
+		str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.json", aName);
+		array<char> lJson;
+		if(!ReadSaveFile(pStorage, aPath, lJson))
+			lJson.clear();
+
+		if(!Writer.AddMap(aName, Seed, lMap.base_ptr(), lMap.size(), lJson.base_ptr(), lJson.size()))
+		{
+			dbg_msg("mapgentool", "mappack: rejected %s", aName);
+			continue;
+		}
+		Added++;
+	}
+	dbg_msg("mapgentool", "appended %d map(s) to %s", Added, pPack);
+	return Added > 0;
+}
+
+bool PackCompact(IStorage *pStorage, const char *pPack)
+{
+	int Maps = 0, Before = 0, After = 0;
+	if(!CMapPackWriter::Compact(pStorage, pPack, &Maps, &Before, &After))
+	{
+		dbg_msg("mapgentool", "mappack: cannot compact %s", pPack);
+		return false;
+	}
+	dbg_msg("mapgentool", "compacted %s: %d map(s), %d -> %d bytes", pPack, Maps, Before, After);
+	return true;
+}
+
+bool PackList(IStorage *pStorage, const char *pPack)
+{
+	CMapPackReader Reader;
+	if(!Reader.Open(pStorage, pPack, IStorage::TYPE_SAVE))
+	{
+		dbg_msg("mapgentool", "mappack: cannot open %s", pPack);
+		return false;
+	}
+	// opening reads the index only: no map blob is decompressed here
+	for(int i = 0; i < Reader.NumMaps(); i++)
+	{
+		const SMapPackEntry *pEntry = Reader.Entry(i);
+		dbg_msg("mapgentool", "%-24s seed=%-5d raw=%d comp=%d", pEntry->m_aName, pEntry->m_Seed, pEntry->m_RawSize, pEntry->m_CompSize);
+	}
+	Reader.Close();
+	return true;
+}
+
+bool PackGet(IStorage *pStorage, const char *pPack, const char *pName)
+{
+	CMapPackReader Reader;
+	if(!Reader.Open(pStorage, pPack, IStorage::TYPE_SAVE))
+	{
+		dbg_msg("mapgentool", "mappack: cannot open %s", pPack);
+		return false;
+	}
+	const int Index = Reader.FindMap(pName);
+	if(Index < 0)
+	{
+		dbg_msg("mapgentool", "mappack: no map '%s' in %s", pName, pPack);
+		Reader.Close();
+		return false;
+	}
+	char aPath[128];
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", pName);
+	const bool Ok = Reader.ExtractMap(Index, pStorage, aPath);
+	dbg_msg("mapgentool", "%s %s", Ok ? "extracted" : "FAILED", pName);
+	Reader.Close();
+	return Ok;
+}
+
+// Loads one instance the way the server does: bytes from the floor's pack,
+// fed straight into the engine map. No cache file is created.
+bool AcquireInstance(IStorage *pStorage, CMapGen &rGen, const char *pFloor, int Seed)
+{
+	CMapGen::SMapInstance Instance;
+	if(!rGen.AcquireMap(pFloor, Seed, &Instance))
+	{
+		dbg_msg("mapgentool", "acquire: FAILED %s_%d", pFloor, Seed);
+		return false;
+	}
+
+	// prove the bytes are a loadable map without touching a file
+	IEngineMap *pMap = CreateEngineMap();
+	char aName[64];
+	str_format(aName, sizeof(aName), "%s_%d", pFloor, Seed);
+	const bool Loaded = pMap->LoadFromMemory(aName, Instance.m_pMap, Instance.m_MapSize);
+	int Groups = 0;
+	if(Loaded)
+	{
+		int Start = 0;
+		pMap->GetType(MAPITEMTYPE_GROUP, &Start, &Groups);
+	}
+	pMap->Unload();
+
+	char aCacheName[64];
+	str_format(aCacheName, sizeof(aCacheName), "%s_%d.map", pFloor, Seed);
+	char aCache[IO_MAX_PATH_LENGTH];
+	const bool CacheFile = pStorage->FindFile(aCacheName, GENERATED_MAPS_DIR, IStorage::TYPE_SAVE, aCache, sizeof(aCache));
+
+	dbg_msg("mapgentool", "acquire %s: map=%d bytes json=%d bytes loaded=%d groups=%d cache_file=%d",
+		aName, Instance.m_MapSize, Instance.m_JsonSize, Loaded, Groups, CacheFile);
+	CMapGen::FreeInstance(&Instance);
+	return Loaded;
+}
+
 void PrintUsage(const char *pProgram)
 {
 	dbg_msg("mapgentool", "usage: %s list", pProgram);
@@ -296,6 +536,14 @@ void PrintUsage(const char *pProgram)
 	dbg_msg("mapgentool", "       %s all [seed...]", pProgram);
 	dbg_msg("mapgentool", "       %s ringcheck <floor...>", pProgram);
 	dbg_msg("mapgentool", "       %s worldjson <map...>", pProgram);
+	dbg_msg("mapgentool", "       %s pack <pack-file> <floor> [seed...]", pProgram);
+	dbg_msg("mapgentool", "       %s unpack <pack-file>", pProgram);
+	dbg_msg("mapgentool", "       %s ensure <floor> [seed...]", pProgram);
+	dbg_msg("mapgentool", "       %s acquire <floor> [seed...]", pProgram);
+	dbg_msg("mapgentool", "       %s mappack add <pack-file> <floor> [seed...]", pProgram);
+	dbg_msg("mapgentool", "       %s mappack list <pack-file>", pProgram);
+	dbg_msg("mapgentool", "       %s mappack get <pack-file> <map-name>", pProgram);
+	dbg_msg("mapgentool", "       %s mappack compact <pack-file>", pProgram);
 	dbg_msg("mapgentool", "runs the mapgen world generator without the server and writes");
 	dbg_msg("mapgentool", GENERATED_MAPS_DIR "/<floor>_<seed>.map into the storage save path");
 }
@@ -369,6 +617,120 @@ int main(int argc, const char **argv)
 			if(!DumpWorldJson(pStorage, argv[i]))
 				Failures++;
 		return Failures == 0 ? 0 : 1;
+	}
+	if(str_comp(pCommand, "acquire") == 0)
+	{
+		if(argc < 3)
+		{
+			PrintUsage(argv[0]);
+			return 1;
+		}
+		// the server path: the pack is the durable copy, no cache file is kept
+		Gen.SetDeleteGeneratedFiles(true);
+		int Failures = 0;
+		const char *pFloor = argv[2];
+		int NumSeeds = 0;
+		for(int i = 3; i < argc && NumSeeds < MAX_TOOL_SEEDS; i++, NumSeeds++)
+			if(!AcquireInstance(pStorage, Gen, pFloor, str_toint(argv[i])))
+				Failures++;
+		if(NumSeeds == 0)
+			return AcquireInstance(pStorage, Gen, pFloor, 1) ? 0 : 1;
+		return Failures == 0 ? 0 : 1;
+	}
+	if(str_comp(pCommand, "ensure") == 0)
+	{
+		// the exact path the server takes when it loads a map: restore from
+		// the floor's pack when possible, generate and pack otherwise
+		if(argc < 3)
+		{
+			PrintUsage(argv[0]);
+			return 1;
+		}
+		const char *pFloor = argv[2];
+		int aSeeds[MAX_TOOL_SEEDS];
+		int NumSeeds = 0;
+		for(int i = 3; i < argc && NumSeeds < MAX_TOOL_SEEDS; i++)
+			aSeeds[NumSeeds++] = str_toint(argv[i]);
+		if(NumSeeds == 0)
+			aSeeds[NumSeeds++] = 1;
+		int Failures = 0;
+		for(int i = 0; i < NumSeeds; i++)
+		{
+			const bool Ok = Gen.EnsureNewMap(pFloor, aSeeds[i]);
+			char aPack[IO_MAX_PATH_LENGTH];
+			Gen.PackPath(pFloor, aPack, sizeof(aPack));
+			dbg_msg("mapgentool", "ensure %s_%d: %s (pack %s)", pFloor, aSeeds[i], Ok ? "ok" : "FAIL", aPack);
+			if(!Ok)
+				Failures++;
+		}
+		return Failures == 0 ? 0 : 1;
+	}
+	if(str_comp(pCommand, "mappack") == 0)
+	{
+		if(argc < 4)
+		{
+			PrintUsage(argv[0]);
+			return 1;
+		}
+		const char *pSub = argv[2];
+		const char *pPack = argv[3];
+		if(str_comp(pSub, "list") == 0)
+			return PackList(pStorage, pPack) ? 0 : 1;
+		if(str_comp(pSub, "compact") == 0)
+			return PackCompact(pStorage, pPack) ? 0 : 1;
+		if(str_comp(pSub, "get") == 0)
+		{
+			if(argc < 5)
+			{
+				PrintUsage(argv[0]);
+				return 1;
+			}
+			return PackGet(pStorage, pPack, argv[4]) ? 0 : 1;
+		}
+		if(str_comp(pSub, "add") == 0)
+		{
+			if(argc < 5)
+			{
+				PrintUsage(argv[0]);
+				return 1;
+			}
+			const char *pFloor = argv[4];
+			int aSeeds[MAX_TOOL_SEEDS];
+			int NumSeeds = 0;
+			for(int i = 5; i < argc && NumSeeds < MAX_TOOL_SEEDS; i++)
+				aSeeds[NumSeeds++] = str_toint(argv[i]);
+			if(NumSeeds == 0)
+				aSeeds[NumSeeds++] = 1;
+			return PackAppend(pStorage, Gen, pPack, pFloor, aSeeds, NumSeeds) ? 0 : 1;
+		}
+		PrintUsage(argv[0]);
+		return 1;
+	}
+	if(str_comp(pCommand, "unpack") == 0)
+	{
+		if(argc < 3)
+		{
+			PrintUsage(argv[0]);
+			return 1;
+		}
+		return UnpackFloor(pStorage, argv[2]) ? 0 : 1;
+	}
+	if(str_comp(pCommand, "pack") == 0)
+	{
+		if(argc < 4)
+		{
+			PrintUsage(argv[0]);
+			return 1;
+		}
+		const char *pOut = argv[2];
+		const char *pFloor = argv[3];
+		int aSeeds[MAX_TOOL_SEEDS];
+		int NumSeeds = 0;
+		for(int i = 4; i < argc && NumSeeds < MAX_TOOL_SEEDS; i++)
+			aSeeds[NumSeeds++] = str_toint(argv[i]);
+		if(NumSeeds == 0)
+			aSeeds[NumSeeds++] = 1;
+		return PackFloor(pStorage, Gen, pFloor, pOut, aSeeds, NumSeeds) ? 0 : 1;
 	}
 
 	// the seeds follow the command; a bare seed list defaults to seed 1

@@ -37,6 +37,29 @@ public:
 			return false;
 		if(!m_DataFile.Open(pStorage, pMapName, IStorage::TYPE_ALL))
 			return false;
+		return PostLoad();
+	}
+
+	virtual bool LoadFromMemory(const char *pMapName, const void *pData, int Size)
+	{
+		if(!pData || Size <= 0)
+			return false;
+		// the reader keeps the stream for the life of the map, so hand it a
+		// copy it owns; the caller's buffer (a pack blob, a download buffer) may
+		// be released right after this call
+		unsigned char *pCopy = (unsigned char *) mem_alloc(Size);
+		if(!pCopy)
+			return false;
+		mem_copy(pCopy, pData, Size);
+		if(!m_DataFile.Open(new memory_read_stream(pCopy, Size, true), true))
+			return false;
+		return PostLoad();
+	}
+
+	// everything after the bytes are in the reader: check the version and turn
+	// compressed tile layers into plain ones
+	bool PostLoad()
+	{
 		// check version
 		CMapItemVersion *pItem = (CMapItemVersion *) m_DataFile.FindItem(MAPITEMTYPE_VERSION, 0);
 		if(!pItem || pItem->m_Version != CMapItemVersion::CURRENT_VERSION)

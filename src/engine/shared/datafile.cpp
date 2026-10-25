@@ -9,6 +9,7 @@
 #include <base/system.h>
 #include <engine/storage.h>
 #include <zlib.h>
+#include <zstd.h>
 
 static const int DEBUG = 0;
 
@@ -61,7 +62,11 @@ struct CDatafileInfo
 
 struct CDatafile
 {
-	IOHANDLE m_File;
+	// the datafile is read through a stream, so the same code serves a file (a
+	// map on disk) and a buffer that already exists (a map restored from a
+	// pack, a map handed over by the network layer)
+	stream *m_pStream;
+	bool m_OwnsStream;
 	SHA256_DIGEST m_Sha256;
 	unsigned m_Crc;
 	CDatafileInfo m_Info;
@@ -83,7 +88,22 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 		return false;
 	}
 
-	// take the hashes of the file and store them
+	// the file is only one kind of stream: everything below reads through the
+	// stream interface, so a caller can hand over memory instead
+	return Open(new file_stream(File, true), true);
+}
+
+bool CDataFileReader::Open(stream *pStream, bool OwnStream)
+{
+	if(!pStream || !pStream->can_read())
+	{
+		dbg_msg("datafile", "stream is not readable");
+		if(OwnStream)
+			delete pStream;
+		return false;
+	}
+
+	// take the hashes of the content and store them; the stream is rewound
 	SHA256_CTX Sha256Ctx;
 	sha256_init(&Sha256Ctx);
 	unsigned Crc = crc32(0L, 0x0, 0);
@@ -97,25 +117,31 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 
 		while(1)
 		{
-			unsigned Bytes = io_read(File, aBuffer, BUFFER_SIZE);
+			unsigned Bytes = pStream->read(aBuffer, BUFFER_SIZE);
 			if(Bytes == 0)
 				break;
 			sha256_update(&Sha256Ctx, aBuffer, Bytes);
 			Crc = crc32(Crc, aBuffer, Bytes);
 		}
-
-		io_seek(File, 0, IOSEEK_START);
 	}
 
 	// TODO: change this header
 	CDatafileHeader Header;
-	io_read(File, &Header, sizeof(Header));
+	pStream->seek(0, STREAM_SEEK_START);
+	if(pStream->read((unsigned char *) &Header, sizeof(Header)) != sizeof(Header))
+	{
+		dbg_msg("datafile", "stream is shorter than a datafile header");
+		if(OwnStream)
+			delete pStream;
+		return false;
+	}
 	if(Header.m_aID[0] != 'A' || Header.m_aID[1] != 'T' || Header.m_aID[2] != 'A' || Header.m_aID[3] != 'D')
 	{
 		if(Header.m_aID[0] != 'D' || Header.m_aID[1] != 'A' || Header.m_aID[2] != 'T' || Header.m_aID[3] != 'A')
 		{
 			dbg_msg("datafile", "wrong signature. %x %x %x %x", Header.m_aID[0], Header.m_aID[1], Header.m_aID[2], Header.m_aID[3]);
-			io_close(File);
+			if(OwnStream)
+				delete pStream;
 			return 0;
 		}
 	}
@@ -123,10 +149,11 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 #if defined(CONF_ARCH_ENDIAN_BIG)
 	swap_endian(&Header, sizeof(int), sizeof(Header) / sizeof(int));
 #endif
-	if(Header.m_Version != 3 && Header.m_Version != 4)
+	if(Header.m_Version != 3 && Header.m_Version != 4 && Header.m_Version != 5)
 	{
 		dbg_msg("datafile", "wrong version. version=%x", Header.m_Version);
-		io_close(File);
+		if(OwnStream)
+			delete pStream;
 		return 0;
 	}
 
@@ -134,17 +161,23 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	int64 Size = 0;
 	Size += Header.m_NumItemTypes * sizeof(CDatafileItemType);
 	Size += (Header.m_NumItems + Header.m_NumRawData) * sizeof(int);
-	if(Header.m_Version == 4)
-		Size += Header.m_NumRawData * sizeof(int); // v4 has uncompressed data sizes aswell
-	Size += Header.m_ItemSize;
+	if(Header.m_Version >= 4)
+		Size += Header.m_NumRawData * sizeof(int); // v4/v5 have uncompressed data sizes aswell
+	if(Header.m_Version >= 5)
+		Size += sizeof(int); // v5 stores the compressed size of the item section
+	else
+		Size += Header.m_ItemSize;
 
 	int64 AllocSize = Size;
+	if(Header.m_Version >= 5)
+		AllocSize += Header.m_ItemSize; // add space for the decompressed item section
 	AllocSize += sizeof(CDatafile); // add space for info structure
 	AllocSize += Header.m_NumRawData * sizeof(void *); // add space for data pointers
 	AllocSize += Header.m_NumRawData * sizeof(int); // add space for data sizes
-	if(Size > (int64(1) << 31) || Header.m_NumItemTypes < 0 || Header.m_NumItems < 0 || Header.m_NumRawData < 0 || Header.m_ItemSize < 0)
+	if(Size > (int64(1) << 31) || AllocSize > (int64(1) << 31) || Header.m_NumItemTypes < 0 || Header.m_NumItems < 0 || Header.m_NumRawData < 0 || Header.m_ItemSize < 0)
 	{
-		io_close(File);
+		if(OwnStream)
+			delete pStream;
 		dbg_msg("datafile", "unable to load file, invalid file information");
 		return false;
 	}
@@ -155,7 +188,8 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	pTmpDataFile->m_ppDataPtrs = (char **) (pTmpDataFile + 1);
 	pTmpDataFile->m_pDataSizes = (int *) (pTmpDataFile->m_ppDataPtrs + Header.m_NumRawData);
 	pTmpDataFile->m_pData = (char *) (pTmpDataFile->m_pDataSizes + Header.m_NumRawData);
-	pTmpDataFile->m_File = File;
+	pTmpDataFile->m_pStream = pStream;
+	pTmpDataFile->m_OwnsStream = OwnStream;
 	pTmpDataFile->m_Sha256 = sha256_finish(&Sha256Ctx);
 	pTmpDataFile->m_Crc = Crc;
 
@@ -164,22 +198,68 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	mem_zero(pTmpDataFile->m_pDataSizes, Header.m_NumRawData * sizeof(int));
 
 	// read types, offsets, sizes and item data
-	unsigned ReadSize = io_read(File, pTmpDataFile->m_pData, Size);
-	if(ReadSize != Size)
+	const unsigned ReadSize = pStream->read((unsigned char *) pTmpDataFile->m_pData, (unsigned) Size);
+	if(ReadSize != (unsigned) Size)
 	{
-		io_close(pTmpDataFile->m_File);
+		if(OwnStream)
+			delete pStream;
 		mem_free(pTmpDataFile);
 		pTmpDataFile = 0;
 		dbg_msg("datafile", "couldn't load the whole thing, wanted=%d got=%d", unsigned(Size), ReadSize);
 		return false;
 	}
 
+#if defined(CONF_ARCH_ENDIAN_BIG)
+	swap_endian(pTmpDataFile->m_pData, sizeof(int), minimum(static_cast<unsigned>(Header.m_Swaplen), static_cast<unsigned>(Size)) / sizeof(int));
+#endif
+
+	// v5 compresses the whole item section as one zstd block. It sits between
+	// the data section and the data blobs, and is decompressed into the space
+	// allocated behind the data section above.
+	if(Header.m_Version >= 5)
+	{
+		int CompressedItemSize = ((int *) pTmpDataFile->m_pData)[Size / sizeof(int) - 1];
+		if(CompressedItemSize < 0 || (int64) CompressedItemSize > (int64) pStream->size())
+		{
+			if(OwnStream)
+				delete pStream;
+			mem_free(pTmpDataFile);
+			dbg_msg("datafile", "invalid compressed item section size %d", CompressedItemSize);
+			return false;
+		}
+
+		pTmpDataFile->m_DataStartOffset = sizeof(CDatafileHeader) + Size + CompressedItemSize;
+		char *pItemData = (char *) pTmpDataFile->m_pData + Size;
+
+		void *pTemp = mem_alloc(CompressedItemSize ? CompressedItemSize : 1);
+		pStream->seek((int) (sizeof(CDatafileHeader) + Size), STREAM_SEEK_START);
+		if(pStream->read((unsigned char *) pTemp, (unsigned) CompressedItemSize) != (unsigned) CompressedItemSize)
+		{
+			mem_free(pTemp);
+			if(OwnStream)
+				delete pStream;
+			mem_free(pTmpDataFile);
+			dbg_msg("datafile", "couldn't read the compressed item section");
+			return false;
+		}
+
+		size_t Result = ZSTD_decompress(pItemData, Header.m_ItemSize, pTemp, CompressedItemSize);
+		mem_free(pTemp);
+		if(ZSTD_isError(Result) || Result != (size_t) Header.m_ItemSize)
+		{
+			if(OwnStream)
+				delete pStream;
+			mem_free(pTmpDataFile);
+			dbg_msg("datafile", "zstd item decompress failed: %s", ZSTD_isError(Result) ? ZSTD_getErrorName(Result) : "size mismatch");
+			return false;
+		}
+#if defined(CONF_ARCH_ENDIAN_BIG)
+		swap_endian(pItemData, sizeof(int), Header.m_ItemSize / sizeof(int));
+#endif
+	}
+
 	Close();
 	m_pDataFile = pTmpDataFile;
-
-#if defined(CONF_ARCH_ENDIAN_BIG)
-	swap_endian(m_pDataFile->m_pData, sizeof(int), minimum(static_cast<unsigned>(Header.m_Swaplen), static_cast<unsigned>(Size)) / sizeof(int));
-#endif
 
 	// if(DEBUG)
 	{
@@ -194,13 +274,15 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	m_pDataFile->m_Info.m_pDataOffsets = (int *) &m_pDataFile->m_Info.m_pItemOffsets[m_pDataFile->m_Header.m_NumItems];
 	m_pDataFile->m_Info.m_pDataSizes = (int *) &m_pDataFile->m_Info.m_pDataOffsets[m_pDataFile->m_Header.m_NumRawData];
 
-	if(Header.m_Version == 4)
+	if(Header.m_Version >= 5)
+		m_pDataFile->m_Info.m_pItemStart = m_pDataFile->m_pData + Size; // decompressed into the appended space
+	else if(Header.m_Version >= 4)
 		m_pDataFile->m_Info.m_pItemStart = (char *) &m_pDataFile->m_Info.m_pDataSizes[m_pDataFile->m_Header.m_NumRawData];
 	else
 		m_pDataFile->m_Info.m_pItemStart = (char *) &m_pDataFile->m_Info.m_pDataOffsets[m_pDataFile->m_Header.m_NumRawData];
 	m_pDataFile->m_Info.m_pDataStart = m_pDataFile->m_Info.m_pItemStart + m_pDataFile->m_Header.m_ItemSize;
 
-	dbg_msg("datafile", "loading done. datafile='%s'", pFilename);
+	dbg_msg("datafile", "loading done. items=%d data=%d", m_pDataFile->m_Header.m_NumItems, m_pDataFile->m_Header.m_NumRawData);
 
 	if(DEBUG)
 	{
@@ -302,30 +384,44 @@ void *CDataFileReader::GetDataImpl(int Index, int Swap)
 		int SwapSize = DataSize;
 #endif
 
-		if(m_pDataFile->m_Header.m_Version == 4)
+		if(m_pDataFile->m_Header.m_Version >= 4)
 		{
-			// v4 has compressed data
+			// v4 compresses with zlib, v5 with zstd; both store the
+			// uncompressed size in the file
 			void *pTemp = (char *) mem_alloc(DataSize);
 			unsigned long UncompressedSize = m_pDataFile->m_Info.m_pDataSizes[Index];
-			unsigned long s;
+			size_t s = (size_t) UncompressedSize;
 
 			dbg_msg("datafile", "loading data index=%d size=%d uncompressed=%lu", Index, DataSize, UncompressedSize);
 			m_pDataFile->m_ppDataPtrs[Index] = (char *) mem_alloc(UncompressedSize);
 			m_pDataFile->m_pDataSizes[Index] = UncompressedSize;
 
 			// read the compressed data
-			io_seek(m_pDataFile->m_File, m_pDataFile->m_DataStartOffset + m_pDataFile->m_Info.m_pDataOffsets[Index], IOSEEK_START);
-			io_read(m_pDataFile->m_File, pTemp, DataSize);
+			m_pDataFile->m_pStream->seek(m_pDataFile->m_DataStartOffset + m_pDataFile->m_Info.m_pDataOffsets[Index], STREAM_SEEK_START);
+			m_pDataFile->m_pStream->read((unsigned char *) pTemp, DataSize);
 
 			// decompress the data
-			s = UncompressedSize;
-			int Result = uncompress((Bytef *) m_pDataFile->m_ppDataPtrs[Index], &s, (Bytef *) pTemp, DataSize);
-			if(Result != Z_OK)
+			if(m_pDataFile->m_Header.m_Version == 5)
 			{
-				dbg_msg("datafile", "zlib uncompress failed: %d", Result);
-				mem_free(pTemp);
-				UnloadData(Index);
-				return 0;
+				size_t Result = ZSTD_decompress(m_pDataFile->m_ppDataPtrs[Index], s, pTemp, DataSize);
+				if(ZSTD_isError(Result) || Result != s)
+				{
+					dbg_msg("datafile", "zstd decompress failed: %s", ZSTD_isError(Result) ? ZSTD_getErrorName(Result) : "size mismatch");
+					mem_free(pTemp);
+					UnloadData(Index);
+					return 0;
+				}
+			}
+			else
+			{
+				int Result = uncompress((Bytef *) m_pDataFile->m_ppDataPtrs[Index], &s, (Bytef *) pTemp, DataSize);
+				if(Result != Z_OK)
+				{
+					dbg_msg("datafile", "zlib uncompress failed: %d", Result);
+					mem_free(pTemp);
+					UnloadData(Index);
+					return 0;
+				}
 			}
 #if defined(CONF_ARCH_ENDIAN_BIG)
 			SwapSize = s;
@@ -340,8 +436,8 @@ void *CDataFileReader::GetDataImpl(int Index, int Swap)
 			dbg_msg("datafile", "loading data index=%d size=%d", Index, DataSize);
 			m_pDataFile->m_ppDataPtrs[Index] = (char *) mem_alloc(DataSize);
 			m_pDataFile->m_pDataSizes[Index] = DataSize;
-			io_seek(m_pDataFile->m_File, m_pDataFile->m_DataStartOffset + m_pDataFile->m_Info.m_pDataOffsets[Index], IOSEEK_START);
-			io_read(m_pDataFile->m_File, m_pDataFile->m_ppDataPtrs[Index], DataSize);
+			m_pDataFile->m_pStream->seek(m_pDataFile->m_DataStartOffset + m_pDataFile->m_Info.m_pDataOffsets[Index], STREAM_SEEK_START);
+			m_pDataFile->m_pStream->read((unsigned char *) m_pDataFile->m_ppDataPtrs[Index], DataSize);
 		}
 
 #if defined(CONF_ARCH_ENDIAN_BIG)
@@ -483,7 +579,8 @@ bool CDataFileReader::Close()
 		m_pDataFile->m_pDataSizes[i] = 0;
 	}
 
-	io_close(m_pDataFile->m_File);
+	if(m_pDataFile->m_OwnsStream)
+		delete m_pDataFile->m_pStream;
 	mem_free(m_pDataFile);
 	m_pDataFile = 0;
 	return true;
@@ -526,7 +623,10 @@ bool CDataFileReader::CheckSha256(IOHANDLE Handle, const void *pSha256)
 
 CDataFileWriter::CDataFileWriter()
 {
-	m_File = 0;
+	m_pStream = nullptr;
+	m_OwnsStream = false;
+	m_Version = 4;
+	m_CompressLevel = 9;
 	m_pItemTypes = static_cast<CItemTypeInfo *>(mem_alloc(sizeof(CItemTypeInfo) * MAX_ITEM_TYPES));
 	m_pItems = static_cast<CItemInfo *>(mem_alloc(sizeof(CItemInfo) * MAX_ITEMS));
 	m_pDatas = static_cast<CDataInfo *>(mem_alloc(sizeof(CDataInfo) * MAX_DATAS));
@@ -534,6 +634,12 @@ CDataFileWriter::CDataFileWriter()
 
 CDataFileWriter::~CDataFileWriter()
 {
+	// a writer that was never finished still owns its stream
+	if(m_pStream && m_OwnsStream)
+		delete m_pStream;
+	m_pStream = nullptr;
+	m_OwnsStream = false;
+
 	mem_free(m_pItemTypes);
 	m_pItemTypes = 0;
 	mem_free(m_pItems);
@@ -542,13 +648,24 @@ CDataFileWriter::~CDataFileWriter()
 	m_pDatas = 0;
 }
 
-bool CDataFileWriter::Open(class IStorage *pStorage, const char *pFilename)
+bool CDataFileWriter::Open(class IStorage *pStorage, const char *pFilename, int Version)
 {
-	dbg_assert(!m_File, "a file already exists");
-	m_File = pStorage->OpenFile(pFilename, IOFLAG_WRITE, IStorage::TYPE_SAVE);
-	if(!m_File)
+	IOHANDLE File = pStorage->OpenFile(pFilename, IOFLAG_WRITE, IStorage::TYPE_SAVE);
+	if(!File)
+		return false;
+	return Open(new file_stream(File, true), Version, true);
+}
+
+bool CDataFileWriter::Open(stream *pStream, int Version, bool OwnStream)
+{
+	dbg_assert(!m_pStream, "a stream already exists");
+	dbg_assert(Version == 4 || Version == 5, "unsupported datafile version");
+	if(!pStream)
 		return false;
 
+	m_pStream = pStream;
+	m_OwnsStream = OwnStream;
+	m_Version = Version;
 	m_NumItems = 0;
 	m_NumDatas = 0;
 	m_NumItemTypes = 0;
@@ -565,11 +682,11 @@ bool CDataFileWriter::Open(class IStorage *pStorage, const char *pFilename)
 
 int CDataFileWriter::AddItem(int Type, int ID, int Size, const void *pData)
 {
-	if(!m_File)
+	if(!m_pStream)
 		return 0;
 
 	dbg_assert(Type >= 0 && Type < 0xFFFF, "incorrect type");
-	dbg_assert(m_NumItems < 1024, "too many items");
+	dbg_assert(m_NumItems < MAX_ITEMS, "too many items");
 	dbg_assert(Size % sizeof(int) == 0, "incorrect boundary");
 
 	m_pItems[m_NumItems].m_Type = Type;
@@ -602,24 +719,42 @@ int CDataFileWriter::AddItem(int Type, int ID, int Size, const void *pData)
 
 int CDataFileWriter::AddData(int Size, const void *pData)
 {
-	if(!m_File)
+	if(!m_pStream)
 		return 0;
 
-	dbg_assert(m_NumDatas < 1024, "too much data");
+	dbg_assert(m_NumDatas < MAX_DATAS, "too much data");
 
 	CDataInfo *pInfo = &m_pDatas[m_NumDatas];
-	unsigned long s = compressBound(Size);
-	void *pCompData = mem_alloc(s); // temporary buffer that we use during compression
+	void *pCompData = 0;
+	int CompressedSize = 0;
 
-	int Result = compress((Bytef *) pCompData, &s, (Bytef *) pData, Size);
-	if(Result != Z_OK)
+	if(m_Version == 5)
 	{
-		dbg_msg("datafile", "compression error %d", Result);
-		dbg_assert(0, "zlib error");
+		size_t Bound = ZSTD_compressBound(Size);
+		pCompData = mem_alloc(Bound);
+		size_t Result = ZSTD_compress(pCompData, Bound, pData, Size, m_CompressLevel);
+		if(ZSTD_isError(Result))
+		{
+			dbg_msg("datafile", "compression error %s", ZSTD_getErrorName(Result));
+			dbg_assert(0, "zstd error");
+		}
+		CompressedSize = (int) Result;
+	}
+	else
+	{
+		unsigned long Bound = compressBound(Size);
+		pCompData = mem_alloc(Bound); // temporary buffer that we use during compression
+		int Result = compress((Bytef *) pCompData, &Bound, (Bytef *) pData, Size);
+		if(Result != Z_OK)
+		{
+			dbg_msg("datafile", "compression error %d", Result);
+			dbg_assert(0, "zlib error");
+		}
+		CompressedSize = (int) Bound;
 	}
 
 	pInfo->m_UncompressedSize = Size;
-	pInfo->m_CompressedSize = (int) s;
+	pInfo->m_CompressedSize = CompressedSize;
 	pInfo->m_pCompressedData = mem_alloc(pInfo->m_CompressedSize);
 	mem_copy(pInfo->m_pCompressedData, pCompData, pInfo->m_CompressedSize);
 	mem_free(pCompData);
@@ -646,7 +781,7 @@ int CDataFileWriter::AddDataSwapped(int Size, const void *pData)
 
 int CDataFileWriter::Finish()
 {
-	if(!m_File)
+	if(!m_pStream)
 		return 0;
 
 	int ItemSize = 0;
@@ -669,11 +804,57 @@ int CDataFileWriter::Finish()
 	for(int i = 0; i < m_NumDatas; i++)
 		DataSize += m_pDatas[i].m_CompressedSize;
 
+	// v5 stores the whole item section as a single compressed block
+	int CompressedItemSize = 0;
+	void *pCompressedItems = 0;
+	if(m_Version >= 5)
+	{
+		char *pItemChunk = (char *) mem_alloc(ItemSize ? ItemSize : 1);
+		int Offset = 0;
+		for(int i = 0; i < 0xffff; i++)
+		{
+			if(!m_pItemTypes[i].m_Num)
+				continue;
+			int k = m_pItemTypes[i].m_First;
+			while(k != -1)
+			{
+				CDatafileItem Item;
+				Item.m_TypeAndID = (i << 16) | m_pItems[k].m_ID;
+				Item.m_Size = m_pItems[k].m_Size;
+#if defined(CONF_ARCH_ENDIAN_BIG)
+				swap_endian(&Item, sizeof(int), sizeof(Item) / sizeof(int));
+#endif
+				mem_copy(pItemChunk + Offset, &Item, sizeof(Item));
+				Offset += sizeof(Item);
+				mem_copy(pItemChunk + Offset, m_pItems[k].m_pData, m_pItems[k].m_Size);
+#if defined(CONF_ARCH_ENDIAN_BIG)
+				swap_endian(pItemChunk + Offset, sizeof(int), m_pItems[k].m_Size / sizeof(int));
+#endif
+				Offset += m_pItems[k].m_Size;
+
+				// next
+				k = m_pItems[k].m_Next;
+			}
+		}
+
+		size_t Bound = ZSTD_compressBound(ItemSize);
+		pCompressedItems = mem_alloc(Bound);
+		size_t Result = ZSTD_compress(pCompressedItems, Bound, pItemChunk, ItemSize, m_CompressLevel);
+		if(ZSTD_isError(Result))
+		{
+			dbg_msg("datafile", "item compression error %s", ZSTD_getErrorName(Result));
+			dbg_assert(0, "zstd error");
+		}
+		CompressedItemSize = (int) Result;
+		mem_free(pItemChunk);
+	}
+
 	// calculate the complete size
 	TypesSize = m_NumItemTypes * sizeof(CDatafileItemType);
 	HeaderSize = sizeof(CDatafileHeader);
 	OffsetSize = (m_NumItems + m_NumDatas + m_NumDatas) * sizeof(int); // ItemOffsets, DataOffsets, DataUncompressedSizes
-	FileSize = HeaderSize + TypesSize + OffsetSize + ItemSize + DataSize;
+	const int StoredItemSize = m_Version >= 5 ? CompressedItemSize + (int) sizeof(int) : ItemSize;
+	FileSize = HeaderSize + TypesSize + OffsetSize + StoredItemSize + DataSize;
 	SwapSize = FileSize - DataSize;
 
 	(void) SwapSize;
@@ -687,7 +868,7 @@ int CDataFileWriter::Finish()
 		Header.m_aID[1] = 'A';
 		Header.m_aID[2] = 'T';
 		Header.m_aID[3] = 'A';
-		Header.m_Version = 4;
+		Header.m_Version = m_Version;
 		Header.m_Size = FileSize - 16;
 		Header.m_Swaplen = SwapSize - 16;
 		Header.m_NumItemTypes = m_NumItemTypes;
@@ -702,7 +883,7 @@ int CDataFileWriter::Finish()
 #if defined(CONF_ARCH_ENDIAN_BIG)
 		swap_endian(&Header, sizeof(int), sizeof(Header) / sizeof(int));
 #endif
-		io_write(m_File, &Header, sizeof(Header));
+		m_pStream->write((const unsigned char *) &Header, sizeof(Header));
 	}
 
 	// write types
@@ -720,7 +901,7 @@ int CDataFileWriter::Finish()
 #if defined(CONF_ARCH_ENDIAN_BIG)
 			swap_endian(&Info, sizeof(int), sizeof(CDatafileItemType) / sizeof(int));
 #endif
-			io_write(m_File, &Info, sizeof(Info));
+			m_pStream->write((const unsigned char *) &Info, sizeof(Info));
 			Count += m_pItemTypes[i].m_Num;
 		}
 	}
@@ -740,7 +921,7 @@ int CDataFileWriter::Finish()
 #if defined(CONF_ARCH_ENDIAN_BIG)
 				swap_endian(&Temp, sizeof(int), sizeof(Temp) / sizeof(int));
 #endif
-				io_write(m_File, &Temp, sizeof(Temp));
+				m_pStream->write((const unsigned char *) &Temp, sizeof(Temp));
 				Offset += m_pItems[k].m_Size + sizeof(CDatafileItem);
 
 				// next
@@ -758,7 +939,7 @@ int CDataFileWriter::Finish()
 #if defined(CONF_ARCH_ENDIAN_BIG)
 		swap_endian(&Temp, sizeof(int), sizeof(Temp) / sizeof(int));
 #endif
-		io_write(m_File, &Temp, sizeof(Temp));
+		m_pStream->write((const unsigned char *) &Temp, sizeof(Temp));
 		Offset += m_pDatas[i].m_CompressedSize;
 	}
 
@@ -771,33 +952,48 @@ int CDataFileWriter::Finish()
 #if defined(CONF_ARCH_ENDIAN_BIG)
 		swap_endian(&UncompressedSize, sizeof(int), sizeof(UncompressedSize) / sizeof(int));
 #endif
-		io_write(m_File, &UncompressedSize, sizeof(UncompressedSize));
+		m_pStream->write((const unsigned char *) &UncompressedSize, sizeof(UncompressedSize));
 	}
 
 	// write m_pItems
-	for(int i = 0; i < 0xffff; i++)
+	if(m_Version >= 5)
 	{
-		if(m_pItemTypes[i].m_Num)
+		// one zstd block: the compressed size, then the item section
+		int Size = CompressedItemSize;
+#if defined(CONF_ARCH_ENDIAN_BIG)
+		swap_endian(&Size, sizeof(int), sizeof(Size) / sizeof(int));
+#endif
+		m_pStream->write((const unsigned char *) &Size, sizeof(Size));
+		m_pStream->write((const unsigned char *) pCompressedItems, CompressedItemSize);
+		mem_free(pCompressedItems);
+		pCompressedItems = 0;
+	}
+	else
+	{
+		for(int i = 0; i < 0xffff; i++)
 		{
-			// write all m_pItems in of this type
-			int k = m_pItemTypes[i].m_First;
-			while(k != -1)
+			if(m_pItemTypes[i].m_Num)
 			{
-				CDatafileItem Item;
-				Item.m_TypeAndID = (i << 16) | m_pItems[k].m_ID;
-				Item.m_Size = m_pItems[k].m_Size;
-				if(DEBUG)
-					dbg_msg("datafile", "writing item type=%x idx=%d id=%d size=%d", i, k, m_pItems[k].m_ID, m_pItems[k].m_Size);
+				// write all m_pItems in of this type
+				int k = m_pItemTypes[i].m_First;
+				while(k != -1)
+				{
+					CDatafileItem Item;
+					Item.m_TypeAndID = (i << 16) | m_pItems[k].m_ID;
+					Item.m_Size = m_pItems[k].m_Size;
+					if(DEBUG)
+						dbg_msg("datafile", "writing item type=%x idx=%d id=%d size=%d", i, k, m_pItems[k].m_ID, m_pItems[k].m_Size);
 
 #if defined(CONF_ARCH_ENDIAN_BIG)
-				swap_endian(&Item, sizeof(int), sizeof(Item) / sizeof(int));
-				swap_endian(m_pItems[k].m_pData, sizeof(int), m_pItems[k].m_Size / sizeof(int));
+					swap_endian(&Item, sizeof(int), sizeof(Item) / sizeof(int));
+					swap_endian(m_pItems[k].m_pData, sizeof(int), m_pItems[k].m_Size / sizeof(int));
 #endif
-				io_write(m_File, &Item, sizeof(Item));
-				io_write(m_File, m_pItems[k].m_pData, m_pItems[k].m_Size);
+					m_pStream->write((const unsigned char *) &Item, sizeof(Item));
+					m_pStream->write((const unsigned char *) m_pItems[k].m_pData, m_pItems[k].m_Size);
 
-				// next
-				k = m_pItems[k].m_Next;
+					// next
+					k = m_pItems[k].m_Next;
+				}
 			}
 		}
 	}
@@ -807,7 +1003,7 @@ int CDataFileWriter::Finish()
 	{
 		if(DEBUG)
 			dbg_msg("datafile", "writing data id=%d size=%d", i, m_pDatas[i].m_CompressedSize);
-		io_write(m_File, m_pDatas[i].m_pCompressedData, m_pDatas[i].m_CompressedSize);
+		m_pStream->write((const unsigned char *) m_pDatas[i].m_pCompressedData, m_pDatas[i].m_CompressedSize);
 	}
 
 	// free data
@@ -816,8 +1012,10 @@ int CDataFileWriter::Finish()
 	for(int i = 0; i < m_NumDatas; ++i)
 		mem_free(m_pDatas[i].m_pCompressedData);
 
-	io_close(m_File);
-	m_File = 0;
+	if(m_OwnsStream)
+		delete m_pStream;
+	m_pStream = nullptr;
+	m_OwnsStream = false;
 
 	if(DEBUG)
 		dbg_msg("datafile", "done");

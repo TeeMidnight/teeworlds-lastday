@@ -620,25 +620,8 @@ static const char *GetMapByMapType(EMapType MapType)
 	return "maps";
 }
 
-bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
+bool CMapCreator::BuildMap(CDataFileWriter &DataFile)
 {
-	CDataFileWriter DataFile;
-
-	char aPath[IO_MAX_PATH_LENGTH];
-	str_format(aPath, sizeof(aPath), "%s/%s.map", GetMapByMapType(MapType), pMap);
-
-	// Write beside the target and move it into place only once the whole file
-	// exists, so a failed save cannot leave a half-written map behind a good
-	// one. The temporary shares the directory, so the rename stays atomic.
-	char aTmpPath[IO_MAX_PATH_LENGTH];
-	str_format(aTmpPath, sizeof(aTmpPath), "%s.tmp", aPath);
-
-	if(!DataFile.Open(Storage(), aTmpPath))
-	{
-		dbg_msg("mapcreater", "failed to open file '%s'...", aTmpPath);
-		return false;
-	}
-
 	// save version
 	{
 		CMapItemVersion Item;
@@ -859,6 +842,31 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 
 	if(!DataFile.Finish())
 	{
+		dbg_msg("mapcreater", "failed to write the map data");
+		return false;
+	}
+	return true;
+}
+
+bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
+{
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), "%s/%s.map", GetMapByMapType(MapType), pMap);
+
+	// Write beside the target and move it into place only once the whole file
+	// exists, so a failed save cannot leave a half-written map behind a good
+	// one. The temporary shares the directory, so the rename stays atomic.
+	char aTmpPath[IO_MAX_PATH_LENGTH];
+	str_format(aTmpPath, sizeof(aTmpPath), "%s.tmp", aPath);
+
+	CDataFileWriter DataFile;
+	if(!DataFile.Open(Storage(), aTmpPath))
+	{
+		dbg_msg("mapcreater", "failed to open file '%s'...", aTmpPath);
+		return false;
+	}
+	if(!BuildMap(DataFile))
+	{
 		dbg_msg("mapcreater", "failed to write '%s'", aTmpPath);
 		Storage()->RemoveFile(aTmpPath, IStorage::TYPE_SAVE);
 		return false;
@@ -872,4 +880,15 @@ bool CMapCreator::SaveMap(EMapType MapType, const char *pMap)
 	}
 
 	return true;
+}
+
+bool CMapCreator::SaveMapToMemory(array<char> &Out)
+{
+	Out.clear();
+	memory_stream<char> Stream(&Out);
+	CDataFileWriter DataFile;
+	// the writer borrows the stream: it lives on this stack
+	if(!DataFile.Open(&Stream, 4, false))
+		return false;
+	return BuildMap(DataFile);
 }

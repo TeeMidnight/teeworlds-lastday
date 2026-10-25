@@ -31,8 +31,11 @@
 // non euclidean floor generation
 // ---------------------------------------------------------------------------
 
-bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed)
+bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGeneratedMap *pOut)
 {
+	if(!pOut)
+		return false;
+
 	const char *pFloorName = pInstruction->m_aFloorName;
 	char aBasePath[IO_MAX_PATH_LENGTH];
 	str_format(aBasePath, sizeof(aBasePath), "maps/%s.map", pInstruction->m_aBaseMap);
@@ -674,30 +677,18 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed)
 	}
 
 	// ---------------------------------------------------------------
-	// write the generated map: "<base>_<seed>.map"
+	// build the generated map in memory: the pack stores it, and a cache file
+	// is only written when the caller asks for one
 	// ---------------------------------------------------------------
-	EnsureGeneratedMapsDir(Storage());
-
-	char aOutName[64];
-	str_format(aOutName, sizeof(aOutName), "%s_%d", pFloorName, Seed);
-
-	// write the metadata sidecar first: a map must never exist without it,
-	// because the map no longer carries the json itself
-	if(!SaveGeneratedWorldMeta(Storage(), aOutName,
-		lEntranceJson.base_ptr(), lEntranceJson.size(),
+	if(!Creator.SaveMapToMemory(pOut->m_Map))
+	{
+		dbg_msg("mapgen", "failed to build the generated map '%s_%d'", pFloorName, Seed);
+		return false;
+	}
+	BuildGeneratedWorldMeta(lEntranceJson.base_ptr(), lEntranceJson.size(),
 		lResourceJson.base_ptr(), lResourceJson.size(),
-		nullptr, 0))
-	{
-		dbg_msg("mapgen", "failed to save the world metadata for '%s'", aOutName);
-		return false;
-	}
+		nullptr, 0, pOut->m_Meta);
 
-	if(!Creator.SaveMap(EMapType::MAPTYPE_NORMAL, aOutName))
-	{
-		dbg_msg("mapgen", "failed to save the generated map '%s'", aOutName);
-		return false;
-	}
-
-	dbg_msg("mapgen", "generated map '" GENERATED_MAPS_DIR "/%s.map' from base '%s'", aOutName, pInstruction->m_aBaseMap);
+	dbg_msg("mapgen", "generated map '%s_%d' from base '%s'", pFloorName, Seed, pInstruction->m_aBaseMap);
 	return true;
 }

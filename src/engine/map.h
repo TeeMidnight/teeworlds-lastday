@@ -27,6 +27,10 @@ class IEngineMap : public IMap
 	MACRO_INTERFACE("enginemap", 0)
 public:
 	virtual bool Load(const char *pMapName, class IStorage *pStorage = 0) = 0;
+	// Load a map from bytes that are already in memory: a map restored from a
+	// pack, or one received over the network. The bytes are copied, so the
+	// caller may free them as soon as this returns.
+	virtual bool LoadFromMemory(const char *pMapName, const void *pData, int Size) = 0;
 	virtual bool IsLoaded() = 0;
 	virtual void Unload() = 0;
 	virtual SHA256_DIGEST Sha256() = 0;

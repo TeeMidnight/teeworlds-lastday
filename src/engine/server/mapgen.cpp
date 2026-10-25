@@ -13,6 +13,7 @@
 #include <engine/map/generatedmaps.h>
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
+#include <engine/shared/mappack.h>
 #include <engine/storage.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
@@ -30,26 +31,18 @@ void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size)
 	str_format(pBuf, Size, GENERATED_MAPS_DIR "/%s.json", pMapName);
 }
 
-bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
-	const char *pEntrances, int EntrancesSize,
+void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
-	const char *pWorld, int WorldSize)
+	const char *pWorld, int WorldSize,
+	array<char> &Out)
 {
-	if(!pStorage || !pMapName || !pMapName[0])
-		return false;
+	Out.clear();
+	memory_stream<char> Stream(&Out);
 
-	char aPath[IO_MAX_PATH_LENGTH];
-	GeneratedWorldMetaPath(pMapName, aPath, sizeof(aPath));
-	IOHANDLE File = pStorage->OpenFile(aPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
-	if(!File)
-		return false;
-
-	bool Ok = true;
 	auto WritePart = [&](const char *pData, int Size) {
 		if(Size <= 0)
 			return;
-		if(io_write(File, pData, (unsigned) Size) != (unsigned) Size)
-			Ok = false;
+		Stream.write((const unsigned char *) pData, (unsigned) Size);
 	};
 	// the blobs are null terminated (and may carry more than one trailing
 	// terminator); write only the JSON itself
@@ -79,6 +72,25 @@ bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
 		WritePart(pWorld, WorldLen);
 	}
 	WritePart("}", 1);
+}
+
+bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
+	const char *pEntrances, int EntrancesSize,
+	const char *pResources, int ResourcesSize,
+	const char *pWorld, int WorldSize)
+{
+	if(!pStorage || !pMapName || !pMapName[0])
+		return false;
+
+	array<char> lMeta;
+	BuildGeneratedWorldMeta(pEntrances, EntrancesSize, pResources, ResourcesSize, pWorld, WorldSize, lMeta);
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	GeneratedWorldMetaPath(pMapName, aPath, sizeof(aPath));
+	IOHANDLE File = pStorage->OpenFile(aPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
+	if(!File)
+		return false;
+	const bool Ok = io_write(File, lMeta.base_ptr(), (unsigned) lMeta.size()) == (unsigned) lMeta.size();
 	io_close(File);
 	return Ok;
 }
@@ -222,6 +234,8 @@ CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 	m_GenStarted = false;
 	m_GenShutdown = false;
 	m_GenWorkerActive = false;
+	m_UseMapPacks = true;
+	m_DeleteGeneratedFiles = false;
 
 	// load the floor instructions from the "maps/worlds" directory; each
 	// "<floorname>.json" file holds the config of one generated floor
@@ -482,6 +496,357 @@ int CMapGen::RollTrainSeed(int Index)
 	return 1 + (int) ((unsigned) random_int() % (unsigned) Chunks);
 }
 
+// ---------------------------------------------------------------------------
+// map packs
+//
+// One append-only pack per floor. The pack is the durable copy of every
+// instance the generator ever produced for that floor: generation appends, and
+// a lookup that misses on disk restores the instance from the pack instead of
+// generating it again. The reader caches the pack index only, so a lookup never
+// decompresses a map; GetMap decompresses exactly the one that is extracted.
+// ---------------------------------------------------------------------------
+struct CMapGen::SFloorPack
+{
+	char m_aFloor[64];
+	// the file may not exist yet (a fresh server has no pack until the first
+	// instance is generated), so an open failure is not cached as fatal
+	bool m_Tried;
+	bool m_Open;
+	CMapPackReader m_Reader;
+};
+
+void CMapGen::PackPath(const char *pFloorName, char *pBuf, int Size) const
+{
+	str_format(pBuf, Size, MAPPACK_DIR "/%s.mappack", pFloorName);
+}
+
+CMapGen::SFloorPack *CMapGen::PackFor(const char *pFloorName)
+{
+	if(!m_UseMapPacks || !pFloorName || !pFloorName[0])
+		return nullptr;
+
+	for(int i = 0; i < m_lPacks.size(); i++)
+		if(str_comp(m_lPacks[i]->m_aFloor, pFloorName) == 0)
+			return m_lPacks[i];
+
+	// the caller holds m_GenMutex, so a pack is never opened twice
+	SFloorPack *pPack = new SFloorPack();
+	str_copy(pPack->m_aFloor, pFloorName, sizeof(pPack->m_aFloor));
+	pPack->m_Tried = false;
+	pPack->m_Open = false;
+	m_lPacks.add(pPack);
+	return pPack;
+}
+
+long long CMapGen::InstanceKey(const char *pFloorName, int Seed)
+{
+	return ((long long) str_quickhash(pFloorName) << 32) | (unsigned) Seed;
+}
+
+void CMapGen::RememberInstance(const char *pFloorName, int Seed)
+{
+	if(!m_UseMapPacks || !pFloorName || !pFloorName[0] || Seed <= 0)
+		return;
+	scope_lock Lock(&m_GenLock);
+	const long long Key = InstanceKey(pFloorName, Seed);
+	if(!m_lKnownInstances.get(Key))
+		m_lKnownInstances.set(Key, true);
+}
+
+void CMapGen::RememberPackInstances(SFloorPack *pPack)
+{
+	if(!pPack || !pPack->m_Open)
+		return;
+	scope_lock Lock(&m_GenLock);
+	for(int i = 0; i < pPack->m_Reader.NumMaps(); i++)
+	{
+		const SMapPackEntry *pEntry = pPack->m_Reader.Entry(i);
+		if(!pEntry || pEntry->m_Seed <= 0)
+			continue;
+		const long long Key = InstanceKey(pPack->m_aFloor, pEntry->m_Seed);
+		if(!m_lKnownInstances.get(Key))
+			m_lKnownInstances.set(Key, true);
+	}
+}
+
+bool CMapGen::KnownInstance(const char *pFloorName, int Seed) const
+{
+	return m_lKnownInstances.get(InstanceKey(pFloorName, Seed)) != nullptr;
+}
+
+bool CMapGen::InstanceAvailable(const char *pFloorName, int Seed) const
+{
+	if(GeneratedMapExists(pFloorName, Seed))
+		return true;
+	return KnownInstance(pFloorName, Seed);
+}
+
+bool CMapGen::EnsurePackOpen(SFloorPack *pPack)
+{
+	if(!pPack)
+		return false;
+	if(pPack->m_Open)
+		return true;
+	if(pPack->m_Tried)
+		return false; // the pack does not exist yet
+
+	pPack->m_Tried = true;
+	char aPath[IO_MAX_PATH_LENGTH];
+	PackPath(pPack->m_aFloor, aPath, sizeof(aPath));
+	pPack->m_Open = pPack->m_Reader.Open(m_pStorage, aPath, IStorage::TYPE_SAVE);
+	if(!pPack->m_Open)
+		return false;
+	RememberPackInstances(pPack);
+	return true;
+}
+
+bool CMapGen::PackContains(const char *pFloorName, int Seed)
+{
+	SFloorPack *pPack = PackFor(pFloorName);
+	if(!pPack || !EnsurePackOpen(pPack))
+		return false;
+
+	char aMapName[64];
+	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
+	return pPack->m_Reader.FindMap(aMapName) >= 0;
+}
+
+bool CMapGen::ReadFromPack(const char *pFloorName, int Seed, SMapInstance *pOut)
+{
+	if(!m_UseMapPacks || !pOut || !PackContains(pFloorName, Seed))
+		return false;
+
+	SFloorPack *pPack = PackFor(pFloorName);
+	if(!pPack || !pPack->m_Open)
+		return false;
+
+	char aMapName[64];
+	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
+	const int Index = pPack->m_Reader.FindMap(aMapName);
+	const void *pMap = nullptr, *pJson = nullptr;
+	int MapSize = 0, JsonSize = 0;
+	if(Index < 0 || !pPack->m_Reader.GetMap(Index, &pMap, &MapSize, &pJson, &JsonSize) || !pMap || MapSize <= 0)
+		return false;
+
+	pOut->m_pMap = mem_alloc(MapSize);
+	mem_copy(pOut->m_pMap, pMap, MapSize);
+	pOut->m_MapSize = MapSize;
+	if(JsonSize > 0 && pJson)
+	{
+		pOut->m_pJson = mem_alloc(JsonSize);
+		mem_copy(pOut->m_pJson, pJson, JsonSize);
+		pOut->m_JsonSize = JsonSize;
+	}
+	RememberInstance(pFloorName, Seed);
+	return true;
+}
+
+bool CMapGen::ExtractFromPack(const char *pFloorName, int Seed)
+{
+	if(!PackContains(pFloorName, Seed))
+		return false;
+
+	SFloorPack *pPack = PackFor(pFloorName);
+	if(!pPack || !pPack->m_Open)
+		return false;
+
+	char aMapName[64];
+	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
+	const int Index = pPack->m_Reader.FindMap(aMapName);
+	if(Index < 0)
+		return false;
+
+	EnsureGeneratedMapsDir(m_pStorage);
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", aMapName);
+	const bool Extracted = pPack->m_Reader.ExtractMap(Index, m_pStorage, aPath, true);
+	if(Extracted)
+		RememberInstance(pFloorName, Seed);
+	dbg_msg("mapgen", "map pack: %s %s", Extracted ? "restored" : "FAILED to restore", aMapName);
+	return Extracted;
+}
+
+void CMapGen::AppendInstanceToPack(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize)
+{
+	if(!m_UseMapPacks || !m_pStorage || !pFloorName || !pFloorName[0] || !pMap || MapSize <= 0)
+		return;
+
+	char aMapName[64];
+	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
+
+	EnsureMappackDir(m_pStorage);
+	char aPackPath[IO_MAX_PATH_LENGTH];
+	PackPath(pFloorName, aPackPath, sizeof(aPackPath));
+	CMapPackWriter Writer;
+	bool Added = false;
+	if(Writer.Open(m_pStorage, aPackPath))
+		Added = Writer.AddMap(aMapName, Seed, pMap, MapSize, pJson, JsonSize);
+	else
+		dbg_msg("mapgen", "map pack: cannot open %s", aPackPath);
+
+	// the cached reader may predate this append (or the pack's creation)
+	SFloorPack *pPack = PackFor(pFloorName);
+	if(pPack)
+	{
+		pPack->m_Reader.Close();
+		pPack->m_Open = false;
+		pPack->m_Tried = false;
+	}
+
+	if(Added)
+		RememberInstance(pFloorName, Seed);
+	dbg_msg("mapgen", "map pack: %s %s into %s", Added ? "packed" : "FAILED to pack", aMapName, aPackPath);
+}
+
+void CMapGen::AppendToPack(const char *pFloorName, int Seed)
+{
+	// migration path: the instance exists as files (an older cache, or a tool
+	// that asked for them) and is added to the pack from there
+	if(!m_UseMapPacks || !m_pStorage || !pFloorName || !pFloorName[0])
+		return;
+
+	char aMapName[64];
+	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", aMapName);
+	void *pMap = nullptr;
+	unsigned MapSize = 0;
+	if(!m_pStorage->ReadFile(aPath, IStorage::TYPE_SAVE, &pMap, &MapSize) || !pMap)
+	{
+		dbg_msg("mapgen", "map pack: cannot read %s", aPath);
+		return;
+	}
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.json", aMapName);
+	void *pJson = nullptr;
+	unsigned JsonSize = 0;
+	if(!m_pStorage->ReadFile(aPath, IStorage::TYPE_SAVE, &pJson, &JsonSize))
+		JsonSize = 0;
+
+	AppendInstanceToPack(pFloorName, Seed, pMap, (int) MapSize, pJson, (int) JsonSize);
+
+	mem_free(pMap);
+	if(pJson)
+		mem_free(pJson);
+}
+
+void CMapGen::WriteInstanceFiles(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize)
+{
+	if(!m_pStorage || !pMap || MapSize <= 0)
+		return;
+
+	EnsureGeneratedMapsDir(m_pStorage);
+	char aMapName[64];
+	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", aMapName);
+	IOHANDLE File = m_pStorage->OpenFile(aPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
+	if(!File)
+	{
+		dbg_msg("mapgen", "cannot write %s", aPath);
+		return;
+	}
+	const bool MapOk = io_write(File, pMap, (unsigned) MapSize) == (unsigned) MapSize;
+	io_close(File);
+	if(!MapOk)
+		dbg_msg("mapgen", "short write of %s", aPath);
+
+	if(!pJson || JsonSize <= 0)
+		return;
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.json", aMapName);
+	File = m_pStorage->OpenFile(aPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
+	if(!File)
+	{
+		dbg_msg("mapgen", "cannot write %s", aPath);
+		return;
+	}
+	io_write(File, pJson, (unsigned) JsonSize);
+	io_close(File);
+}
+
+void CMapGen::FreeInstance(SMapInstance *pInstance)
+{
+	if(!pInstance)
+		return;
+	if(pInstance->m_pMap)
+		mem_free(pInstance->m_pMap);
+	if(pInstance->m_pJson)
+		mem_free(pInstance->m_pJson);
+	mem_zero(pInstance, sizeof(*pInstance));
+}
+
+bool CMapGen::AcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut)
+{
+	if(!pOut)
+		return false;
+	mem_zero(pOut, sizeof(*pOut));
+	if(!pFloorName || !pFloorName[0])
+		return false;
+
+	char aMapName[64];
+	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
+
+	scope_lock Lock(&m_GenMutex);
+
+	// the pack is the source of truth: take the bytes straight out of it
+	if(ReadFromPack(pFloorName, Seed, pOut))
+		return true;
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	const bool Existed = GeneratedMapExists(pFloorName, Seed);
+	if(!Existed)
+	{
+		if(!GenerateNow(pFloorName, Seed))
+			return false;
+		// a server drops the generator's staging file once it is packed, so
+		// consult the pack again before falling back to the file
+		// the instance is packed now: take it from there
+		if(ReadFromPack(pFloorName, Seed, pOut))
+			return true;
+	}
+
+	// read the bytes the generator (or an older cache) produced
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", aMapName);
+	void *pMap = nullptr;
+	unsigned MapSize = 0;
+	if(!m_pStorage->ReadFile(aPath, IStorage::TYPE_SAVE, &pMap, &MapSize) || !pMap || MapSize == 0)
+	{
+		if(pMap)
+			mem_free(pMap);
+		dbg_msg("mapgen", "cannot read the instance %s", aMapName);
+		return false;
+	}
+
+	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.json", aMapName);
+	void *pJson = nullptr;
+	unsigned JsonSize = 0;
+	if(!m_pStorage->ReadFile(aPath, IStorage::TYPE_SAVE, &pJson, &JsonSize))
+		JsonSize = 0;
+
+	if(Existed && m_UseMapPacks && !PackContains(pFloorName, Seed))
+	{
+		// a cache from before packs existed: migrate it once
+		AppendToPack(pFloorName, Seed);
+	}
+
+	pOut->m_pMap = pMap;
+	pOut->m_MapSize = (int) MapSize;
+	pOut->m_pJson = pJson;
+	pOut->m_JsonSize = (int) JsonSize;
+	return true;
+}
+
+void CMapGen::ClosePacks()
+{
+	for(int i = 0; i < m_lPacks.size(); i++)
+	{
+		m_lPacks[i]->m_Reader.Close();
+		delete m_lPacks[i];
+	}
+	m_lPacks.clear();
+}
+
 bool CMapGen::GeneratedMapExists(const char *pFloorName, int Seed) const
 {
 	if(!m_pStorage || !pFloorName || !pFloorName[0])
@@ -505,8 +870,9 @@ void CMapGen::PromoteReadyLocked(int Index)
 		return;
 
 	// The worker renames a completed map into place, so the file appearing
-	// before the worker updates the state is a valid readiness signal.
-	if(!GeneratedMapExists(m_lTrainFloors[Index]->m_aFloorName, Chunk.m_PendingSeed))
+	// before the worker updates the state is a valid readiness signal. A pack
+	// backed server keeps no file, so the pack index counts as well.
+	if(!InstanceAvailable(m_lTrainFloors[Index]->m_aFloorName, Chunk.m_PendingSeed))
 		return;
 
 	Chunk.m_ReadySeed = Chunk.m_PendingSeed;
@@ -523,9 +889,9 @@ void CMapGen::QueueChunkLocked(int Index, int Seed)
 		return;
 
 	const char *pFloorName = m_lTrainFloors[Index]->m_aFloorName;
-	if(GeneratedMapExists(pFloorName, Seed))
+	if(InstanceAvailable(pFloorName, Seed))
 	{
-		// the on-disk cache from an earlier run is already a ready chunk
+		// an earlier run (its file or its pack) already has this chunk
 		Chunk.m_ReadySeed = Seed;
 		QueueRingNeighboursLocked(Index, Seed);
 		return;
@@ -556,7 +922,7 @@ void CMapGen::QueuePrefetchLocked(const char *pFloorName, int Seed)
 {
 	if(!pFloorName || !pFloorName[0] || Seed <= 0)
 		return;
-	if(GeneratedMapExists(pFloorName, Seed))
+	if(InstanceAvailable(pFloorName, Seed))
 		return;
 
 	// already waiting, or being generated right now
@@ -621,7 +987,7 @@ bool CMapGen::RingNeighboursReadyLocked(int Index, int Seed)
 		const int Neighbour = RingNeighbourSeed(Seed, Direction, Ring.m_Size);
 		if(Neighbour == Seed)
 			continue;
-		if(GeneratedMapExists(pFloor->m_aFloorName, Neighbour))
+		if(InstanceAvailable(pFloor->m_aFloorName, Neighbour))
 			continue;
 		QueuePrefetchLocked(pFloor->m_aFloorName, Neighbour);
 		Ready = false;
@@ -687,7 +1053,18 @@ int CMapGen::GenWorker(void *pUser)
 		if(!pJob)
 			break;
 
+		// Check the pack (and the disk cache) once more before spending a
+		// generation: while this job waited in the queue a player may have
+		// loaded the same instance, and generating it again would append a
+		// duplicate record to the pack.
 		bool Generated;
+		{
+			scope_lock Lock(&pSelf->m_GenLock);
+			Generated = pSelf->InstanceAvailable(pJob->m_aFloorName, pJob->m_Seed);
+		}
+		if(Generated)
+			dbg_msg("mapgen", "map pack: %s_%d already available, skipping generation", pJob->m_aFloorName, pJob->m_Seed);
+		else
 		{
 			// Only one generation runs at a time: the generator caches ring
 			// geometry inside the instruction and writes one temporary file.
@@ -790,6 +1167,19 @@ void CMapGen::StartPreGeneration(IEngine *pEngine)
 		m_lTrainChunks[i].m_PendingSeed = 0;
 	}
 
+	// Seed the known-instance table from the pack indexes: a restart must not
+	// regenerate instances that are already packed, and the per tick train code
+	// must not wait on a generation to find that out.
+	if(m_UseMapPacks)
+	{
+		scope_lock Lock(&m_GenMutex);
+		for(int i = 0; i < m_lTrainFloors.size(); i++)
+		{
+			SFloorPack *pPack = PackFor(m_lTrainFloors[i]->m_aFloorName);
+			EnsurePackOpen(pPack);
+		}
+	}
+
 	scope_lock Lock(&m_GenLock);
 	for(int i = 0; i < m_lTrainFloors.size(); i++)
 		QueueChunkLocked(i, RollTrainSeed(i));
@@ -852,6 +1242,7 @@ bool CMapGen::TakeTrainChunk(const char *pFloorName, char *pOutMapName, int OutS
 CMapGen::~CMapGen()
 {
 	StopGeneration();
+	ClosePacks();
 	m_lInstructions.for_each(FreeInstruction, nullptr);
 }
 
@@ -874,18 +1265,39 @@ bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 	// the world kind selects the generation strategy. The hub is a hand
 	// authored static map which the server loads directly, so asking the
 	// generator for it is a configuration error rather than a failure.
+	// the instance is built entirely in memory: no staging file is involved
+	SGeneratedMap GeneratedMap;
+	bool Generated = false;
 	switch(pInstruction->m_Kind)
 	{
 		case WORLDKIND_HUB:
 			dbg_msg("mapgen", "the hub world '%s' is a static map and is not generated", pFloorName);
 			return false;
 		case WORLDKIND_EUCLID:
-			return GenerateEuclidean(pInstruction, Seed);
+			Generated = GenerateEuclidean(pInstruction, Seed, &GeneratedMap);
+			break;
 		case WORLDKIND_NONEUCLID:
-			return GenerateNoneuclid(pInstruction, Seed);
+			Generated = GenerateNoneuclid(pInstruction, Seed, &GeneratedMap);
+			break;
 	}
 
-	return false;
+	if(!Generated)
+		return false;
+
+	// every instance the generator produces joins its floor's pack, so the
+	// pack becomes the complete set of that floor's worlds
+	AppendInstanceToPack(pFloorName, Seed,
+		GeneratedMap.m_Map.base_ptr(), GeneratedMap.m_Map.size(),
+		GeneratedMap.m_Meta.base_ptr(), GeneratedMap.m_Meta.size());
+
+	// a cache file is only written when the caller wants one (tooling) or when
+	// there is no pack to read the instance back from
+	if(!m_DeleteGeneratedFiles || !m_UseMapPacks)
+		WriteInstanceFiles(pFloorName, Seed,
+			GeneratedMap.m_Map.base_ptr(), GeneratedMap.m_Map.size(),
+			GeneratedMap.m_Meta.base_ptr(), GeneratedMap.m_Meta.size());
+
+	return true;
 }
 
 bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
@@ -901,15 +1313,37 @@ bool CMapGen::EnsureNewMap(const char *pFloorName, int Seed)
 	if(!pFloorName || !pFloorName[0])
 		return false;
 
+	if(!m_UseMapPacks)
+	{
+		if(GeneratedMapExists(pFloorName, Seed))
+			return true;
+
+		// A background train job may be writing this very map. Take the
+		// generator lock so we wait for it, then check the disk again: the map
+		// file appears only after it is complete, so the worker's copy is
+		// reused instead of being generated a second time.
+		scope_lock Lock(&m_GenMutex);
+		if(GeneratedMapExists(pFloorName, Seed))
+			return true;
+		return GenerateNow(pFloorName, Seed);
+	}
+
+	// The pack lookup needs the cached reader, so the whole path takes the
+	// generator lock. A map load happens once per transition, not per tick.
+	scope_lock Lock(&m_GenMutex);
+
 	if(GeneratedMapExists(pFloorName, Seed))
+	{
+		// a map generated before its pack existed (or with packs disabled) is
+		// migrated once, on first use, so the pack converges on the whole floor
+		if(!PackContains(pFloorName, Seed))
+			AppendToPack(pFloorName, Seed);
+		return true;
+	}
+
+	// the pack is the durable copy: restore instead of generating again
+	if(ExtractFromPack(pFloorName, Seed) && GeneratedMapExists(pFloorName, Seed))
 		return true;
 
-	// A background train job may be writing this very map. Take the generator
-	// lock so we wait for it, then check the disk again: the map file appears
-	// only after it is complete, so the worker's copy is reused instead of
-	// being generated a second time.
-	scope_lock Lock(&m_GenMutex);
-	if(GeneratedMapExists(pFloorName, Seed))
-		return true;
 	return GenerateNow(pFloorName, Seed);
 }

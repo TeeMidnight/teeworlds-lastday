@@ -1554,6 +1554,11 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	bool IsGenerated = false;
 	// the base floor name of a generated "<base>_<seed>" map, "" otherwise
 	char aBaseMap[64] = "";
+	// a generated instance arrives in memory: the pack is the durable copy and
+	// no cache file is needed
+	CMapGen::SMapInstance Instance;
+	mem_zero(&Instance, sizeof(Instance));
+	bool HaveInstance = false;
 
 	// a requested map may be a generated "<base>_<seed>" map: split at the
 	// last underscore and parse the numeric seed
@@ -1571,17 +1576,15 @@ int CServer::LoadMap(CMapInfo *pInfo)
 			str_copy(aBaseMap, pInfo->m_aName, BaseLen + 1);
 			const int Seed = str_toint(pUnderscore + 1);
 
-			// the generated map file is <mod>/<version>/<name>.map
-			char aGenPath[IO_MAX_PATH_LENGTH];
-			str_format(aGenPath, sizeof(aGenPath), GENERATED_MAPS_DIR "/%s.map", pInfo->m_aName);
-			// Generate it only when the file is missing, and reuse a map the
-			// train worker is already building instead of generating it twice.
-			if(!m_pMapGen || !m_pMapGen->EnsureNewMap(aBaseMap, Seed))
+			// The instance comes from its floor's pack; a miss generates it and
+			// packs it. Either way the server never needs a cache file.
+			if(!m_pMapGen || !m_pMapGen->AcquireMap(aBaseMap, Seed, &Instance))
 			{
 				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "mapgen", "failed to generate the map");
 				return 0;
 			}
-			str_copy(aBuf, aGenPath, sizeof(aBuf));
+			HaveInstance = true;
+			str_format(aBuf, sizeof(aBuf), "pack:%s_%d", aBaseMap, Seed);
 			IsGenerated = true;
 		}
 	}
@@ -1612,7 +1615,15 @@ int CServer::LoadMap(CMapInfo *pInfo)
 		return 0;
 	}
 
-	if(!m_pMap->Load(aBuf))
+	if(HaveInstance)
+	{
+		if(!m_pMap->LoadFromMemory(pInfo->m_aName, Instance.m_pMap, Instance.m_MapSize))
+		{
+			CMapGen::FreeInstance(&Instance);
+			return 0;
+		}
+	}
+	else if(!m_pMap->Load(aBuf))
 		return 0;
 
 	// stop recording when we change map
@@ -1635,15 +1646,26 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	{
 		if(pInfo->m_pData)
 			mem_free(pInfo->m_pData);
-		unsigned Size = 0;
-		if(!Storage()->ReadFile(aBuf, IStorage::TYPE_ALL, (void **) &pInfo->m_pData, &Size) || !pInfo->m_pData || Size == 0)
+		if(HaveInstance)
 		{
-			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "failed to read the map for download");
-			pInfo->m_pData = 0;
-			pInfo->m_Size = 0;
-			return 0;
+			// hand the bytes over instead of reading them back from a file
+			pInfo->m_pData = (unsigned char *) Instance.m_pMap;
+			pInfo->m_Size = Instance.m_MapSize;
+			Instance.m_pMap = nullptr;
+			Instance.m_MapSize = 0;
 		}
-		pInfo->m_Size = (int) Size;
+		else
+		{
+			unsigned Size = 0;
+			if(!Storage()->ReadFile(aBuf, IStorage::TYPE_ALL, (void **) &pInfo->m_pData, &Size) || !pInfo->m_pData || Size == 0)
+			{
+				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "failed to read the map for download");
+				pInfo->m_pData = 0;
+				pInfo->m_Size = 0;
+				return 0;
+			}
+			pInfo->m_Size = (int) Size;
+		}
 	}
 
 	pInfo->m_Loaded = true;
@@ -1655,7 +1677,9 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	array<char> aMeta;
 	CJsonParser MetaParser;
 	json_value *pMeta = nullptr;
-	if(LoadGeneratedWorldMeta(Storage(), pInfo->m_aName, aMeta))
+	if(HaveInstance && Instance.m_JsonSize > 0)
+		pMeta = MetaParser.ParseString((const char *) Instance.m_pJson, "world meta");
+	else if(LoadGeneratedWorldMeta(Storage(), pInfo->m_aName, aMeta))
 		pMeta = MetaParser.ParseString(aMeta.base_ptr(), "world meta");
 	const bool HasMeta = pMeta && pMeta->type == json_object;
 
@@ -1734,6 +1758,8 @@ int CServer::LoadMap(CMapInfo *pInfo)
 		}
 	}
 
+	CMapGen::FreeInstance(&Instance);
+
 	GameServer()->RequestLoadWorld(pInfo->m_MapID);
 
 	return 1;
@@ -1753,6 +1779,11 @@ void CServer::InitInterfaces(IKernel *pKernel)
 	m_pMapChecker = pKernel->RequestInterface<IMapChecker>();
 	m_pStorage = pKernel->RequestInterface<IStorage>();
 	m_pMapGen = new CMapGen(m_pStorage, m_pConsole);
+	// generated instances are kept in one append-only pack per floor
+	m_pMapGen->SetUseMapPacks(Config()->m_SvMappack != 0);
+	// the server loads instances from the pack, so no cache file has to stay
+	// (without packs the files are the only copy)
+	m_pMapGen->SetDeleteGeneratedFiles(Config()->m_SvMappack != 0);
 	// Build one chunk per train destination in the engine's thread pool now,
 	// so the first player to board does not wait for a floor to be generated.
 	m_pMapGen->StartPreGeneration(pKernel->RequestInterface<IEngine>());

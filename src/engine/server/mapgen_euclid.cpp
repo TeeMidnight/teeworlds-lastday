@@ -112,8 +112,11 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 // euclidean floor generation
 // ---------------------------------------------------------------------------
 
-bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
+bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGeneratedMap *pOut)
 {
+	if(!pOut)
+		return false;
+
 	const char *pFloorName = pInstruction->m_aFloorName;
 	const CWorldRing Ring = WorldRing(pInstruction, Seed);
 	if(Ring.m_Enabled)
@@ -1154,8 +1157,6 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 		lResourceJson.add(0);
 	}
 
-	EnsureGeneratedMapsDir(Storage());
-
 	// The world geometry, as a third json item. The horizontal wrap is a
 	// property of the world: a generated floor is a cylinder, a hand drawn map
 	// has real edges. It goes here rather than in CMapItemInfo (fixed at version
@@ -1186,30 +1187,21 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed)
 		lWorldJson.add(0);
 	}
 
-	char aOutName[64];
-	str_format(aOutName, sizeof(aOutName), "%s_%d", pFloorName, Seed);
-
-	// write the metadata sidecar first: a map must never exist without it,
-	// because the map no longer carries the json itself
-	if(!SaveGeneratedWorldMeta(Storage(), aOutName,
-		lEntranceJson.base_ptr(), lEntranceJson.size(),
-		lResourceJson.base_ptr(), lResourceJson.size(),
-		lWorldJson.base_ptr(), lWorldJson.size()))
-	{
-		dbg_msg("mapgen", "failed to save the world metadata for '%s'", aOutName);
-		delete pWorld;
-		return false;
-	}
-
-	const bool Saved = Creator.SaveMap(EMapType::MAPTYPE_NORMAL, aOutName);
+	// Build the instance in memory: the pack is what keeps it, and the caller
+	// decides whether a cache file is worth writing.
+	const bool Saved = Creator.SaveMapToMemory(pOut->m_Map);
+	if(Saved)
+		BuildGeneratedWorldMeta(lEntranceJson.base_ptr(), lEntranceJson.size(),
+			lResourceJson.base_ptr(), lResourceJson.size(),
+			lWorldJson.base_ptr(), lWorldJson.size(), pOut->m_Meta);
 	delete pWorld;
 
 	if(!Saved)
 	{
-		dbg_msg("mapgen", "failed to save the generated map '%s'", aOutName);
+		dbg_msg("mapgen", "failed to build the generated map '%s_%d'", pFloorName, Seed);
 		return false;
 	}
 
-	dbg_msg("mapgen", "generated euclidean map '" GENERATED_MAPS_DIR "/%s.map' from base '%s'", aOutName, pInstruction->m_aBaseMap);
+	dbg_msg("mapgen", "generated euclidean map '%s_%d' from base '%s'", pFloorName, Seed, pInstruction->m_aBaseMap);
 	return true;
 }

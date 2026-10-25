@@ -53,6 +53,13 @@ public:
 	void AddJsonData(const char *pJsonData, int Size, int ID = 0);
 
 	bool SaveMap(EMapType MapType, const char *pMap);
+	// Build the same map into memory instead of a file. The bytes are a
+	// complete v4 datafile, ready to be packed or handed to the engine map.
+	bool SaveMapToMemory(array<char> &Out);
+
+private:
+	// writes every item and finishes the datafile, without touching the path
+	bool BuildMap(class CDataFileWriter &DataFile);
 };
 
 #endif // ENGINE_MAP_MAPCREATER_H

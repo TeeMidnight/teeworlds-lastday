@@ -7,6 +7,7 @@
 
 #include <base/hash.h>
 #include <base/system.h>
+#include <base/tl/stream.h>
 
 // raw datafile access
 class CDataFileReader
@@ -23,6 +24,10 @@ public:
 	bool IsOpen() const { return m_pDataFile != 0; }
 
 	bool Open(class IStorage *pStorage, const char *pFilename, int StorageType);
+	// Read a datafile from any stream: a file (the overload above wraps one) or
+	// a buffer that already exists, such as a map restored from a pack. With
+	// OwnStream the reader deletes the stream when it closes.
+	bool Open(stream *pStream, bool OwnStream = true);
 	bool Close();
 
 	void *GetData(int Index);
@@ -74,11 +79,18 @@ class CDataFileWriter
 	enum
 	{
 		MAX_ITEM_TYPES = 0xffff,
-		MAX_ITEMS = 1024,
-		MAX_DATAS = 1024,
+		MAX_ITEMS = 4096,
+		MAX_DATAS = 4096,
 	};
 
-	IOHANDLE m_File;
+	// the writer writes through a stream as well, so a map can be built in
+	// memory (a pack entry, a network buffer) instead of a file
+	stream *m_pStream;
+	bool m_OwnsStream;
+	// 4 (zlib, readable by 0.7) or 5 (zstd, item section compressed as a
+	// whole). Maps are written as 4 so legacy clients can still load them.
+	int m_Version;
+	int m_CompressLevel;
 	int m_NumItems;
 	int m_NumDatas;
 	int m_NumItemTypes;
@@ -89,7 +101,11 @@ class CDataFileWriter
 public:
 	CDataFileWriter();
 	~CDataFileWriter();
-	bool Open(class IStorage *pStorage, const char *Filename);
+	bool Open(class IStorage *pStorage, const char *Filename, int Version = 4);
+	// Write into any writable stream. With OwnStream the writer deletes the
+	// stream when it finishes.
+	bool Open(stream *pStream, int Version = 4, bool OwnStream = true);
+	void SetCompressLevel(int Level) { m_CompressLevel = Level; }
 	int AddData(int Size, const void *pData);
 	int AddDataSwapped(int Size, const void *pData);
 	int AddItem(int Type, int ID, int Size, const void *pData);

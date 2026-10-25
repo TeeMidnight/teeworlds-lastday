@@ -660,6 +660,8 @@ set_src(ENGINE_SHARED GLOB_RECURSE src/engine/shared
   linereader.cpp
   linereader.h
   map.cpp
+  mappack.cpp
+  mappack.h
   mapchecker.cpp
   mapchecker.h
   masterserver.cpp
@@ -687,6 +689,8 @@ set_src(ENGINE_SHARED GLOB_RECURSE src/engine/shared
   storage.cpp
   uuid_manager.cpp
   uuid_manager.h
+  worldpack.cpp
+  worldpack.h
   zstd_dict.cpp
   zstd_dict.h
 )
@@ -921,8 +925,10 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     test.cpp
     test.h
     thread.cpp
+    mappack.cpp
     world_ring.cpp
     world_wrap.cpp
+    worldpack.cpp
   )
   set(TARGET_TESTRUNNER testrunner)
   add_executable(${TARGET_TESTRUNNER} EXCLUDE_FROM_ALL

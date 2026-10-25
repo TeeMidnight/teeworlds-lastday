@@ -12,6 +12,12 @@
 // is relative to the storage save path.
 #define GENERATED_MAPS_DIR "generatedmaps/" MOD_NAME "/" MOD_VERSION
 
+// One append-only map pack per floor lives next to the generated maps. The
+// pack is the durable copy: a generated instance is appended as soon as it is
+// written, and an instance that is missing from the disk cache is restored
+// from the pack instead of being generated again.
+#define MAPPACK_DIR "mappacks/" MOD_NAME "/" MOD_VERSION
+
 // Creates the generated map directory and its parents on the save path.
 // IStorage::CreateFolder is not recursive, so every level is created on its
 // own. An already existing directory is not an error: the caller only needs
@@ -23,6 +29,16 @@ static inline void EnsureGeneratedMapsDir(IStorage *pStorage)
 	pStorage->CreateFolder("generatedmaps", IStorage::TYPE_SAVE);
 	pStorage->CreateFolder("generatedmaps/" MOD_NAME, IStorage::TYPE_SAVE);
 	pStorage->CreateFolder(GENERATED_MAPS_DIR, IStorage::TYPE_SAVE);
+}
+
+// Same for the map pack directory.
+static inline void EnsureMappackDir(IStorage *pStorage)
+{
+	if(!pStorage)
+		return;
+	pStorage->CreateFolder("mappacks", IStorage::TYPE_SAVE);
+	pStorage->CreateFolder("mappacks/" MOD_NAME, IStorage::TYPE_SAVE);
+	pStorage->CreateFolder(MAPPACK_DIR, IStorage::TYPE_SAVE);
 }
 
 #endif // ENGINE_MAP_GENERATEDMAPS_H
