@@ -194,9 +194,18 @@ public:
 	// whether a ring world with a player has the given map as a live neighbour
 	bool HasRingNeighbour(unsigned MapID) const;
 
+	// whether an occupied world has an entrance pointing at the given map
+	bool HasEntranceTarget(unsigned MapID) const;
+
 	// Make sure the live neighbours of every occupied ring world exist, so the
 	// single owner nodes and entities in the shared strip can be reached.
 	void EnsureOccupiedRingNeighbours();
+
+	// Preload the target world of every entrance in an occupied world. Entrance
+	// switches are synchronous like ring crossings, so a world that is only
+	// discovered at the moment the player walks into the entrance would stall
+	// that tick and, if generation fails, drop the switch entirely.
+	void EnsureOccupiedEntrances();
 
 	// apply a signed aggro delta to the (npc, account) ledger
 	void NpcAddAggro(const Uuid &Npc, const Uuid &User, int Delta);

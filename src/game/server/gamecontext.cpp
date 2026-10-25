@@ -883,6 +883,10 @@ void CGameContext::OnTick()
 	// single owned, so half of what they see and can mine lives next door
 	EnsureOccupiedRingNeighbours();
 
+	// entrance target worlds are switched to synchronously; keep them loaded so
+	// the switch never has to generate a world inside the movement tick
+	EnsureOccupiedEntrances();
+
 	// bind the neighbours' players as proxy cores before anything moves, so a
 	// hook or a player collision this tick sees them where they are
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
@@ -2105,6 +2109,51 @@ void CGameContext::EnsureOccupiedRingNeighbours()
 	}
 }
 
+bool CGameContext::HasEntranceTarget(unsigned MapID) const
+{
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		const CPlayer *pPlayer = m_apPlayers[i];
+		if(!pPlayer)
+			continue;
+		const CGameWorld *pWorld = pPlayer->GameWorld();
+		if(!pWorld)
+			continue;
+		for(int e = 0; e < pWorld->m_lEntrances.size(); e++)
+		{
+			const char *pTarget = pWorld->m_lEntrances[e].m_aTargetMap;
+			if(pTarget[0] && str_quickhash(pTarget) == MapID)
+				return true;
+		}
+	}
+	return false;
+}
+
+void CGameContext::EnsureOccupiedEntrances()
+{
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = m_apPlayers[i];
+		if(!pPlayer)
+			continue;
+		CGameWorld *pWorld = pPlayer->GameWorld();
+		if(!pWorld || pWorld->m_lEntrances.size() == 0)
+			continue;
+
+		for(int e = 0; e < pWorld->m_lEntrances.size(); e++)
+		{
+			const CGameWorld::CEntranceInfo &Entrance = pWorld->m_lEntrances[e];
+			if(!Entrance.m_aTargetMap[0])
+				continue;
+
+			// The engine has to know the map name before LoadMapForWorld can
+			// find it; registration is idempotent.
+			Server()->RegisterMapName(Entrance.m_aTargetMap);
+			EnsureWorld(str_quickhash(Entrance.m_aTargetMap));
+		}
+	}
+}
+
 void CGameContext::RequestLoadWorld(unsigned MapID)
 {
 	// Loading is idempotent: a duplicate request (a delayed map load callback,
@@ -2232,6 +2281,11 @@ void CGameContext::UnloadIdleWorlds()
 		// keep the live neighbours of a ring world, so a crossing entity has
 		// somewhere to go even when nobody is in the neighbour yet
 		if(pSelf->HasRingNeighbour(pWorld->WorldID()))
+			return;
+		// same for an entrance target: it is preloaded so the synchronous
+		// switch does not have to generate it; unloading it after 30s would
+		// only make the next tick regenerate it again
+		if(pSelf->HasEntranceTarget(pWorld->WorldID()))
 			return;
 		pCollector->m_lToUnload.add(pWorld->WorldID());
 	}, &Collector);
