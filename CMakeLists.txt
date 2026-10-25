@@ -418,6 +418,17 @@ if(NOT OPENSSL_FOUND)
   set(DEP_MD5 $<TARGET_OBJECTS:md5>)
 endif()
 
+# PocketPy is the server-side scripting runtime. Build it as a static library
+# and disable host facilities the item/prop scripts never need.
+set(PK_BUILD_STATIC_LIB ON CACHE BOOL "" FORCE)
+set(PK_ENABLE_OS OFF CACHE BOOL "" FORCE)
+set(PK_ENABLE_THREADS OFF CACHE BOOL "" FORCE)
+set(PK_ENABLE_DLL OFF CACHE BOOL "" FORCE)
+set(PK_ENABLE_WATCHDOG ON CACHE BOOL "" FORCE)
+set(PK_ENABLE_DETERMINISM ON CACHE BOOL "" FORCE)
+add_subdirectory(src/engine/external/pocketpy EXCLUDE_FROM_ALL)
+list(APPEND TARGETS_DEP pocketpy)
+
 ########################################################################
 # DATA
 ########################################################################
@@ -433,7 +444,8 @@ file(GLOB_RECURSE DATA CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/datasrc/*.ttc"
   "${PROJECT_SOURCE_DIR}/datasrc/*.ttf"
   "${PROJECT_SOURCE_DIR}/datasrc/*.txt"
-  "${PROJECT_SOURCE_DIR}/datasrc/*.opus")
+  "${PROJECT_SOURCE_DIR}/datasrc/*.opus"
+  "${PROJECT_SOURCE_DIR}/datasrc/scripts/*.py")
 list(SORT DATA)
 
 # destination path of each datasrc source inside the data directory
@@ -452,7 +464,8 @@ file(GLOB_RECURSE DATA_STALE CONFIGURE_DEPENDS
   "${PROJECT_BINARY_DIR}/data/*.ttc"
   "${PROJECT_BINARY_DIR}/data/*.ttf"
   "${PROJECT_BINARY_DIR}/data/*.txt"
-  "${PROJECT_BINARY_DIR}/data/*.opus")
+  "${PROJECT_BINARY_DIR}/data/*.opus"
+  "${PROJECT_BINARY_DIR}/data/scripts/*.py")
 foreach(candidate ${DATA_STALE})
   if(NOT candidate IN_LIST DATA_DEST)
     file(REMOVE ${candidate})
@@ -660,10 +673,10 @@ set_src(ENGINE_SHARED GLOB_RECURSE src/engine/shared
   linereader.cpp
   linereader.h
   map.cpp
-  mappack.cpp
-  mappack.h
   mapchecker.cpp
   mapchecker.h
+  mappack.cpp
+  mappack.h
   masterserver.cpp
   memheap.cpp
   memheap.h
@@ -783,10 +796,6 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/drill.h
   entities/dropped_pickup.cpp
   entities/dropped_pickup.h
-  entities/health_drop.cpp
-  entities/health_drop.h
-  entities/health_jar.cpp
-  entities/health_jar.h
   entities/laser.cpp
   entities/laser.h
   entities/npcentity.cpp
@@ -823,6 +832,19 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   player.cpp
   player.h
   player_data.cpp
+  scripting/buff_system.cpp
+  scripting/buff_system.h
+  scripting/script_api.cpp
+  scripting/script_commands.cpp
+  scripting/script_commands.h
+  scripting/script_runtime.cpp
+  scripting/script_runtime.h
+  scripting/scripted_bot_ai.cpp
+  scripting/scripted_bot_ai.h
+  scripting/scripted_entity.cpp
+  scripting/scripted_entity.h
+  scripting/scripted_weapon.cpp
+  scripting/scripted_weapon.h
   trade.cpp
   trade.h
   weapon.h
@@ -851,7 +873,7 @@ else()
 endif()
 
 # Libraries
-set(LIBS_SERVER ${LIBS} SQLite3::SQLite3 PostgreSQL::PostgreSQL)
+set(LIBS_SERVER ${LIBS} SQLite3::SQLite3 PostgreSQL::PostgreSQL pocketpy)
 
 # Target
 set(TARGET_SERVER ${SERVER_EXECUTABLE})
@@ -862,6 +884,17 @@ add_executable(${TARGET_SERVER}
   $<TARGET_OBJECTS:engine-shared>
   $<TARGET_OBJECTS:game-shared>
 )
+# PocketPy's C++ binding layer uses C++ exceptions. The rest of the game is
+# compiled with -fno-exceptions, so enable them only for the two scripting TUs.
+if(NOT MSVC)
+  set_source_files_properties(
+    src/game/server/scripting/script_api.cpp
+    src/game/server/scripting/script_runtime.cpp
+    src/game/server/scripting/scripted_bot_ai.cpp
+    src/game/server/scripting/scripted_entity.cpp
+    src/game/server/scripting/scripted_weapon.cpp
+    PROPERTIES COMPILE_OPTIONS "-fexceptions")
+endif()
 target_link_libraries(${TARGET_SERVER} ${LIBS_SERVER})
 list(APPEND TARGETS_OWN ${TARGET_SERVER})
 list(APPEND TARGETS_LINK ${TARGET_SERVER})
@@ -920,6 +953,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     jsonwriter.cpp
     legacy_compat.cpp
     localization.cpp
+    mappack.cpp
     packer.cpp
     partial_array.cpp
     silent_step.cpp
@@ -929,7 +963,6 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     test.cpp
     test.h
     thread.cpp
-    mappack.cpp
     world_ring.cpp
     world_wrap.cpp
     worldpack.cpp

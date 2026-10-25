@@ -26,6 +26,7 @@ class CDatabase;
 class CItemSystem;
 class CNpcSystem;
 class CTradeSystem;
+class CScriptedEntitySystem;
 
 // Broadcast life span in ticks. A timed message stays on screen for the whole
 // span; a realtime message (life span 0) is only visible while it is submitted
@@ -165,11 +166,18 @@ public:
 
 	CNpcSystem *m_pNpcSystem;
 
+	class CBuffSystem *m_pBuffSystem;
+
+	// generic scripted props (data/entities/*.json + scripts/entities/*.py)
+	class CScriptedEntitySystem *m_pScriptedEntities;
+
 	CGameMenu *GameMenu() const { return m_pGameMenu; }
 	CDatabase *Database() const { return m_pDatabase; }
 	CItemSystem *Item() const { return m_pItemSystem; }
 	CTradeSystem *Trade() const { return m_pTradeSystem; }
 	CNpcSystem *Npcs() const { return m_pNpcSystem; }
+	class CBuffSystem *Buffs() const { return m_pBuffSystem; }
+	class CScriptedEntitySystem *ScriptedEntities() const { return m_pScriptedEntities; }
 
 	// the global bot manager (null before OnInit)
 	class CBotManager *BotManager() const { return m_pBotManager; }

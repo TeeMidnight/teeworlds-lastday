@@ -25,7 +25,7 @@
 #include "entities/character.h"
 #include "entities/drill.h"
 #include "entities/dropped_pickup.h"
-#include "entities/health_jar.h"
+#include "scripting/scripted_entity.h"
 #include "entities/laser.h"
 #include "entities/projectile.h"
 #include "entities/resource.h"
@@ -34,6 +34,9 @@
 #include "item.h"
 #include "npcdata.h"
 #include "player.h"
+#include "scripting/buff_system.h"
+#include "scripting/script_commands.h"
+#include "scripting/script_runtime.h"
 #include "trade.h"
 #include "weapon.h"
 #include "weaponmanager.h"
@@ -65,6 +68,8 @@ void CGameContext::Construct(int Resetting)
 	m_pItemSystem = 0;
 	m_pTradeSystem = 0;
 	m_pNpcSystem = 0;
+	m_pBuffSystem = 0;
+	m_pScriptedEntities = 0;
 	m_MainWorldID = 0;
 	m_LockTeams = 0;
 	m_TipTimer = 0;
@@ -117,6 +122,8 @@ void CGameContext::Clear()
 	CItemSystem *pItemSystem = m_pItemSystem;
 	CTradeSystem *pTradeSystem = m_pTradeSystem;
 	CNpcSystem *pNpcSystem = m_pNpcSystem;
+	CBuffSystem *pBuffSystem = m_pBuffSystem;
+	CScriptedEntitySystem *pScriptedEntities = m_pScriptedEntities;
 	// the engine services (IServer & co) outlive the game context, so preserve
 	// them: the world teardown in OnShutdown and a following OnInit on a forced
 	// reload both rely on Server() being valid.
@@ -143,6 +150,8 @@ void CGameContext::Clear()
 	m_pItemSystem = pItemSystem;
 	m_pTradeSystem = pTradeSystem;
 	m_pNpcSystem = pNpcSystem;
+	m_pBuffSystem = pBuffSystem;
+	m_pScriptedEntities = pScriptedEntities;
 	m_pServer = pServer;
 	m_pConfig = pConfig;
 	m_pConsole = pConsole;
@@ -784,20 +793,21 @@ bool CGameContext::PlaceHealthJar(int ClientID, const CItemID &ItemId)
 		return false;
 	}
 	const float BottomY = (float) round_to_int(Hit.y / 32.0f) * 32.0f;
-	const float CenterY = BottomY - (float) CHealthJarEntity::JAR_HEIGHT / 2.0f;
+	const float CenterY = BottomY - (float) SCRIPTED_JAR_HEIGHT / 2.0f;
 	const vec2 Center(CenterX, CenterY);
 
 	// leave the bottom edge resting on the floor instead of inside it
-	if(pCollision->TestBox(Center, vec2((float) CHealthJarEntity::JAR_WIDTH - 4.0f, (float) CHealthJarEntity::JAR_HEIGHT - 6.0f)))
+	if(pCollision->TestBox(Center, vec2((float) SCRIPTED_JAR_WIDTH - 4.0f, (float) SCRIPTED_JAR_HEIGHT - 6.0f)))
 	{
 		SendChat(-1, CHAT_WHISPER, ClientID, Localize("There is no room for a health jar here.", "Health Jar"));
 		return false;
 	}
 
 	// one jar per spot, so a stack of items cannot pile entities onto one tile
-	for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_HEALTH_JAR); !r.empty(); r.pop_front())
+	for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_SCRIPTED); !r.empty(); r.pop_front())
 	{
-		if(distance(r.front()->GetPos(), Center) < (float) CHealthJarEntity::JAR_WIDTH)
+		CScriptedEntity *pEntity = static_cast<CScriptedEntity *>(r.front());
+		if(pEntity && str_comp(pEntity->Kind(), "health_jar") == 0 && distance(pEntity->GetPos(), Center) < (float) SCRIPTED_JAR_WIDTH)
 		{
 			SendChat(-1, CHAT_WHISPER, ClientID, Localize("There is already a health jar here.", "Health Jar"));
 			return false;
@@ -811,7 +821,22 @@ bool CGameContext::PlaceHealthJar(int ClientID, const CItemID &ItemId)
 	// an account survives a reconnect; without one the jar can only follow the
 	// client slot until the server restarts
 	const Uuid OwnerAccount = pPlayer->m_LoggedIn ? pPlayer->m_AccountUuid : UUID_ZEROED;
-	new CHealthJarEntity(pWorld, Center, ItemId, Def.m_Cooldown, Def.m_Range, Def.m_Health, OwnerAccount, ClientID, Server()->ClientName(ClientID));
+	CScriptedEntitySystem *pScripted = ScriptedEntities();
+	if(!pScripted || !pScripted->GetDef("health_jar"))
+	{
+		Item()->AddItem(ClientID, ItemId, 1, true);
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("Health jars are unavailable.", "Health Jar"));
+		return false;
+	}
+
+	CScriptedEntity *pJar = pScripted->SpawnHealthJar(pWorld, Center, ItemId, OwnerAccount, ClientID,
+		Server()->ClientName(ClientID), Def.m_Cooldown, Def.m_Range, Def.m_Health);
+	if(!pJar)
+	{
+		Item()->AddItem(ClientID, ItemId, 1, true);
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("The health jar could not be placed.", "Health Jar"));
+		return false;
+	}
 
 	SavePlayerData(pPlayer);
 	SendChat(-1, CHAT_WHISPER, ClientID,
@@ -1578,6 +1603,8 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("remove_vote", "s[option]", CFGFLAG_SERVER, ConRemoveVote, this, "remove a voting option");
 	Console()->Register("clear_votes", "", CFGFLAG_SERVER, ConClearVotes, this, "Clears the voting options");
 	Console()->Register("vote", "r['yes'|'no']", CFGFLAG_SERVER, ConVote, this, "Force a vote to yes/no");
+
+	RegisterScriptCommands(this);
 }
 
 void CGameContext::NewCommandHook(const CCommandManager::CCommand *pCommand, void *pContext)
@@ -1644,9 +1671,24 @@ void CGameContext::OnInit()
 			m_pDatabase->SetJobPool(Kernel()->RequestInterface<IEngine>());
 	}
 
+	// The PocketPy VM is process-wide: initialize it before any system that
+	// can load a script (items, buffs, weapons, entities, bot AI).
+	CScriptRuntime::Get()->Init(this, Storage());
+
 	// initialize the item system (loads datasrc/items/*.json)
 	m_pItemSystem = new CItemSystem();
 	m_pItemSystem->Init(this, Storage());
+
+	// buffs: data/buffs/*.json + per-tick Python modules
+	m_pBuffSystem = new CBuffSystem();
+	m_pBuffSystem->Init(this, Storage());
+
+	// generic scripted props: data/entities/*.json + scripts/entities/*.py
+	m_pScriptedEntities = new CScriptedEntitySystem();
+	m_pScriptedEntities->Init(this, Storage());
+
+	// data/weapons/*.json overrides the native weapon class of the same name
+	WeaponManager()->LoadScriptedWeapons(Storage());
 
 	// the player owned shop (in-memory listings for this session)
 	m_pTradeSystem = new CTradeSystem();
@@ -1850,6 +1892,18 @@ void CGameContext::OnShutdown()
 
 	delete m_pNpcSystem;
 	m_pNpcSystem = 0;
+
+	delete m_pBuffSystem;
+	m_pBuffSystem = 0;
+
+	// entity definitions reference loaded script modules, so release them while
+	// the VM is still alive
+	delete m_pScriptedEntities;
+	m_pScriptedEntities = 0;
+
+	// Scripts no longer have any live game object at this point. Tear the VM
+	// down while the engine is still valid so module destruction is orderly.
+	CScriptRuntime::Get()->Shutdown();
 
 	delete m_pController;
 	m_pController = 0;

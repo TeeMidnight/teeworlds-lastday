@@ -8,6 +8,7 @@
 #include <engine/storage.h>
 
 #include <game/server/gamecontext.h>
+#include <game/server/scripting/script_runtime.h>
 
 #include <game/localization_format.h>
 
@@ -154,6 +155,7 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath, const 
 
 	SItemDef Item;
 	mem_zero(&Item, sizeof(Item));
+	Item.m_Module = -1;
 	str_copy(Item.m_aCategory, pCategory && pCategory[0] ? pCategory : "misc", sizeof(Item.m_aCategory));
 	Item.m_Id = CItemID::FromName(pIdName);
 	str_copy(Item.m_aIdString, Item.m_Id.SourceName(), sizeof(Item.m_aIdString));
@@ -165,6 +167,16 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath, const 
 	if(!pDesc[0])
 		pDesc = (*pJson)["Desc"];
 	str_copy(Item.m_aDesc, pDesc, sizeof(Item.m_aDesc));
+
+	// optional behaviour module: scripts/items/<id>.py
+	const char *pScript = (*pJson)["script"];
+	if(pScript[0])
+	{
+		str_copy(Item.m_aScript, pScript, sizeof(Item.m_aScript));
+		Item.m_Module = CScriptRuntime::Get()->LoadModule(Item.m_aScript);
+		if(Item.m_Module < 0)
+			dbg_msg("items", "script '%s' for item '%s' failed to load", Item.m_aScript, pDefaultId);
+	}
 
 	// item_type: a single string or an array of strings
 	Item.m_NumTypes = 0;
@@ -336,6 +348,21 @@ void CItemSystem::Load(IStorage *pStorage)
 	m_Crafts.clear();
 	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "items", ListItemDirsCallback, this);
 	m_pStorage->ListDirectory(IStorage::TYPE_ALL, "craft", ListCraftDirsCallback, this);
+}
+
+void CItemSystem::ReloadScriptCallback(SItemDef &Item, void *pUser)
+{
+	(void) pUser;
+	if(Item.m_aScript[0])
+		Item.m_Module = CScriptRuntime::Get()->LoadModule(Item.m_aScript);
+}
+
+bool CItemSystem::ReloadScripts()
+{
+	if(!CScriptRuntime::Get()->Ready())
+		return false;
+	m_Items.for_each(ReloadScriptCallback, this);
+	return true;
 }
 
 bool CItemSystem::AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef)

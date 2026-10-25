@@ -14,6 +14,7 @@
 #include <game/server/entity.h>
 
 class CBotManager;
+class IBotAI;
 
 /*
 	Class: IBotEntity
@@ -137,6 +138,32 @@ public:
 	// the physics core, exposed for variants that want to drive it directly
 	CCharacterCore *Core() override { return &m_Core; }
 
+	// --- AI strategy ------------------------------------------------------
+	// Takes ownership of pAI and deletes the previous strategy. Never call this
+	// from inside a strategy hook: use RequestAI(), which is applied after the
+	// tick's hook has returned.
+	void SetAI(IBotAI *pAI);
+	// Resolves a name through the shared factory ("chase", "wander", "stand",
+	// "script:<path>", "<name>.py" or a bare name under scripts/bot_ai/).
+	// Keeps the current strategy when the name does not resolve.
+	bool SetAIByName(const char *pName);
+	// Queues a strategy change for the end of this tick. Safe from a hook.
+	bool RequestAI(const char *pName);
+	IBotAI *AI() const { return m_pAI; }
+	// Name of the running strategy, or "none".
+	const char *AIName() const;
+
+	// --- input surface used by IBotAI -------------------------------------
+	// A strategy only decides input; the body, physics and snapping stay here.
+	CNetObj_PlayerInput &Input() { return m_Input; }
+	const CNetObj_PlayerInput &Input() const { return m_Input; }
+	void SetDirection(int Direction) { m_Input.m_Direction = Direction < 0 ? -1 : (Direction > 0 ? 1 : 0); }
+	void SetJump(bool Jump) { m_Input.m_Jump = Jump ? 1 : 0; }
+	void SetFire(bool Fire) { m_Input.m_Fire = Fire ? 1 : 0; }
+	void SetAimTarget(vec2 Target) { m_CursorTarget = Target; }
+	vec2 CursorTarget() const { return m_CursorTarget; }
+	int ReloadTimer() const { return m_ReloadTimer; }
+
 	/*
 		Function: PickTeeID
 			Chooses the private TeeID for a bot. The global CBotManager derives
@@ -148,20 +175,24 @@ public:
 	*/
 	static int PickTeeID(CGameWorld *pGameWorld, Uuid BotID);
 
-protected:
-	// Decides this tick's input. The default bot chases or wanders; a variant
-	// overrides it to implement its own behaviour.
-	virtual void OnAction();
-	// Picks the entity the default action should chase, or null for "wander"
+	// Picks the entity the default action should chase, or null for "wander".
+	// Public because a strategy decides what to chase.
 	virtual CEntity *FindTarget();
+	// Smoothly moves the aim cursor towards m_CursorTarget; shared by the
+	// built-in strategies and by variants such as the NPC.
+	void AimCursor();
+
+protected:
+	// Decides this tick's input. The default implementation delegates to m_pAI;
+	// a variant (the NPC) overrides it and ignores the strategy layer.
+	virtual void OnAction();
 	// Swings the held weapon; called after the input was decided
 	virtual void DoWeapon();
 	// Called for every hittable a melee swing landed on; Killed is true when the
 	// swing was the one that brought a character down. A variant can react.
 	virtual void OnBotHit(CEntity *pTarget, bool Killed);
-	// Smoothly moves the aim cursor towards m_CursorTarget; shared by the
-	// default chase action and by variants such as the NPC.
-	void AimCursor();
+	// Applies a strategy change queued by RequestAI(); safe point only.
+	void ApplyPendingAI();
 
 	CBotTeeInfo m_TeeInfo;
 	Uuid m_BotID;
@@ -193,6 +224,12 @@ protected:
 	CNetObj_PlayerInput m_Input;
 	CNetObj_PlayerInput m_PrevInput;
 	vec2 m_CursorTarget;
+
+	// the strategy layer; owned, replaced through SetAI()/RequestAI()
+	IBotAI *m_pAI;
+	// a strategy change requested from inside a hook, applied after OnAction()
+	char m_aPendingAI[192];
+	bool m_bPendingAI;
 
 	// set when the bot has no weapon item system backing it: it swings a
 	// hammer, the one weapon that needs neither an item nor ammo

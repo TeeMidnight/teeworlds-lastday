@@ -1,5 +1,5 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
-/* (c) Teeworlds LastDay - Bamcane.                                                          */
+/* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef GAME_SERVER_ENTITIES_DROPPED_PICKUP_H
 #define GAME_SERVER_ENTITIES_DROPPED_PICKUP_H
@@ -7,29 +7,43 @@
 #include <game/item_id.h>
 #include <game/server/entity.h>
 
-// A player-dropped item lying (or flying) in a world. It is rendered as a
-// hammer pickup and behaves like a small physics object: gravity pulls it
-// down, CCollision::MoveBox resolves the movement against solid tiles with a
-// light bounce, and horizontal friction is very low (but not zero) so thrown
-// items glide a long way and only slowly come to rest.
+// A small physics pickup in a world. One class covers both payloads:
 //
-// A pickup itself carries no persistence logic: while a world is loaded the
-// pickups live purely in memory, and the world's dropped items are stored
-// and restored through CGameWorld (SaveToDatabase/RestoreFromDatabase),
-// which will grow to cover the other persistent world attributes too.
+//   KIND_ITEM   - a player-dropped item stack; picked up into the inventory.
+//   KIND_HEALTH - a health pickup dropped by a jar; heals one heart.
+//
+// They share gravity, collision, the pickup grace period and the snap object.
+// Only the collection effect, snap sprite and persistence flag differ.
 class CDroppedPickup : public CEntity
 {
 public:
+	enum EKind
+	{
+		KIND_ITEM = 0,
+		KIND_HEALTH,
+	};
+
+	// item stack
 	CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const CItemID &ItemId, int Count);
+	// health pickup (Health is normally 1)
+	CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, int Health);
 
 	virtual void Tick();
+	virtual void TickPaused();
 	virtual void Snap(int SnappingClient);
-	// ring: a dropped item crosses the boundary like a player does
-	virtual bool RingCrosses() const override { return true; }
+	// ring: a dropped item crosses the boundary like a player does; a health
+	// pickup is transient and stays with its jar's world
+	virtual bool RingCrosses() const override { return m_Kind == KIND_ITEM; }
 
-	// the dropped item's id / stack size
+	EKind Kind() const { return m_Kind; }
+	bool IsHealthDrop() const { return m_Kind == KIND_HEALTH; }
+	// health drops are transient props, not world content to save
+	bool IsPersistent() const { return m_Kind == KIND_ITEM; }
+
+	// the dropped item's id / stack size (zero for a health pickup)
 	const CItemID &ItemId() const { return m_ItemId; }
 	int Count() const { return m_Count; }
+	int Health() const { return m_Health; }
 
 	enum
 	{
@@ -38,13 +52,16 @@ public:
 		DROP_BOX = 10,
 		// the client renders the pickup roughly this large
 		DROP_PHYS_SIZE = 14,
+		HEALTH_PHYS_SIZE = 20,
 	};
 
 private:
+	EKind m_Kind;
 	CItemID m_ItemId;
 	int m_Count;
+	int m_Health;
 	vec2 m_Vel;
-	// ticks to wait before the item can be picked up again (gives a thrown
+	// ticks to wait before the pickup can be collected again (gives a thrown
 	// item time to fly away from its owner)
 	int m_NoPickupTick;
 

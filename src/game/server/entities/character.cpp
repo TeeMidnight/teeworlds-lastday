@@ -9,6 +9,7 @@
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/player.h>
+#include <game/server/scripting/buff_system.h>
 #include <game/server/weapon.h>
 #include <game/server/weaponmanager.h>
 #include <generated/server_data.h>
@@ -471,6 +472,16 @@ void CCharacter::RefreshAccessoryEffects()
 		Range += Acc.m_Range;
 		Speed += Acc.m_Speed;
 	}
+
+	// active buffs add on top of the worn accessories
+	int BuffHealth = 0;
+	float BuffRange = 0.0f;
+	float BuffSpeed = 0.0f;
+	if(GameServer()->Buffs())
+		GameServer()->Buffs()->GetModifiers(GetCID(), &BuffHealth, &BuffRange, &BuffSpeed);
+	Health += BuffHealth;
+	Range += BuffRange;
+	Speed += BuffSpeed;
 
 	// clamp the combined bonuses so content cannot unboundedly break the game
 	m_MaxHealth = clamp(Health, MAX_HEALTH, MAX_HEALTH * 2);

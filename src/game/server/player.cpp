@@ -10,6 +10,7 @@
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "player.h"
+#include "scripting/buff_system.h"
 
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
@@ -89,6 +90,10 @@ void CPlayer::Tick()
 {
 	if(!IsDummy() && !Server()->ClientIngame(m_ClientID))
 		return;
+
+	// active buffs tick every game tick (their scripts decide what to do)
+	if(GameServer()->Buffs())
+		GameServer()->Buffs()->TickPlayer(m_ClientID);
 
 	// the scoreboard shows the player's remaining clarity (100 - forgetting):
 	// a clear mind (low forgetting) ranks above a clouded one
@@ -332,6 +337,10 @@ CCharacter *CPlayer::GetCharacter()
 void CPlayer::KillCharacter(int Weapon, bool Clean)
 {
 	ExitDrillControl();
+
+	// death clears temporary buffs; their on_remove hooks still see the body
+	if(GameServer()->Buffs())
+		GameServer()->Buffs()->ClearPlayer(m_ClientID);
 
 	if(m_pCharacter)
 	{

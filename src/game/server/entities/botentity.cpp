@@ -9,6 +9,7 @@
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/player.h>
+#include <game/server/scripting/scripted_bot_ai.h>
 #include <game/server/weapon.h>
 #include <game/server/weaponmanager.h>
 
@@ -60,6 +61,10 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	m_Team = Team;
 	m_Alive = true;
 
+	m_pAI = nullptr;
+	m_aPendingAI[0] = 0;
+	m_bPendingAI = false;
+
 	m_MaxHealth = MAX_HEALTH;
 	m_MaxArmor = MAX_ARMOR;
 	m_Health = MAX_HEALTH;
@@ -91,11 +96,17 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	mem_zero(&m_Input, sizeof(m_Input));
 	mem_zero(&m_PrevInput, sizeof(m_PrevInput));
 
+	// the default bot keeps the historical chase behaviour; the manager may
+	// replace it with another strategy right after construction
+	SetAIByName(BotAIDefaultName());
+
 	GameWorld()->InsertEntity(this);
 }
 
 CBotEntity::~CBotEntity()
 {
+	SetAI(nullptr);
+
 	// Unbind before the core dies, or a physics tick would read a dangling
 	// pointer out of the world's table.
 	if(m_TeeID != -1 && GameWorld())
@@ -161,45 +172,67 @@ void CBotEntity::OnBotTick()
 	m_Input.m_Jump = 0;
 	m_Input.m_Fire = 0;
 
+	// per-tick strategy hook (scripted AIs run their on_tick here)
+	if(m_pAI)
+		m_pAI->OnTick(this);
+
 	OnAction();
+
+	// A script may have asked for another strategy from inside a hook. Apply it
+	// only now: deleting the strategy that is currently running would be a
+	// use-after-free.
+	ApplyPendingAI();
 }
 
 void CBotEntity::OnAction()
 {
-	CEntity *pTarget = FindTarget();
-	if(pTarget)
-	{
-		const vec2 Target = GameWorld()->PosInFrame(pTarget);
+	// The default body delegates to the attached strategy. Variants (the NPC)
+	// override OnAction and never reach this.
+	if(m_pAI)
+		m_pAI->OnAction(this);
+}
 
-		// walk towards the target, but only correct while noticeably off
-		if(absolute(Target.x - m_Pos.x) > 48.0f)
-			m_Input.m_Direction = (int) sign(Target.x - m_Pos.x);
-		else
-			m_Input.m_Direction = 0;
+void CBotEntity::SetAI(IBotAI *pAI)
+{
+	if(m_pAI == pAI)
+		return;
+	delete m_pAI;
+	m_pAI = pAI;
+}
 
-		if((Target.y - m_Pos.y < -48.0f) && !(m_Core.m_Jumped & 1) && (m_Core.m_Vel.y > -1.25f))
-			m_Input.m_Jump = 1;
+bool CBotEntity::SetAIByName(const char *pName)
+{
+	IBotAI *pAI = CreateBotAI(pName);
+	if(!pAI)
+		return false;
+	SetAI(pAI);
+	return true;
+}
 
-		if(distance(Target, m_Pos) < 48.0f && (random_int() % 100) < 8 && m_ReloadTimer <= 0)
-			m_Input.m_Fire = 1;
+bool CBotEntity::RequestAI(const char *pName)
+{
+	if(!pName || !pName[0])
+		return false;
+	str_copy(m_aPendingAI, pName, sizeof(m_aPendingAI));
+	m_bPendingAI = true;
+	return true;
+}
 
-		m_CursorTarget = Target - m_Pos;
-	}
-	else
-	{
-		// wander: occasionally jump or change direction
-		if(random_int() % 1000 < 25)
-			m_Input.m_Jump = 1;
+void CBotEntity::ApplyPendingAI()
+{
+	if(!m_bPendingAI)
+		return;
+	m_bPendingAI = false;
 
-		if(random_int() % 1000 < 55)
-		{
-			m_Input.m_Direction = random_int() % 3 - 1;
-			if(m_Input.m_Direction)
-				m_CursorTarget = vec2(length(m_CursorTarget) * m_Input.m_Direction, 0.0f);
-		}
-	}
+	char aName[sizeof(m_aPendingAI)];
+	str_copy(aName, m_aPendingAI, sizeof(aName));
+	if(!SetAIByName(aName))
+		dbg_msg("bot", "unknown bot AI '%s', keeping '%s'", aName, AIName());
+}
 
-	AimCursor();
+const char *CBotEntity::AIName() const
+{
+	return m_pAI ? m_pAI->Name() : "none";
 }
 
 void CBotEntity::AimCursor()
@@ -301,8 +334,8 @@ void CBotEntity::DoWeapon()
 
 void CBotEntity::OnBotHit(CEntity *pTarget, bool Killed)
 {
-	(void) pTarget;
-	(void) Killed;
+	if(m_pAI)
+		m_pAI->OnHit(this, pTarget, Killed);
 }
 
 void CBotEntity::TickDefered()
@@ -577,11 +610,8 @@ bool CBotEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, in
 
 bool CBotEntity::OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
 {
-	(void) Force;
-	(void) Source;
-	(void) Dmg;
-	(void) pFrom;
-	(void) Weapon;
+	if(m_pAI)
+		return m_pAI->OnDamaged(this, Force, Source, Dmg, pFrom, Weapon);
 	return true;
 }
 

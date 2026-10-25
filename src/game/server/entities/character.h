@@ -122,6 +122,8 @@ public:
 
 	// derived stats granted by the worn accessories
 	int MaxHealth() const { return m_MaxHealth; }
+	int Health() const { return m_Health; }
+	int Armor() const { return m_Armor; }
 	float RangeScale() const { return m_RangeScale; }
 	float SpeedScale() const { return m_SpeedScale; }
 

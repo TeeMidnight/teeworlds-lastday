@@ -35,6 +35,26 @@ static IBotEntity *NpcBotCreator(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const
 	return new CNpcEntity(pWorld, Pos, BotID, TeeInfo, Team);
 }
 
+// Applies the configured strategy to a freshly spawned default bot. NPCs keep
+// their own OnAction override and are left alone.
+static void ApplySpawnAI(IBotEntity *pBot)
+{
+	if(!pBot || str_comp(pBot->BotTypeName(), "default") != 0)
+		return;
+
+	const char *pName = pBot->Config()->m_SvBotAI;
+	if(!pName || !pName[0])
+		pName = "chase";
+
+	CBotEntity *pBotEntity = static_cast<CBotEntity *>(pBot);
+	if(!pBotEntity->SetAIByName(pName))
+	{
+		dbg_msg("bot", "unknown bot AI '%s', falling back to 'chase'", pName);
+		pBotEntity->SetAIByName("chase");
+	}
+	dbg_msg("bot", "spawned bot with AI '%s'", pBotEntity->AIName());
+}
+
 CBotManager::CBotManager(CGameContext *pGameServer)
 {
 	m_pGameServer = pGameServer;
@@ -474,6 +494,8 @@ IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 		: DefaultBotCreator(pWorld, SpawnPos, BotID, TeeInfo, TEAM_BLUE, nullptr);
 	if(!pBot)
 		return nullptr;
+
+	ApplySpawnAI(pBot);
 
 	m_Bots.set(BotID, pBot);
 	m_lBotOrder.add(BotID);

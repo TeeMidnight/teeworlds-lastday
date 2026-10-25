@@ -4,6 +4,7 @@
 #ifndef GAME_SERVER_WEAPONMANAGER_H
 #define GAME_SERVER_WEAPONMANAGER_H
 
+#include <base/system.h>
 #include <base/tl/array.h>
 #include <base/tl/hashtable.h>
 #include <base/vmath.h>
@@ -11,6 +12,8 @@
 #include <game/server/ammo.h>
 
 class CCharacter;
+class CScriptedWeapon;
+class IStorage;
 class IWeaponInterface;
 
 // Manages all weapons. Weapons are collected automatically through the static
@@ -28,10 +31,19 @@ class CWeaponManager
 	// registration order, used for iteration (GetWeaponByIndex / NumWeapons)
 	array<IWeaponInterface *> m_apWeaponList;
 
+	// scripted overrides (data/weapons/*.json + data/scripts/weapons/*.py).
+	// They are owned here and consulted before the native static registry, so a
+	// failed script simply leaves the native weapon in service.
+	hash_table<unsigned, CScriptedWeapon *, 8> m_ScriptedWeapons;
+	array<CScriptedWeapon *> m_apScriptedWeaponList;
+
 	void Init();
+	void LoadScriptedWeapon(IStorage *pStorage, const char *pDefaultName, const char *pPath);
+	static int ListScriptedWeaponsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 
 public:
 	CWeaponManager() : m_Initialized(false) {}
+	~CWeaponManager() { ClearScriptedWeapons(); }
 
 	// called by CWeaponRegistrar (appends to the static registry, may be
 	// called repeatedly)
@@ -42,6 +54,17 @@ public:
 	IWeaponInterface *GetWeaponByIndex(int Index); // iteration, 0-based
 	int NumWeapons() const { return m_apWeaponList.size(); }
 	void OutputRegisteredWeapons();
+
+	// Loads every data/weapons/*.json, compiles its script and registers the
+	// override. A missing/broken script is logged and skipped, keeping the
+	// native weapon of that name active. Call after CScriptRuntime::Init().
+	void LoadScriptedWeapons(IStorage *pStorage);
+	// Re-reads the JSON definitions and re-executes the Python modules.
+	void ReloadScripts();
+	// Deletes all scripted overrides (the native registry is untouched).
+	void ClearScriptedWeapons();
+	int NumScriptedWeapons() const { return m_apScriptedWeaponList.size(); }
+	CScriptedWeapon *GetScriptedWeaponByIndex(int Index) const;
 
 	// convenience attribute lookups
 	int SnapStyle(unsigned WeaponID);

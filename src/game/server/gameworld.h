@@ -37,8 +37,8 @@ public:
 		ENTTYPE_DROPPEDPICKUP,
 		ENTTYPE_DRILL,
 		ENTTYPE_BOTENTITY,
-		ENTTYPE_HEALTH_JAR,
-		ENTTYPE_HEALTH_DROP,
+		// generic scripted prop (data/entities/*.json + data/scripts/entities/*.py)
+		ENTTYPE_SCRIPTED,
 		NUM_ENTTYPES,
 
 		ENTFLAG_HITABLE = 1,
@@ -229,6 +229,10 @@ public:
 			Returns a pointer to the closest CEntity or NULL if no CEntity is close enough.
 	*/
 	CEntity *ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis, bool AcrossRing = false);
+
+	// The entity with this snapshot id in this world, or null. Scripted props
+	// address each other through the id handed to their spawn callback.
+	CEntity *FindEntityByID(int ID);
 	CEntity *ClosestFlagEntity(vec2 Pos, float Radius, int Flag, CEntity *pNotThis);
 
 	// The closest harvestable resource to Pos, including nodes owned by a live

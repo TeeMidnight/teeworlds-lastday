@@ -8,6 +8,7 @@
 #include <game/server/entities/character.h>
 #include <game/server/gamecontext.h>
 #include <game/server/player.h>
+#include <game/server/scripting/script_runtime.h>
 
 // ---------------------------------------------------------------
 // item "use" effects
@@ -23,7 +24,11 @@
 bool CItemSystem::IsUsable(const CItemID &Id) const
 {
 	const SItemDef *pItem = m_Items.get(Id.Value());
-	return pItem && pItem->m_Use.m_HasUse;
+	if(!pItem)
+		return false;
+	if(pItem->m_Use.m_HasUse)
+		return true;
+	return pItem->m_Module >= 0 && CScriptRuntime::Get()->HasFunction(pItem->m_Module, "on_use");
 }
 
 CItemSystem::SUse CItemSystem::GetUse(const CItemID &Id) const
@@ -45,13 +50,49 @@ int CItemSystem::UseItem(int ClientID, const CItemID &Id, int Count)
 	if(Count > Owned)
 		Count = Owned;
 
-	const SUse Use = GetUse(Id);
-	if(!Use.m_HasUse)
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	if(!pItem)
 		return 0;
 
 	CGameContext *pGameServer = m_pGameServer;
 	CPlayer *pPlayer = pGameServer->m_apPlayers[ClientID];
 	if(!pPlayer)
+		return 0;
+
+	// Scripted items own their use behaviour. C++ still owns the inventory
+	// transaction: a script must set ctx["consumed"] before one copy is removed.
+	if(pItem->m_Module >= 0 && CScriptRuntime::Get()->HasFunction(pItem->m_Module, "on_use"))
+	{
+		int Used = 0;
+		CCharacter *pChr = pGameServer->GetPlayerChar(ClientID);
+		while(Used < Count)
+		{
+			SScriptContext Ctx;
+			Ctx.m_pGameServer = pGameServer;
+			Ctx.m_ClientID = ClientID;
+			Ctx.m_ItemId = Id;
+			Ctx.m_Now = pGameServer->Server()->Tick();
+			Ctx.m_TickSpeed = pGameServer->Server()->TickSpeed();
+			Ctx.m_Pos = pChr ? pChr->GetPos() : vec2(0.0f, 0.0f);
+			str_copy(Ctx.m_aEvent, "item_use", sizeof(Ctx.m_aEvent));
+			if(!CScriptRuntime::Get()->Call(pItem->m_Module, "on_use", Ctx))
+			{
+				dbg_msg("items", "script error in '%s': %s", pItem->m_aScript, CScriptRuntime::Get()->LastError());
+				break;
+			}
+			if(!Ctx.m_Consumed)
+				break;
+			if(!RemoveItem(ClientID, Id, 1))
+				break;
+			Used++;
+		}
+		if(Used > 0)
+			pGameServer->SavePlayerData(pPlayer);
+		return Used;
+	}
+
+	const SUse Use = GetUse(Id);
+	if(!Use.m_HasUse)
 		return 0;
 
 	int Used = 0;

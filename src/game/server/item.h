@@ -117,6 +117,9 @@ private:
 		char m_aDesc[256];
 		// the item's folder under data/items, e.g. "weapon"
 		char m_aCategory[32];
+		// optional Python module for on_use / on_place; -1 = native only
+		char m_aScript[128];
+		int m_Module;
 		// the weapon this item equips as, or "" when it is not a weapon
 		char m_aWeapon[32];
 		// an item can belong to several types (e.g. an ore is both "ore" and
@@ -160,6 +163,7 @@ private:
 		bool m_Found;
 	};
 	static void AmmoAddCallback(SItemDef &Item, void *pUser);
+	static void ReloadScriptCallback(SItemDef &Item, void *pUser);
 
 	// add to an inventory without any chat / logging, used by craft simulation
 	static bool AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef);
@@ -262,6 +266,8 @@ public:
 
 	void Init(class CGameContext *pGameServer, class IStorage *pStorage);
 	void Load(class IStorage *pStorage);
+	// re-exec every item script in place (monotonic hot reload)
+	bool ReloadScripts();
 
 	CInventory &GetInventory(int ClientID) { return m_aInventories[ClientID]; }
 

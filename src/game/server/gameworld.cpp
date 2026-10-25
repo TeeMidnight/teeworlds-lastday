@@ -20,8 +20,8 @@
 #include "entities/character.h"
 #include "entities/drill.h"
 #include "entities/dropped_pickup.h"
-#include "entities/health_jar.h"
 #include "entities/resource.h"
+#include "scripting/scripted_entity.h"
 #include "entity.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
@@ -31,6 +31,75 @@
 #include <game/server/database/database.h>
 
 #include <algorithm>
+
+namespace
+{
+// CJsonWriter only writes typed values, so a state/params document that is
+// already parsed is walked here and written back as a nested object instead of
+// being escaped into a string.
+void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
+{
+	switch(Value.type)
+	{
+	case json_object:
+		Writer.BeginObject();
+		for(unsigned i = 0; i < Value.u.object.length; i++)
+		{
+			Writer.WriteAttribute(Value.u.object.values[i].name);
+			WriteJsonValue(Writer, *Value.u.object.values[i].value);
+		}
+		Writer.EndObject();
+		break;
+	case json_array:
+		Writer.BeginArray();
+		for(unsigned i = 0; i < Value.u.array.length; i++)
+			WriteJsonValue(Writer, *Value.u.array.values[i]);
+		Writer.EndArray();
+		break;
+	case json_integer:
+		Writer.WriteInt64Value(Value.u.integer);
+		break;
+	case json_double:
+		Writer.WriteDoubleValue(Value.u.dbl);
+		break;
+	case json_string:
+		Writer.WriteStrValue(Value.u.string.ptr);
+		break;
+	case json_boolean:
+		Writer.WriteBoolValue(Value.u.boolean != 0);
+		break;
+	case json_none:
+	case json_null:
+	default:
+		Writer.WriteNullValue();
+		break;
+	}
+}
+
+// The stored form of a scripted entity's state: a nested json object when the
+// text parses, its raw string otherwise (so a damaged document is not lost).
+void WriteJsonText(CJsonWriter &Writer, const char *pAttribute, const std::string &Text)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(Text.c_str(), pAttribute);
+	Writer.WriteAttribute(pAttribute);
+	if(pJson && (pJson->type == json_object || pJson->type == json_array))
+		WriteJsonValue(Writer, *pJson);
+	else
+		Writer.WriteStrValue(Text.c_str());
+}
+
+// Reads a value written by WriteJsonText back into the text the script layer
+// expects, accepting both the nested object and the legacy string form.
+std::string ReadJsonText(const json_value &Value)
+{
+	if(Value.type == json_object || Value.type == json_array)
+		return ScriptJsonToString(&Value);
+	if(Value.type == json_string)
+		return Value.u.string.ptr;
+	return "{}";
+}
+} // namespace
 
 //////////////////////////////////////////////////
 // game world
@@ -578,6 +647,15 @@ CGameWorld::TypeRange CGameWorld::DoTypeRange(int Type)
 CGameWorld::FlagRange CGameWorld::DoFlagRange(int Flag)
 {
 	return FlagRange(m_lpFlagEntityList.all(), CFlagCheck(Flag));
+}
+
+CEntity *CGameWorld::FindEntityByID(int ID)
+{
+	for(int i = 0; i < NUM_ENTTYPES; i++)
+		for(auto &pEnt : m_alpEntityLists[i])
+			if(pEnt->GetID() == ID)
+				return pEnt;
+	return nullptr;
 }
 
 int CGameWorld::FindEntities(vec2 Pos, float Radius, array<CEntity *> &lpEnts, int Type)
@@ -1180,12 +1258,13 @@ void CGameWorld::SaveToDatabase()
 	if(!pDB || !m_aMapName[0])
 		return;
 
-	// collect the live dropped pickups of this world
+	// collect the live persistent item drops of this world; health pickups use
+	// the same entity class but are transient and never saved
 	array<CDroppedPickup *> lDrops;
 	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_DROPPEDPICKUP); !r.empty(); r.pop_front())
 	{
 		CDroppedPickup *pPickup = static_cast<CDroppedPickup *>(r.front());
-		if(!pPickup->IsMarkedForDestroy())
+		if(!pPickup->IsMarkedForDestroy() && pPickup->IsPersistent())
 			lDrops.add(pPickup);
 	}
 
@@ -1198,14 +1277,23 @@ void CGameWorld::SaveToDatabase()
 			lDrills.add(pDrill);
 	}
 
-	// collect the placed health jars
-	array<CHealthJarEntity *> lJars;
-	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_HEALTH_JAR); !r.empty(); r.pop_front())
+	// collect the persistent scripted props (the health jar among them). Only
+	// persistent kinds are world content; a transient visual prop comes back
+	// from its own spawn point or not at all.
+	array<CScriptedEntity *> lScripted;
+	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_SCRIPTED); !r.empty(); r.pop_front())
 	{
-		CHealthJarEntity *pJar = static_cast<CHealthJarEntity *>(r.front());
-		if(!pJar->IsMarkedForDestroy())
-			lJars.add(pJar);
+		CScriptedEntity *pEntity = static_cast<CScriptedEntity *>(r.front());
+		if(pEntity->IsMarkedForDestroy() || !pEntity->Persistent())
+			continue;
+		lScripted.add(pEntity);
 	}
+
+	// Give every script a chance to fold timers into its state first. This runs
+	// after the list walk, so a script that spawns another prop cannot invalidate
+	// the range being iterated.
+	for(int i = 0; i < lScripted.size(); i++)
+		lScripted[i]->CallSave();
 
 	// build the whole world document from scratch
 	array<char> lJson;
@@ -1256,29 +1344,31 @@ void CGameWorld::SaveToDatabase()
 	}
 	JsonWriter.EndArray();
 
-	// placed health jars: the item, its position and its owner. The owner is
-	// stored as an account uuid so a jar survives a reconnect; a jar placed
-	// while logged out keeps its owner name but comes back ownerless.
-	JsonWriter.WriteAttribute("jar");
+	// scripted props: kind, position, health, owner account, params and state.
+	// The owner is an account uuid so a prop survives a reconnect; a prop placed
+	// while logged out keeps its owner client id and comes back ownerless.
+	JsonWriter.WriteAttribute("scripted");
 	JsonWriter.BeginArray();
-	for(int i = 0; i < lJars.size(); i++)
+	for(int i = 0; i < lScripted.size(); i++)
 	{
-		const CHealthJarEntity *pJar = lJars[i];
-		char aUuid[UUID_MAXSTRSIZE];
-		pJar->ItemId().FormatUuid(aUuid, sizeof(aUuid));
+		const CScriptedEntity *pEntity = lScripted[i];
 		char aOwner[UUID_MAXSTRSIZE];
-		format_uuid(pJar->OwnerAccount(), aOwner, sizeof(aOwner));
+		format_uuid(pEntity->OwnerAccount(), aOwner, sizeof(aOwner));
 		JsonWriter.BeginObject();
-		JsonWriter.WriteAttribute("item");
-		JsonWriter.WriteStrValue(aUuid);
+		JsonWriter.WriteAttribute("kind");
+		JsonWriter.WriteStrValue(pEntity->Kind());
 		JsonWriter.WriteAttribute("x");
-		JsonWriter.WriteIntValue(round_to_int(pJar->GetPos().x));
+		JsonWriter.WriteIntValue(round_to_int(pEntity->GetPos().x));
 		JsonWriter.WriteAttribute("y");
-		JsonWriter.WriteIntValue(round_to_int(pJar->GetPos().y));
+		JsonWriter.WriteIntValue(round_to_int(pEntity->GetPos().y));
+		JsonWriter.WriteAttribute("health");
+		JsonWriter.WriteIntValue(pEntity->Health());
 		JsonWriter.WriteAttribute("owner");
 		JsonWriter.WriteStrValue(aOwner);
-		JsonWriter.WriteAttribute("owner_name");
-		JsonWriter.WriteStrValue(pJar->OwnerName());
+		JsonWriter.WriteAttribute("persistent");
+		JsonWriter.WriteBoolValue(pEntity->Persistent());
+		WriteJsonText(JsonWriter, "params", pEntity->Params());
+		WriteJsonText(JsonWriter, "state", pEntity->State());
 		JsonWriter.EndObject();
 	}
 	JsonWriter.EndArray();
@@ -1291,7 +1381,7 @@ void CGameWorld::SaveToDatabase()
 	// were snapshotted above, so the job never touches the live world and the
 	// world may be unloaded right after this returns. An empty world still
 	// queues a job: it deletes the row.
-	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0 || lJars.size() > 0);
+	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0 || lScripted.size() > 0);
 }
 
 void CGameWorld::RestoreFromDatabase()
@@ -1396,7 +1486,44 @@ void CGameWorld::RestoreFromDatabase()
 		pDrill->SetDirection(Dir);
 	}
 
-	// placed health jars: the item, its position and the owner account
+	// scripted props: recreate them and let their script rebuild timers/visuals
+	// from the stored state (on_spawn, then on_load).
+	CScriptedEntitySystem *pScripted = GameServer()->ScriptedEntities();
+	const json_value &rScripted = (*pJson)["scripted"];
+	for(unsigned i = 0; rScripted.type == json_array && i < rScripted.u.array.length; i++)
+	{
+		const json_value &rEntity = rScripted[i];
+		if(rEntity.type != json_object)
+			continue;
+		const json_value &rKind = rEntity["kind"];
+		const json_value &rX = rEntity["x"];
+		const json_value &rY = rEntity["y"];
+		if(rKind.type != json_string || rX.type != json_integer || rY.type != json_integer)
+			continue;
+		if(!pScripted || !pScripted->GetDef(rKind.u.string.ptr))
+			continue;
+
+		Uuid Owner = UUID_ZEROED;
+		const json_value &rOwner = rEntity["owner"];
+		if(rOwner.type == json_string)
+			parse_uuid(&Owner, rOwner.u.string.ptr);
+
+		const json_value &rHealth = rEntity["health"];
+		// current hp; the definition supplies the maximum
+		const int Health = rHealth.type == json_integer ? maximum(1, (int) (json_int_t) rHealth) : -1;
+		const json_value &rPersistent = rEntity["persistent"];
+		const int Persistent = rPersistent.type == json_boolean ? (rPersistent.u.boolean != 0 ? 1 : 0) : -1;
+
+		const std::string Params = ReadJsonText(rEntity["params"]);
+		const std::string State = ReadJsonText(rEntity["state"]);
+
+		pScripted->Spawn(rKind.u.string.ptr, this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY),
+			Params.c_str(), Owner, -1, Persistent, 0, Health, State.c_str(), true);
+	}
+
+	// Backward compatibility: worlds saved before the scripted entity existed
+	// stored health jars in a "jar" array. Convert them into scripted jars so an
+	// old world keeps its props after the migration.
 	const json_value &rJars = (*pJson)["jar"];
 	for(unsigned i = 0; rJars.type == json_array && i < rJars.u.array.length; i++)
 	{
@@ -1415,6 +1542,8 @@ void CGameWorld::RestoreFromDatabase()
 		const CItemSystem::SHealthJar Def = pItems->GetHealthJar(JarId);
 		if(!Def.m_HasJar)
 			continue;
+		if(!pScripted || !pScripted->GetDef("health_jar"))
+			continue;
 
 		Uuid Owner = UUID_ZEROED;
 		const json_value &rOwner = rJar["owner"];
@@ -1423,6 +1552,7 @@ void CGameWorld::RestoreFromDatabase()
 		const json_value &rOwnerName = rJar["owner_name"];
 		const char *pOwnerName = rOwnerName.type == json_string ? rOwnerName.u.string.ptr : "";
 
-		new CHealthJarEntity(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY), JarId, Def.m_Cooldown, Def.m_Range, Def.m_Health, Owner, -1, pOwnerName);
+		pScripted->SpawnHealthJar(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY),
+			JarId, Owner, -1, pOwnerName, Def.m_Cooldown, Def.m_Range, Def.m_Health, "{}", true);
 	}
 }
