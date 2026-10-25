@@ -1758,6 +1758,26 @@ int CServer::LoadMap(CMapInfo *pInfo)
 		}
 	}
 
+	// The game world reads generated metadata from its sidecar path, not from
+	// CMapGen's in-memory instance. A pack-restored map may have no sidecar
+	// (packs are the durable copy), so write it before the instance is freed;
+	// without this CGameWorld::ParseEntrances sees an empty list and ring /
+	// entrance switches have no target geometry.
+	if(HaveInstance && Instance.m_JsonSize > 0 && Instance.m_pJson)
+	{
+		EnsureGeneratedMapsDir(Storage());
+		char aMetaPath[IO_MAX_PATH_LENGTH];
+		GeneratedWorldMetaPath(pInfo->m_aName, aMetaPath, sizeof(aMetaPath));
+		IOHANDLE File = Storage()->OpenFile(aMetaPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
+		if(File)
+		{
+			io_write(File, Instance.m_pJson, Instance.m_JsonSize);
+			io_close(File);
+		}
+		else
+			dbg_msg("mapgen", "cannot write metadata sidecar for '%s'", pInfo->m_aName);
+	}
+
 	CMapGen::FreeInstance(&Instance);
 
 	GameServer()->RequestLoadWorld(pInfo->m_MapID);
