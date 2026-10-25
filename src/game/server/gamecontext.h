@@ -217,6 +217,10 @@ public:
 	// item; returns false (with a chat message) when it cannot be placed.
 	bool PlaceDrill(int ClientID, const CItemID &ItemId);
 
+	// place a health jar item on the floor in front of the player. consumes one
+	// item; returns false (with a chat message) when it cannot be placed.
+	bool PlaceHealthJar(int ClientID, const CItemID &ItemId);
+
 	CCommandManager m_CommandManager;
 
 	CCommandManager *CommandManager() { return &m_CommandManager; }

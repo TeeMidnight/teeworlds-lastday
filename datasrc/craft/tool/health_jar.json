@@ -1,0 +1,25 @@
+{
+    "craft_id": "health_jar",
+    "needed": [
+        {
+            "item_id": "stone_bricks",
+            "count": 4
+        },
+        {
+            "item_id": "iron_ingot",
+            "count": 2
+        },
+        {
+            "item_id": "silver_ingot",
+            "count": 2
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 2
+        }
+    ],
+    "result": {
+        "item_id": "health_jar",
+        "count": 1
+    }
+}

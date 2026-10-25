@@ -289,6 +289,26 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath, const 
 			Item.m_Drill.m_Power = clamp((int) (json_int_t) Power, 1, 100);
 	}
 
+	// health jar placement: an optional "jar" object. Values are clamped so a
+	// data pack cannot turn the jar into a map-wide free health fountain.
+	const json_value &Jar = (*pJson)["jar"];
+	if(Jar.type == json_object)
+	{
+		Item.m_Jar.m_HasJar = true;
+		auto ReadJarInt = [&](const char *pKey, int Default, int Min, int Max) -> int
+		{
+			const json_value &Value = Jar[pKey];
+			if(Value.type == json_integer || Value.type == json_double)
+				return clamp((int) (json_int_t) Value, Min, Max);
+			return Default;
+		};
+		// SItemDef is mem_zero'd before loading, so the defaults have to be
+		// spelled out here rather than read back from the zeroed struct
+		Item.m_Jar.m_Cooldown = ReadJarInt("cooldown", 45, 1, 3600);
+		Item.m_Jar.m_Range = ReadJarInt("range", 96, 32, 512);
+		Item.m_Jar.m_Health = ReadJarInt("health", 10, 1, 1000);
+	}
+
 	// a UUID collision is astronomically unlikely, but a duplicated id must not
 	// silently replace an unrelated item
 	const SItemDef *pExisting = m_Items.get(Item.m_Id.Value());
@@ -422,6 +442,18 @@ CItemSystem::SDrill CItemSystem::GetDrill(const CItemID &Id) const
 {
 	const SItemDef *pItem = m_Items.get(Id.Value());
 	return pItem ? pItem->m_Drill : SDrill();
+}
+
+bool CItemSystem::IsHealthJar(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem && pItem->m_Jar.m_HasJar;
+}
+
+CItemSystem::SHealthJar CItemSystem::GetHealthJar(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem ? pItem->m_Jar : SHealthJar();
 }
 
 bool CItemSystem::HasItemType(const CItemID &Id, const char *pType) const

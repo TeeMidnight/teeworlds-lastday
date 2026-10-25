@@ -20,6 +20,7 @@
 #include "entities/character.h"
 #include "entities/drill.h"
 #include "entities/dropped_pickup.h"
+#include "entities/health_jar.h"
 #include "entities/resource.h"
 #include "entity.h"
 #include "gamecontext.h"
@@ -1197,6 +1198,15 @@ void CGameWorld::SaveToDatabase()
 			lDrills.add(pDrill);
 	}
 
+	// collect the placed health jars
+	array<CHealthJarEntity *> lJars;
+	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_HEALTH_JAR); !r.empty(); r.pop_front())
+	{
+		CHealthJarEntity *pJar = static_cast<CHealthJarEntity *>(r.front());
+		if(!pJar->IsMarkedForDestroy())
+			lJars.add(pJar);
+	}
+
 	// build the whole world document from scratch
 	array<char> lJson;
 	memory_stream<char> Stream(&lJson);
@@ -1245,6 +1255,34 @@ void CGameWorld::SaveToDatabase()
 		JsonWriter.EndObject();
 	}
 	JsonWriter.EndArray();
+
+	// placed health jars: the item, its position and its owner. The owner is
+	// stored as an account uuid so a jar survives a reconnect; a jar placed
+	// while logged out keeps its owner name but comes back ownerless.
+	JsonWriter.WriteAttribute("jar");
+	JsonWriter.BeginArray();
+	for(int i = 0; i < lJars.size(); i++)
+	{
+		const CHealthJarEntity *pJar = lJars[i];
+		char aUuid[UUID_MAXSTRSIZE];
+		pJar->ItemId().FormatUuid(aUuid, sizeof(aUuid));
+		char aOwner[UUID_MAXSTRSIZE];
+		format_uuid(pJar->OwnerAccount(), aOwner, sizeof(aOwner));
+		JsonWriter.BeginObject();
+		JsonWriter.WriteAttribute("item");
+		JsonWriter.WriteStrValue(aUuid);
+		JsonWriter.WriteAttribute("x");
+		JsonWriter.WriteIntValue(round_to_int(pJar->GetPos().x));
+		JsonWriter.WriteAttribute("y");
+		JsonWriter.WriteIntValue(round_to_int(pJar->GetPos().y));
+		JsonWriter.WriteAttribute("owner");
+		JsonWriter.WriteStrValue(aOwner);
+		JsonWriter.WriteAttribute("owner_name");
+		JsonWriter.WriteStrValue(pJar->OwnerName());
+		JsonWriter.EndObject();
+	}
+	JsonWriter.EndArray();
+
 	// future world attributes get their own fields of this object here
 	JsonWriter.EndObject();
 	lJson.add(0);
@@ -1253,7 +1291,7 @@ void CGameWorld::SaveToDatabase()
 	// were snapshotted above, so the job never touches the live world and the
 	// world may be unloaded right after this returns. An empty world still
 	// queues a job: it deletes the row.
-	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0);
+	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0 || lJars.size() > 0);
 }
 
 void CGameWorld::RestoreFromDatabase()
@@ -1356,5 +1394,35 @@ void CGameWorld::RestoreFromDatabase()
 
 		CDrillEntity *pDrill = new CDrillEntity(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY), DrillId, Def.m_MaxLength, Def.m_Power, -1);
 		pDrill->SetDirection(Dir);
+	}
+
+	// placed health jars: the item, its position and the owner account
+	const json_value &rJars = (*pJson)["jar"];
+	for(unsigned i = 0; rJars.type == json_array && i < rJars.u.array.length; i++)
+	{
+		const json_value &rJar = rJars[i];
+		if(rJar.type != json_object)
+			continue;
+		const json_value &rItem = rJar["item"];
+		const json_value &rX = rJar["x"];
+		const json_value &rY = rJar["y"];
+		if(rItem.type != json_string || rX.type != json_integer || rY.type != json_integer)
+			continue;
+
+		CItemID JarId;
+		if(!CItemID::Parse(rItem.u.string.ptr, &JarId) || JarId.IsZero())
+			continue;
+		const CItemSystem::SHealthJar Def = pItems->GetHealthJar(JarId);
+		if(!Def.m_HasJar)
+			continue;
+
+		Uuid Owner = UUID_ZEROED;
+		const json_value &rOwner = rJar["owner"];
+		if(rOwner.type == json_string)
+			parse_uuid(&Owner, rOwner.u.string.ptr);
+		const json_value &rOwnerName = rJar["owner_name"];
+		const char *pOwnerName = rOwnerName.type == json_string ? rOwnerName.u.string.ptr : "";
+
+		new CHealthJarEntity(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY), JarId, Def.m_Cooldown, Def.m_Range, Def.m_Health, Owner, -1, pOwnerName);
 	}
 }

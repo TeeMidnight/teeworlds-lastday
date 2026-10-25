@@ -25,6 +25,7 @@
 #include "entities/character.h"
 #include "entities/drill.h"
 #include "entities/dropped_pickup.h"
+#include "entities/health_jar.h"
 #include "entities/laser.h"
 #include "entities/projectile.h"
 #include "entities/resource.h"
@@ -738,6 +739,83 @@ bool CGameContext::PlaceDrill(int ClientID, const CItemID &ItemId)
 	SavePlayerData(m_apPlayers[ClientID]);
 	SendChat(-1, CHAT_WHISPER, ClientID,
 		Localize("Drill placed. Hold the scoreboard next to it to take control; jump to let go.", "Drill"));
+	return true;
+}
+
+bool CGameContext::PlaceHealthJar(int ClientID, const CItemID &ItemId)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || !m_apPlayers[ClientID])
+		return false;
+
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
+	CCharacter *pChr = GetPlayerChar(ClientID);
+	if(!pChr)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You have to be alive to place a health jar.", "Health Jar"));
+		return false;
+	}
+	if(!pChr->IsGrounded())
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("Stand on the ground to place a health jar.", "Health Jar"));
+		return false;
+	}
+
+	const CItemSystem::SHealthJar Def = Item()->GetHealthJar(ItemId);
+	if(!Def.m_HasJar || Item()->GetItemCount(ClientID, ItemId) <= 0)
+		return false;
+
+	CGameWorld *pWorld = pChr->GameWorld();
+	CCollision *pCollision = pWorld->Collision();
+
+	// a 2 tile wide jar is centred on a tile boundary, one and a half tiles in
+	// front of the player, so the tee does not end up standing inside its frame
+	const int Face = pChr->AimDirection().x >= 0.0f ? 1 : -1;
+	const float CenterX = roundf((pChr->GetPos().x + (float) (Face * 48)) / 32.0f) * 32.0f;
+
+	// the floor below the jar spot, not below the player: placing over a pit
+	// must fail rather than leave the jar hanging in the air. IntersectLine
+	// returns a point inside the first solid tile, so rounding to the tile
+	// index recovers its surface.
+	const vec2 FloorStart(CenterX, pChr->GetPos().y);
+	vec2 Hit;
+	if(!pCollision->IntersectLine(FloorStart, FloorStart + vec2(0.0f, 4 * 32.0f), &Hit, nullptr))
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("There is no floor below the jar.", "Health Jar"));
+		return false;
+	}
+	const float BottomY = (float) round_to_int(Hit.y / 32.0f) * 32.0f;
+	const float CenterY = BottomY - (float) CHealthJarEntity::JAR_HEIGHT / 2.0f;
+	const vec2 Center(CenterX, CenterY);
+
+	// leave the bottom edge resting on the floor instead of inside it
+	if(pCollision->TestBox(Center, vec2((float) CHealthJarEntity::JAR_WIDTH - 4.0f, (float) CHealthJarEntity::JAR_HEIGHT - 6.0f)))
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("There is no room for a health jar here.", "Health Jar"));
+		return false;
+	}
+
+	// one jar per spot, so a stack of items cannot pile entities onto one tile
+	for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_HEALTH_JAR); !r.empty(); r.pop_front())
+	{
+		if(distance(r.front()->GetPos(), Center) < (float) CHealthJarEntity::JAR_WIDTH)
+		{
+			SendChat(-1, CHAT_WHISPER, ClientID, Localize("There is already a health jar here.", "Health Jar"));
+			return false;
+		}
+	}
+
+	if(!Item()->RemoveItem(ClientID, ItemId, 1))
+		return false;
+
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	// an account survives a reconnect; without one the jar can only follow the
+	// client slot until the server restarts
+	const Uuid OwnerAccount = pPlayer->m_LoggedIn ? pPlayer->m_AccountUuid : UUID_ZEROED;
+	new CHealthJarEntity(pWorld, Center, ItemId, Def.m_Cooldown, Def.m_Range, Def.m_Health, OwnerAccount, ClientID, Server()->ClientName(ClientID));
+
+	SavePlayerData(pPlayer);
+	SendChat(-1, CHAT_WHISPER, ClientID,
+		Localize("Health jar placed. Its owner coming close makes it drop a health pickup.", "Health Jar"));
 	return true;
 }
 

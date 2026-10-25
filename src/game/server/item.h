@@ -81,6 +81,25 @@ public:
 		}
 	};
 
+	// placement effect of a health jar item: a laser-framed container that shows
+	// a health pickup in its middle. While its owner stands close it drops one
+	// health pickup to the ground, at most once per m_Cooldown seconds.
+	struct SHealthJar
+	{
+		int m_Cooldown; // seconds between two drops
+		int m_Range; // how close the owner has to stand (world units)
+		int m_Health; // damage the frame takes before it is dismantled
+		bool m_HasJar; // whether a "jar" object was declared
+
+		SHealthJar() :
+			m_Cooldown(45),
+			m_Range(96),
+			m_Health(10),
+			m_HasJar(false)
+		{
+		}
+	};
+
 private:
 	class CGameContext *m_pGameServer;
 	class IStorage *m_pStorage;
@@ -114,6 +133,7 @@ private:
 		SUse m_Use;
 		SAccessory m_Accessory;
 		SDrill m_Drill;
+		SHealthJar m_Jar;
 	};
 	hash_table<Uuid, SItemDef, 16, uuid_table_function> m_Items;
 
@@ -276,6 +296,10 @@ public:
 	bool IsDrill(const CItemID &Id) const;
 	// the item's drill data; m_HasDrill false when it is not a drill
 	SDrill GetDrill(const CItemID &Id) const;
+	// whether the item can be placed as a health jar building
+	bool IsHealthJar(const CItemID &Id) const;
+	// the item's health jar data; m_HasJar false when it is not one
+	SHealthJar GetHealthJar(const CItemID &Id) const;
 
 	// consume up to Count items and apply their "use" effects to the player
 	int UseItem(int ClientID, const CItemID &Id, int Count = 1);

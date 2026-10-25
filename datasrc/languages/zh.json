@@ -457,6 +457,21 @@
 			"context": "Item Desc: Heaven Drill",
 			"or": "A drill carrying a sliver of heaven. Its beam reaches 30 tiles and chips 9 hardness per pass.",
 			"tr": "带着一线天堂之力的钻头。光束可延伸 30 格，每次钻探削去 9 点硬度。"
+		},
+		{
+			"context": "Item Name",
+			"or": "Health Jar",
+			"tr": "生命罐"
+		},
+		{
+			"context": "Item Desc: Health Jar",
+			"or": "A laser-sealed jar with a health pickup floating inside. When its owner comes close it drops the pickup to the ground.",
+			"tr": "一只以激光封口的罐子，里面悬着一枚生命拾取物。主人靠近时，它会将拾取物掉到地上。"
+		},
+		{
+			"context": "Item Type",
+			"or": "container",
+			"tr": "容器"
 		}
 	],
 	"server strings": [
@@ -1279,6 +1294,46 @@
 			"context": "Trade",
 			"or": "You have no inventory space.",
 			"tr": "背包空间不足。"
+		},
+		{
+			"context": "Health Jar",
+			"or": "You have to be alive to place a health jar.",
+			"tr": "你必须活着才能放置生命罐。"
+		},
+		{
+			"context": "Health Jar",
+			"or": "Stand on the ground to place a health jar.",
+			"tr": "站在地面上才能放置生命罐。"
+		},
+		{
+			"context": "Health Jar",
+			"or": "There is no floor below the jar.",
+			"tr": "罐子下方没有可以放置的地面。"
+		},
+		{
+			"context": "Health Jar",
+			"or": "There is no room for a health jar here.",
+			"tr": "这里没有足够空间放置生命罐。"
+		},
+		{
+			"context": "Health Jar",
+			"or": "There is already a health jar here.",
+			"tr": "这里已经有一个生命罐了。"
+		},
+		{
+			"context": "Health Jar",
+			"or": "Health jar placed. Its owner coming close makes it drop a health pickup.",
+			"tr": "生命罐已放置。主人靠近时，它会掉出一枚生命拾取物。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Place health jar",
+			"tr": "放置生命罐"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Its owner standing close makes it drop a health pickup.",
+			"tr": "主人站在附近时，它会掉出一枚生命拾取物。"
 		}
 	]
 }
