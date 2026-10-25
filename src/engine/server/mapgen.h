@@ -489,7 +489,10 @@ private:
 	bool ReadFromPack(const char *pFloorName, int Seed, SMapInstance *pOut);
 	bool ExtractFromPack(const char *pFloorName, int Seed);
 	// append bytes that are already in memory
-	void AppendInstanceToPack(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize);
+	// Returns whether the instance was actually appended. Callers must keep a
+	// sidecar file when it returns false, otherwise the just-generated world
+	// cannot be read back by AcquireMap and ring/entrance switches fail.
+	bool AppendInstanceToPack(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize);
 	// append an instance that exists as files (migration / tooling)
 	void AppendToPack(const char *pFloorName, int Seed);
 	// write the instance as the usual "<name>.map" + ".json" cache files

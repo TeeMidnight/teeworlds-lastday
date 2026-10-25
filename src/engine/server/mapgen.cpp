@@ -666,10 +666,10 @@ bool CMapGen::ExtractFromPack(const char *pFloorName, int Seed)
 	return Extracted;
 }
 
-void CMapGen::AppendInstanceToPack(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize)
+bool CMapGen::AppendInstanceToPack(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize)
 {
 	if(!m_UseMapPacks || !m_pStorage || !pFloorName || !pFloorName[0] || !pMap || MapSize <= 0)
-		return;
+		return false;
 
 	char aMapName[64];
 	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
@@ -696,6 +696,9 @@ void CMapGen::AppendInstanceToPack(const char *pFloorName, int Seed, const void 
 	if(Added)
 		RememberInstance(pFloorName, Seed);
 	dbg_msg("mapgen", "map pack: %s %s into %s", Added ? "packed" : "FAILED to pack", aMapName, aPackPath);
+	if(!Added)
+		dbg_msg("mapgen", "map pack: keeping sidecar files for %s", aMapName);
+	return Added;
 }
 
 void CMapGen::AppendToPack(const char *pFloorName, int Seed)
@@ -1286,13 +1289,15 @@ bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 
 	// every instance the generator produces joins its floor's pack, so the
 	// pack becomes the complete set of that floor's worlds
-	AppendInstanceToPack(pFloorName, Seed,
+	const bool Packed = AppendInstanceToPack(pFloorName, Seed,
 		GeneratedMap.m_Map.base_ptr(), GeneratedMap.m_Map.size(),
 		GeneratedMap.m_Meta.base_ptr(), GeneratedMap.m_Meta.size());
 
-	// a cache file is only written when the caller wants one (tooling) or when
-	// there is no pack to read the instance back from
-	if(!m_DeleteGeneratedFiles || !m_UseMapPacks)
+	// A cache file is written when the caller wants one (tooling), when packs
+	// are disabled, or when the append failed. The last case is essential:
+	// AcquireMap must be able to read the instance back after GenerateNow;
+	// otherwise a ring neighbour or an entrance target cannot be created.
+	if(!Packed || !m_DeleteGeneratedFiles || !m_UseMapPacks)
 		WriteInstanceFiles(pFloorName, Seed,
 			GeneratedMap.m_Map.base_ptr(), GeneratedMap.m_Map.size(),
 			GeneratedMap.m_Meta.base_ptr(), GeneratedMap.m_Meta.size());
