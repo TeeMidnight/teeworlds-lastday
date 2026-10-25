@@ -1,0 +1,9 @@
+{
+	"name": "grenade",
+	"script": "scripts/weapons/grenade.py",
+	"snap_style": 3,
+	"fire_delay": 500,
+	"full_auto": true,
+	"default_ammo": 10,
+	"max_ammo": 10
+}

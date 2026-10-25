@@ -1,0 +1,9 @@
+{
+	"name": "sword",
+	"script": "scripts/weapons/sword.py",
+	"snap_style": 5,
+	"fire_delay": 125,
+	"full_auto": false,
+	"default_ammo": -1,
+	"max_ammo": -1
+}

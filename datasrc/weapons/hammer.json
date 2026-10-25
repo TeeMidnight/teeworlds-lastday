@@ -1,0 +1,9 @@
+{
+	"name": "hammer",
+	"script": "scripts/weapons/hammer.py",
+	"snap_style": 0,
+	"fire_delay": 125,
+	"full_auto": false,
+	"default_ammo": -1,
+	"max_ammo": -1
+}

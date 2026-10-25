@@ -2,6 +2,7 @@
     "name": "Bandage",
     "desc": "Clean cloth wrapped over a wound. Mends a little health without clouding the mind.",
     "item_type": ["medicine"],
+    "script": "scripts/items/bandage.py",
     "use": {
         "health": 4
     }

@@ -1,0 +1,9 @@
+{
+	"name": "hand",
+	"script": "scripts/weapons/hand.py",
+	"snap_style": -1,
+	"fire_delay": 500,
+	"full_auto": false,
+	"default_ammo": -1,
+	"max_ammo": -1
+}

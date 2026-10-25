@@ -2,6 +2,7 @@
     "name": "Medkit",
     "desc": "A field kit with everything needed to patch a tee up completely.",
     "item_type": ["medicine"],
+    "script": "scripts/items/medkit.py",
     "use": {
         "health": 10
     }

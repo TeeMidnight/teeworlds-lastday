@@ -1,0 +1,12 @@
+{
+    "kind": "health_jar",
+    "script": "scripts/entities/health_jar.py",
+    "health": 10,
+    "radius": 32,
+    "persistent": true,
+    "params": {
+        "cooldown": 45,
+        "range": 96
+    },
+    "visual": {}
+}

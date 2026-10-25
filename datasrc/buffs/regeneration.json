@@ -1,0 +1,14 @@
+{
+    "id": "regeneration",
+    "name": "Regeneration",
+    "desc": "Mends one heart every second while it lasts.",
+    "duration": 10,
+    "max_stacks": 3,
+    "stack_duration": true,
+    "script": "scripts/buffs/regeneration.py",
+    "modifiers": {
+        "health": 0,
+        "range": 0.0,
+        "speed": 0.0
+    }
+}

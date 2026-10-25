@@ -2,6 +2,7 @@
     "name": "Herb Tonic",
     "desc": "A bitter brew that clears the head and mends a scratch or two.",
     "item_type": ["medicine"],
+    "script": "scripts/items/herb_tonic.py",
     "use": {
         "health": 3,
         "forgetting": -15

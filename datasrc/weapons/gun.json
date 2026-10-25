@@ -1,0 +1,9 @@
+{
+	"name": "gun",
+	"script": "scripts/weapons/gun.py",
+	"snap_style": 1,
+	"fire_delay": 125,
+	"full_auto": false,
+	"default_ammo": 10,
+	"max_ammo": 10
+}

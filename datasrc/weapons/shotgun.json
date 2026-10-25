@@ -1,0 +1,9 @@
+{
+	"name": "shotgun",
+	"script": "scripts/weapons/shotgun.py",
+	"snap_style": 2,
+	"fire_delay": 500,
+	"full_auto": true,
+	"default_ammo": 10,
+	"max_ammo": 10
+}

@@ -1,0 +1,9 @@
+{
+	"name": "laser",
+	"script": "scripts/weapons/laser.py",
+	"snap_style": 4,
+	"fire_delay": 800,
+	"full_auto": true,
+	"default_ammo": 10,
+	"max_ammo": 10
+}
