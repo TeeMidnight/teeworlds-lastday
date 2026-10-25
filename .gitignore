@@ -72,6 +72,7 @@ Release
 _CPack_Packages/
 build.ninja
 cmake_install.cmake
+src/engine/external/pocketpy/libpocketpy.a
 googletest-build
 googletest-download
 googletest-src

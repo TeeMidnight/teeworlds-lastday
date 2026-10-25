@@ -1,0 +1,160 @@
+# Scripting (PocketPy)
+
+The server embeds [PocketPy](https://github.com/blueloveTH/pocketpy) 2.2.0 as a
+process-wide VM. Scripts run only on the server tick thread; clients never need
+PocketPy. The script sources live in `datasrc/scripts/` and are copied to
+`data/scripts/` by `ninja copy-data` (or a plain `ninja`).
+
+## Layout
+
+- `src/game/server/scripting/script_runtime.*` — VM lifetime, module loading,
+  watchdog, exception isolation, JSON state/result transfer.
+- `src/game/server/scripting/script_api.cpp` — embedded `lastday` module
+  (players, items, buffs, projectiles, lasers, sounds, tuning).
+- `datasrc/scripts/_context.py` — class-based callback context. Every callback
+  receives one `Context` object.
+- `src/game/server/scripting/buff_system.*` — buff definitions and per-tick
+  buff instances.
+- `src/game/server/scripting/scripted_weapon.*` + `weaponmanager.*` — weapon
+  overrides.
+- `src/game/server/scripting/scripted_entity.*` — generic scripted prop and the
+  `lastday_entity` module (health jar is the first migrated prop).
+- `src/game/server/scripting/scripted_bot_ai.*` — bot AI strategies and the
+  `lastday_bot` module.
+- `src/game/server/scripting/script_commands.cpp` — admin commands.
+
+## Callback context
+
+```python
+def on_use(ctx):
+    ctx.player.heal(4)       # Player class
+    ctx.consumed = True
+
+def on_tick(ctx):
+    if ctx.now % ctx.tick_speed == 0:
+        ctx.player.heal(1)
+```
+
+Useful fields:
+
+- `ctx.player` — player wrapper (`.id`, `.pos`, `.health`, `.alive`,
+  `.heal()`, `.damage()`, `.chat()`, `.item_count()`, `.give_item()`,
+  `.add_buff()`, `.forget()`, ...) or `None`.
+- `ctx.entity` — scripted entity wrapper (`.id`, `.pos`, `.health`,
+  `.damage()`, `.destroy()`, `.set_visual()`, ...) or `None`.
+- `ctx.item` — item wrapper (`.id`, `.count(player)`, `.give()`, `.take()`).
+- `ctx.buff` — active buff wrapper (`.id`, `.stacks`, `.state`, `.remove()`).
+- `ctx.pos`, `ctx.dir` — `Vec2` with `.x`, `.y`, indexing, `.length()`,
+  `.normalized()`, basic arithmetic.
+- `ctx.ammo` — `Ammo` (`.damage`, `.projectiles`, `.speed`, `.lifetime`, `.effect`).
+- `ctx.extra` — `Extra` for subsystem-specific values (missing keys read as 0).
+- `ctx.params`, `ctx.state`, `ctx.result` — plain dictionaries.
+- `ctx.now`, `ctx.tick_speed`, `ctx.range_scale`, `ctx.weapon`, `ctx.kind`.
+- Output flags: `ctx.consumed`, `ctx.reload_ticks`, `ctx.destroy`.
+- Constructor classes: `ctx.Projectile`, `ctx.Laser`, `ctx.HealthDrop`,
+  `ctx.DroppedPickup`, `ctx.MeleeSwing`. Their constructors call the existing
+  C++ `new CProjectile(...)` / `new CLaser(...)` / etc. The returned object
+  only carries the entity id; the game world owns and deletes the C++ entity.
+
+```python
+def on_fire(ctx):
+    span = int(lastday.tuning("gun_lifetime") * ctx.ammo.lifetime * ctx.tick_speed)
+    start = ctx.pos + ctx.dir * ctx.extra.proximity_radius * 0.75
+    ctx.Projectile(ctx.player, start, ctx.dir * ctx.ammo.speed, span,
+                   ctx.ammo.damage or ctx.extra.default_damage,
+                   False, -1, 1)
+```
+
+`ctx["player"]` etc. still work as a compatibility shim for older scripts and
+return the primitive id/name; new scripts should use the class attributes.
+
+## Data formats
+
+Item (`datasrc/items/<category>/<id>.json`):
+
+```json
+{
+  "name": "Bandage",
+  "item_type": ["medicine"],
+  "script": "scripts/items/bandage.py"
+}
+```
+
+The item script may implement `on_use`; C++ removes one copy only when the
+script sets `ctx.consumed`.
+
+Buff (`datasrc/buffs/<id>.json`):
+
+```json
+{
+  "id": "swiftness",
+  "duration": 15,
+  "max_stacks": 3,
+  "stack_duration": true,
+  "script": "scripts/buffs/swiftness.py",
+  "modifiers": { "health": 0, "range": 0.0, "speed": 0.05 }
+}
+```
+
+Buffs call `on_apply`, `on_tick` (every game tick) and `on_remove`. C++ owns
+duration, stacking and the modifier sums.
+
+Weapon (`datasrc/weapons/<name>.json`):
+
+```json
+{
+  "name": "gun",
+  "script": "scripts/weapons/gun.py",
+  "snap_style": 1,
+  "fire_delay": 125,
+  "full_auto": false,
+  "default_ammo": 10,
+  "max_ammo": 10
+}
+```
+
+A scripted weapon overrides the native class of the same name and implements
+`on_fire`; `on_tick` and `on_switch` are optional. The native class remains
+as fallback if the script is missing or broken.
+
+Entity (`datasrc/entities/<kind>.json`):
+
+```json
+{
+  "kind": "health_jar",
+  "script": "scripts/entities/health_jar.py",
+  "health": 10,
+  "radius": 32,
+  "persistent": true
+}
+```
+
+Entity callbacks: `on_spawn`, `on_load`, `on_tick`, `on_hit`, `on_destroy`,
+`on_save`. Use `lastday_entity` for spawn/destroy/visuals/drops/owner checks.
+
+Bot AI: `sv_bot_ai` selects `chase` (default), `wander`, `stand`, a bare
+example name (`guard`), or `script:scripts/bot_ai/<name>.py`. Scripts implement
+`on_spawn`, `on_tick`, `on_action`, `on_damaged`, `on_hit` and drive the
+body through `lastday_bot.set_input(...)`. Set `ctx.consumed = True` (or
+`ctx.result["handled"] = True`) to suppress the native fallback for that tick.
+
+## Admin commands
+
+No `sv_` / `cl_` prefix:
+
+- `reload_scripts` — re-exec item/buff/weapon/entity scripts in place.
+- `buff <client> <buff_id> [seconds] [stacks]`
+- `give_item <client> <item_id> [count]`
+- `script_selftest` — run `scripts/selftest.py` through the class context.
+
+(Settings keep the engine's normal `sv_` convention, e.g. `sv_bot_ai`.)
+
+## Migration status
+
+Scripted now: medicine item use, weapon firing for gun/shotgun/grenade/laser/
+hammer/hand/sword, buffs, health jar prop, and bot AI. Health drops are merged
+into `CDroppedPickup` as `KIND_HEALTH` (one physics/collection path, not a
+separate entity type). The ninja weapon, player character, projectile/laser
+simulation, resource/pickup/drill entities remain native (hot paths or still
+stateful). New prop kinds can use the generic scripted entity; migrate them one
+at a time while keeping the native fallback.
