@@ -1549,6 +1549,11 @@ int CServer::LoadMap(CMapInfo *pInfo)
 {
 	if(!pInfo || pInfo->m_Loaded)
 		return 1;
+	// PushMapList/RegisterMapEntrances below can grow m_MapInfos and invalidate
+	// this pointer. Keep the stable id and re-fetch before writing the ring
+	// fields, otherwise they land in a stale hash-table slot and the client
+	// never receives the correct no-fade/offset flags.
+	const unsigned MapID = pInfo->m_MapID;
 	char aBuf[IO_MAX_PATH_LENGTH];
 	str_format(aBuf, sizeof(aBuf), "maps/%s.map", pInfo->m_aName);
 	bool IsGenerated = false;
@@ -1677,8 +1682,17 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	array<char> aMeta;
 	CJsonParser MetaParser;
 	json_value *pMeta = nullptr;
-	if(HaveInstance && Instance.m_JsonSize > 0)
-		pMeta = MetaParser.ParseString((const char *) Instance.m_pJson, "world meta");
+	if(HaveInstance && Instance.m_JsonSize > 0 && Instance.m_pJson)
+	{
+		// Pack payloads are length-delimited, not C strings: copy the JSON and
+		// append the terminator the parser expects. Parsing the raw pack memory
+		// could run into the map bytes and silently leave m_Ring/m_RingOffsetX
+		// at zero even though CGameWorld later reads the same JSON correctly.
+		aMeta.set_size(Instance.m_JsonSize + 1);
+		mem_copy(aMeta.base_ptr(), Instance.m_pJson, Instance.m_JsonSize);
+		aMeta[Instance.m_JsonSize] = '\0';
+		pMeta = MetaParser.ParseString(aMeta.base_ptr(), "world meta");
+	}
 	else if(LoadGeneratedWorldMeta(Storage(), pInfo->m_aName, aMeta))
 		pMeta = MetaParser.ParseString(aMeta.base_ptr(), "world meta");
 	const bool HasMeta = pMeta && pMeta->type == json_object;
@@ -1717,6 +1731,10 @@ int CServer::LoadMap(CMapInfo *pInfo)
 				RegisterMapEntrances(pJsonData);
 		}
 	}
+	// The entrance registrations above may have reallocated m_MapInfos.
+	pInfo = m_MapInfos[MapID];
+	if(!pInfo)
+		return 0;
 
 	// A ring switch continues the same world, so the client must not fade the
 	// old map over the new one, and the two view positions differ by the ring
@@ -1757,13 +1775,10 @@ int CServer::LoadMap(CMapInfo *pInfo)
 			}
 		}
 	}
-
 	// Hand the metadata to the game layer in memory. The pack (or a legacy
 	// sidecar) is the source of truth; CGameWorld must not require a second
 	// copy of the sidecar on disk just because the map came from a pack.
-	if(HaveInstance && Instance.m_JsonSize > 0 && Instance.m_pJson)
-		SetMapMeta(pInfo->m_MapID, Instance.m_pJson, Instance.m_JsonSize);
-	else if(HasMeta && aMeta.size() > 0)
+	if(aMeta.size() > 0)
 		SetMapMeta(pInfo->m_MapID, aMeta.base_ptr(), aMeta.size());
 
 	CMapGen::FreeInstance(&Instance);
