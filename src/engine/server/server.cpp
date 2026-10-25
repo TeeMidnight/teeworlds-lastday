@@ -2289,7 +2289,13 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 	// Entering a ring from the hub or any other non-ring map is a real map
 	// change and keeps the normal fade.
 	CMapInfo *pOldInfo = m_MapInfos[m_aClients[ClientID].m_MapID];
-	const bool NoFade = pOldInfo && pOldInfo->m_Ring && pInfo->m_Ring;
+	// NO_FADE is only valid inside one ring floor: the two maps share the same
+	// axis and terrain strip. Switching from a ring instance to a *different*
+	// ring floor (an entrance, for example) is still a real world change and
+	// must fade like any other map change.
+	const bool SameRing = pOldInfo && pOldInfo->m_Ring && pInfo->m_Ring &&
+		SameRingFloor(pOldInfo, pInfo);
+	const bool NoFade = SameRing;
 
 	// The two maps share an axis only when they are instances of the same ring
 	// floor. RingNeighbourShift works in tiles and gives the new origin minus
