@@ -1,0 +1,71 @@
+{
+	"comment": "One loot table. A structure variant decides which table its containers use; see datasrc/maps/struct/*.json. Entries are chosen by weight without replacement, rolls_min..rolls_max distinct item kinds, capped by the container capacity. rarity is descriptive and used in the server log; weight balances the table. count_min/count_max bound the stack size.",
+	"id": "scavenger_cache",
+	"rolls_min": 1,
+	"rolls_max": 1,
+	"entries": [
+		{
+			"item": "stone",
+			"count_min": 4,
+			"count_max": 10,
+			"weight": 50,
+			"rarity": "common"
+		},
+		{
+			"item": "grass",
+			"count_min": 3,
+			"count_max": 8,
+			"weight": 25,
+			"rarity": "common"
+		},
+		{
+			"item": "straw_rope",
+			"count_min": 1,
+			"count_max": 3,
+			"weight": 12,
+			"rarity": "common"
+		},
+		{
+			"item": "pistol_bullet",
+			"count_min": 6,
+			"count_max": 12,
+			"weight": 10,
+			"rarity": "common"
+		},
+		{
+			"item": "iron_ore",
+			"count_min": 1,
+			"count_max": 2,
+			"weight": 6,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "bandage",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 4,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "silver_ore",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "amber",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "rare"
+		},
+		{
+			"item": "health_jar",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "rare"
+		}
+	]
+}

@@ -1,0 +1,183 @@
+{
+	"comment": "One loot table. A structure variant decides which table its containers use; see datasrc/maps/struct/*.json. Entries are chosen by weight without replacement, rolls_min..rolls_max distinct item kinds, capped by the container capacity. rarity is descriptive and used in the server log; weight balances the table. count_min/count_max bound the stack size.",
+	"id": "relic_hoard",
+	"rolls_min": 2,
+	"rolls_max": 3,
+	"entries": [
+		{
+			"item": "iron_ingot",
+			"count_min": 2,
+			"count_max": 5,
+			"weight": 18,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "addon:steel_ingot",
+			"count_min": 1,
+			"count_max": 3,
+			"weight": 14,
+			"rarity": "rare"
+		},
+		{
+			"item": "silver_ore",
+			"count_min": 2,
+			"count_max": 4,
+			"weight": 12,
+			"rarity": "rare"
+		},
+		{
+			"item": "silver_ingot",
+			"count_min": 1,
+			"count_max": 3,
+			"weight": 10,
+			"rarity": "rare"
+		},
+		{
+			"item": "heavy_bullet",
+			"count_min": 6,
+			"count_max": 16,
+			"weight": 10,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "shotgun_slug",
+			"count_min": 4,
+			"count_max": 10,
+			"weight": 8,
+			"rarity": "rare"
+		},
+		{
+			"item": "laser_charge",
+			"count_min": 4,
+			"count_max": 10,
+			"weight": 8,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "medkit",
+			"count_min": 1,
+			"count_max": 2,
+			"weight": 6,
+			"rarity": "rare"
+		},
+		{
+			"item": "health_jar",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 5,
+			"rarity": "rare"
+		},
+		{
+			"item": "amber",
+			"count_min": 1,
+			"count_max": 2,
+			"weight": 4,
+			"rarity": "rare"
+		},
+		{
+			"item": "sword",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 4,
+			"rarity": "rare"
+		},
+		{
+			"item": "shotgun",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 3,
+			"rarity": "rare"
+		},
+		{
+			"item": "grenade",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 3,
+			"rarity": "rare"
+		},
+		{
+			"item": "laser",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 3,
+			"rarity": "rare"
+		},
+		{
+			"item": "iron_drill",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 3,
+			"rarity": "rare"
+		},
+		{
+			"item": "steel_drill",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "heart_charm",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "hawk_eye",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "wind_charm",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "ninja",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "legendary"
+		},
+		{
+			"item": "longshot_lens",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "legendary"
+		},
+		{
+			"item": "guardian_heart",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "legendary"
+		},
+		{
+			"item": "storm_charm",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "legendary"
+		},
+		{
+			"item": "heaven_ore",
+			"count_min": 1,
+			"count_max": 2,
+			"weight": 1,
+			"rarity": "legendary"
+		},
+		{
+			"item": "heaven_drill",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "legendary"
+		}
+	]
+}

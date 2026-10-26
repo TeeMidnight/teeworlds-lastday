@@ -1,0 +1,134 @@
+{
+	"comment": "One loot table. A structure variant decides which table its containers use; see datasrc/maps/struct/*.json. Entries are chosen by weight without replacement, rolls_min..rolls_max distinct item kinds, capped by the container capacity. rarity is descriptive and used in the server log; weight balances the table. count_min/count_max bound the stack size.",
+	"id": "supply_cache",
+	"rolls_min": 1,
+	"rolls_max": 2,
+	"entries": [
+		{
+			"item": "stone_bricks",
+			"count_min": 3,
+			"count_max": 8,
+			"weight": 24,
+			"rarity": "common"
+		},
+		{
+			"item": "iron_ore",
+			"count_min": 2,
+			"count_max": 4,
+			"weight": 18,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "iron_ingot",
+			"count_min": 1,
+			"count_max": 3,
+			"weight": 14,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "pistol_bullet",
+			"count_min": 8,
+			"count_max": 20,
+			"weight": 12,
+			"rarity": "common"
+		},
+		{
+			"item": "shotgun_shell",
+			"count_min": 6,
+			"count_max": 14,
+			"weight": 10,
+			"rarity": "common"
+		},
+		{
+			"item": "bandage",
+			"count_min": 1,
+			"count_max": 2,
+			"weight": 8,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "herb_tonic",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 6,
+			"rarity": "uncommon"
+		},
+		{
+			"item": "straw_rope",
+			"count_min": 2,
+			"count_max": 4,
+			"weight": 5,
+			"rarity": "common"
+		},
+		{
+			"item": "silver_ore",
+			"count_min": 1,
+			"count_max": 2,
+			"weight": 4,
+			"rarity": "rare"
+		},
+		{
+			"item": "silver_ingot",
+			"count_min": 1,
+			"count_max": 2,
+			"weight": 3,
+			"rarity": "rare"
+		},
+		{
+			"item": "amber",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "medkit",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "health_jar",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "sword",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 2,
+			"rarity": "rare"
+		},
+		{
+			"item": "addon:steel_ingot",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "rare"
+		},
+		{
+			"item": "shotgun",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "rare"
+		},
+		{
+			"item": "grenade",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "rare"
+		},
+		{
+			"item": "iron_drill",
+			"count_min": 1,
+			"count_max": 1,
+			"weight": 1,
+			"rarity": "rare"
+		}
+	]
+}
