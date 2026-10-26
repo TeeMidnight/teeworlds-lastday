@@ -33,6 +33,7 @@ void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size)
 
 void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
+	const char *pContainers, int ContainersSize,
 	const char *pWorld, int WorldSize,
 	array<char> &Out)
 {
@@ -65,6 +66,8 @@ void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 	WriteBlob(pEntrances, EntrancesSize);
 	WritePart(",\"resources\":", (int) (sizeof(",\"resources\":") - 1));
 	WriteBlob(pResources, ResourcesSize);
+	WritePart(",\"containers\":", (int) (sizeof(",\"containers\":") - 1));
+	WriteBlob(pContainers, ContainersSize);
 	const int WorldLen = TrimSize(pWorld, WorldSize);
 	if(WorldLen > 0)
 	{
@@ -77,13 +80,15 @@ void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
 	const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
+	const char *pContainers, int ContainersSize,
 	const char *pWorld, int WorldSize)
 {
 	if(!pStorage || !pMapName || !pMapName[0])
 		return false;
 
 	array<char> lMeta;
-	BuildGeneratedWorldMeta(pEntrances, EntrancesSize, pResources, ResourcesSize, pWorld, WorldSize, lMeta);
+	BuildGeneratedWorldMeta(pEntrances, EntrancesSize, pResources, ResourcesSize,
+		pContainers, ContainersSize, pWorld, WorldSize, lMeta);
 
 	char aPath[IO_MAX_PATH_LENGTH];
 	GeneratedWorldMetaPath(pMapName, aPath, sizeof(aPath));
@@ -224,59 +229,140 @@ void CMapGen::WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEn
 
 
 // ---------------------------------------------------------------------------
-// structure catalog
+// structure definitions
+//
+// One file per structure under maps/struct/<id>.json. A file owns one id and
+// its variants; each variant names the containers it pastes and, for each
+// container, which independent loot table it should use.
 // ---------------------------------------------------------------------------
-void CMapGen::LoadStructCatalog()
+static void AddStructContainer(CStructContainer *pContainers, int *pNum, const char *pKind, const char *pLoot)
 {
-	m_lStructCatalog.clear();
+	if(!pKind || !pKind[0] || *pNum >= CStructVariant::MAX_CONTAINERS)
+		return;
+	CStructContainer &Container = pContainers[*pNum];
+	str_copy(Container.m_aKind, pKind, sizeof(Container.m_aKind));
+	str_copy(Container.m_aLoot, pLoot && pLoot[0] ? pLoot : "", sizeof(Container.m_aLoot));
+	(*pNum)++;
+}
+
+// Accepts the current object form ({ "kind": ..., "loot": ... }) and the older
+// plain kind string. A plain string has no loot table, so that container starts
+// empty unless its structure file is updated.
+static void ReadStructContainers(const json_value &rValue, CStructContainer *pContainers, int *pNum)
+{
+	if(rValue.type == json_string)
+		AddStructContainer(pContainers, pNum, rValue.u.string.ptr, "");
+	else if(rValue.type == json_array)
+	{
+		for(unsigned c = 0; c < rValue.u.array.length; c++)
+		{
+			const json_value &rEntry = *rValue.u.array.values[c];
+			if(rEntry.type == json_string)
+			{
+				AddStructContainer(pContainers, pNum, rEntry.u.string.ptr, "");
+				continue;
+			}
+			if(rEntry.type != json_object)
+				continue;
+			const json_value &rKind = rEntry["kind"];
+			const json_value &rLoot = rEntry["loot"];
+			if(rKind.type != json_string)
+				continue;
+			AddStructContainer(pContainers, pNum, rKind.u.string.ptr,
+				rLoot.type == json_string ? rLoot.u.string.ptr : "");
+		}
+	}
+}
+
+int CMapGen::ListStructDefsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+{
+	(void) StorageType;
+	if(IsDir)
+		return 0;
+
+	const int Len = str_length(pFilename);
+	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
+		return 0;
+
+	char aDefaultId[64];
+	if(Len - 5 >= (int) sizeof(aDefaultId))
+		return 0;
+	str_copy(aDefaultId, pFilename, sizeof(aDefaultId));
+	aDefaultId[Len - 5] = '\0';
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), "maps/struct/%s", pFilename);
+	static_cast<CMapGen *>(pUser)->LoadStructDefinition(aDefaultId, aPath);
+	return 0;
+}
+
+void CMapGen::LoadStructDefinition(const char *pDefaultId, const char *pFilePath)
+{
 	CJsonParser Parser;
-	json_value *pJson = Parser.ParseFile("maps/struct/catalog.json", m_pStorage, IStorage::TYPE_ALL);
+	json_value *pJson = Parser.ParseFile(pFilePath, m_pStorage, IStorage::TYPE_ALL);
 	if(!pJson || pJson->type != json_object)
 	{
-		dbg_msg("mapgen", "no struct catalog at maps/struct/catalog.json");
+		dbg_msg("mapgen", "failed to load structure definition '%s'", pFilePath);
 		return;
 	}
 
-	const json_value &rStructs = (*pJson)["structs"];
-	for(unsigned i = 0; i < rStructs.u.array.length; i++)
+	const json_value &rId = (*pJson)["id"];
+	const char *pId = rId.type == json_string && rId.u.string.ptr[0] ? rId.u.string.ptr : pDefaultId;
+	if(!pId || !pId[0])
+		return;
+
+	for(int i = 0; i < m_lStructCatalog.size(); i++)
 	{
-		const json_value &rEntry = rStructs[i];
-		if(rEntry.type != json_object)
-			continue;
-		const json_value &rId = rEntry["id"];
-		if(rId.type != json_string || !rId.u.string.ptr[0])
-			continue;
-
-		CStructCatalogEntry &Entry = m_lStructCatalog.emplace();
-		str_copy(Entry.m_aId, rId.u.string.ptr, sizeof(Entry.m_aId));
-		Entry.m_GenerateProba = clamp(JsonFloat(rEntry["proba"], 1.0f), 0.0f, 1.0f);
-		Entry.m_PasteAir = JsonBool(rEntry["paste_air"], true);
-		Entry.m_Count = maximum(0, JsonInt(rEntry["count"], 0));
-		Entry.m_Margin = maximum(0, JsonInt(rEntry["margin"], 24));
-		Entry.m_MinSeparation = maximum(0, JsonInt(rEntry["min_separation"], 48));
-		Entry.m_FlatWidth = maximum(0, JsonInt(rEntry["flat_width"], 0));
-		Entry.m_SurfaceOffset = JsonInt(rEntry["surface_offset"], 0);
-
-		const json_value &rVariants = rEntry["variants"];
-		for(unsigned v = 0; v < rVariants.u.array.length; v++)
+		if(str_comp(m_lStructCatalog[i].m_aId, pId) == 0)
 		{
-			const json_value &rVariant = rVariants[v];
-			if(rVariant.type != json_object)
-				continue;
-			const json_value &rBase = rVariant["base"];
-			if(rBase.type != json_string || !rBase.u.string.ptr[0])
-				continue;
-			CStructVariant &Variant = Entry.m_lVariants.emplace();
-			Variant.m_aSubId[0] = 0;
-			const json_value &rSubId = rVariant["sub_id"];
-			if(rSubId.type == json_string)
-				str_copy(Variant.m_aSubId, rSubId.u.string.ptr, sizeof(Variant.m_aSubId));
-			str_copy(Variant.m_aBaseMap, rBase.u.string.ptr, sizeof(Variant.m_aBaseMap));
+			dbg_msg("mapgen", "duplicate structure id '%s' in '%s', keeping the first", pId, pFilePath);
+			return;
 		}
-		if(!Entry.m_lVariants.size())
-			dbg_msg("mapgen", "struct catalog entry '%s' has no usable variant", Entry.m_aId);
 	}
-	dbg_msg("mapgen", "loaded %d struct id(s) from maps/struct/catalog.json", m_lStructCatalog.size());
+
+	CStructCatalogEntry &Entry = m_lStructCatalog.emplace();
+	str_copy(Entry.m_aId, pId, sizeof(Entry.m_aId));
+	Entry.m_GenerateProba = clamp(JsonFloat((*pJson)["proba"], 1.0f), 0.0f, 1.0f);
+	Entry.m_PasteAir = JsonBool((*pJson)["paste_air"], true);
+	Entry.m_Count = maximum(0, JsonInt((*pJson)["count"], 0));
+	Entry.m_Margin = maximum(0, JsonInt((*pJson)["margin"], 24));
+	Entry.m_MinSeparation = maximum(0, JsonInt((*pJson)["min_separation"], 48));
+	Entry.m_FlatWidth = maximum(0, JsonInt((*pJson)["flat_width"], 0));
+	Entry.m_SurfaceOffset = JsonInt((*pJson)["surface_offset"], 0);
+
+	const json_value &rVariants = (*pJson)["variants"];
+	for(unsigned v = 0; v < rVariants.u.array.length; v++)
+	{
+		const json_value &rVariant = rVariants[v];
+		if(rVariant.type != json_object)
+			continue;
+		const json_value &rBase = rVariant["base"];
+		if(rBase.type != json_string || !rBase.u.string.ptr[0])
+			continue;
+
+		CStructVariant &Variant = Entry.m_lVariants.emplace();
+		Variant.m_aSubId[0] = 0;
+		Variant.m_NumContainers = 0;
+		const json_value &rSubId = rVariant["sub_id"];
+		if(rSubId.type == json_string)
+			str_copy(Variant.m_aSubId, rSubId.u.string.ptr, sizeof(Variant.m_aSubId));
+		str_copy(Variant.m_aBaseMap, rBase.u.string.ptr, sizeof(Variant.m_aBaseMap));
+		ReadStructContainers(rVariant["containers"], Variant.m_aContainers, &Variant.m_NumContainers);
+	}
+
+	if(!Entry.m_lVariants.size())
+	{
+		dbg_msg("mapgen", "structure '%s' has no usable variant", pId);
+		m_lStructCatalog.remove_index(m_lStructCatalog.size() - 1);
+	}
+}
+
+void CMapGen::LoadStructCatalog()
+{
+	m_lStructCatalog.clear();
+	if(m_pStorage)
+		m_pStorage->ListDirectory(IStorage::TYPE_ALL, "maps/struct", ListStructDefsCallback, this);
+	dbg_msg("mapgen", "loaded %d struct id(s) from maps/struct/*.json", m_lStructCatalog.size());
 }
 
 const CStructCatalogEntry *CMapGen::FindStructCatalog(const char *pId) const
@@ -453,7 +539,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 					str_copy(Struct.m_aBaseMap, Struct.m_lVariants[0].m_aBaseMap, sizeof(Struct.m_aBaseMap));
 			}
 			else
-				dbg_msg("mapgen", "floor '%s': struct id '%s' is not in maps/struct/catalog.json", pFloorName, pId);
+				dbg_msg("mapgen", "floor '%s': struct id '%s' has no definition in maps/struct", pFloorName, pId);
 		}
 
 		// A literal "base" still works. It also pins a catalog id to one map,
@@ -463,6 +549,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 			Struct.m_lVariants.clear();
 			CStructVariant &Variant = Struct.m_lVariants.emplace();
 			Variant.m_aSubId[0] = 0;
+			Variant.m_NumContainers = 0;
 			str_copy(Variant.m_aBaseMap, pBase, sizeof(Variant.m_aBaseMap));
 			str_copy(Struct.m_aBaseMap, pBase, sizeof(Struct.m_aBaseMap));
 		}
@@ -500,6 +587,23 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 		const json_value &rPasteAir = rStruct["paste_air"];
 		if(rPasteAir.type == json_boolean)
 			Struct.m_PasteAir = (bool) rPasteAir;
+
+		// A floor can name the container kinds itself. This wins over the
+		// catalog list, and is the only way an inline "base" structure (which
+		// is not in the catalog) gets containers at all.
+		const json_value &rStructContainers = rStruct["containers"];
+		const json_value &rStructContainer = rStruct["container"];
+		if(rStructContainers.type == json_string || rStructContainers.type == json_array || rStructContainer.type == json_string)
+		{
+			for(int v = 0; v < Struct.m_lVariants.size(); v++)
+			{
+				CStructVariant &Variant = Struct.m_lVariants[v];
+				Variant.m_NumContainers = 0;
+				ReadStructContainers(rStructContainers, Variant.m_aContainers, &Variant.m_NumContainers);
+				if(Variant.m_NumContainers == 0)
+					ReadStructContainers(rStructContainer, Variant.m_aContainers, &Variant.m_NumContainers);
+			}
+		}
 
 		// the struct may carry its own entrances, configured here in
 		// worlds.json (a single object or an array); serialize them for

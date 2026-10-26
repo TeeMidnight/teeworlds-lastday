@@ -11,6 +11,20 @@
 
 struct CInstruction;
 
+// A container placed in a generated structure. m_ID is stable for the map
+// instance and is the key of the container's world save entry; m_X/m_Y are map
+// tile coordinates, like a resource placement.
+struct SContainerSpawn
+{
+	int m_ID;
+	char m_aKind[32];
+	// loot table the structure assigned to this container; empty means the
+	// container spawns empty
+	char m_aLoot[32];
+	int m_X;
+	int m_Y;
+};
+
 // The result of generating one euclidean world. Owns its tile buffers; the
 // caller hands them to the map creator.
 class CGeneratedWorld
@@ -77,6 +91,7 @@ public:
 	int m_BackgroundGroundY;
 	array<CLayer> m_lLayers;
 	array<CResource> m_lResources;
+	array<SContainerSpawn> m_lContainers;
 	array<CEntrance> m_lEntrances;
 
 	CLayer *AddLayer(const char *pName, int Width, int Height, bool IsGameLayer);

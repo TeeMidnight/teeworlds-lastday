@@ -2,7 +2,7 @@
     "base": "Grove",
     "structs": [
         {
-            "base": "Wonderland_Post",
+            "id": "wonderland_post",
             "proba": 0.30,
             "resources": [
                 {
@@ -17,7 +17,7 @@
             ]
         },
         {
-            "base": "Wonderland_Post2",
+            "id": "wonderland_post2",
             "proba": 0.30,
             "resources": [
                 {

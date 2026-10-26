@@ -1,0 +1,17 @@
+{
+	"id": "frost_gate",
+	"proba": 1.0,
+	"count": 1,
+	"margin": 48,
+	"min_separation": 32,
+	"flat_width": 0,
+	"surface_offset": 0,
+	"paste_air": false,
+	"variants": [
+		{
+			"sub_id": "default",
+			"base": "FrostGate",
+			"containers": [ { "kind": "chest", "loot": "supply_cache" } ]
+		}
+	]
+}

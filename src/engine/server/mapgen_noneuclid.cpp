@@ -132,6 +132,9 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 	array<CResourceConfig> lStructResourceConfigs;
 	array<CStructResourceSpot> lStructResourceSpots;
 
+	// containers contributed by the structs, in map tile coordinates
+	array<SContainerSpawn> lContainers;
+
 	struct CBaseTemplate
 	{
 		char m_aName[32];
@@ -556,6 +559,59 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 					}
 				}
 
+				// The variant's containers go on a reachable floor spot inside
+				// the pasted region. The base game tiles now carry the merged
+				// collision, so the scan can tell a floor from a wall.
+				if(Variant.m_NumContainers > 0 && pGameTiles)
+				{
+					const int DestX1 = RegionX1 + OffsetX;
+					const int DestY1 = RegionY1 + OffsetY;
+					const int DestX2 = RegionX2 + OffsetX;
+					const int DestY2 = RegionY2 + OffsetY;
+					int aUsedX[CStructVariant::MAX_CONTAINERS];
+					int aUsedY[CStructVariant::MAX_CONTAINERS];
+					int NumUsed = 0;
+					for(int c = 0; c < Variant.m_NumContainers; c++)
+					{
+						const int PreferredX = DestX1 + ((DestX2 - DestX1 + 1) * (c + 1)) / (Variant.m_NumContainers + 1);
+						int SpotX = 0;
+						int SpotY = 0;
+						if(!FindContainerSpot(pGameTiles, GameWidth, GameHeight,
+							   DestX1, DestY1, DestX2, DestY2, PreferredX, &SpotX, &SpotY))
+						{
+							dbg_msg("mapgen", "struct '%s': no floor spot for its '%s' container",
+								pStructMapName, Variant.m_aContainers[c].m_aKind);
+							continue;
+						}
+
+						bool Used = false;
+						for(int u = 0; u < NumUsed; u++)
+						{
+							if(aUsedX[u] == SpotX && aUsedY[u] == SpotY)
+							{
+								Used = true;
+								break;
+							}
+						}
+						if(Used)
+							continue;
+
+						SContainerSpawn &Spawn = lContainers.emplace();
+						// stable per (struct entry, placement, container index)
+						Spawn.m_ID = (s + 1) * 100000 + (p + 1) * 100 + c;
+						str_copy(Spawn.m_aKind, Variant.m_aContainers[c].m_aKind, sizeof(Spawn.m_aKind));
+						str_copy(Spawn.m_aLoot, Variant.m_aContainers[c].m_aLoot, sizeof(Spawn.m_aLoot));
+						Spawn.m_X = SpotX;
+						Spawn.m_Y = SpotY;
+						if(NumUsed < (int) (sizeof(aUsedX) / sizeof(aUsedX[0])))
+						{
+							aUsedX[NumUsed] = SpotX;
+							aUsedY[NumUsed] = SpotY;
+							NumUsed++;
+						}
+					}
+				}
+
 				// the struct's own entrances are offsets relative to the
 				// top-left corner of the struct region (defined by the red
 				// flag as the left edge and the blue flag as the top edge,
@@ -693,6 +749,14 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 		lResourceJson.add(0); // null terminate
 	}
 
+	array<char> lContainerJson;
+	{
+		memory_stream<char> Stream(&lContainerJson);
+		CJsonWriter JsonWriter(&Stream);
+		WriteContainers(&JsonWriter, lContainers);
+		lContainerJson.add(0); // null terminate
+	}
+
 	// ---------------------------------------------------------------
 	// build the generated map in memory: the pack stores it, and a cache file
 	// is only written when the caller asks for one
@@ -704,6 +768,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 	}
 	BuildGeneratedWorldMeta(lEntranceJson.base_ptr(), lEntranceJson.size(),
 		lResourceJson.base_ptr(), lResourceJson.size(),
+		lContainerJson.base_ptr(), lContainerJson.size(),
 		nullptr, 0, pOut->m_Meta);
 
 	dbg_msg("mapgen", "generated map '%s_%d' from base '%s'", pFloorName, Seed, pInstruction->m_aBaseMap);

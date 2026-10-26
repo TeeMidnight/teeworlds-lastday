@@ -2,7 +2,7 @@
     "base": "Darkness",
     "structs": [
         {
-            "base": "Darkness_Platform",
+            "id": "darkness_platform",
             "proba": 0.20
         }
     ],

@@ -2,7 +2,7 @@
     "base": "Underground",
     "structs": [
         {
-            "base": "Underground_Left",
+            "id": "underground_left",
             "entrances": [
                 {
                     "tiles": [
@@ -19,7 +19,7 @@
             "proba": 0.50
         },
         {
-            "base": "Underground_Left",
+            "id": "underground_left",
             "entrances": [
                 {
                     "tiles": [

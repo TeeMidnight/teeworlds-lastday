@@ -1,0 +1,22 @@
+{
+	"id": "ruined_gate",
+	"proba": 1.0,
+	"count": 1,
+	"margin": 48,
+	"min_separation": 32,
+	"flat_width": 0,
+	"surface_offset": 0,
+	"paste_air": false,
+	"variants": [
+		{
+			"sub_id": "broken",
+			"base": "RuinedGate",
+			"containers": [ { "kind": "crate", "loot": "scavenger_cache" } ]
+		},
+		{
+			"sub_id": "mossy",
+			"base": "RuinedGate_Mossy",
+			"containers": [ { "kind": "crate", "loot": "scavenger_cache" } ]
+		}
+	]
+}

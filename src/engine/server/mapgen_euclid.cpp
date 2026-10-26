@@ -805,6 +805,58 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 				PasteEuclidStructQuads(StructMap, OffsetX, OffsetY, pStructMapName,
 					pStructGroup, lRequests, lCreatorImages);
 
+			// Containers carried by this variant go on a reachable floor spot
+			// inside the pasted region. The tiles are final here, so the scan
+			// sees the structure's own collision and the level shelf cut above.
+			if(Variant.m_NumContainers > 0 && pGameLayer)
+			{
+				int aUsedX[CStructVariant::MAX_CONTAINERS];
+				int aUsedY[CStructVariant::MAX_CONTAINERS];
+				int NumUsed = 0;
+				for(int c = 0; c < Variant.m_NumContainers; c++)
+				{
+					const int PreferredX = ChosenX + (RegionWidth * (c + 1)) / (Variant.m_NumContainers + 1);
+					int SpotX = 0;
+					int SpotY = 0;
+					if(!FindContainerSpot(pGameLayer->m_pTiles, pGameLayer->m_Width, pGameLayer->m_Height,
+						   ChosenX, AnchorY - (RegionHeight - 1), ChosenX + RegionWidth - 1, AnchorY,
+						   PreferredX, &SpotX, &SpotY))
+					{
+						dbg_msg("mapgen", "euclid struct '%s': no floor spot for its '%s' container",
+							pStructMapName, Variant.m_aContainers[c].m_aKind);
+						continue;
+					}
+
+					bool Used = false;
+					for(int u = 0; u < NumUsed; u++)
+					{
+						if(aUsedX[u] == SpotX && aUsedY[u] == SpotY)
+						{
+							Used = true;
+							break;
+						}
+					}
+					if(Used)
+						continue;
+
+					SContainerSpawn &Spawn = pWorld->m_lContainers.emplace();
+					// The id names the structure, its placement and the container
+					// inside it, not the order of the list: editing another
+					// structure cannot move a saved stack to a different prop.
+					Spawn.m_ID = (s + 1) * 100000 + (p + 1) * 100 + c;
+					str_copy(Spawn.m_aKind, Variant.m_aContainers[c].m_aKind, sizeof(Spawn.m_aKind));
+					str_copy(Spawn.m_aLoot, Variant.m_aContainers[c].m_aLoot, sizeof(Spawn.m_aLoot));
+					Spawn.m_X = SpotX;
+					Spawn.m_Y = SpotY;
+					if(NumUsed < (int) (sizeof(aUsedX) / sizeof(aUsedX[0])))
+					{
+						aUsedX[NumUsed] = SpotX;
+						aUsedY[NumUsed] = SpotY;
+						NumUsed++;
+					}
+				}
+			}
+
 			// The structure claims this piece of ground. A spawn point inside
 			// it would drop the player inside a wall, so it is moved out of the
 			// way by clearing the entity cell; the floor keeps its other spawns.
@@ -1987,6 +2039,14 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		lResourceJson.add(0);
 	}
 
+	array<char> lContainerJson;
+	{
+		memory_stream<char> Stream(&lContainerJson);
+		CJsonWriter Writer(&Stream);
+		WriteContainers(&Writer, pWorld->m_lContainers);
+		lContainerJson.add(0);
+	}
+
 	// The world geometry, as a third json item. The horizontal wrap is a
 	// property of the world: a generated floor is a cylinder, a hand drawn map
 	// has real edges. It goes here rather than in CMapItemInfo (fixed at version
@@ -2023,6 +2083,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 	if(Saved)
 		BuildGeneratedWorldMeta(lEntranceJson.base_ptr(), lEntranceJson.size(),
 			lResourceJson.base_ptr(), lResourceJson.size(),
+			lContainerJson.base_ptr(), lContainerJson.size(),
 			lWorldJson.base_ptr(), lWorldJson.size(), pOut->m_Meta);
 	delete pWorld;
 

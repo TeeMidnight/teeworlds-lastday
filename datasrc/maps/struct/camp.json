@@ -1,0 +1,25 @@
+{
+	"id": "camp",
+	"proba": 1.0,
+	"count": 1,
+	"margin": 48,
+	"min_separation": 32,
+	"flat_width": 12,
+	"surface_offset": 0,
+	"paste_air": false,
+	"variants": [
+		{
+			"sub_id": "default",
+			"base": "Camp",
+			"containers": [
+				{ "kind": "chest", "loot": "supply_cache" },
+				{ "kind": "crate", "loot": "scavenger_cache" }
+			]
+		},
+		{
+			"sub_id": "abandoned",
+			"base": "Camp_Abandoned",
+			"containers": [ { "kind": "crate", "loot": "scavenger_cache" } ]
+		}
+	]
+}

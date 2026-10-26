@@ -29,6 +29,7 @@ CGeneratedWorld::CGeneratedWorld()
 	m_BackgroundGroundY = -1;
 	m_lLayers.clear();
 	m_lResources.clear();
+	m_lContainers.clear();
 	m_lEntrances.clear();
 }
 

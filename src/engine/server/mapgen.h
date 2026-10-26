@@ -16,16 +16,33 @@ struct _json_value;
 typedef struct _json_value json_value;
 struct CStructEntrance;
 
-// A structure catalog lives in maps/struct/catalog.json. One catalog entry is
-// one structure id; it owns one or more variants, each with its own base map
-// file and a short sub id. A floor refers to the id, optionally pins a variant
-// with "variant" / "sub_id", and the generator picks a variant deterministically
-// when the entry does not pin one. Listing the same id twice with two different
-// sub ids places both variants in the same world.
+// Structure definitions live in maps/struct/<id>.json, one file per structure.
+// A file owns one structure id and one or more variants, each with its own base
+// map file and a short sub id. A floor refers to the id, optionally pins a
+// variant with "variant" / "sub_id", and the generator picks a variant
+// deterministically when the entry does not pin one. Listing the same id twice
+// with two different sub ids places both variants in the same world.
+//
+// A variant also owns its containers, and each container names the loot table
+// the structure wants it to use. The map generator finds a reachable floor spot
+// inside the pasted region, so a structure author does not write tile
+// coordinates. Loot tables are independent files under data/loot/.
+struct CStructContainer
+{
+	char m_aKind[32];
+	char m_aLoot[32];
+};
+
 struct CStructVariant
 {
 	char m_aSubId[32];
 	char m_aBaseMap[64];
+	enum
+	{
+		MAX_CONTAINERS = 4,
+	};
+	CStructContainer m_aContainers[MAX_CONTAINERS];
+	int m_NumContainers;
 };
 
 struct CStructCatalogEntry
@@ -51,19 +68,21 @@ inline float HashToUnitFloat(unsigned Hash)
 	return (float) (Hash & 0xffffffu) / 16777216.0f;
 }
 
-// The server-side metadata of a generated map: entrance regions, resource
-// placements and world geometry. It is written next to the map as
+// The server-side metadata of a generated map: entrance regions, resource and
+// container placements and world geometry. It is written next to the map as
 // "<GENERATED_MAPS_DIR>/<map>.json" instead of being embedded as map items, so
 // the map clients download contains only what they render. When a map is kept
 // only in a pack the same document is built in memory.
 void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
+	const char *pContainers, int ContainersSize,
 	const char *pWorld, int WorldSize,
 	array<char> &Out);
 void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size);
 bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
 	const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
+	const char *pContainers, int ContainersSize,
 	const char *pWorld, int WorldSize);
 bool LoadGeneratedWorldMeta(IStorage *pStorage, const char *pMapName, array<char> &OutJson);
 
@@ -469,11 +488,13 @@ private:
 	class IStorage *Storage() { return m_pStorage; };
 	class IConsole *Console() { return m_pConsole; };
 
-	// The structure catalog, loaded once from maps/struct/catalog.json. Floor
-	// entries refer to these ids; the variants inside an entry are the map
+	// The structure definitions, loaded once from maps/struct/*.json. Floor
+	// entries refer to these ids; the variants inside a definition are the map
 	// files that may be pasted for that id.
 	array<CStructCatalogEntry> m_lStructCatalog;
 	void LoadStructCatalog();
+	static int ListStructDefsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
+	void LoadStructDefinition(const char *pDefaultId, const char *pFilePath);
 	const CStructCatalogEntry *FindStructCatalog(const char *pId) const;
 
 	// keyed by str_quickhash of the floor name

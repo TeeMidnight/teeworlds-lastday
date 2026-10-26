@@ -594,6 +594,80 @@ static inline void ParseResources(const char *pJsonData, array<CResourceConfig> 
 	}
 }
 
+// serializes the placed containers (see SContainerSpawn in worldgen.h) into
+// the generated world metadata
+static inline void WriteContainers(CJsonWriter *pWriter, const array<SContainerSpawn> &lEntries)
+{
+	pWriter->BeginArray();
+	for(int i = 0; i < lEntries.size(); i++)
+	{
+		const SContainerSpawn &Entry = lEntries[i];
+		pWriter->BeginObject();
+		pWriter->WriteAttribute("id");
+		pWriter->WriteIntValue(Entry.m_ID);
+		pWriter->WriteAttribute("kind");
+		pWriter->WriteStrValue(Entry.m_aKind);
+		pWriter->WriteAttribute("loot");
+		pWriter->WriteStrValue(Entry.m_aLoot);
+		pWriter->WriteAttribute("pos_x");
+		pWriter->WriteIntValue(Entry.m_X);
+		pWriter->WriteAttribute("pos_y");
+		pWriter->WriteIntValue(Entry.m_Y);
+		pWriter->EndObject();
+	}
+	pWriter->EndArray();
+}
+
+// A container needs a free one-tile spot with solid ground below it and one
+// more air tile above (its box is taller than a tile). Scanning from the bottom
+// row up and outwards from PreferredX keeps the result deterministic and puts
+// the prop near the middle of the structure.
+static inline bool FindContainerSpot(const CTile *pTiles, int Width, int Height,
+	int X1, int Y1, int X2, int Y2, int PreferredX, int *pOutX, int *pOutY)
+{
+	if(!pTiles || !pOutX || !pOutY)
+		return false;
+
+	X1 = clamp(X1, 0, Width - 1);
+	X2 = clamp(X2, 0, Width - 1);
+	Y1 = clamp(Y1, 0, Height - 1);
+	Y2 = clamp(Y2, 0, Height - 1);
+	if(X2 < X1 || Y2 < Y1)
+		return false;
+
+	PreferredX = clamp(PreferredX, X1, X2);
+	const int MaxOffset = maximum(PreferredX - X1, X2 - PreferredX);
+	for(int y = Y2; y >= Y1; y--)
+	{
+		// the tile above the container, and the ground tile below it, must be
+		// inside the layer
+		if(y - 1 < 0 || y + 1 >= Height)
+			continue;
+		for(int Offset = 0; Offset <= MaxOffset; Offset++)
+		{
+			for(int Side = 0; Side < 2; Side++)
+			{
+				const int x = Side == 0 ? PreferredX - Offset : PreferredX + Offset;
+				if(Side == 1 && Offset == 0)
+					continue; // the preferred column was checked already
+				if(x < X1 || x > X2)
+					continue;
+				if(pTiles[y * Width + x].m_Index != TILE_AIR)
+					continue;
+				if(pTiles[(y - 1) * Width + x].m_Index != TILE_AIR)
+					continue;
+				const int Ground = pTiles[(y + 1) * Width + x].m_Index;
+				if(Ground != TILE_HOOKABLE && Ground != TILE_UNHOOKABLE)
+					continue;
+				*pOutX = x;
+				*pOutY = y;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 // serializes the placed resources into the "world internal" json
 static inline void WriteResources(CJsonWriter *pWriter, const array<CResourceEntry> &lEntries)
 {

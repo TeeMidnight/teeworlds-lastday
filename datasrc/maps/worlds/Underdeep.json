@@ -2,7 +2,7 @@
     "base": "Underdeep",
     "structs": [
         {
-            "base": "Darkness_Platform",
+            "id": "darkness_platform",
             "proba": 0.60,
             "resources": [
                 {
@@ -17,7 +17,7 @@
             ]
         },
         {
-            "base": "Wonderland_Post",
+            "id": "wonderland_post",
             "proba": 0.25,
             "resources": [
                 {
