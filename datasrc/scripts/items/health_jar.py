@@ -5,6 +5,8 @@ scripts/entities/health_jar.py; this script only decides where it may be placed
 and spawns it. C++ consumes one item when on_place returns True.
 """
 
+import math
+
 import lastday
 import lastday_entity
 
@@ -20,7 +22,9 @@ def _jar_center(ctx, height):
     aim = ctx.player.aim_direction
     face = 1.0 if aim.x >= 0.0 else -1.0
 
-    center_x = round((pos.x + face * FORWARD_OFFSET) / TILE) * TILE
+    # floor(x + 0.5) matches the C++ roundf the old placement code used
+    # (Python round() is banker's rounding and would differ at .5)
+    center_x = math.floor((pos.x + face * FORWARD_OFFSET) / TILE + 0.5) * TILE
     found, floor_y = lastday.world_floor_y(center_x, pos.y, FLOOR_SEARCH)
     if not found:
         return None
