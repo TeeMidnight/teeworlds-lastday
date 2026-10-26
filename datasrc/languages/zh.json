@@ -1137,6 +1137,11 @@
 		},
 		{
 			"context": "Drill",
+			"or": "The drill could not be placed.",
+			"tr": "钻头无法放置。"
+		},
+		{
+			"context": "Drill",
 			"or": "Drill placed. Hold the scoreboard next to it to take control; jump to let go.",
 			"tr": "钻头已放置。站在旁边按住计分板即可控制，跳跃退出。"
 		},
@@ -1339,6 +1344,11 @@
 			"context": "Health Jar",
 			"or": "There is already a health jar here.",
 			"tr": "这里已经有一个生命罐了。"
+		},
+		{
+			"context": "Health Jar",
+			"or": "Health jars are unavailable.",
+			"tr": "生命罐当前不可用。"
 		},
 		{
 			"context": "Health Jar",

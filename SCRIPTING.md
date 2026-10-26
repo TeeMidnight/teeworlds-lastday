@@ -43,10 +43,10 @@ def on_tick(ctx):
 
 Useful fields:
 
-- `ctx.player` — player wrapper (`.id`, `.pos`, `.velocity`, `.health`,
-  `.alive`, `.team`, `.name`, `.weapon`, `.heal()`, `.damage()`, `.chat()`,
-  `.teleport()`, `.item_count()`, `.give_item()`, `.add_buff()`, `.forget()`,
-  ...) or `None`.
+- `ctx.player` — player wrapper (`.id`, `.pos`, `.velocity`, `.grounded`,
+  `.aim_direction`, `.health`, `.alive`, `.team`, `.name`, `.weapon`,
+  `.heal()`, `.damage()`, `.chat()`, `.teleport()`, `.item_count()`,
+  `.give_item()`, `.add_buff()`, `.forget()`, ...) or `None`.
 - `ctx.entity` — scripted entity wrapper (`.id`, `.pos`, `.health`, `.exists`,
   `.world_id`, `.damage()`, `.destroy()`, `.set_visual()`, ...) or `None`.
 - `ctx.item` — item wrapper (`.id`, `.count(player)`, `.give()`, `.take()`).
@@ -93,13 +93,15 @@ return the primitive id/name; new scripts should use the class attributes.
   `player_speed_scale`, `player_team`, `player_name`, `player_velocity`,
   `player_heal`, `player_armor`, `player_damage`, `player_forget`,
   `player_teleport`, `player_weapon`, `player_weapon_id`,
-  `player_set_weapon`, `chat`, `chat_localized`.
-- items / buffs: `item_count`, `item_give`, `item_take`, `buff_add`,
-  `buff_remove`, `buff_stacks`.
+  `player_grounded`, `player_aim_direction`, `player_set_weapon`, `chat`,
+  `chat_localized`.
+- items / buffs: `item_count`, `item_give`, `item_take`, `item_drill`,
+  `item_health_jar`, `buff_add`, `buff_remove`, `buff_stacks`.
 - entities: `create_projectile`, `create_laser`, `sound`, `hammer_hit`,
   `tuning`, `random_int`, `random_int_range`, `log`.
 - server / worlds: `tick`, `tick_speed`, `active_world`, `world_name`,
-  `floor_name`, `world_kind`.
+  `floor_name`, `world_kind`, `world_test_box`, `world_floor_y`, `drill_near`,
+  `drill_spawn`.
 - snapshot ids: `snap_new_id()`, `snap_new_id_for(world_id)`,
   `snap_free_id(id)`, `snap_free_id_for(id, world_id)`. The `_for` variants
   name the world explicitly; the plain ones use the callback's world. Freeing
@@ -127,6 +129,25 @@ The item script may implement `on_use`; its return value decides whether C++
 removes one copy. Return `True` when the effect actually applied, `False` when
 nothing changed (full health, no forgetting to restore, ...). For compatibility
 `ctx.consumed = True` is still accepted as a fallback.
+
+A building item implements `on_place` instead. The script owns the placement
+checks and spawns the world object; returning `True` consumes one item:
+
+```python
+def on_place(ctx):
+    if not ctx.player.grounded:
+        ctx.player.chat("Stand on the ground to place a drill.", "Drill")
+        return False
+    has_drill, max_length, power = lastday.item_drill(ctx.item.id)
+    ...
+    return lastday.drill_spawn(ctx.item.id, pos.x, pos.y, max_length, power, ctx.player.id) >= 0
+```
+
+Placement primitives: `lastday.item_drill`, `lastday.item_health_jar`,
+`lastday.player_grounded`, `lastday.player_aim_direction`,
+`lastday.world_test_box`, `lastday.world_floor_y`, `lastday.drill_near`,
+`lastday.drill_spawn`, and on `lastday_entity`: `health_jar_size`,
+`health_jar_near`, `spawn_health_jar`.
 
 Player-visible script text should use the localized form of `chat`:
 
