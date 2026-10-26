@@ -53,6 +53,9 @@ struct SScriptContext
 	std::string m_Result = "{}";
 
 	bool m_Consumed = false;
+	// truthiness of the value the callback returned. on_use uses this to decide
+	// whether an item is consumed; other callbacks may ignore it.
+	bool m_ReturnValue = false;
 	int m_ReloadTicks = 0;
 	bool m_Destroy = false;
 };

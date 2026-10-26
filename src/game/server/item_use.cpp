@@ -60,7 +60,8 @@ int CItemSystem::UseItem(int ClientID, const CItemID &Id, int Count)
 		return 0;
 
 	// Scripted items own their use behaviour. C++ still owns the inventory
-	// transaction: a script must set ctx["consumed"] before one copy is removed.
+	// transaction: on_use returns True when one copy should be consumed. The
+	// legacy ctx.consumed flag is accepted as a fallback for older scripts.
 	if(pItem->m_Module >= 0 && CScriptRuntime::Get()->HasFunction(pItem->m_Module, "on_use"))
 	{
 		int Used = 0;
@@ -81,7 +82,7 @@ int CItemSystem::UseItem(int ClientID, const CItemID &Id, int Count)
 				dbg_msg("items", "script error in '%s': %s", pItem->m_aScript, CScriptRuntime::Get()->LastError());
 				break;
 			}
-			if(!Ctx.m_Consumed)
+			if(!Ctx.m_ReturnValue && !Ctx.m_Consumed)
 				break;
 			if(!RemoveItem(ClientID, Id, 1))
 				break;

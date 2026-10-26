@@ -377,7 +377,9 @@ bool CScriptRuntime::Call(int Module, const char *pFunction, SScriptContext &Ctx
 		SWatchdog Watchdog(m_TimeoutMs);
 		py::object Fn = py::getattr(M.m_Module, pFunction);
 		py::object Ret = Fn(CtxObject);
-		(void) Ret; // handlers may return a value; the context object is authoritative
+		// The context object is still authoritative for state/result. The return
+		// value is exposed separately so item scripts can say "consume this".
+		Ctx.m_ReturnValue = ToBool(Ret);
 
 		Ctx.m_State = JsonDumps(CtxObject.attr("state"));
 		Ctx.m_Result = JsonDumps(CtxObject.attr("result"));
