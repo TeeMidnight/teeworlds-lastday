@@ -10,10 +10,12 @@
 #include <game/localization.h>
 
 #include <game/server/entities/character.h>
+#include <game/server/entities/drill.h>
 #include <game/server/entities/laser.h>
 #include <game/server/entities/projectile.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gameworld.h>
+#include <game/server/item.h>
 #include <game/server/player.h>
 #include <game/server/scripting/buff_system.h>
 
@@ -41,6 +43,13 @@ CCharacter *Character(int ClientID)
 {
 	CGameContext *pGame = Game();
 	return pGame ? pGame->GetPlayerChar(ClientID) : nullptr;
+}
+
+// World of the callback that is currently running (or the main world).
+CGameWorld *ActiveWorld()
+{
+	CScriptRuntime *pRuntime = CScriptRuntime::Get();
+	return pRuntime ? pRuntime->ActiveWorld() : nullptr;
 }
 
 bool ValidPos(float x, float y)
@@ -197,6 +206,19 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return Vec2Tuple(Vel.x, Vel.y);
 	});
 
+	m.def("player_grounded", [](int ClientID) {
+		CCharacter *pChr = Character(ClientID);
+		return pChr && pChr->IsGrounded();
+	});
+
+	m.def("player_aim_direction", [](int ClientID) {
+		CCharacter *pChr = Character(ClientID);
+		if(!pChr)
+			return Vec2Tuple(0.0f, 0.0f);
+		const vec2 Dir = pChr->AimDirection();
+		return Vec2Tuple(Dir.x, Dir.y);
+	});
+
 	m.def("player_teleport", [](int ClientID, float x, float y) {
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr || !ValidPos(x, y))
@@ -244,6 +266,46 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 	m.def("item_take", [](int ClientID, const std::string &ItemId, int Count) {
 		CGameContext *pGame = Game();
 		return pGame && pGame->Item()->RemoveItem(ClientID, CItemID::FromName(ItemId.c_str()), Count);
+	});
+
+	// Placement metadata. Returns (has_data, ...); item scripts use the values
+	// from the item definition instead of hard-coding them.
+	m.def("item_drill", [](const std::string &ItemId) {
+		py::tuple Result(3);
+		CGameContext *pGame = Game();
+		CItemID Id;
+		if(!pGame || !CItemID::Parse(ItemId.c_str(), &Id) || Id.IsZero())
+		{
+			Result[0] = py::cast(false);
+			Result[1] = py::cast(0);
+			Result[2] = py::cast(0);
+			return Result;
+		}
+		const CItemSystem::SDrill Drill = pGame->Item()->GetDrill(Id);
+		Result[0] = py::cast(Drill.m_HasDrill);
+		Result[1] = py::cast(Drill.m_MaxLength);
+		Result[2] = py::cast(Drill.m_Power);
+		return Result;
+	});
+
+	m.def("item_health_jar", [](const std::string &ItemId) {
+		py::tuple Result(4);
+		CGameContext *pGame = Game();
+		CItemID Id;
+		if(!pGame || !CItemID::Parse(ItemId.c_str(), &Id) || Id.IsZero())
+		{
+			Result[0] = py::cast(false);
+			Result[1] = py::cast(0);
+			Result[2] = py::cast(0);
+			Result[3] = py::cast(0);
+			return Result;
+		}
+		const CItemSystem::SHealthJar Def = pGame->Item()->GetHealthJar(Id);
+		Result[0] = py::cast(Def.m_HasJar);
+		Result[1] = py::cast(Def.m_Cooldown);
+		Result[2] = py::cast(Def.m_Range);
+		Result[3] = py::cast(Def.m_Health);
+		return Result;
 	});
 
 	// Constructor-style host surface. The Python Projectile/Laser classes in
@@ -328,6 +390,57 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 	m.def("world_kind", [](unsigned WorldID) {
 		CGameContext *pGame = Game();
 		return pGame ? pGame->Server()->GetMapWorldKind(WorldID) : -1;
+	});
+
+	// ---- placement primitives -------------------------------------------
+	m.def("world_test_box", [](float X, float Y, float Width, float Height) -> bool {
+		CGameWorld *pWorld = ActiveWorld();
+		if(!pWorld || Width <= 0.0f || Height <= 0.0f)
+			return false;
+		return pWorld->Collision()->TestBox(vec2(X, Y), vec2(Width, Height)) != 0;
+	});
+
+	// (found, floor_y): the first solid surface below (X, Y), snapped to a tile
+	// boundary. found is false when there is no floor within MaxDrop.
+	m.def("world_floor_y", [](float X, float Y, float MaxDrop) {
+		py::tuple Result(2);
+		CGameWorld *pWorld = ActiveWorld();
+		vec2 Hit;
+		bool Found = false;
+		int FloorY = 0;
+		if(pWorld && MaxDrop > 0.0f && pWorld->Collision()->IntersectLine(vec2(X, Y), vec2(X, Y + MaxDrop), &Hit, nullptr))
+		{
+			Found = true;
+			FloorY = round_to_int(Hit.y / 32.0f) * 32;
+		}
+		Result[0] = py::cast(Found);
+		Result[1] = py::cast(FloorY);
+		return Result;
+	});
+
+	m.def("drill_near", [](float X, float Y, float Radius) -> bool {
+		CGameWorld *pWorld = ActiveWorld();
+		if(!pWorld)
+			return false;
+		const float Reach = Radius > 0.0f ? Radius : 40.0f;
+		for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_DRILL); !r.empty(); r.pop_front())
+			if(distance(r.front()->GetPos(), vec2(X, Y)) < Reach)
+				return true;
+		return false;
+	});
+
+	m.def("drill_spawn", [](const std::string &ItemId, float X, float Y, int MaxLength, int Power, int Owner) -> int {
+		CGameWorld *pWorld = ActiveWorld();
+		CGameContext *pGame = Game();
+		if(!pWorld || !pGame || !ValidPos(X, Y))
+			return -1;
+		if(Owner < 0 || Owner >= MAX_CLIENTS || !pGame->m_apPlayers[Owner])
+			return -1;
+		CItemID Id;
+		if(!CItemID::Parse(ItemId.c_str(), &Id) || Id.IsZero())
+			return -1;
+		CDrillEntity *pDrill = new CDrillEntity(pWorld, vec2(X, Y), Id, MaxLength, Power, Owner);
+		return pDrill ? pDrill->GetID() : -1;
 	});
 
 	// Snapshot ids are pooled per floor. snap_new_id()/snap_free_id() use the

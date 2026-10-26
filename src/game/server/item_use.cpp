@@ -131,3 +131,54 @@ int CItemSystem::UseItem(int ClientID, const CItemID &Id, int Count)
 	pGameServer->SavePlayerData(pPlayer);
 	return Used;
 }
+
+bool CItemSystem::IsPlaceable(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	if(!pItem || pItem->m_Module < 0)
+		return false;
+	return CScriptRuntime::Get()->HasFunction(pItem->m_Module, "on_place");
+}
+
+bool CItemSystem::PlaceItem(int ClientID, const CItemID &Id)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return false;
+	if(GetItemCount(ClientID, Id) <= 0)
+		return false;
+
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	if(!pItem || !IsPlaceable(Id))
+		return false;
+
+	CGameContext *pGameServer = m_pGameServer;
+	CPlayer *pPlayer = pGameServer->m_apPlayers[ClientID];
+	if(!pPlayer)
+		return false;
+
+	CCharacter *pChr = pGameServer->GetPlayerChar(ClientID);
+	SScriptContext Ctx;
+	Ctx.m_pGameServer = pGameServer;
+	Ctx.m_ClientID = ClientID;
+	Ctx.m_WorldID = pChr ? pChr->GameWorld()->WorldID() : 0;
+	Ctx.m_ItemId = Id;
+	Ctx.m_Now = pGameServer->Server()->Tick();
+	Ctx.m_TickSpeed = pGameServer->Server()->TickSpeed();
+	Ctx.m_Pos = pChr ? pChr->GetPos() : vec2(0.0f, 0.0f);
+	str_copy(Ctx.m_aEvent, "item_place", sizeof(Ctx.m_aEvent));
+
+	if(!CScriptRuntime::Get()->Call(pItem->m_Module, "on_place", Ctx))
+	{
+		dbg_msg("items", "script error in '%s': %s", pItem->m_aScript, CScriptRuntime::Get()->LastError());
+		return false;
+	}
+	// The script only builds the object; C++ still owns the inventory
+	// transaction, exactly like on_use.
+	if(!Ctx.m_ReturnValue)
+		return false;
+	if(!RemoveItem(ClientID, Id, 1))
+		return false;
+
+	pGameServer->SavePlayerData(pPlayer);
+	return true;
+}

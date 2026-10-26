@@ -1,9 +1,13 @@
 """Runtime self-test used by the script_selftest console command.
 
 It touches the class context, the constructor wrappers and the
-state/result/consumed bridge. A missing world makes the snapshot-id check
-return -1 rather than fail, which is the expected console behaviour.
+state/result/consumed bridge. A missing world makes the snapshot-id and
+placement checks return -1/false rather than fail, which is expected on the
+console.
 """
+
+import lastday
+import lastday_entity
 
 
 def on_selftest(ctx):
@@ -27,6 +31,13 @@ def on_selftest(ctx):
     ctx.result["ctor"] = [projectile.id, laser.id, health.id, pickup.id, swing.hits]
     ctx.result["player_id"] = ctx.Player(3).id
     ctx.result["drop_near"] = ctx.HealthDrop.near(origin, 96.0)
+
+    # placement metadata and world probes (no world in the console test)
+    ctx.result["item_drill"] = lastday.item_drill("lastday:iron_drill")
+    ctx.result["item_jar"] = lastday.item_health_jar("lastday:health_jar")
+    ctx.result["jar_size"] = lastday_entity.health_jar_size()
+    ctx.result["floor"] = lastday.world_floor_y(0.0, 0.0, 128.0)
+    ctx.result["drill_near"] = lastday.drill_near(0.0, 0.0, 40.0)
 
     # per-floor snapshot id allocation through the host bridge
     snap_id = ctx.snap_new_id()

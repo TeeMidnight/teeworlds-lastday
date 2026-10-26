@@ -99,6 +99,15 @@ class Player:
         return Vec2(x, y)
 
     @property
+    def grounded(self):
+        return lastday.player_grounded(self.id)
+
+    @property
+    def aim_direction(self):
+        x, y = lastday.player_aim_direction(self.id)
+        return Vec2(x, y)
+
+    @property
     def weapon(self):
         return lastday.player_weapon(self.id)
 

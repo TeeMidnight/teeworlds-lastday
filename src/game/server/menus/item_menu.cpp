@@ -133,13 +133,11 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	const char *pName = Forgotten ? "???" : pItem->GetName(Id);
 	const char *pLocalizedName = Localize(pName, "Item Name");
 
-	// place a building (the item is consumed by the placement call)
+	// place a building through the item's on_place script; the script builds
+	// the object and C++ consumes one copy on a True return
 	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "PLACE") == 0)
 	{
-		if(pItem->IsHealthJar(Id))
-			pMenu->GameServer()->PlaceHealthJar(ClientID, Id);
-		else if(pItem->IsDrill(Id))
-			pMenu->GameServer()->PlaceDrill(ClientID, Id);
+		pItem->PlaceItem(ClientID, Id);
 		pMenu->SetPlayerPage(ClientID, "INVENTORY");
 		return false;
 	}
@@ -246,15 +244,22 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		pMenu->AddOption(Localize("Use", "Menu Inventory"), "USE", "★");
 		pMenu->AddOption(Localize("Use a number as the vote reason to use that many.", "Menu Inventory"), "DISPLAY", "-");
 	}
-	if(pItem->IsDrill(Id))
+	if(pItem->IsPlaceable(Id))
 	{
-		pMenu->AddOption(Localize("Place drill", "Menu Inventory"), "PLACE", "★");
-		pMenu->AddOption(Localize("Hold the scoreboard next to it to control the drill. Jump to exit.", "Menu Inventory"), "DISPLAY", "-");
-	}
-	if(pItem->IsHealthJar(Id))
-	{
-		pMenu->AddOption(Localize("Place health jar", "Menu Inventory"), "PLACE", "★");
-		pMenu->AddOption(Localize("Its owner standing close makes it drop a health pickup.", "Menu Inventory"), "DISPLAY", "-");
+		if(pItem->IsHealthJar(Id))
+		{
+			pMenu->AddOption(Localize("Place health jar", "Menu Inventory"), "PLACE", "★");
+			pMenu->AddOption(Localize("Its owner standing close makes it drop a health pickup.", "Menu Inventory"), "DISPLAY", "-");
+		}
+		else if(pItem->IsDrill(Id))
+		{
+			pMenu->AddOption(Localize("Place drill", "Menu Inventory"), "PLACE", "★");
+			pMenu->AddOption(Localize("Hold the scoreboard next to it to control the drill. Jump to exit.", "Menu Inventory"), "DISPLAY", "-");
+		}
+		else
+		{
+			pMenu->AddOption(Localize("Place", "Menu Inventory"), "PLACE", "★");
+		}
 	}
 	pMenu->AddOption(Localize("Drop", "Menu Inventory"), "DROP", "★");
 	pMenu->AddOption(Localize("Use a number as the vote reason to drop that many.", "Menu Inventory"), "DISPLAY", "-");

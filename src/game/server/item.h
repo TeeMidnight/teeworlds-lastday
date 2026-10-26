@@ -309,6 +309,10 @@ public:
 
 	// consume up to Count items and apply their "use" effects to the player
 	int UseItem(int ClientID, const CItemID &Id, int Count = 1);
+	// whether the item has an on_place script that builds a world object
+	bool IsPlaceable(const CItemID &Id) const;
+	// run the item's on_place script; one copy is consumed on a True return
+	bool PlaceItem(int ClientID, const CItemID &Id);
 	// optional item_type of the item
 	bool HasItemType(const CItemID &Id, const char *pType) const;
 	// callback used to enumerate the type tags of a single item

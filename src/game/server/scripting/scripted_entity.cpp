@@ -881,6 +881,49 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return pChr && pChr->IsAlive() ? pChr->GetCID() : -1;
 	});
 
+	// size of the built-in jar visual; the item placement script uses the same
+	// footprint the C++ placement code used to hard-code.
+	m.def("health_jar_size", []() {
+		py::tuple Result(2);
+		Result[0] = py::cast((float) SCRIPTED_JAR_WIDTH);
+		Result[1] = py::cast((float) SCRIPTED_JAR_HEIGHT);
+		return Result;
+	});
+
+	m.def("health_jar_near", [](float X, float Y, float Radius) -> bool {
+		CGameWorld *pWorld = ActiveWorldOrMain();
+		if(!pWorld)
+			return false;
+		const float Reach = Radius > 0.0f ? Radius : (float) SCRIPTED_JAR_WIDTH;
+		for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_SCRIPTED); !r.empty(); r.pop_front())
+		{
+			CScriptedEntity *pEntity = static_cast<CScriptedEntity *>(r.front());
+			if(pEntity && str_comp(pEntity->Kind(), "health_jar") == 0 && distance(pEntity->GetPos(), vec2(X, Y)) < Reach)
+				return true;
+		}
+		return false;
+	});
+
+	m.def("spawn_health_jar", [](const std::string &ItemId, float X, float Y, int Cooldown, int Range, int Health, int OwnerClient) -> int {
+		CGameWorld *pWorld = ActiveWorldOrMain();
+		CGameContext *pGame = Game();
+		if(!pWorld || !pGame || !pGame->ScriptedEntities() || !ValidPos(X, Y))
+			return -1;
+
+		CItemID Id;
+		if(!CItemID::Parse(ItemId.c_str(), &Id) || Id.IsZero())
+			return -1;
+
+		CPlayer *pPlayer = OwnerClient >= 0 && OwnerClient < MAX_CLIENTS ? pGame->m_apPlayers[OwnerClient] : nullptr;
+		if(!pPlayer)
+			return -1;
+		const Uuid OwnerAccount = pPlayer->m_LoggedIn ? pPlayer->m_AccountUuid : UUID_ZEROED;
+		const char *pOwnerName = pGame->Server()->ClientName(OwnerClient);
+		CScriptedEntity *pJar = pGame->ScriptedEntities()->SpawnHealthJar(
+			pWorld, vec2(X, Y), Id, OwnerAccount, OwnerClient, pOwnerName, Cooldown, Range, Health);
+		return pJar ? pJar->GetID() : -1;
+	});
+
 	m.def("exists", [](int EntityID) -> bool {
 		return FindScriptedEntity(EntityID) != nullptr;
 	});

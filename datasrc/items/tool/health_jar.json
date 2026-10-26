@@ -2,6 +2,7 @@
     "name": "Health Jar",
     "desc": "A laser-sealed jar with a health pickup floating inside. When its owner comes close it drops the pickup to the ground.",
     "item_type": ["tool", "container"],
+    "script": "scripts/items/health_jar.py",
     "jar": {
         "cooldown": 45,
         "range": 96,

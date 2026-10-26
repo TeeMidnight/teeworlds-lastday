@@ -5,6 +5,7 @@
         "tool",
         "drill"
     ],
+    "script": "scripts/items/drill.py",
     "drill": {
         "max_length": 640,
         "power": 3
