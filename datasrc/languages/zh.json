@@ -1484,6 +1484,306 @@
 			"context": "Tip",
 			"or": "Aim at a container in a ruin and open the menu to store your goods.",
 			"tr": "在废墟中瞄准容器并打开菜单，就能存放你的物资。"
+		},
+		{
+			"context": "Item Name",
+			"or": "Venom Gland",
+			"tr": "毒腺"
+		},
+		{
+			"context": "Item Name",
+			"or": "Ancient Core",
+			"tr": "远古核心"
+		},
+		{
+			"context": "Item Desc: Venom Gland",
+			"or": "A still-warm gland from a burrowing horror. Alchemists pay well for it.",
+			"tr": "来自钻地怪物的温热腺体。炼金师愿意出高价。"
+		},
+		{
+			"context": "Item Desc: Ancient Core",
+			"or": "A humming shard of something that should not still be alive.",
+			"tr": "一块仍在嗡鸣的碎片，本不该还活着。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Another skull for the pile.",
+			"tr": "又一颗脑袋可以堆上了。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "You picked the wrong valley, {player}.",
+			"tr": "你选错了山谷，{player}。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Fresh meat.",
+			"tr": "新鲜的肉。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Run, and I will make it quick!",
+			"tr": "跑吧，我会让你死得痛快点！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Stand still!",
+			"tr": "站住！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "You'll pay for that!",
+			"tr": "你会为此付出代价！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Is that all?",
+			"tr": "就这？"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Rest now.",
+			"tr": "安息吧。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The warband... will find you...",
+			"tr": "战团……会找到你的……"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "I'll take you with me!",
+			"tr": "我要拉你一起下地狱！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The air tastes of iron.",
+			"tr": "空气里有铁锈味。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "There you are.",
+			"tr": "找到你了。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Keep running, {player}.",
+			"tr": "继续跑吧，{player}。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "A little closer...",
+			"tr": "再靠近一点……"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Hsss!",
+			"tr": "嘶——！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The hive will know.",
+			"tr": "蜂巢会知道的。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The stone remembers.",
+			"tr": "石头记得一切。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Turn back.",
+			"tr": "回头吧。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "You will not pass.",
+			"tr": "你过不去。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Cracks... in the plating.",
+			"tr": "装甲……裂了。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The seal... breaks...",
+			"tr": "封印……破碎了……"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The road is long, and I am in no hurry.",
+			"tr": "路还长，我不急。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Mind your step, {player}.",
+			"tr": "小心脚下，{player}。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Fine weather for walking.",
+			"tr": "适合赶路的好天气。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "I warned you!",
+			"tr": "我警告过你！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Leave me be!",
+			"tr": "别烦我！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "So this is where the road ends...",
+			"tr": "看来路就到这里了……"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Hm. Which way now?",
+			"tr": "嗯，该走哪边？"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "I smell rain.",
+			"tr": "我闻到雨味了。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "I'll keep watch.",
+			"tr": "我来放哨。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Stay close, {player}.",
+			"tr": "跟紧我，{player}。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "I have your back.",
+			"tr": "我护着你。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Hostile! Left flank!",
+			"tr": "敌袭！左翼！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "I can still fight.",
+			"tr": "我还能打。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Hold the line...",
+			"tr": "守住阵线……"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "All quiet.",
+			"tr": "一切安静。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The ground breathes.",
+			"tr": "大地在呼吸。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Skreee!",
+			"tr": "嘶嘎——！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Skreeeeee!",
+			"tr": "嘶嘎啊啊啊！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The clinic is open. Try not to bleed on the floor.",
+			"tr": "诊所开门了。别把血滴在地板上。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "You look half-dead, {player}. I can fix that.",
+			"tr": "你看起来半死不活，{player}。我能治。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Bandages, tonics, medkits. All honest goods.",
+			"tr": "绷带、补剂、医疗包，都是实在货。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Mind the stitches!",
+			"tr": "小心缝线！"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "I will be back. I always am.",
+			"tr": "我会回来的，我一直都会。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Wash your hands.",
+			"tr": "洗手。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Hold still.",
+			"tr": "别动。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The forge is hot. Say your piece.",
+			"tr": "炉火正旺，有话快说。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Need steel, {player}?",
+			"tr": "要钢吗，{player}？"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Keep your hands where I can see them.",
+			"tr": "手放在我看得见的地方。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "You want a fight? Fine.",
+			"tr": "想打架？行。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Cheap shot.",
+			"tr": "偷袭。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Stay down.",
+			"tr": "躺好。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "I have had worse.",
+			"tr": "我受过更重的伤。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Hmph.",
+			"tr": "哼。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The coals are low.",
+			"tr": "炭火快灭了。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "...",
+			"tr": "……"
 		}
 	]
 }

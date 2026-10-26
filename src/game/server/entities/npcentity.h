@@ -7,6 +7,8 @@
 
 #include "botentity.h"
 
+#include <game/server/mobdata.h>
+
 struct SNpcDef;
 
 /*
@@ -78,6 +80,12 @@ private:
 
 	// announce the shop to players that enter the trading range
 	void TickInteract();
+	// heal/armor aura granted by the definition
+	void TickAuras();
+	// localized event dialogue, rate limited like CMonsterEntity
+	void SayEvent(int Event, bool Force = false);
+	// remember the bot that hit this NPC, so a neutral NPC can retaliate
+	void RememberBotAttacker(CEntity *pFrom);
 
 	// the closest live player within the roam radius, or null
 	CEntity *ClosestPlayer();
@@ -93,6 +101,8 @@ private:
 		int m_RefreshTick;
 	};
 	array<SNpcAggroEntry> m_lAggro;
+	// guests have no account ledger; their aggro lives for this session only
+	int m_aSessionAggro[MAX_CLIENTS] = {};
 
 	// who was inside the trading range last tick, so the unlock notice fires
 	// once per entry instead of every frame
@@ -122,6 +132,13 @@ private:
 	vec2 m_SpawnPos;
 	// the direction it is currently wandering in (-1, 0 or 1)
 	int m_WanderDir;
+
+	int m_HealTimer = 0;
+	int m_ArmorTimer = 0;
+	int m_LastSpeakTick = -1000;
+	int m_aLastEventTick[NUM_MOBDIALOGUE_EVENTS] = {};
+	Uuid m_LastAttackerBot = UUID_ZEROED;
+	int m_RetaliateUntil = 0;
 };
 
 #endif // GAME_SERVER_ENTITIES_NPCENTITY_H

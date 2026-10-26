@@ -1,0 +1,8 @@
+{
+    "craft_id": "ancient_charge",
+    "needed": [
+        {"item_id": "ancient_core", "count": 1},
+        {"item_id": "silver_ingot", "count": 1}
+    ],
+    "result": {"item_id": "laser_charge", "count": 6}
+}

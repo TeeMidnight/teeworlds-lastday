@@ -15,6 +15,7 @@
 
 class CBotManager;
 class IBotAI;
+struct SMobDef;
 
 /*
 	Class: IBotEntity
@@ -42,6 +43,10 @@ public:
 	virtual const CBotTeeInfo *GetTeeInfo() const = 0;
 	// Team the bot fights for; used for friendly fire and snap colouring.
 	virtual int GetBotTeam() const = 0;
+	// Social stance (hostile / neutral / friendly); target selection uses it.
+	virtual int GetBotFaction() const = 0;
+	// The content definition behind a monster, or null for a generic bot.
+	virtual const SMobDef *MobDef() const { return nullptr; }
 
 	// The key CWorldCore registers this bot's core under, so it must be unique
 	// among live entities and stay inside [0, MAX_TEES) for the bot's whole
@@ -97,7 +102,7 @@ public:
 	static const int MAX_HEALTH = 10;
 	static const int MAX_ARMOR = 10;
 
-	CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team);
+	CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team, int Faction = BOTFACTION_HOSTILE);
 	~CBotEntity() override;
 
 	// --- CEntity ---
@@ -118,6 +123,7 @@ public:
 	const char *BotTypeName() const override { return "default"; }
 	const CBotTeeInfo *GetTeeInfo() const override { return &m_TeeInfo; }
 	int GetBotTeam() const override { return m_Team; }
+	int GetBotFaction() const override { return m_Faction; }
 	int TeeID() const override { return m_TeeID; }
 	bool IsAlive() const override { return m_Alive; }
 	int GetHealth() const override { return m_Health; }
@@ -200,6 +206,7 @@ protected:
 	// under. Not the id the bot snaps as; see IBotEntity::TeeID.
 	int m_TeeID;
 	int m_Team;
+	int m_Faction;
 	bool m_Alive;
 
 	int m_Health;
@@ -234,6 +241,18 @@ protected:
 	// set when the bot has no weapon item system backing it: it swings a
 	// hammer, the one weapon that needs neither an item nor ammo
 	int m_WeaponSlot;
+	// melee tuning; content variants (a monster) override the hammer defaults
+	int m_MeleeDamage;
+	int m_MeleeCooldown;
+	float m_MeleeRange;
+
+public:
+	void SetMeleeTuning(int Damage, int Cooldown, float Range)
+	{
+		m_MeleeDamage = maximum(1, Damage);
+		m_MeleeCooldown = maximum(1, Cooldown);
+		m_MeleeRange = maximum(8.0f, Range);
+	}
 };
 
 #endif // GAME_SERVER_ENTITIES_BOTENTITY_H

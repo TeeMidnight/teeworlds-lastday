@@ -6,6 +6,8 @@
     "y": 41,
     "health": 20,
     "health_regen": 1,
+    "faction": "friendly",
+    "attack_hostiles": false,
     "skin": {
         "body":       {"name": "standard", "custom_color": true,  "hue": 233, "sat": 158, "lgt": 183},
         "marking":    {"name": "duodonny", "custom_color": true,  "hue": 231, "sat": 146, "lgt": 218, "alp": 255},
@@ -13,6 +15,9 @@
         "hands":      {"name": "standard", "custom_color": true,  "hue": 233, "sat": 158, "lgt": 183},
         "feet":       {"name": "standard", "custom_color": true,  "hue": 0,   "sat": 146, "lgt": 224},
         "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "abilities": {
+        "heal_aura": {"enabled": true, "radius": 150, "amount": 1, "interval": 100}
     },
     "sells": [
         {"item": "bandage",    "count": 1, "price_item": "grass",      "price_count": 3, "stock_min": 8, "stock_max": 16, "restock_seconds": 240},
@@ -24,5 +29,12 @@
         "per_kill": 0,
         "per_hit": 0,
         "kill_decay": 0
+    },
+    "dialogue": {
+        "spawn": ["The clinic is open. Try not to bleed on the floor."],
+        "sight": ["You look half-dead, {player}. I can fix that.", "Bandages, tonics, medkits. All honest goods."],
+        "hurt": ["Mind the stitches!"],
+        "death": ["I will be back. I always am."],
+        "idle": ["Wash your hands.", "Hold still."]
     }
 }

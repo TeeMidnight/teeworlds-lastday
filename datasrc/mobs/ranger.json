@@ -1,0 +1,36 @@
+{
+    "id": "ranger",
+    "name": "Ranger",
+    "faction": "friendly",
+    "group": "rangers",
+    "type": "tee",
+    "health": 16,
+    "armor": 2,
+    "speed_scale": 1.0,
+    "aggro_radius": 420,
+    "keep_distance": 180,
+    "jump_chance": 15,
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true, "hue": 128, "sat": 150, "lgt": 130},
+        "marking":    {"name": "stripe",   "custom_color": true, "hue": 128, "sat": 150, "lgt": 110},
+        "decoration": {"name": "",         "custom_color": false},
+        "hands":      {"name": "standard", "custom_color": true, "hue": 128, "sat": 150, "lgt": 130},
+        "feet":       {"name": "standard", "custom_color": true, "hue": 128, "sat": 120, "lgt": 90},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "ai": "companion",
+    "abilities": {
+        "melee": {"damage": 2, "cooldown": 25, "range": 44},
+        "ranged": {"enabled": true, "weapon": "gun", "damage": 2, "cooldown": 50, "range": 380, "min_range": 96, "force": 1, "span": 700, "sound": "gun"},
+        "heal_aura": {"enabled": true, "radius": 140, "amount": 1, "interval": 120}
+    },
+    "dialogue": {
+        "spawn": ["I'll keep watch."],
+        "sight": ["Stay close, {player}.", "I have your back."],
+        "combat": ["Hostile! Left flank!"],
+        "hurt": ["I can still fight."],
+        "death": ["Hold the line..."],
+        "idle": ["All quiet."]
+    },
+    "drops": []
+}

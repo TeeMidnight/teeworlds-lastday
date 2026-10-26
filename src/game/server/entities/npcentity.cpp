@@ -7,6 +7,7 @@
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/npcdata.h>
+#include <game/localization.h>
 #include <game/localization_format.h>
 #include <game/server/player.h>
 
@@ -52,7 +53,7 @@ static CBotTeeInfo NpcTeeInfoFromDef(const SNpcDef *pDef)
 }
 
 CNpcEntity::CNpcEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team) :
-	CBotEntity(pWorld, Pos, BotID, TeeInfo, Team)
+	CBotEntity(pWorld, Pos, BotID, TeeInfo, Team, BOTFACTION_FRIENDLY)
 {
 	m_pDef = nullptr;
 	m_HealthRegen = 0;
@@ -65,7 +66,7 @@ CNpcEntity::CNpcEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 }
 
 CNpcEntity::CNpcEntity(CGameWorld *pWorld, const SNpcDef *pDef, int Team) :
-	CBotEntity(pWorld, pDef->m_Pos, pDef->m_Id.Value(), NpcTeeInfoFromDef(pDef), Team)
+	CBotEntity(pWorld, pDef->m_Pos, pDef->m_Id.Value(), NpcTeeInfoFromDef(pDef), Team, pDef->m_Faction)
 {
 	m_pDef = pDef;
 	m_MaxHealth = pDef->m_Health;
@@ -84,6 +85,7 @@ void CNpcEntity::Tick()
 	CBotEntity::Tick();
 
 	TickInteract();
+	TickAuras();
 
 	// the scripted respawn drives itself once started
 	if(m_State == NPCSTATE_TELEPORTING)
@@ -123,6 +125,10 @@ void CNpcEntity::AddAggro(int ClientID, int Delta)
 {
 	if(!m_pDef || Delta == 0 || ClientID < 0 || ClientID >= MAX_CLIENTS)
 		return;
+	// every client, logged in or not, keeps a session aggro so a guest can
+	// still provoke a neutral NPC
+	m_aSessionAggro[ClientID] = maximum(0, m_aSessionAggro[ClientID] + Delta);
+
 	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
 	if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
 		return;
@@ -146,7 +152,7 @@ int CNpcEntity::CachedAggro(int ClientID)
 		return 0;
 	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
 	if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
-		return 0;
+		return m_aSessionAggro[ClientID];
 
 	SNpcAggroEntry *pEntry = nullptr;
 	for(int i = 0; i < m_lAggro.size(); i++)
@@ -187,7 +193,7 @@ void CNpcEntity::UpdateAggroCache(const Uuid &Account, int Delta)
 
 int CNpcEntity::FindHatedPlayer()
 {
-	if(!m_pDef || m_pDef->m_Aggro.m_Threshold <= 0)
+	if(!m_pDef || m_pDef->m_Faction == BOTFACTION_FRIENDLY || m_pDef->m_Aggro.m_Threshold <= 0)
 		return -1;
 
 	int Best = -1;
@@ -257,9 +263,14 @@ void CNpcEntity::ChaseEntity(CEntity *pTarget)
 
 CEntity *CNpcEntity::FindHostileBot()
 {
-	// An NPC fights hostile bots on its own: any live bot that is not a fellow
-	// NPC of its team is a target, out to the normal chase radius. A different
-	// team counts even for another NPC.
+	// A neutral NPC is not automatically at war with every monster: it only
+	// engages hostile monsters when its definition says it defends the area
+	// (the blacksmith does, the medic does not), or when that exact monster
+	// attacked it. This keeps town NPCs from clearing the whole floor on sight.
+	if(!m_pDef || m_pDef->m_Faction == BOTFACTION_FRIENDLY)
+		return nullptr;
+
+	const int Now = Server()->Tick();
 	float BestDist = NPC_CHASE_RADIUS;
 	CEntity *pBest = nullptr;
 
@@ -273,10 +284,13 @@ CEntity *CNpcEntity::FindHostileBot()
 			continue;
 
 		IBotEntity *pBot = static_cast<IBotEntity *>(pEnt);
-		if(!pBot->IsAlive())
+		if(!pBot->IsAlive() || pBot->GetBotFaction() != BOTFACTION_HOSTILE)
 			continue;
-		if(pBot->GetBotTeam() == m_Team && str_comp(pBot->BotTypeName(), "npc") == 0)
+
+		const bool bRetaliating = m_RetaliateUntil > Now && m_LastAttackerBot != UUID_ZEROED && pBot->GetBotID() == m_LastAttackerBot;
+		if(!m_pDef->m_AttackHostiles && !bRetaliating)
 			continue;
+
 		// only a bot the NPC could actually reach and see is a target
 		if(GameWorld()->Collision()->IntersectLine(m_Pos, GameWorld()->PosInFrame(pEnt), NULL, NULL))
 			continue;
@@ -303,14 +317,20 @@ bool CNpcEntity::OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, 
 	if(ClientID >= 0)
 	{
 		ShowHealth(ClientID);
-		if(m_pDef)
+		if(m_pDef && m_pDef->m_Faction == BOTFACTION_NEUTRAL)
 			AddAggro(ClientID, m_pDef->m_Aggro.m_PerHit);
 	}
+	RememberBotAttacker(pFrom);
+	if(Dmg > 0)
+		SayEvent(MOBDIALOGUE_HURT);
 	return true;
 }
 
 void CNpcEntity::OnBotHit(CEntity *pTarget, bool Killed)
 {
+	if(Killed)
+		SayEvent(MOBDIALOGUE_KILL, true);
+
 	// the NPC killing a player decays the aggro it holds for that player
 	if(!Killed || !m_pDef || !pTarget || pTarget->ObjType() != CGameWorld::ENTTYPE_CHARACTER)
 		return;
@@ -322,6 +342,8 @@ void CNpcEntity::Die(CEntity *pKiller, int Weapon)
 {
 	if(!m_Alive || m_Invincible)
 		return;
+
+	SayEvent(MOBDIALOGUE_DEATH, true);
 
 	// a player that lands the killing blow gains per-kill aggro and sees the
 	// final health; the world or any non-player source adds nothing
@@ -346,6 +368,7 @@ bool CNpcEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, in
 	// NPCs are immovable: a hit lands and damages, but its knockback impulse is
 	// dropped so a player cannot shove the NPC around.
 	(void) Force;
+	RememberBotAttacker(pFrom);
 	return CBotEntity::TakeDamage(vec2(0.0f, 0.0f), Source, Dmg, pFrom, Weapon);
 }
 
@@ -465,9 +488,104 @@ void CNpcEntity::TickInteract()
 			CLanguageScope LanguageScope(GameServer()->LanguageOf(i));
 			const std::string Msg = LocalizeFormat("NPC", "You unlocked the shop of {}.", NpcIDDisplayName(m_pDef->m_Id));
 			GameServer()->SendChat(-1, CHAT_WHISPER, i, Msg.c_str());
+			SayEvent(MOBDIALOGUE_SIGHT);
 		}
 		m_aClientInRange[i] = InRange;
 	}
+}
+
+void CNpcEntity::RememberBotAttacker(CEntity *pFrom)
+{
+	if(!pFrom || pFrom->ObjType() != CGameWorld::ENTTYPE_BOTENTITY)
+		return;
+	IBotEntity *pBot = static_cast<IBotEntity *>(pFrom);
+	if(!pBot->IsAlive() || pBot->GetBotFaction() != BOTFACTION_HOSTILE)
+		return;
+	m_LastAttackerBot = pBot->GetBotID();
+	m_RetaliateUntil = Server()->Tick() + Server()->TickSpeed() * 10;
+}
+
+void CNpcEntity::TickAuras()
+{
+	if(!m_pDef || !m_Alive)
+		return;
+
+	if(m_pDef->m_HealAura.m_Enabled)
+	{
+		if(m_HealTimer > 0)
+			m_HealTimer--;
+		else
+		{
+			m_HealTimer = m_pDef->m_HealAura.m_Interval;
+			for(int i = 0; i < MAX_CLIENTS; i++)
+			{
+				CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+				if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+					continue;
+				CCharacter *pChr = pPlayer->GetCharacter();
+				if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_HealAura.m_Radius)
+					continue;
+				pChr->IncreaseHealth(m_pDef->m_HealAura.m_Amount);
+			}
+		}
+	}
+
+	if(m_pDef->m_ArmorAura.m_Enabled)
+	{
+		if(m_ArmorTimer > 0)
+			m_ArmorTimer--;
+		else
+		{
+			m_ArmorTimer = m_pDef->m_ArmorAura.m_Interval;
+			for(int i = 0; i < MAX_CLIENTS; i++)
+			{
+				CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+				if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+					continue;
+				CCharacter *pChr = pPlayer->GetCharacter();
+				if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_ArmorAura.m_Radius)
+					continue;
+				pChr->IncreaseArmor(m_pDef->m_ArmorAura.m_Amount);
+			}
+		}
+	}
+}
+
+void CNpcEntity::SayEvent(int Event, bool Force)
+{
+	if(!m_pDef || Event < 0 || Event >= NUM_MOBDIALOGUE_EVENTS)
+		return;
+	const SDialogueSet &Set = m_pDef->m_Dialogue.m_aEvents[Event];
+	if(Set.m_NumLines <= 0)
+		return;
+
+	const int Now = Server()->Tick();
+	static const int s_aCooldown[NUM_MOBDIALOGUE_EVENTS] = {0, 50, 100, 60, 80, 0, 600, 300};
+	if(!Force)
+	{
+		if(s_aCooldown[Event] > 0 && Now - m_aLastEventTick[Event] < s_aCooldown[Event])
+			return;
+		if(Now - m_LastSpeakTick < 25)
+			return;
+	}
+
+	const char *pLine = Set.m_aaLines[random_int() % Set.m_NumLines];
+	const char *pName = NpcIDDisplayName(m_pDef->m_Id);
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+		if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+			continue;
+		if(distance(pPlayer->m_ViewPos, m_Pos) > 700.0f)
+			continue;
+		CLanguageScope LanguageScope(pPlayer->Language());
+		char aBuf[384];
+		str_format(aBuf, sizeof(aBuf), "%s: %s", pName, Localize(pLine, "Mob Dialogue"));
+		GameServer()->SendChat(-1, CHAT_ALL, i, aBuf);
+	}
+
+	m_LastSpeakTick = Now;
+	m_aLastEventTick[Event] = Now;
 }
 
 void CNpcEntity::OnAction()

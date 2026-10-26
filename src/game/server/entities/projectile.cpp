@@ -16,7 +16,13 @@ CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, 
 	m_Direction.y = round_to_int(Dir.y * 100.0f) / 100.0f;
 	m_LifeSpan = Span;
 	m_Owner = Owner;
-	m_OwnerTeam = GameServer()->m_apPlayers[Owner]->GetTeam();
+	// A bot has no client slot: its projectile carries the team sentinel
+	// (PLAYER_TEAM_BLUE / PLAYER_TEAM_RED) so the victim's friendly-fire check
+	// still resolves. A real client keeps its protocol team.
+	if(Owner >= 0 && Owner < MAX_CLIENTS && GameServer()->m_apPlayers[Owner])
+		m_OwnerTeam = GameServer()->m_apPlayers[Owner]->GetTeam();
+	else
+		m_OwnerTeam = Owner == PLAYER_TEAM_BLUE ? TEAM_BLUE : TEAM_RED;
 	m_Force = Force;
 	m_Damage = Damage;
 	m_SoundImpact = SoundImpact;

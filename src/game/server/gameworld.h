@@ -16,6 +16,7 @@ class CContainerEntity;
 struct _json_value;
 typedef struct _json_value json_value;
 struct SNpcDef;
+struct SMobSpawn;
 
 /*
 	Class: Game World
@@ -40,6 +41,8 @@ public:
 		// a storage container placed by a generated map structure
 		ENTTYPE_CONTAINER,
 		ENTTYPE_BOTENTITY,
+		// a segmented burrower; its body segments are bots, the head is this
+		ENTTYPE_WORM,
 		// generic scripted prop (data/entities/*.json + data/scripts/entities/*.py)
 		ENTTYPE_SCRIPTED,
 		NUM_ENTTYPES,
@@ -89,6 +92,8 @@ public:
 	bool m_BotConfigured;
 	bool m_BotNpcRole;
 	array<const SNpcDef *> m_lBotDefinedNpcs;
+	// fixed content mob spawns belonging to this world (data/mobs/spawns.json)
+	array<const SMobSpawn *> m_lBotDefinedMobs;
 	bool IsNpcWorld() const { return m_BotNpcRole; }
 	bool BotConfigured() const { return m_BotConfigured; }
 

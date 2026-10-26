@@ -1,0 +1,10 @@
+{
+    "comment": "Weighted random population for euclidean floors. Friendly units are fixed spawns, not part of the hostile/neutral pool.",
+    "entries": [
+        {"mob": "raider",   "weight": 34},
+        {"mob": "spitter",  "weight": 24},
+        {"mob": "ironhide", "weight": 14},
+        {"mob": "wanderer", "weight": 20},
+        {"mob": "burrower", "weight": 8}
+    ]
+}

@@ -1,0 +1,5 @@
+{
+    "name": "Venom Gland",
+    "desc": "A still-warm gland from a burrowing horror. Alchemists pay well for it.",
+    "item_type": ["monster_part", "craft"]
+}

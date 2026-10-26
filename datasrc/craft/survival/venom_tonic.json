@@ -1,0 +1,8 @@
+{
+    "craft_id": "venom_tonic",
+    "needed": [
+        {"item_id": "venom_gland", "count": 1},
+        {"item_id": "bandage", "count": 2}
+    ],
+    "result": {"item_id": "herb_tonic", "count": 2}
+}

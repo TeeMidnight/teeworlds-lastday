@@ -16,7 +16,14 @@
 enum
 {
 	PLAYER_TEAM_BLUE = -2,
-	PLAYER_TEAM_RED = -1
+	PLAYER_TEAM_RED = -1,
+	// A hostile bot/monster hit. It is deliberately not a player team: the
+	// default survival team is red, so a red sentinel would make every monster
+	// harmless to every player. The victim skips the team friendly-fire check.
+	PLAYER_TEAM_HOSTILE = -3,
+	// A friendly NPC/companion hit. It still damages hostile bots (which do not
+	// consult the team), but a player is never hurt by an ally.
+	PLAYER_TEAM_FRIENDLY = -4
 };
 
 /*

@@ -1,0 +1,42 @@
+{
+    "id": "raider",
+    "name": "Raider",
+    "faction": "hostile",
+    "group": "raiders",
+    "type": "tee",
+    "health": 14,
+    "armor": 2,
+    "speed_scale": 1.05,
+    "aggro_radius": 420,
+    "attack_range": 48,
+    "jump_chance": 25,
+    "fight_hostile_groups": true,
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true, "hue": 0,   "sat": 120, "lgt": 96},
+        "marking":    {"name": "cammo2",   "custom_color": true, "hue": 12,  "sat": 140, "lgt": 80},
+        "decoration": {"name": "",         "custom_color": false},
+        "hands":      {"name": "standard", "custom_color": true, "hue": 0,   "sat": 120, "lgt": 96},
+        "feet":       {"name": "standard", "custom_color": true, "hue": 0,   "sat": 90,  "lgt": 64},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "ai": "hunter",
+    "abilities": {
+        "melee": {"damage": 4, "cooldown": 18, "range": 52},
+        "leap":  {"enabled": true, "cooldown": 130, "range": 230, "force_x": 6.5, "force_y": -7.5},
+        "enrage": {"health_percent": 35, "damage_bonus": 2, "speed_percent": 35}
+    },
+    "dialogue": {
+        "spawn": ["Another skull for the pile."],
+        "sight": ["You picked the wrong valley, {player}.", "Fresh meat."],
+        "combat": ["Run, and I will make it quick!", "Stand still!"],
+        "hurt": ["You'll pay for that!", "Is that all?"],
+        "kill": ["Rest now."],
+        "death": ["The warband... will find you..."],
+        "low_health": ["I'll take you with me!"]
+    },
+    "drops": [
+        {"item": "iron_ingot", "count_min": 1, "count_max": 2, "chance": 0.45},
+        {"item": "stone", "count_min": 2, "count_max": 5, "chance": 0.30},
+        {"item": "silver_ore", "count_min": 1, "count_max": 1, "chance": 0.08}
+    ]
+}

@@ -1,0 +1,39 @@
+{
+    "id": "spitter",
+    "name": "Spitter",
+    "faction": "hostile",
+    "group": "swarm",
+    "type": "tee",
+    "health": 11,
+    "armor": 0,
+    "speed_scale": 0.95,
+    "aggro_radius": 500,
+    "attack_range": 360,
+    "keep_distance": 220,
+    "jump_chance": 15,
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true, "hue": 88,  "sat": 180, "lgt": 110},
+        "marking":    {"name": "twintri",  "custom_color": true, "hue": 96,  "sat": 190, "lgt": 128},
+        "decoration": {"name": "",         "custom_color": false},
+        "hands":      {"name": "standard", "custom_color": true, "hue": 88,  "sat": 180, "lgt": 110},
+        "feet":       {"name": "standard", "custom_color": true, "hue": 88,  "sat": 150, "lgt": 90},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "ai": "skirmisher",
+    "abilities": {
+        "melee": {"damage": 2, "cooldown": 25, "range": 44},
+        "ranged": {"enabled": true, "weapon": "gun", "damage": 2, "cooldown": 55, "range": 340, "min_range": 120, "force": 1, "span": 700, "sound": "gun"}
+    },
+    "dialogue": {
+        "spawn": ["The air tastes of iron."],
+        "sight": ["There you are.", "Keep running, {player}."],
+        "combat": ["A little closer..."],
+        "hurt": ["Hsss!"],
+        "death": ["The hive will know."],
+        "idle": ["..."]
+    },
+    "drops": [
+        {"item": "venom_gland", "count_min": 1, "count_max": 2, "chance": 0.70},
+        {"item": "grass", "count_min": 1, "count_max": 3, "chance": 0.35}
+    ]
+}

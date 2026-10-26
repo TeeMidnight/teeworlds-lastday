@@ -1,0 +1,37 @@
+{
+    "id": "wanderer",
+    "name": "Wanderer",
+    "faction": "neutral",
+    "group": "wanderers",
+    "type": "tee",
+    "health": 12,
+    "armor": 0,
+    "speed_scale": 0.9,
+    "aggro_radius": 260,
+    "attack_range": 48,
+    "jump_chance": 20,
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true, "hue": 34,  "sat": 90,  "lgt": 150},
+        "marking":    {"name": "saddo",    "custom_color": true, "hue": 34,  "sat": 80,  "lgt": 130},
+        "decoration": {"name": "",         "custom_color": false},
+        "hands":      {"name": "standard", "custom_color": true, "hue": 34,  "sat": 90,  "lgt": 150},
+        "feet":       {"name": "standard", "custom_color": true, "hue": 30,  "sat": 70,  "lgt": 100},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "ai": "wanderer",
+    "abilities": {
+        "melee": {"damage": 2, "cooldown": 28, "range": 46}
+    },
+    "dialogue": {
+        "spawn": ["The road is long, and I am in no hurry."],
+        "sight": ["Mind your step, {player}.", "Fine weather for walking."],
+        "combat": ["I warned you!"],
+        "hurt": ["Leave me be!"],
+        "death": ["So this is where the road ends..."],
+        "idle": ["Hm. Which way now?", "I smell rain."]
+    },
+    "drops": [
+        {"item": "grass", "count_min": 1, "count_max": 3, "chance": 0.50},
+        {"item": "bandage", "count_min": 1, "count_max": 1, "chance": 0.20}
+    ]
+}

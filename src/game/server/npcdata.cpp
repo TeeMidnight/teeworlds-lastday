@@ -32,6 +32,22 @@ int ReadInt(const json_value &Value, int Default)
 	return Default;
 }
 
+float ReadFloat(const json_value &Value, float Default)
+{
+	if(Value.type == json_integer || Value.type == json_double)
+		return (float) (double) Value;
+	return Default;
+}
+
+bool ReadBool(const json_value &Value, bool Default)
+{
+	if(Value.type == json_boolean)
+		return (bool) Value;
+	if(Value.type == json_integer)
+		return Value.u.integer != 0;
+	return Default;
+}
+
 // the persistable name of an item id: its namespaced source, or the uuid
 void ItemSourceName(const CItemID &Id, char *pOut, int Size)
 {
@@ -204,10 +220,43 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 		}
 	}
 
+	// A faction is explicit when present; otherwise the aggro rules decide:
+	// an NPC that can gain hate is neutral, one that never fights is friendly.
+	const char *pFaction = (*pJson)["faction"];
+	if(pFaction[0])
+		pDef->m_Faction = BotFactionFromString(pFaction, BOTFACTION_FRIENDLY);
+	else
+		pDef->m_Faction = pDef->m_Aggro.m_Threshold > 0 ? BOTFACTION_NEUTRAL : BOTFACTION_FRIENDLY;
+	pDef->m_AttackHostiles = ReadBool((*pJson)["attack_hostiles"], pDef->m_Faction == BOTFACTION_NEUTRAL);
+
+	CMobSystem::LoadDialogue((*pJson)["dialogue"], &pDef->m_Dialogue);
+
+	const json_value &rAbilities = (*pJson)["abilities"];
+	if(rAbilities.type == json_object)
+	{
+		const json_value &rHeal = rAbilities["heal_aura"];
+		if(rHeal.type == json_object)
+		{
+			pDef->m_HealAura.m_Enabled = ReadBool(rHeal["enabled"], true);
+			pDef->m_HealAura.m_Radius = maximum(16.0f, ReadFloat(rHeal["radius"], pDef->m_HealAura.m_Radius));
+			pDef->m_HealAura.m_Amount = maximum(0, ReadInt(rHeal["amount"], pDef->m_HealAura.m_Amount));
+			pDef->m_HealAura.m_Interval = maximum(1, ReadInt(rHeal["interval"], pDef->m_HealAura.m_Interval));
+		}
+
+		const json_value &rArmor = rAbilities["armor_aura"];
+		if(rArmor.type == json_object)
+		{
+			pDef->m_ArmorAura.m_Enabled = ReadBool(rArmor["enabled"], true);
+			pDef->m_ArmorAura.m_Radius = maximum(16.0f, ReadFloat(rArmor["radius"], pDef->m_ArmorAura.m_Radius));
+			pDef->m_ArmorAura.m_Amount = maximum(0, ReadInt(rArmor["amount"], pDef->m_ArmorAura.m_Amount));
+			pDef->m_ArmorAura.m_Interval = maximum(1, ReadInt(rArmor["interval"], pDef->m_ArmorAura.m_Interval));
+		}
+	}
+
 	m_lDefs.add(pDef);
-	dbg_msg("npc", "loaded npc '%s' ('%s') world '%s' pos %d,%d hp %d regen %d sells %d",
+	dbg_msg("npc", "loaded npc '%s' ('%s') world '%s' pos %d,%d hp %d regen %d faction %s sells %d",
 		Id.SourceName(), NpcIDDisplayName(Id), pDef->m_aWorld,
-		TileX, TileY, pDef->m_Health, pDef->m_HealthRegen, pDef->m_lSells.size());
+		TileX, TileY, pDef->m_Health, pDef->m_HealthRegen, BotFactionName(pDef->m_Faction), pDef->m_lSells.size());
 }
 
 void CNpcSystem::Init(CGameContext *pGameServer, IStorage *pStorage)

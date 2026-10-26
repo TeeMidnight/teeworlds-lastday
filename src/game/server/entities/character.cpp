@@ -937,6 +937,10 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 	if(m_pPlayer && m_pPlayer->IsTrainProtected())
 		return false;
 
+	// an allied NPC's shot can pass through a player without hurting them
+	if(From == PLAYER_TEAM_FRIENDLY)
+		return false;
+
 	m_Core.m_Vel += Force;
 
 	if(From >= 0)
@@ -944,7 +948,7 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 		if(GameServer()->m_pController->IsFriendlyFire(m_pPlayer->GetCID(), From, Dmg))
 			return false;
 	}
-	else
+	else if(From != PLAYER_TEAM_HOSTILE)
 	{
 		int Team = TEAM_RED;
 		if(From == PLAYER_TEAM_BLUE)

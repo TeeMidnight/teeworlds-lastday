@@ -20,9 +20,12 @@ class CGameContext;
 class CGameController;
 class CGameWorld;
 class CBotEntity;
+class CWormEntity;
 class IBotEntity;
 struct CBotTeeInfo;
 struct SNpcDef;
+struct SMobDef;
+struct SMobSpawn;
 
 /*
 	Class: CBotManager
@@ -76,6 +79,19 @@ public:
 	// with its own fixed identity. A world that owns defined NPCs does not top
 	// up with random bots.
 	IBotEntity *SpawnNpc(CGameWorld *pWorld, const SNpcDef *pDef);
+	// Spawns one content-defined monster. pStableID keeps a fixed spawn stable
+	// across world reloads; null generates a fresh identity for a random spawn.
+	IBotEntity *SpawnMob(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos,
+		const Uuid *pStableID = nullptr, const char *pName = nullptr);
+	// Spawns a segmented worm. The returned object is not an IBotEntity; its
+	// body segments are registered as bots and report through HeadSegment().
+	CWormEntity *SpawnWorm(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos,
+		const Uuid *pStableID = nullptr);
+	// Creates and registers one body segment for a worm. Used by CWormEntity.
+	IBotEntity *SpawnWormSegment(CGameWorld *pWorld, CWormEntity *pWorm, Uuid BotID,
+		const CBotTeeInfo &TeeInfo, int Team, int Faction);
+	// Respawns every fixed mob definition of a world whose entity is gone.
+	void TickFixedMobs(CGameWorld *pWorld);
 	// Puts a defined NPC back into the world after its death sequence.
 	IBotEntity *RespawnNpc(CGameWorld *pWorld, const SNpcDef *pDef) { return SpawnNpc(pWorld, pDef); }
 	// Removes every bot living in one world (world unload).

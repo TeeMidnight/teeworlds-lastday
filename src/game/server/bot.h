@@ -24,6 +24,40 @@ enum
 	BOT_MAX_PER_CLIENT = MAX_BOTS_07,
 };
 
+// A bot's social stance. The value is independent of the protocol team: two
+// hostile monsters can belong to different warbands and fight each other, a
+// neutral monster only fights back, and a friendly unit fights for the players.
+enum EBotFaction
+{
+	BOTFACTION_HOSTILE = 0,
+	BOTFACTION_NEUTRAL,
+	BOTFACTION_FRIENDLY,
+};
+
+inline const char *BotFactionName(int Faction)
+{
+	switch(Faction)
+	{
+	case BOTFACTION_HOSTILE: return "hostile";
+	case BOTFACTION_NEUTRAL: return "neutral";
+	case BOTFACTION_FRIENDLY: return "friendly";
+	}
+	return "unknown";
+}
+
+inline int BotFactionFromString(const char *pName, int Default = BOTFACTION_HOSTILE)
+{
+	if(!pName || !pName[0])
+		return Default;
+	if(str_comp_nocase(pName, "hostile") == 0 || str_comp_nocase(pName, "enemy") == 0)
+		return BOTFACTION_HOSTILE;
+	if(str_comp_nocase(pName, "neutral") == 0)
+		return BOTFACTION_NEUTRAL;
+	if(str_comp_nocase(pName, "friendly") == 0 || str_comp_nocase(pName, "ally") == 0)
+		return BOTFACTION_FRIENDLY;
+	return Default;
+}
+
 // Same layout as player.h's CTeeInfos, repeated so that spawning a bot does not
 // drag the whole player header (and IServer / CGameWorld) into every call site.
 struct CBotSkin

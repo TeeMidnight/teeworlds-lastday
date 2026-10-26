@@ -27,6 +27,7 @@ class CItemSystem;
 class CContainerSystem;
 class CContainerEntity;
 class CNpcSystem;
+class CMobSystem;
 class CTradeSystem;
 class CScriptedEntitySystem;
 
@@ -170,6 +171,8 @@ public:
 	CTradeSystem *m_pTradeSystem;
 
 	CNpcSystem *m_pNpcSystem;
+	// data/mobs/*.json: content-defined factions, abilities and fixed spawns
+	CMobSystem *m_pMobSystem;
 
 	class CBuffSystem *m_pBuffSystem;
 
@@ -182,6 +185,7 @@ public:
 	CContainerSystem *Containers() const { return m_pContainerSystem; }
 	CTradeSystem *Trade() const { return m_pTradeSystem; }
 	CNpcSystem *Npcs() const { return m_pNpcSystem; }
+	CMobSystem *Mobs() const { return m_pMobSystem; }
 	class CBuffSystem *Buffs() const { return m_pBuffSystem; }
 	class CScriptedEntitySystem *ScriptedEntities() const { return m_pScriptedEntities; }
 

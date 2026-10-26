@@ -1,0 +1,45 @@
+{
+    "id": "burrower",
+    "name": "Burrower",
+    "faction": "hostile",
+    "group": "burrowers",
+    "type": "worm",
+    "health": 24,
+    "armor": 1,
+    "speed_scale": 1.0,
+    "aggro_radius": 560,
+    "attack_range": 48,
+    "worm": {
+        "segments": 6,
+        "speed": 2.8,
+        "burrow_ticks": 100,
+        "surface_ticks": 70,
+        "damage": 2,
+        "bite_radius": 52,
+        "chase_radius": 560
+    },
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true, "hue": 268, "sat": 170, "lgt": 96},
+        "marking":    {"name": "twinbelly", "custom_color": true, "hue": 280, "sat": 160, "lgt": 120},
+        "decoration": {"name": "",         "custom_color": false},
+        "hands":      {"name": "standard", "custom_color": true, "hue": 268, "sat": 170, "lgt": 96},
+        "feet":       {"name": "standard", "custom_color": true, "hue": 268, "sat": 140, "lgt": 70},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "ai": "hunter",
+    "abilities": {
+        "melee": {"damage": 3, "cooldown": 20, "range": 56}
+    },
+    "dialogue": {
+        "spawn": ["The ground breathes."],
+        "sight": ["..."],
+        "hurt": ["Skreee!"],
+        "death": ["..."],
+        "low_health": ["Skreeeeee!"]
+    },
+    "drops": [
+        {"item": "venom_gland", "count_min": 2, "count_max": 4, "chance": 0.90},
+        {"item": "ancient_core", "count_min": 1, "count_max": 1, "chance": 0.25},
+        {"item": "amber", "count_min": 1, "count_max": 2, "chance": 0.30}
+    ]
+}

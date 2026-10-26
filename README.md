@@ -107,6 +107,47 @@ id, so they survive a world reload. Cached instances keep the containers they
 were generated with: after editing a structure file or a world's `structs`,
 remove the floor's pack (or pick unused seeds) to regenerate them.
 
+Mobs, factions and dialogue
+--------------------------
+Monsters are content, not C++ classes. One file per creature lives in
+`datasrc/mobs/<id>.json` and defines:
+
+- identity, skin, health and armor
+- `faction`: `hostile`, `neutral` or `friendly`
+- `ai`: `hunter`, `skirmisher`, `sentry`, `wanderer`, `companion` or
+  `support`
+- abilities: melee, ranged projectile, leap, heal aura, armor aura, enrage
+- localized `dialogue` events (spawn, sight, combat, hurt, kill, death, idle,
+  low health), with `{player}` substitution and per-event cooldowns
+- weighted `drops`; each entry is a normal item id with a count range and a
+  chance
+
+Faction rules are deliberately asymmetric. A hostile mob attacks players,
+friendly units, neutral units and hostile mobs of a different `group`
+(`fight_hostile_groups`). A neutral mob does nothing until attacked, then
+retaliates for a while. A friendly unit attacks hostile mobs only and never
+hurts a player. The same rules apply to configured town NPCs: a friendly Medic
+never gains aggro or starts a fight, while the neutral Blacksmith gains aggro
+when a player hits it and, because it sets `attack_hostiles`, also defends the
+square against hostile monsters. A neutral NPC without that flag only answers
+the exact creature that hit it.
+
+`datasrc/mobs/pool.json` is the weighted random population of euclidean
+floors. `datasrc/mobs/spawns.json` places fixed content: the friendly Ranger in
+the Connector, for example. Fixed spawns respawn after death; a world that owns
+them does not also roll random mobs.
+
+`burrower` is a segmented worm: the head and body are real tee-shaped bot
+entities, so it reads as a chain of tees, while one `CWormEntity` owns the
+shared health, the burrow/surface cycle, contact damage and loot. It phases
+through terrain instead of carving it, is only hittable while surfaced, and any
+body link routes damage to the whole creature.
+
+Hostile, neutral and friendly combat uses the `PLAYER_TEAM_HOSTILE` and
+`PLAYER_TEAM_FRIENDLY` damage sentinels. They keep hostile hits from being
+swallowed by the survival mode's red team friendly-fire rule, and keep allied
+shots from hurting players, without changing the protocol teams.
+
 World packs
 -----------
 A generated instance is a `.map` plus a `.json` sidecar holding its entrances,

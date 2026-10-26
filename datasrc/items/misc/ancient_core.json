@@ -1,0 +1,5 @@
+{
+    "name": "Ancient Core",
+    "desc": "A humming shard of something that should not still be alive.",
+    "item_type": ["monster_part", "craft"]
+}

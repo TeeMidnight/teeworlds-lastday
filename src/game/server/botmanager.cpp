@@ -6,7 +6,10 @@
 
 #include <game/server/entities/botentity.h>
 #include <game/server/entities/character.h>
+#include <game/server/entities/monsterentity.h>
 #include <game/server/entities/npcentity.h>
+#include <game/server/entities/wormentity.h>
+#include <game/server/mobdata.h>
 #include <game/server/npcdata.h>
 
 #include "botmanager.h"
@@ -488,6 +491,17 @@ IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 			return nullptr;
 	}
 
+	// A world with a content pool draws from it: the definition carries the
+	// faction, skin, abilities and loot, so a random spawn is a real monster
+	// rather than the legacy hammer bot.
+	const SMobDef *pMob = m_pGameServer->Mobs() ? m_pGameServer->Mobs()->RandomDef() : nullptr;
+	if(pMob)
+	{
+		IBotEntity *pMobEntity = SpawnMob(pWorld, pMob, SpawnPos, &BotID);
+		if(pMobEntity)
+			return pMobEntity;
+	}
+
 	const CBotTeeInfo TeeInfo = BotMakeRandomTeeInfo();
 	IBotEntity *pBot = pWorld->IsNpcWorld()
 		? NpcBotCreator(pWorld, SpawnPos, BotID, TeeInfo, TEAM_BLUE, nullptr)
@@ -502,6 +516,65 @@ IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 	if(pBot->TeeID() != -1)
 		m_BotsByTeeID.set(pBot->TeeID(), pBot);
 	return pBot;
+}
+
+IBotEntity *CBotManager::SpawnMob(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos,
+	const Uuid *pStableID, const char *pName)
+{
+	if(!pWorld || !pDef)
+		return nullptr;
+	if(pDef->m_IsWorm)
+	{
+		CWormEntity *pWorm = SpawnWorm(pWorld, pDef, Pos, pStableID);
+		return pWorm ? pWorm->HeadSegment() : nullptr;
+	}
+
+	const Uuid BotID = pStableID ? *pStableID : random_uuid();
+	if(BotID == UUID_ZEROED || BotByID(BotID))
+		return nullptr;
+
+	CMonsterEntity *pBot = new CMonsterEntity(pWorld, Pos, BotID, pDef, pName);
+	m_Bots.set(BotID, pBot);
+	m_lBotOrder.add(BotID);
+	if(pBot->TeeID() != -1)
+		m_BotsByTeeID.set(pBot->TeeID(), pBot);
+	return pBot;
+}
+
+CWormEntity *CBotManager::SpawnWorm(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos, const Uuid *pStableID)
+{
+	if(!pWorld || !pDef || !pDef->m_IsWorm)
+		return nullptr;
+	const Uuid HeadID = pStableID && *pStableID != UUID_ZEROED ? *pStableID : random_uuid();
+	if(BotByID(HeadID))
+		return nullptr;
+	return new CWormEntity(pWorld, Pos, pDef, HeadID, pDef->m_aName);
+}
+
+IBotEntity *CBotManager::SpawnWormSegment(CGameWorld *pWorld, CWormEntity *pWorm, Uuid BotID,
+	const CBotTeeInfo &TeeInfo, int Team, int Faction)
+{
+	if(!pWorld || !pWorm || BotID == UUID_ZEROED || BotByID(BotID))
+		return nullptr;
+
+	CWormSegmentEntity *pSegment = new CWormSegmentEntity(pWorld, pWorm->GetPos(), BotID, TeeInfo, Team, Faction, pWorm);
+	m_Bots.set(BotID, pSegment);
+	m_lBotOrder.add(BotID);
+	if(pSegment->TeeID() != -1)
+		m_BotsByTeeID.set(pSegment->TeeID(), pSegment);
+	return pSegment;
+}
+
+void CBotManager::TickFixedMobs(CGameWorld *pWorld)
+{
+	if(!pWorld)
+		return;
+	for(int i = 0; i < pWorld->m_lBotDefinedMobs.size(); i++)
+	{
+		const SMobSpawn *pSpawn = pWorld->m_lBotDefinedMobs[i];
+		if(pSpawn && pSpawn->m_pDef && !BotByID(pSpawn->m_Id))
+			SpawnMob(pWorld, pSpawn->m_pDef, pSpawn->m_Pos, &pSpawn->m_Id, pSpawn->m_aName);
+	}
 }
 
 IBotEntity *CBotManager::SpawnNpc(CGameWorld *pWorld, const SNpcDef *pDef)
@@ -543,8 +616,12 @@ int CBotManager::LiveBotsInWorld(CGameWorld *pWorld) const
 	for(int i = 0; i < m_lBotOrder.size(); i++)
 	{
 		IBotEntity *const *ppBot = m_Bots.get(m_lBotOrder[i]);
-		if(ppBot && *ppBot && (*ppBot)->GameWorld() == pWorld)
-			Count++;
+		if(!ppBot || !*ppBot || (*ppBot)->GameWorld() != pWorld)
+			continue;
+		// Every body link occupies a bot slot the client can be shown, so a
+		// worm counts as its whole chain. Excluding the links would make the
+		// top-up loop spawn worm after worm around one existing creature.
+		Count++;
 	}
 	return Count;
 }
@@ -554,9 +631,9 @@ void CBotManager::TickWorld(CGameWorld *pWorld)
 	if(!pWorld || !pWorld->m_BotConfigured)
 		return;
 
-	// a world that owns configured NPCs respawns those instead of rolling
-	// random bots, so the population is exactly the definitions
-	if(pWorld->m_lBotDefinedNpcs.size())
+	// a world that owns configured NPCs or fixed mobs respawns those instead
+	// of rolling random bots, so the population is exactly the definitions
+	if(pWorld->m_lBotDefinedNpcs.size() || pWorld->m_lBotDefinedMobs.size())
 	{
 		for(int i = 0; i < pWorld->m_lBotDefinedNpcs.size(); i++)
 		{
@@ -564,6 +641,7 @@ void CBotManager::TickWorld(CGameWorld *pWorld)
 			if(pDef && !BotByID(pDef->m_Id.Value()))
 				SpawnNpc(pWorld, pDef);
 		}
+		TickFixedMobs(pWorld);
 		return;
 	}
 

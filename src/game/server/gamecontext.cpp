@@ -33,6 +33,7 @@
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "item.h"
+#include "mobdata.h"
 #include "npcdata.h"
 #include "player.h"
 #include "scripting/buff_system.h"
@@ -76,6 +77,7 @@ void CGameContext::Construct(int Resetting)
 	m_pContainerSystem = 0;
 	m_pTradeSystem = 0;
 	m_pNpcSystem = 0;
+	m_pMobSystem = 0;
 	m_pBuffSystem = 0;
 	m_pScriptedEntities = 0;
 	m_MainWorldID = 0;
@@ -131,6 +133,7 @@ void CGameContext::Clear()
 	CContainerSystem *pContainerSystem = m_pContainerSystem;
 	CTradeSystem *pTradeSystem = m_pTradeSystem;
 	CNpcSystem *pNpcSystem = m_pNpcSystem;
+	CMobSystem *pMobSystem = m_pMobSystem;
 	CBuffSystem *pBuffSystem = m_pBuffSystem;
 	CScriptedEntitySystem *pScriptedEntities = m_pScriptedEntities;
 	// the engine services (IServer & co) outlive the game context, so preserve
@@ -160,6 +163,7 @@ void CGameContext::Clear()
 	m_pContainerSystem = pContainerSystem;
 	m_pTradeSystem = pTradeSystem;
 	m_pNpcSystem = pNpcSystem;
+	m_pMobSystem = pMobSystem;
 	m_pBuffSystem = pBuffSystem;
 	m_pScriptedEntities = pScriptedEntities;
 	m_pServer = pServer;
@@ -1611,6 +1615,11 @@ void CGameContext::OnInit()
 	m_pTradeSystem = new CTradeSystem();
 	m_pTradeSystem->Init(this);
 
+	// content-defined mobs (datasrc/mobs/*.json): factions, abilities and
+	// fixed spawns, loaded before any world can ask the bot manager for one
+	m_pMobSystem = new CMobSystem();
+	m_pMobSystem->Init(this, Storage());
+
 	// the configured NPCs (datasrc/bots/npc/*.json)
 	m_pNpcSystem = new CNpcSystem();
 	m_pNpcSystem->Init(this, Storage());
@@ -1812,6 +1821,9 @@ void CGameContext::OnShutdown()
 
 	delete m_pNpcSystem;
 	m_pNpcSystem = 0;
+
+	delete m_pMobSystem;
+	m_pMobSystem = 0;
 
 	delete m_pBuffSystem;
 	m_pBuffSystem = 0;
@@ -2107,12 +2119,36 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 		}
 	}
 
-	pNewWorld->m_BotConfigured = BotWorld || lpNpcs.size() > 0;
+	// Fixed mob spawns are content too: a friendly ranger in the hub or a
+	// named guard in a dungeon spawns even with sv_bots 0, and is respawned by
+	// the bot manager after death.
+	array<const SMobSpawn *> lpMobs;
+	if(m_pMobSystem)
+	{
+		for(int i = 0; i < m_pMobSystem->NumSpawns(); i++)
+		{
+			const SMobSpawn *pSpawn = m_pMobSystem->SpawnAt(i);
+			if(pSpawn && str_comp(pSpawn->m_aWorld, pMapName) == 0)
+				lpMobs.add(pSpawn);
+		}
+	}
+
+	pNewWorld->m_BotConfigured = BotWorld || lpNpcs.size() > 0 || lpMobs.size() > 0;
 	pNewWorld->m_BotNpcRole = WorldKind == WORLDKIND_HUB || lpNpcs.size() > 0;
 	if(m_pBotManager)
 	{
 		for(int i = 0; i < lpNpcs.size(); i++)
 			m_pBotManager->SpawnNpc(pNewWorld, lpNpcs[i]);
+		for(int i = 0; i < lpMobs.size(); i++)
+		{
+			const SMobSpawn *pSpawn = lpMobs[i];
+			bool Known = false;
+			for(int k = 0; k < pNewWorld->m_lBotDefinedMobs.size() && !Known; k++)
+				Known = pNewWorld->m_lBotDefinedMobs[k] == pSpawn;
+			if(!Known)
+				pNewWorld->m_lBotDefinedMobs.add(pSpawn);
+			m_pBotManager->SpawnMob(pNewWorld, pSpawn->m_pDef, pSpawn->m_Pos, &pSpawn->m_Id, pSpawn->m_aName);
+		}
 	}
 
 	// A ring crossing names the neighbouring instance at runtime, and the engine

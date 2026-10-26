@@ -157,6 +157,37 @@ def parse_tips():
 			l10n[(tip, TIP_CTXT)] = ""
 	return l10n
 
+def parse_mob_dialogue():
+	"""Collects dialogue lines from datasrc/mobs/*.json and configured NPCs.
+	The runtime localizes each line with the "Mob Dialogue" context; they are
+	data, not source literals, so the extractor has to read the same files."""
+	l10n = {}
+	paths = []
+	for directory in ("datasrc/mobs", "datasrc/bots/npc"):
+		if not os.path.isdir(directory):
+			continue
+		for filename in sorted(os.listdir(directory)):
+			if filename.endswith(".json"):
+				paths.append(os.path.join(directory, filename))
+
+	for path in paths:
+		try:
+			with open(path, encoding='utf-8') as f:
+				data = json.load(f)
+		except (OSError, ValueError):
+			continue
+		if not isinstance(data, dict):
+			continue
+		dialogue = data.get("dialogue")
+		if not isinstance(dialogue, dict):
+			continue
+		for value in dialogue.values():
+			lines = value if isinstance(value, list) else [value]
+			for line in lines:
+				if isinstance(line, str) and line:
+					l10n[(line, "Mob Dialogue")] = ""
+	return l10n
+
 def parse_script_chat():
 	"""Collects player-visible chat strings written by Python scripts.
 
@@ -291,6 +322,8 @@ if __name__ == '__main__':
 	l10n_server.update(parse_tips())
 	# container display names are data looked up with "Container Name"
 	l10n_server.update(parse_container_names())
+	# dialogue lines from mob/NPC json are looked up with "Mob Dialogue"
+	l10n_server.update(parse_mob_dialogue())
 	# player-visible chat text written by Python scripts
 	l10n_server.update(parse_script_chat())
 

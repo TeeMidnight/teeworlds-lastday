@@ -11,6 +11,7 @@
 #include <game/item_id.h>
 #include <game/npc_id.h>
 #include <game/server/bot.h> // CBotSkin
+#include <game/server/mobdata.h> // dialogue, auras and faction
 
 class CGameContext;
 class IStorage;
@@ -54,9 +55,16 @@ struct SNpcDef
 	vec2 m_Pos;        // world position (tiles converted by the loader)
 	int m_Health;
 	int m_HealthRegen; // hit points per second
+	int m_Faction;     // BOTFACTION_*; friendly NPCs never gain aggro
 	CBotSkin m_Skin;
 	SNpcAggroDef m_Aggro;
 	array<SNpcSell> m_lSells;
+	SMobDialogue m_Dialogue;
+	SMobHealAura m_HealAura;
+	SMobArmorAura m_ArmorAura;
+	// neutral NPCs may defend the area against hostile monsters; friendly ones
+	// never start a fight, and a neutral NPC without this flag only retaliates
+	bool m_AttackHostiles;
 };
 
 // How close a player must be to trade with an NPC (and to be told about it),

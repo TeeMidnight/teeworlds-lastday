@@ -52,13 +52,14 @@ int CBotEntity::PickTeeID(CGameWorld *pGameWorld, Uuid BotID)
 	return pBots ? pBots->PickTeeID(BotID) : -1;
 }
 
-CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team) :
+CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo, int Team, int Faction) :
 	IBotEntity(pWorld, CGameWorld::ENTTYPE_BOTENTITY, Pos, ms_PhysSize)
 {
 	m_BotID = BotID;
 	m_TeeID = PickTeeID(pWorld, BotID);
 	m_TeeInfo = TeeInfo;
 	m_Team = Team;
+	m_Faction = Faction;
 	m_Alive = true;
 
 	m_pAI = nullptr;
@@ -78,6 +79,11 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	// bots have no item system, so they hold the one weapon that needs
 	// neither an item nor ammo: the hammer (loadout slot 0)
 	m_WeaponSlot = WEAPON_HAMMER;
+	// hammer defaults; a content variant may raise these through
+	// SetMeleeTuning() without touching the weapon table
+	m_MeleeDamage = g_pData->m_Weapons.m_aId[WEAPON_HAMMER].m_Damage;
+	m_MeleeCooldown = Server()->TickSpeed() / 3;
+	m_MeleeRange = GetProximityRadius();
 
 	m_Core.Reset();
 	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
@@ -297,12 +303,12 @@ void CBotEntity::DoWeapon()
 	GameWorld()->CreateSound(m_Pos, SOUND_HAMMER_FIRE);
 	GameWorld()->CreateHammerHit(ProjStartPos);
 
-	const int Dmg = g_pData->m_Weapons.m_aId[WEAPON_HAMMER].m_Damage;
+	const int Dmg = m_MeleeDamage;
 
 	int Hits = 0;
 	array<CEntity *> lpEnts;
 	lpEnts.hint_size(8);
-	const int Num = GameWorld()->FindFlagEntities(ProjStartPos, GetProximityRadius() * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
+	const int Num = GameWorld()->FindFlagEntities(ProjStartPos, m_MeleeRange * 0.5f, lpEnts, CGameWorld::ENTFLAG_HITABLE);
 	for(int i = 0; i < Num; ++i)
 	{
 		CHitableEntity *pTarget = static_cast<CHitableEntity *>(lpEnts[i]);
@@ -329,7 +335,7 @@ void CBotEntity::DoWeapon()
 	}
 
 	m_AttackTick = Server()->Tick();
-	m_ReloadTimer = Hits ? Server()->TickSpeed() / 3 : Server()->TickSpeed() / 2;
+	m_ReloadTimer = Hits ? m_MeleeCooldown : maximum(1, m_MeleeCooldown / 2);
 }
 
 void CBotEntity::OnBotHit(CEntity *pTarget, bool Killed)
@@ -534,10 +540,13 @@ bool CBotEntity::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int W
 
 int CBotEntity::GetHitAttacker()
 {
-	// Bots have no client slot, so a hit they land is attributed to their team.
-	// Without this a bot always counted as red, and a blue bot damaged its own
-	// teammates without triggering the friendly fire check.
-	return m_Team == TEAM_BLUE ? PLAYER_TEAM_BLUE : PLAYER_TEAM_RED;
+	// Bots have no client slot. A friendly bot uses the blue sentinel; every
+	// other bot is a hostile source and uses its own sentinel, because the
+	// default survival team is red and a red sentinel would be swallowed by the
+	// same-team friendly-fire rule.
+	if(m_Faction == BOTFACTION_FRIENDLY)
+		return PLAYER_TEAM_FRIENDLY;
+	return PLAYER_TEAM_HOSTILE;
 }
 
 bool CBotEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)

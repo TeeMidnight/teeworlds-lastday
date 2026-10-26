@@ -6,6 +6,8 @@
     "y": 41,
     "health": 20,
     "health_regen": 1,
+    "faction": "neutral",
+    "attack_hostiles": true,
     "skin": {
         "body":       {"name": "standard", "custom_color": true,  "hue": 27,  "sat": 111, "lgt": 116},
         "marking":    {"name": "standard", "custom_color": false},
@@ -14,14 +16,26 @@
         "feet":       {"name": "standard", "custom_color": true,  "hue": 27,  "sat": 111, "lgt": 116},
         "eyes":       {"name": "standard", "custom_color": false}
     },
+    "abilities": {
+        "armor_aura": {"enabled": true, "radius": 120, "amount": 1, "interval": 160}
+    },
     "sells": [
         {"item": "lastday:stone", "count": 5, "price_item": "lastday:iron_ingot", "price_count": 1, "stock_min": 10, "stock_max": 30, "restock_seconds": 300},
         {"item": "lastday:hammer", "count": 1, "price_item": "lastday:stone_bricks", "price_count": 3, "stock_min": 2, "stock_max": 6, "restock_seconds": 600}
     ],
     "aggro": {
-        "threshold": 10,
+        "threshold": 3,
         "per_kill": 5,
-        "per_hit": 0,
+        "per_hit": 1,
         "kill_decay": 10
+    },
+    "dialogue": {
+        "spawn": ["The forge is hot. Say your piece."],
+        "sight": ["Need steel, {player}?", "Keep your hands where I can see them."],
+        "combat": ["You want a fight? Fine."],
+        "hurt": ["Cheap shot."],
+        "kill": ["Stay down."],
+        "death": ["I have had worse."],
+        "idle": ["Hmph.", "The coals are low."]
     }
 }

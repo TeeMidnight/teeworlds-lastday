@@ -1,0 +1,40 @@
+{
+    "id": "ironhide",
+    "name": "Ironhide",
+    "faction": "hostile",
+    "group": "sentinel",
+    "type": "tee",
+    "health": 22,
+    "armor": 5,
+    "speed_scale": 0.80,
+    "aggro_radius": 300,
+    "attack_range": 56,
+    "jump_chance": 5,
+    "fight_hostile_groups": false,
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true, "hue": 210, "sat": 30,  "lgt": 70},
+        "marking":    {"name": "stripes",  "custom_color": true, "hue": 210, "sat": 60,  "lgt": 54},
+        "decoration": {"name": "hair",     "custom_color": true, "hue": 0,   "sat": 0,   "lgt": 40},
+        "hands":      {"name": "standard", "custom_color": true, "hue": 210, "sat": 30,  "lgt": 70},
+        "feet":       {"name": "standard", "custom_color": true, "hue": 210, "sat": 30,  "lgt": 46},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "ai": "sentry",
+    "abilities": {
+        "melee": {"damage": 5, "cooldown": 24, "range": 58},
+        "armor_aura": {"enabled": true, "radius": 96, "amount": 1, "interval": 120}
+    },
+    "dialogue": {
+        "spawn": ["The stone remembers."],
+        "sight": ["Turn back."],
+        "combat": ["You will not pass."],
+        "hurt": ["Cracks... in the plating."],
+        "death": ["The seal... breaks..."],
+        "idle": ["..."]
+    },
+    "drops": [
+        {"item": "iron_ingot", "count_min": 2, "count_max": 4, "chance": 0.80},
+        {"item": "stone_bricks", "count_min": 1, "count_max": 3, "chance": 0.45},
+        {"item": "steel_ingot", "count_min": 1, "count_max": 1, "chance": 0.08}
+    ]
+}

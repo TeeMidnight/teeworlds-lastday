@@ -804,6 +804,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/dropped_pickup.h
   entities/laser.cpp
   entities/laser.h
+  entities/monsterentity.cpp
+  entities/monsterentity.h
   entities/npcentity.cpp
   entities/npcentity.h
   entities/pickup.cpp
@@ -812,6 +814,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/projectile.h
   entities/resource.cpp
   entities/resource.h
+  entities/wormentity.cpp
+  entities/wormentity.h
   entity.cpp
   entity.h
   eventhandler.cpp
@@ -834,6 +838,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   menus/loadout_menu.cpp
   menus/trade_menu.cpp
   menus/vote_menu.cpp
+  mobdata.cpp
+  mobdata.h
   npcdata.cpp
   npcdata.h
   player.cpp
@@ -946,6 +952,7 @@ list(APPEND TARGETS_LINK ${TARGET_MAPGEN})
 if(GTEST_FOUND OR DOWNLOAD_GTEST)
   set_src(TESTS GLOB src/test
     aio.cpp
+    bot_faction.cpp
     bot_identity.cpp
     bytes_be.cpp
     compression.cpp
