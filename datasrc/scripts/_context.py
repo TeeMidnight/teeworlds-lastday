@@ -1,9 +1,17 @@
-# Runtime implementation. Type hints for editors live in _context.pyi;
-# keep the two files in sync when the context API changes.
+"""Runtime callback context for PocketPy scripts.
+
+C++ calls make_context(raw) with a plain dict and turns it into the wrapper
+classes below. After the callback the same object supplies state, result and
+the consumed/reload/destroy flags back to C++. Type hints for editors live in
+_context.pyi; keep the two files in sync when the API changes.
+"""
+
 import lastday
 
 
 class Vec2:
+    """A 2D vector; supports indexing and basic arithmetic."""
+
     def __init__(self, x=0.0, y=0.0):
         self.x = x
         self.y = y
@@ -43,6 +51,8 @@ class Vec2:
 
 
 class Player:
+    """A connected player addressed by client id."""
+
     def __init__(self, client_id):
         self.id = client_id
 
@@ -143,6 +153,8 @@ class Player:
 
 
 class Item:
+    """A content item id, bound to a player only by its methods."""
+
     def __init__(self, item_id):
         self.id = item_id
 
@@ -163,6 +175,8 @@ class Item:
 
 
 class Entity:
+    """A live scripted entity addressed by its entity id."""
+
     def __init__(self, entity_id):
         self.id = entity_id
 
@@ -221,6 +235,8 @@ class Entity:
 
 
 class Buff:
+    """One active buff instance on a player."""
+
     def __init__(self, buff_id, player, state):
         self.id = buff_id
         self.player = player
@@ -245,6 +261,8 @@ class Buff:
 
 
 class Ammo:
+    """Ammo values supplied by the weapon that is firing."""
+
     def __init__(self, data):
         self.damage = data["damage"]
         self.projectiles = data["projectiles"]
@@ -260,6 +278,8 @@ class Ammo:
 
 
 class Extra:
+    """Subsystem-specific values; a missing key reads as 0."""
+
     def __init__(self, data):
         self._data = data
 
@@ -372,6 +392,12 @@ class MeleeSwing:
 
 
 class Context:
+    """The object passed to every script callback.
+
+    Attribute access is the supported API; dict-style item access is kept as a
+    compatibility shim for older scripts.
+    """
+
     def __init__(self, raw):
         self.event = raw["event"]
         client_id = raw["player"]
@@ -461,6 +487,7 @@ class Context:
 
 
 def make_context(raw):
+    """Build a Context from the plain dict C++ hands to the runtime."""
     return Context(raw)
 
 

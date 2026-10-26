@@ -21,10 +21,14 @@ import lastday_bot
 
 GUARD_RADIUS = 260.0
 MELEE_RANGE = 48.0
+JUMP_HEIGHT = -48.0
 PATROL_FLIP_TICKS = 100  # 2 seconds at the default 50 Hz
+PATROL_AIM_DISTANCE = 100.0
+FIRE_INTERVAL_TICKS = 2
 
 
 def _engage(ctx, entity, target):
+    """Walk toward the target and swing when it is within melee reach."""
     tx, ty = lastday_bot.get_pos(target)
     px, py = lastday_bot.get_pos(entity.id)
     dx = tx - px
@@ -36,23 +40,26 @@ def _engage(ctx, entity, target):
     elif dx < -MELEE_RANGE:
         direction = -1
 
-    jump = dy < -48.0
+    jump = dy < JUMP_HEIGHT
     # Fire in pulses: DoWeapon only swings on a fresh press, so holding the
     # button down across ticks would not keep attacking.
     in_range = dx * dx + dy * dy < MELEE_RANGE * MELEE_RANGE
-    fire = in_range and ctx.now % 2 == 0
+    fire = in_range and ctx.now % FIRE_INTERVAL_TICKS == 0
     lastday_bot.set_input(entity.id, direction, jump, fire, dx, dy)
     ctx.state["mode"] = "engage"
 
 
 def _patrol(ctx, entity):
+    """Walk one way for a while, then turn around to avoid a wall."""
     # Keep one direction for a while, then turn around, so the bot does not
     # drift into a wall. The aim follows the walk direction.
     direction = ctx.state.get("direction", 1)
     if ctx.now % PATROL_FLIP_TICKS == 0:
         direction = -direction
         ctx.state["direction"] = direction
-    lastday_bot.set_input(entity.id, direction, False, False, 100.0 * direction, 0.0)
+    lastday_bot.set_input(
+        entity.id, direction, False, False, PATROL_AIM_DISTANCE * direction, 0.0
+    )
     ctx.state["mode"] = "patrol"
 
 

@@ -1,6 +1,9 @@
-import lastday
+"""Medkit: heals a large amount when used."""
+
+
+HEAL_AMOUNT = 10
 
 
 def on_use(ctx):
-    if ctx.player.heal(10) > 0:
+    if ctx.player.heal(HEAL_AMOUNT) > 0:
         ctx.consumed = True
