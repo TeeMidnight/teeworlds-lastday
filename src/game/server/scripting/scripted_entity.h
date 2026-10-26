@@ -112,6 +112,11 @@ public:
 	// them when it is destroyed or when release_visual() is called. Replacing
 	// the visual geometry must not allocate new ids.
 	void SetVisual(const char *pJson);
+	// Incremental visual update. Entries are matched by their "id"; only the
+	// fields present in the JSON change, and primitives not mentioned keep
+	// their previous geometry. The script calls this explicitly; when it does
+	// not, the last visual stays on screen.
+	void UpdateVisual(const char *pJson);
 	// drops the current visual and returns its owned ids to the floor pool
 	void ReleaseVisual();
 	const array<SVisualLaser> &Lasers() const { return m_lLasers; }

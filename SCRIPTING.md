@@ -239,12 +239,27 @@ def _set_visual(ctx):
     })
 ```
 
-`set_visual()` only replaces the geometry; it does not allocate or release ids.
-The entity keeps the union of the ids it has been given and releases all of them
-when it is destroyed. `ctx.entity.release_visual()` drops the current visual and
-returns the ids early; allocate fresh ones before setting a visual again after
-that. Scripts must not free ids that they passed in. A primitive with `id < 0`
-(for example because the pool is exhausted) is not drawn.
+`set_visual()` replaces the whole geometry. `update_visual()` is the
+incremental form: primitives are matched by `id`, only the fields present in
+the update change, and primitives that are not mentioned keep their previous
+geometry:
+
+```python
+ctx.entity.update_visual({
+    "lasers": [
+        {"id": ids[0], "x2": 32.0},   # y1/y2/x1 stay as they were
+    ],
+})
+```
+
+Both calls are explicit. If the script calls neither, the last visual stays on
+screen; there is no automatic per-tick refresh. Neither call allocates or
+releases ids. The entity keeps the union of the ids it has been given and
+releases all of them when it is destroyed. `ctx.entity.release_visual()` drops
+the current visual and returns the ids early; allocate fresh ones before setting
+a visual again after that. Scripts must not free ids that they passed in. A
+primitive with `id < 0` (for example because the pool is exhausted) is not
+drawn.
 
 Bot AI: `sv_bot_ai` selects `chase` (default), `wander`, `stand`, a bare
 example name (`guard`), or `script:scripts/bot_ai/<name>.py`. Scripts implement

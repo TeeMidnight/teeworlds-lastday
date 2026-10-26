@@ -126,6 +126,11 @@ int ReadInt(const json_value &Value, int Default)
 	return Default;
 }
 
+bool HasNumber(const json_value &Value)
+{
+	return Value.type == json_integer || Value.type == json_double;
+}
+
 float ReadFloat(const json_value &Value, float Default)
 {
 	if(Value.type == json_integer)
@@ -345,6 +350,95 @@ void CScriptedEntity::SetVisual(const char *pJson)
 		if(!TrackSnapID(Pickup.m_ID))
 			Pickup.m_ID = -1;
 		m_lPickups.add(Pickup);
+	}
+}
+
+void CScriptedEntity::UpdateVisual(const char *pJson)
+{
+	if(!pJson || !pJson[0])
+		return;
+
+	CJsonParser Parser;
+	json_value *pRoot = Parser.ParseString(pJson, "entity visual update");
+	if(!pRoot || pRoot->type != json_object)
+		return;
+
+	const json_value &rLasers = (*pRoot)["lasers"];
+	for(unsigned i = 0; rLasers.type == json_array && i < rLasers.u.array.length; i++)
+	{
+		const json_value &rLaser = rLasers[i];
+		if(rLaser.type != json_object)
+			continue;
+
+		const int ID = ReadInt(rLaser["id"], -1);
+		if(ID < 0 || !TrackSnapID(ID))
+			continue;
+
+		SVisualLaser *pLaser = nullptr;
+		for(int j = 0; j < m_lLasers.size(); j++)
+			if(m_lLasers[j].m_ID == ID)
+			{
+				pLaser = &m_lLasers[j];
+				break;
+			}
+		if(!pLaser)
+		{
+			if(m_lLasers.size() >= MAX_VISUAL_LASERS)
+				continue;
+			SVisualLaser New;
+			New.m_From = vec2(0.0f, 0.0f);
+			New.m_To = vec2(0.0f, 0.0f);
+			New.m_ID = ID;
+			m_lLasers.add(New);
+			pLaser = &m_lLasers[m_lLasers.size() - 1];
+		}
+
+		if(HasNumber(rLaser["x1"]))
+			pLaser->m_From.x = ReadFloat(rLaser["x1"], pLaser->m_From.x);
+		if(HasNumber(rLaser["y1"]))
+			pLaser->m_From.y = ReadFloat(rLaser["y1"], pLaser->m_From.y);
+		if(HasNumber(rLaser["x2"]))
+			pLaser->m_To.x = ReadFloat(rLaser["x2"], pLaser->m_To.x);
+		if(HasNumber(rLaser["y2"]))
+			pLaser->m_To.y = ReadFloat(rLaser["y2"], pLaser->m_To.y);
+	}
+
+	const json_value &rPickups = (*pRoot)["pickups"];
+	for(unsigned i = 0; rPickups.type == json_array && i < rPickups.u.array.length; i++)
+	{
+		const json_value &rPickup = rPickups[i];
+		if(rPickup.type != json_object)
+			continue;
+
+		const int ID = ReadInt(rPickup["id"], -1);
+		if(ID < 0 || !TrackSnapID(ID))
+			continue;
+
+		SVisualPickup *pPickup = nullptr;
+		for(int j = 0; j < m_lPickups.size(); j++)
+			if(m_lPickups[j].m_ID == ID)
+			{
+				pPickup = &m_lPickups[j];
+				break;
+			}
+		if(!pPickup)
+		{
+			if(m_lPickups.size() >= MAX_VISUAL_PICKUPS)
+				continue;
+			SVisualPickup New;
+			New.m_Pos = vec2(0.0f, 0.0f);
+			New.m_Type = PICKUP_HEALTH;
+			New.m_ID = ID;
+			m_lPickups.add(New);
+			pPickup = &m_lPickups[m_lPickups.size() - 1];
+		}
+
+		if(HasNumber(rPickup["x"]))
+			pPickup->m_Pos.x = ReadFloat(rPickup["x"], pPickup->m_Pos.x);
+		if(HasNumber(rPickup["y"]))
+			pPickup->m_Pos.y = ReadFloat(rPickup["y"], pPickup->m_Pos.y);
+		if(rPickup["type"].type == json_integer)
+			pPickup->m_Type = ReadInt(rPickup["type"], pPickup->m_Type);
 	}
 }
 
@@ -771,6 +865,15 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 			return false;
 		const std::string Json = JsonArg(Visual);
 		pEntity->SetVisual(Json.c_str());
+		return true;
+	});
+
+	m.def("update_visual", [](int EntityID, py::object Visual) -> bool {
+		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
+		if(!pEntity)
+			return false;
+		const std::string Json = JsonArg(Visual);
+		pEntity->UpdateVisual(Json.c_str());
 		return true;
 	});
 
