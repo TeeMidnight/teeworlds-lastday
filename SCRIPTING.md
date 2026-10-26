@@ -15,6 +15,11 @@ PocketPy. The script sources live in `datasrc/scripts/` and are copied to
   per-floor snapshot ids).
 - `datasrc/scripts/_context.py` — class-based callback context. Every callback
   receives one `Context` object.
+- `datasrc/scripts/*.pyi` — type hints for `lastday`, `lastday_entity`,
+  `lastday_bot`, `lastday_weapon` and `_context`. They are copied to
+  `data/scripts/` but never executed; PocketPy executes the `.py` files.
+  Scripts can annotate handlers with `from _context import Context` under
+  `typing.TYPE_CHECKING`.
 - `src/game/server/scripting/buff_system.*` — buff definitions and per-tick
   buff instances.
 - `src/game/server/scripting/scripted_weapon.*` + `weaponmanager.*` — weapon

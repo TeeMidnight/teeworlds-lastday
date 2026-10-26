@@ -445,7 +445,8 @@ file(GLOB_RECURSE DATA CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/datasrc/*.ttf"
   "${PROJECT_SOURCE_DIR}/datasrc/*.txt"
   "${PROJECT_SOURCE_DIR}/datasrc/*.opus"
-  "${PROJECT_SOURCE_DIR}/datasrc/scripts/*.py")
+  "${PROJECT_SOURCE_DIR}/datasrc/scripts/*.py"
+  "${PROJECT_SOURCE_DIR}/datasrc/scripts/*.pyi")
 list(SORT DATA)
 
 # destination path of each datasrc source inside the data directory
@@ -465,7 +466,8 @@ file(GLOB_RECURSE DATA_STALE CONFIGURE_DEPENDS
   "${PROJECT_BINARY_DIR}/data/*.ttf"
   "${PROJECT_BINARY_DIR}/data/*.txt"
   "${PROJECT_BINARY_DIR}/data/*.opus"
-  "${PROJECT_BINARY_DIR}/data/scripts/*.py")
+  "${PROJECT_BINARY_DIR}/data/scripts/*.py"
+  "${PROJECT_BINARY_DIR}/data/scripts/*.pyi")
 foreach(candidate ${DATA_STALE})
   if(NOT candidate IN_LIST DATA_DEST)
     file(REMOVE ${candidate})

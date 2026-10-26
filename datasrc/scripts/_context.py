@@ -1,3 +1,5 @@
+# Runtime implementation. Type hints for editors live in _context.pyi;
+# keep the two files in sync when the context API changes.
 import lastday
 
 
