@@ -89,6 +89,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	Register("TRADE_MINE", "My Listings", MenuTradeMine, nullptr, "TRADE"); // Localize("My Listings", "TRADE_MINE")
 	Register("VOTE", "Server Vote", MenuVote, nullptr); // Localize("Server Vote", "VOTE")
 	Register("TRAVEL", "Travel", MenuTravel, nullptr); // Localize("Travel", "TRAVEL")
+	Register("TEAM", "Team", MenuTeam, nullptr); // Localize("Team", "TEAM")
 	Register("LANG", "Language", MenuLanguage, nullptr); // Localize("Language", "LANG")
 }
 
@@ -309,10 +310,28 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->SetPlayerPage(ClientID, "TRAVEL");
 			return false;
 		}
+		else if(str_comp(VoteStatus.m_aCmd, "PAGE TEAM") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "TEAM");
+			return false;
+		}
 		else if(str_comp(VoteStatus.m_aCmd, "PAGE LANG") == 0)
 		{
 			pMenu->SetPlayerPage(ClientID, "LANG");
 			return false;
+		}
+		else if(str_startswith(VoteStatus.m_aCmd, "TRAIN "))
+		{
+			// travel lives directly on the main page; a successful boarding
+			// switches the world, so there is no menu left to rebuild
+			if(pMenu->TravelTo(ClientID, VoteStatus.m_aCmd + str_length("TRAIN ")))
+				return false;
+		}
+		else if(str_startswith(VoteStatus.m_aCmd, "LOCK "))
+		{
+			int Mode = BUILD_LOCK_SELF;
+			if(BuildLockFromName(VoteStatus.m_aCmd + str_length("LOCK "), &Mode))
+				pMenu->GameServer()->SetAimedBuildLock(ClientID, Mode);
 		}
 		else if(str_comp(VoteStatus.m_aCmd, "HIDDEN") == 0)
 		{
@@ -357,18 +376,113 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		pMenu->AddOption(Localize("Container", "Menu Main"), "PAGE CONTAINER", "★");
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
-		// A train only boards from a platform. The page stays listed as a
-		// non-clickable hint elsewhere so the player can see why it is not
-		// usable instead of wondering where it went.
+		pMenu->AddOption(Localize("Team", "Menu Main"), "PAGE TEAM", "★");
+
 		CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+		// Travel is deliberately not a submenu: when the player stands on a
+		// platform, every destination is one click away on the main page.
 		if(pPlayer && pMenu->GameServer()->IsOnTrainEntrance(pPlayer))
-			pMenu->AddOption(Localize("Travel", "Menu Main"), "PAGE TRAVEL", "★");
+		{
+			if(pMenu->GameServer()->Server()->GetTrainDestinationCount() > 0)
+			{
+				pMenu->AddOption(Localize("Train destinations:", "Menu Main"), "DISPLAY", "-");
+				for(int i = 0; i < pMenu->GameServer()->Server()->GetTrainDestinationCount(); i++)
+				{
+					const char *pName = nullptr;
+					if(!pMenu->GameServer()->Server()->GetTrainDestination(i, &pName, nullptr) || !pName || !pName[0])
+						continue;
+					char aCommand[VOTE_CMD_LENGTH];
+					str_format(aCommand, sizeof(aCommand), "TRAIN %s", pName);
+					pMenu->AddOption(LocalizeFormat("Menu Main", "Travel: {}", Localize(pName, "World Name")).c_str(), aCommand, "★");
+				}
+			}
+			else
+				pMenu->AddOption(Localize("No train destinations are available.", "Menu Main"), "DISPLAY", "-");
+		}
 		else
 			pMenu->AddOption(Localize("Travel (stand on a train entrance)", "Menu Main"), "DISPLAY", "-");
+
+		// A building the player is aiming at while close enough gets its lock
+		// controls right here. Only the owner sees the three change actions.
+		if(pPlayer)
+		{
+			CEntity *pBuildable = pMenu->GameServer()->AimedBuildable(ClientID);
+			CBuildAccess Access;
+			if(pBuildable && pMenu->GameServer()->BuildableAccess(pBuildable, &Access))
+			{
+				char aName[64];
+				pMenu->GameServer()->BuildableName(pBuildable, aName, sizeof(aName));
+				pMenu->AddHorizontalRule();
+				pMenu->AddOption(LocalizeFormat("Menu Main", "Building: {}", aName).c_str(), "DISPLAY", "-");
+				const char *pLock = Access.m_LockMode == BUILD_LOCK_PUBLIC ? Localize("everyone", "Menu Main") :
+					(Access.m_LockMode == BUILD_LOCK_TEAM ? Localize("team only", "Menu Main") : Localize("owner only", "Menu Main"));
+				pMenu->AddOption(LocalizeFormat("Menu Main", "Lock: {}", pLock).c_str(), "DISPLAY", "-");
+				if(Access.m_Owner == pPlayer->m_AccountUuid && Access.m_Owner != UUID_ZEROED)
+				{
+					pMenu->AddOption(Localize("Lock: owner only", "Menu Main"), "LOCK self", "★");
+					pMenu->AddOption(Localize("Lock: team only", "Menu Main"), "LOCK team", "★");
+					pMenu->AddOption(Localize("Lock: everyone", "Menu Main"), "LOCK public", "★");
+				}
+			}
+		}
+
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
 		pMenu->AddOption(Localize("Language", "Menu Main"), "PAGE LANG", "★");
 	}
 
+	return true;
+}
+
+bool CGameMenu::TravelTo(int ClientID, const char *pDestination)
+{
+	CGameContext *pGameServer = GameServer();
+	CPlayer *pPlayer = pGameServer->m_apPlayers[ClientID];
+	if(!pPlayer || !pDestination || !pDestination[0])
+		return false;
+
+	CLanguageScope LanguageScope(pPlayer->Language());
+	if(!pGameServer->IsOnTrainEntrance(pPlayer))
+	{
+		pGameServer->SendChat(-1, CHAT_ALL, ClientID,
+			Localize("You must stand on a train entrance to travel.", "Menu Travel"));
+		return false;
+	}
+
+	// The destination list can change while the menu is open, so re-check the
+	// clicked name instead of trusting it.
+	bool Known = false;
+	for(int i = 0; i < pGameServer->Server()->GetTrainDestinationCount(); i++)
+	{
+		const char *pTrainDestination = nullptr;
+		if(pGameServer->Server()->GetTrainDestination(i, &pTrainDestination, nullptr) &&
+			pTrainDestination && str_comp(pTrainDestination, pDestination) == 0)
+		{
+			Known = true;
+			break;
+		}
+	}
+	if(!Known)
+	{
+		pGameServer->SendChat(-1, CHAT_ALL, ClientID,
+			Localize("That train destination is no longer available.", "Menu Travel"));
+		return false;
+	}
+
+	// The engine consumed the chunk prepared for this trip and started building
+	// the one for the following trip. A false result means that chunk is still
+	// being generated; the player can board again shortly.
+	char aMapName[64];
+	if(!pGameServer->Server()->TakeTrainDestinationChunk(pDestination, aMapName, sizeof(aMapName)))
+	{
+		pGameServer->SendChat(-1, CHAT_ALL, ClientID,
+			Localize("The train is still being prepared. Try again in a moment.", "Menu Travel"));
+		return false;
+	}
+
+	pGameServer->Server()->RegisterMapName(aMapName);
+	pGameServer->SendChat(-1, CHAT_ALL, ClientID,
+		LocalizeFormat("Menu Travel", "The train takes you to {}.", Localize(pDestination, "World Name")).c_str());
+	pGameServer->SwitchPlayerWorld(pPlayer, str_quickhash(aMapName), vec2(0.0f, 0.0f), false, true);
 	return true;
 }
 
@@ -387,50 +501,7 @@ bool CGameMenu::MenuTravel(int ClientID, CCallVoteStatus &VoteStatus, class CGam
 	// on a random chunk of that euclidean world
 	if(str_startswith(VoteStatus.m_aCmd, "TRAIN "))
 	{
-		const char *pName = VoteStatus.m_aCmd + str_length("TRAIN ");
-		bool Known = false;
-		for(int i = 0; i < pGameServer->Server()->GetTrainDestinationCount(); i++)
-		{
-			const char *pDestination = nullptr;
-			if(pGameServer->Server()->GetTrainDestination(i, &pDestination, nullptr) &&
-				pDestination && str_comp(pDestination, pName) == 0)
-			{
-				Known = true;
-				break;
-			}
-		}
-
-		// The platform and the destination list can change while the menu is
-		// open, so re-check both instead of trusting the clicked command.
-		if(!OnStation || !Known)
-		{
-			pMenu->SetPlayerPage(ClientID, "TRAVEL");
-			return false;
-		}
-
-		// The engine consumed the chunk prepared for this trip and started
-		// building the one for the following trip. A false result means that
-		// chunk is still being generated; the player can board again shortly.
-		char aMapName[64];
-		if(!pGameServer->Server()->TakeTrainDestinationChunk(pName, aMapName, sizeof(aMapName)))
-		{
-			pMenu->SetPlayerPage(ClientID, "TRAVEL");
-			CLanguageScope LanguageScope(pPlayer->Language());
-			pGameServer->SendChat(-1, CHAT_ALL, ClientID,
-				Localize("The train is still being prepared. Try again in a moment.", "Menu Travel"));
-			return false;
-		}
-
-		// the engine only switches to a map name it knows; a chunk that has
-		// never been visited is registered here
-		pGameServer->Server()->RegisterMapName(aMapName);
-
-		{
-			CLanguageScope LanguageScope(pPlayer->Language());
-			pGameServer->SendChat(-1, CHAT_ALL, ClientID,
-				LocalizeFormat("Menu Travel", "The train takes you to {}.", Localize(pName, "World Name")).c_str());
-		}
-		pGameServer->SwitchPlayerWorld(pPlayer, str_quickhash(aMapName), vec2(0.0f, 0.0f), false, true);
+		pMenu->TravelTo(ClientID, VoteStatus.m_aCmd + str_length("TRAIN "));
 		return false;
 	}
 

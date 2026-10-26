@@ -174,6 +174,9 @@ public:
 	// account (bound on login / register)
 	Uuid m_AccountUuid;
 	bool m_LoggedIn;
+	// a guest has a nickname-derived UUID and a persisted guest profile, but
+	// no password/account; it can later log in and switch to the real account
+	bool m_Guest;
 
 	// localization language selected by this player; unknown/empty falls back
 	// to the server default
@@ -187,7 +190,9 @@ public:
 	// fill a queued database job with a snapshot of everything SaveStatus
 	// writes, so the actual queries can run on the thread pool
 	void CaptureStatus(struct CDbJob &Job);
-	void LoadStatus(class CDatabase *pDB);
+	// RefreshMenu is false while a guest profile is loaded before the client
+	// has entered the game; sending vote options at that point is premature.
+	void LoadStatus(class CDatabase *pDB, bool RefreshMenu = true);
 
 	// capture the current character's slot layout into m_Status.m_aLoadout
 	// and mark the loadout as customized (m_Status.m_LoadoutSet)

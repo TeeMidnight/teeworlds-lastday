@@ -236,7 +236,7 @@ private:
 
 	friend void CPlayer::SaveStatus(class CDatabase *pDB);
 	friend void CPlayer::CaptureStatus(struct CDbJob &Job);
-	friend void CPlayer::LoadStatus(class CDatabase *pDB);
+	friend void CPlayer::LoadStatus(class CDatabase *pDB, bool RefreshMenu);
 };
 
 #endif

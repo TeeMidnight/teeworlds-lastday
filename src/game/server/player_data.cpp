@@ -133,7 +133,7 @@ void CPlayer::ApplyAccessories()
 	m_pCharacter->SetAccessoryLayout(aLayout);
 }
 
-void CPlayer::LoadStatus(CDatabase *pDB)
+void CPlayer::LoadStatus(CDatabase *pDB, bool RefreshMenu)
 {
 	if(!pDB || m_AccountUuid == UUID_ZEROED)
 		return;
@@ -249,6 +249,8 @@ void CPlayer::LoadStatus(CDatabase *pDB)
 
 	ApplyLoadout();
 	ApplyAccessories();
-	// refresh menu
-	GameServer()->GameMenu()->RefreshMenu(m_ClientID);
+	// A guest profile is loaded before the client enters the game; sending vote
+	// options then would race the join UI. The menu is generated on demand.
+	if(RefreshMenu && GameServer()->GameMenu())
+		GameServer()->GameMenu()->RefreshMenu(m_ClientID);
 }

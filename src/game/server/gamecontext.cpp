@@ -25,6 +25,7 @@
 #include "entities/botentity.h"
 #include "entities/character.h"
 #include "entities/container.h"
+#include "entities/drill.h"
 #include "entities/dropped_pickup.h"
 #include "scripting/scripted_entity.h"
 #include "entities/laser.h"
@@ -35,6 +36,7 @@
 #include "item.h"
 #include "mobdata.h"
 #include "npcdata.h"
+#include "team.h"
 #include "player.h"
 #include "scripting/buff_system.h"
 #include "scripting/script_commands.h"
@@ -78,6 +80,7 @@ void CGameContext::Construct(int Resetting)
 	m_pTradeSystem = 0;
 	m_pNpcSystem = 0;
 	m_pMobSystem = 0;
+	m_pTeamSystem = 0;
 	m_pBuffSystem = 0;
 	m_pScriptedEntities = 0;
 	m_MainWorldID = 0;
@@ -134,6 +137,7 @@ void CGameContext::Clear()
 	CTradeSystem *pTradeSystem = m_pTradeSystem;
 	CNpcSystem *pNpcSystem = m_pNpcSystem;
 	CMobSystem *pMobSystem = m_pMobSystem;
+	CTeamSystem *pTeamSystem = m_pTeamSystem;
 	CBuffSystem *pBuffSystem = m_pBuffSystem;
 	CScriptedEntitySystem *pScriptedEntities = m_pScriptedEntities;
 	// the engine services (IServer & co) outlive the game context, so preserve
@@ -164,6 +168,7 @@ void CGameContext::Clear()
 	m_pTradeSystem = pTradeSystem;
 	m_pNpcSystem = pNpcSystem;
 	m_pMobSystem = pMobSystem;
+	m_pTeamSystem = pTeamSystem;
 	m_pBuffSystem = pBuffSystem;
 	m_pScriptedEntities = pScriptedEntities;
 	m_pServer = pServer;
@@ -514,6 +519,173 @@ CContainerEntity *CGameContext::AimedContainer(int ClientID)
 	if(distance(pContainer->GetPos(), pChr->GetPos()) > ContainerReach)
 		return nullptr;
 	return pContainer;
+}
+
+bool CGameContext::CanUseBuilding(const CBuildAccess &Access, const Uuid &Viewer) const
+{
+	if(Access.m_Owner == UUID_ZEROED || Access.m_LockMode == BUILD_LOCK_PUBLIC)
+		return true;
+	if(Viewer != UUID_ZEROED && Viewer == Access.m_Owner)
+		return true;
+	if(Access.m_LockMode == BUILD_LOCK_TEAM && m_pTeamSystem && Viewer != UUID_ZEROED)
+		return m_pTeamSystem->SameTeam(Viewer, Access.m_Owner);
+	return false;
+}
+
+bool CGameContext::CanUseBuilding(const CBuildAccess &Access, CPlayer *pPlayer) const
+{
+	return pPlayer && CanUseBuilding(Access, pPlayer->m_AccountUuid);
+}
+
+Uuid CGameContext::BuildUserAccount(CEntity *pFrom) const
+{
+	if(!pFrom)
+		return UUID_ZEROED;
+	if(pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD)
+	{
+		const int Owner = static_cast<CChildEntity *>(pFrom)->GetOwner();
+		if(Owner >= 0 && Owner < MAX_CLIENTS && m_apPlayers[Owner])
+			return m_apPlayers[Owner]->m_AccountUuid;
+		return UUID_ZEROED;
+	}
+	if(pFrom->ObjType() == CGameWorld::ENTTYPE_CHARACTER)
+	{
+		const int ClientID = static_cast<CCharacter *>(pFrom)->GetCID();
+		if(ClientID >= 0 && ClientID < MAX_CLIENTS && m_apPlayers[ClientID])
+			return m_apPlayers[ClientID]->m_AccountUuid;
+	}
+	return UUID_ZEROED;
+}
+
+bool CGameContext::CanUseBuildingAsSource(const CBuildAccess &Access, CEntity *pFrom) const
+{
+	// damage without a player source (world, script) is not access-controlled
+	if(!pFrom)
+		return true;
+	return CanUseBuilding(Access, BuildUserAccount(pFrom));
+}
+
+CEntity *CGameContext::AimedBuildable(int ClientID)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return nullptr;
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	if(!pPlayer || pPlayer->IsDummy() || pPlayer->m_MapLoading)
+		return nullptr;
+	CCharacter *pChr = pPlayer->GetCharacter();
+	if(!pChr || !pChr->IsAlive())
+		return nullptr;
+	CGameWorld *pWorld = pPlayer->GameWorld();
+	if(!pWorld)
+		return nullptr;
+
+	const vec2 CursorPos = pChr->GetPos() + pChr->AimVector();
+	CEntity *pBest = nullptr;
+	float BestDist = 1e30f;
+	const float Reach = 4.0f * 32.0f;
+
+	auto Consider = [&](CEntity *pEntity) {
+		if(!pEntity || pEntity->IsMarkedForDestroy())
+			return;
+		if(distance(pEntity->GetPos(), pChr->GetPos()) > Reach)
+			return;
+		const float CursorDist = distance(pEntity->GetPos(), CursorPos);
+		const float Radius = maximum(28.0f, pEntity->GetProximityRadius());
+		if(CursorDist > Radius)
+			return;
+		if(CursorDist < BestDist)
+		{
+			BestDist = CursorDist;
+			pBest = pEntity;
+		}
+	};
+
+	for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_DRILL); !r.empty(); r.pop_front())
+		Consider(r.front());
+	for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_SCRIPTED); !r.empty(); r.pop_front())
+	{
+		CScriptedEntity *pEntity = static_cast<CScriptedEntity *>(r.front());
+		if(pEntity->Persistent())
+			Consider(pEntity);
+	}
+	return pBest;
+}
+
+bool CGameContext::BuildableAccess(CEntity *pEntity, CBuildAccess *pAccess) const
+{
+	if(!pEntity || !pAccess)
+		return false;
+	if(pEntity->ObjType() == CGameWorld::ENTTYPE_DRILL)
+	{
+		*pAccess = static_cast<CDrillEntity *>(pEntity)->Access();
+		return true;
+	}
+	if(pEntity->ObjType() == CGameWorld::ENTTYPE_SCRIPTED)
+	{
+		*pAccess = static_cast<CScriptedEntity *>(pEntity)->Access();
+		return true;
+	}
+	return false;
+}
+
+const char *CGameContext::BuildableName(CEntity *pEntity, char *pBuf, int BufSize)
+{
+	if(!pBuf || BufSize <= 0)
+		return "";
+	pBuf[0] = '\0';
+	if(!pEntity)
+		return pBuf;
+	if(pEntity->ObjType() == CGameWorld::ENTTYPE_DRILL)
+	{
+		const CDrillEntity *pDrill = static_cast<const CDrillEntity *>(pEntity);
+		const char *pName = Item() ? Item()->GetName(pDrill->ItemId()) : nullptr;
+		str_copy(pBuf, pName && pName[0] ? pName : "Drill", BufSize);
+	}
+	else if(pEntity->ObjType() == CGameWorld::ENTTYPE_SCRIPTED)
+	{
+		const CScriptedEntity *pScripted = static_cast<const CScriptedEntity *>(pEntity);
+		if(str_comp(pScripted->Kind(), "health_jar") == 0)
+			str_copy(pBuf, Localize("Health Jar", "Building"), BufSize);
+		else
+			str_copy(pBuf, pScripted->Kind(), BufSize);
+	}
+	return pBuf;
+}
+
+bool CGameContext::SetAimedBuildLock(int ClientID, int Mode)
+{
+	if(Mode < BUILD_LOCK_PUBLIC || Mode > BUILD_LOCK_TEAM)
+		return false;
+	CPlayer *pPlayer = ClientID >= 0 && ClientID < MAX_CLIENTS ? m_apPlayers[ClientID] : nullptr;
+	if(!pPlayer)
+		return false;
+	CEntity *pEntity = AimedBuildable(ClientID);
+	if(!pEntity)
+	{
+		CLanguageScope LanguageScope(LanguageOf(ClientID));
+		SendChat(-1, CHAT_ALL, ClientID, Localize("Aim at a building you own first.", "Building"));
+		return false;
+	}
+	CBuildAccess Access;
+	if(!BuildableAccess(pEntity, &Access) || Access.m_Owner == UUID_ZEROED || Access.m_Owner != pPlayer->m_AccountUuid)
+	{
+		CLanguageScope LanguageScope(LanguageOf(ClientID));
+		SendChat(-1, CHAT_ALL, ClientID, Localize("Only the owner can change this building's lock.", "Building"));
+		return false;
+	}
+
+	if(pEntity->ObjType() == CGameWorld::ENTTYPE_DRILL)
+		static_cast<CDrillEntity *>(pEntity)->SetLockMode(Mode);
+	else if(pEntity->ObjType() == CGameWorld::ENTTYPE_SCRIPTED)
+		static_cast<CScriptedEntity *>(pEntity)->SetLockMode(Mode);
+	else
+		return false;
+
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
+	const char *pMode = Mode == BUILD_LOCK_PUBLIC ? Localize("everyone", "Building") :
+		(Mode == BUILD_LOCK_TEAM ? Localize("team only", "Building") : Localize("owner only", "Building"));
+	SendChat(-1, CHAT_ALL, ClientID, LocalizeFormat("Building", "Building lock: {}.", pMode).c_str());
+	return true;
 }
 
 void CGameContext::SendEmoticon(int ClientID, int Emoticon)
@@ -933,17 +1105,9 @@ void CGameContext::OnClientEnter(int ClientID)
 	Msg.m_ClientID = ClientID;
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
 
-	// a player that is not logged in may only spectate; they must log in (or
-	// register) before they are allowed to join the game
-	if(!m_apPlayers[ClientID]->m_LoggedIn)
-	{
-		m_apPlayers[ClientID]->SetTeam(TEAM_SPECTATORS);
-		SendBroadcast(ClientID, Localize("You are not logged in. Use /login <username> <password> or /register <username> <password> to join the game.", "Account"),
-			BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE);
-	}
-
-	// the player must log in or register to bind an account; guest players
-	// start with a fresh status
+	// Guests are first-class players now: SetupGuestPlayer bound a
+	// nickname-derived profile before this point, so no login is required to
+	// enter the game.
 	Server()->ExpireServerInfo();
 }
 
@@ -1012,6 +1176,8 @@ void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 		// a recycled slot must not inherit the previous occupant's inventory
 		Item()->GetInventory(ClientID).Reset();
 		m_apPlayers[ClientID] = new(ClientID) CPlayer(pWorld, ClientID, Dummy, AsSpec);
+		if(!Dummy && !AsSpec)
+			SetupGuestPlayer(ClientID);
 	}
 	else if(GetPlayerChar(ClientID))
 	{
@@ -1082,6 +1248,8 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 
 	// persist the player's status before dropping
 	SavePlayerData(m_apPlayers[ClientID]);
+	if(m_pTeamSystem && m_apPlayers[ClientID]->m_AccountUuid != UUID_ZEROED)
+		m_pTeamSystem->OnPlayerDisconnected(m_apPlayers[ClientID]->m_AccountUuid);
 
 	GameMenu()->AbortVoteOnDisconnect(ClientID);
 	m_pController->OnPlayerDisconnect(m_apPlayers[ClientID]);
@@ -1227,11 +1395,6 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 					GameMenu()->SetVoteUpdate();
 				pPlayer->m_TeamChangeTick = Server()->Tick() + Server()->TickSpeed() * 3;
 				m_pController->DoTeamChange(pPlayer, pMsg->m_Team);
-			}
-			else if(pMsg->m_Team != TEAM_SPECTATORS && !pPlayer->m_LoggedIn)
-			{
-				CLanguageScope LanguageScope(LanguageOf(ClientID));
-				SendChat(-1, CHAT_ALL, ClientID, Localize("You must be logged in to join the game. Use /login <username> <password>.", "Account"));
 			}
 		}
 		else if(MsgID == NETMSGTYPE_CL_SETSPECTATORMODE)
@@ -1620,6 +1783,10 @@ void CGameContext::OnInit()
 	m_pMobSystem = new CMobSystem();
 	m_pMobSystem->Init(this, Storage());
 
+	// guild-style teams; loaded from the database so a restart keeps them
+	m_pTeamSystem = new CTeamSystem();
+	m_pTeamSystem->Init(this);
+
 	// the configured NPCs (datasrc/bots/npc/*.json)
 	m_pNpcSystem = new CNpcSystem();
 	m_pNpcSystem->Init(this, Storage());
@@ -1639,7 +1806,11 @@ void CGameContext::OnInit()
 
 void CGameContext::SavePlayerData(CPlayer *pPlayer)
 {
-	if(!m_pDatabase || !pPlayer || pPlayer->IsDummy() || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
+	if(!m_pDatabase || !pPlayer || pPlayer->IsDummy() || pPlayer->m_AccountUuid == UUID_ZEROED)
+		return;
+	// A guest has a nickname-derived UUID and a persisted profile even though
+	// m_LoggedIn is false. Anything else without a bound identity is skipped.
+	if(!pPlayer->m_LoggedIn && !pPlayer->m_Guest)
 		return;
 
 	// snapshot the player state on this thread and let the pool write it
@@ -1649,6 +1820,52 @@ void CGameContext::SavePlayerData(CPlayer *pPlayer)
 	pJob->m_Uuid = pPlayer->m_AccountUuid;
 	pPlayer->CaptureStatus(*pJob);
 	m_pDatabase->QueueJob(pJob);
+}
+
+void CGameContext::GiveStartingKit(int ClientID)
+{
+	CItemSystem *pItem = Item();
+	if(!pItem || ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return;
+	pItem->AddItem(ClientID, "hammer", 1, true);
+	pItem->AddItem(ClientID, "gun", 1, true);
+	pItem->AddItem(ClientID, "pistol_bullet", 100, true);
+	pItem->AddItem(ClientID, "bandage", 3, true);
+}
+
+void CGameContext::SetupGuestPlayer(int ClientID)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return;
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	if(!pPlayer || pPlayer->IsDummy() || pPlayer->m_LoggedIn || pPlayer->m_AccountUuid != UUID_ZEROED)
+		return;
+
+	const char *pName = Server()->ClientName(ClientID);
+	char aIdentity[192];
+	str_format(aIdentity, sizeof(aIdentity), "lastday:guest:%s", pName);
+	const Uuid GuestUuid = calculate_uuid(aIdentity);
+
+	char aUsername[96];
+	str_format(aUsername, sizeof(aUsername), "@guest:%s", pName);
+
+	pPlayer->m_AccountUuid = GuestUuid;
+	pPlayer->m_Guest = true;
+
+	bool Created = true;
+	if(m_pDatabase)
+	{
+		Created = m_pDatabase->EnsureGuestPlayer(GuestUuid, aUsername);
+		pPlayer->LoadStatus(m_pDatabase, false);
+	}
+	if(Created)
+		GiveStartingKit(ClientID);
+
+	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
+		m_pController->DoTeamChange(pPlayer, TEAM_RED, false);
+
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
+	SendChat(-1, CHAT_ALL, ClientID, Localize("Playing as a guest. Use /register <username> <password> to keep your progress on an account.", "Account"));
 }
 
 void CGameContext::NpcAddAggro(const Uuid &Npc, const Uuid &User, int Delta)
@@ -1824,6 +2041,9 @@ void CGameContext::OnShutdown()
 
 	delete m_pMobSystem;
 	m_pMobSystem = 0;
+
+	delete m_pTeamSystem;
+	m_pTeamSystem = 0;
 
 	delete m_pBuffSystem;
 	m_pBuffSystem = 0;

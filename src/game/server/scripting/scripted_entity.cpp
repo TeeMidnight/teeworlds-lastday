@@ -210,7 +210,7 @@ std::string ScriptJsonToString(const struct _json_value *pValue)
 //////////////////////////////////////////////////
 CScriptedEntity::CScriptedEntity(CGameWorld *pGameWorld, vec2 Pos, const char *pKind, int Module,
 	int MaxHealth, int Health, float Radius, const Uuid &OwnerAccount, int OwnerClient, bool Persistent,
-	const char *pParams, const char *pState, const char *pVisual) :
+	const char *pParams, const char *pState, const char *pVisual, int LockMode) :
 	CHitableEntity(pGameWorld, CGameWorld::ENTTYPE_SCRIPTED, 0, Pos, Radius)
 {
 	str_copy(m_aKind, pKind ? pKind : "", sizeof(m_aKind));
@@ -218,6 +218,8 @@ CScriptedEntity::CScriptedEntity(CGameWorld *pGameWorld, vec2 Pos, const char *p
 	m_MaxHealth = maximum(1, MaxHealth);
 	m_Health = Health < 0 ? m_MaxHealth : clamp(Health, 1, m_MaxHealth);
 	m_OwnerAccount = OwnerAccount;
+	m_Access.m_Owner = OwnerAccount;
+	m_Access.m_LockMode = LockMode;
 	m_OwnerClient = OwnerClient;
 	m_Persistent = Persistent;
 	m_Params = pParams && pParams[0] ? pParams : "{}";
@@ -524,6 +526,13 @@ bool CScriptedEntity::Damage(int Amount, int FromClient, int Weapon, CEntity *pF
 	if(m_bKilled || IsMarkedForDestroy())
 		return false;
 
+	// A locked building is immune to unauthorised damage/dismantling. A null
+	// source is world damage and stays allowed.
+	if(pFrom && !GameServer()->CanUseBuildingAsSource(m_Access, pFrom))
+		return false;
+	if(!pFrom && FromClient >= 0 && !CanUseClient(FromClient))
+		return false;
+
 	const int Attacker = pFrom ? pFrom->GetHitAttacker() : FromClient;
 	CallEvent("on_hit", Attacker, pFrom, Amount, Weapon);
 
@@ -536,6 +545,38 @@ bool CScriptedEntity::Damage(int Amount, int FromClient, int Weapon, CEntity *pF
 	else
 		GameWorld()->CreateHammerHit(m_Pos);
 	return true;
+}
+
+bool CScriptedEntity::CanUseClient(int ClientID)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || !GameServer())
+		return false;
+	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
+	return pPlayer && GameServer()->CanUseBuilding(m_Access, pPlayer);
+}
+
+int CScriptedEntity::AllowedPlayerNear()
+{
+	if(!GameServer())
+		return -1;
+	int Best = -1;
+	float BestDist = m_Range;
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+		if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+			continue;
+		CCharacter *pChr = pPlayer->GetCharacter();
+		if(!pChr || !pChr->IsAlive() || !CanUseClient(i))
+			continue;
+		const float Dist = distance(pChr->GetPos(), m_Pos);
+		if(Dist <= BestDist)
+		{
+			BestDist = Dist;
+			Best = i;
+		}
+	}
+	return Best;
 }
 
 bool CScriptedEntity::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon)
@@ -575,7 +616,7 @@ int CScriptedEntity::OwnerNear()
 		// fall back to the slot when the entity was placed offline
 		bool IsOwner;
 		if(m_OwnerAccount != UUID_ZEROED)
-			IsOwner = pPlayer->m_LoggedIn && pPlayer->m_AccountUuid == m_OwnerAccount;
+			IsOwner = pPlayer->m_AccountUuid == m_OwnerAccount;
 		else
 			IsOwner = m_OwnerClient >= 0 && pPlayer->GetCID() == m_OwnerClient;
 		if(!IsOwner)
@@ -760,7 +801,7 @@ const SScriptedEntityDef *CScriptedEntitySystem::GetDef(const char *pKind) const
 
 CScriptedEntity *CScriptedEntitySystem::Spawn(const char *pKind, CGameWorld *pWorld, vec2 Pos,
 	const char *pParams, const Uuid &OwnerAccount, int OwnerClient, int Persistent, int MaxHealth,
-	int Health, const char *pState, bool FromLoad)
+	int Health, const char *pState, bool FromLoad, int LockMode)
 {
 	if(!pWorld || !pKind || !pKind[0])
 		return nullptr;
@@ -779,7 +820,7 @@ CScriptedEntity *CScriptedEntitySystem::Spawn(const char *pKind, CGameWorld *pWo
 
 	CScriptedEntity *pEntity = new CScriptedEntity(pWorld, Pos, pDef->m_aKind, pDef->m_Module,
 		UseMaxHealth, Health, pDef->m_Radius, OwnerAccount, OwnerClient, UsePersistent,
-		pUseParams, pUseState, pDef->m_Visual.c_str());
+		pUseParams, pUseState, pDef->m_Visual.c_str(), LockMode);
 
 	pEntity->CallSpawn();
 	if(FromLoad)
@@ -789,7 +830,7 @@ CScriptedEntity *CScriptedEntitySystem::Spawn(const char *pKind, CGameWorld *pWo
 
 CScriptedEntity *CScriptedEntitySystem::SpawnHealthJar(CGameWorld *pWorld, vec2 Pos, const CItemID &ItemId,
 	const Uuid &OwnerAccount, int OwnerClient, const char *pOwnerName,
-	int Cooldown, int Range, int Health, const char *pState, bool FromLoad)
+	int Cooldown, int Range, int Health, const char *pState, bool FromLoad, int LockMode)
 {
 	char aItem[UUID_MAXSTRSIZE];
 	ItemId.FormatUuid(aItem, sizeof(aItem));
@@ -816,7 +857,7 @@ CScriptedEntity *CScriptedEntitySystem::SpawnHealthJar(CGameWorld *pWorld, vec2 
 	lJson.add(0);
 
 	return Spawn("health_jar", pWorld, Pos, lJson.base_ptr(), OwnerAccount, OwnerClient,
-		1, Health, -1, pState, FromLoad);
+		1, Health, -1, pState, FromLoad, LockMode);
 }
 
 //////////////////////////////////////////////////
@@ -975,6 +1016,21 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return pEntity ? pEntity->OwnerNear() : -1;
 	});
 
+	m.def("allowed_player_near", [](int EntityID) -> int {
+		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
+		return pEntity ? pEntity->AllowedPlayerNear() : -1;
+	});
+
+	m.def("can_use", [](int EntityID, int PlayerID) -> bool {
+		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
+		return pEntity && pEntity->CanUseClient(PlayerID);
+	});
+
+	m.def("lock_mode", [](int EntityID) -> int {
+		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
+		return pEntity ? pEntity->Access().m_LockMode : BUILD_LOCK_SELF;
+	});
+
 	m.def("player_near", [](int EntityID, float Radius) -> int {
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity || Radius <= 0.0f)
@@ -1020,7 +1076,7 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		CPlayer *pPlayer = OwnerClient >= 0 && OwnerClient < MAX_CLIENTS ? pGame->m_apPlayers[OwnerClient] : nullptr;
 		if(!pPlayer)
 			return -1;
-		const Uuid OwnerAccount = pPlayer->m_LoggedIn ? pPlayer->m_AccountUuid : UUID_ZEROED;
+		const Uuid OwnerAccount = pPlayer->m_AccountUuid;
 		const char *pOwnerName = pGame->Server()->ClientName(OwnerClient);
 		CScriptedEntity *pJar = pGame->ScriptedEntities()->SpawnHealthJar(
 			pWorld, vec2(X, Y), Id, OwnerAccount, OwnerClient, pOwnerName, Cooldown, Range, Health);

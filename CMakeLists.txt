@@ -780,6 +780,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   bot.h
   botmanager.cpp
   botmanager.h
+  building.h
   container.cpp
   container.h
   database/account.cpp
@@ -836,6 +837,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   menus/item_menu.cpp
   menus/item_menu.h
   menus/loadout_menu.cpp
+  menus/team_menu.cpp
   menus/trade_menu.cpp
   menus/vote_menu.cpp
   mobdata.cpp
@@ -858,6 +860,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   scripting/scripted_entity.h
   scripting/scripted_weapon.cpp
   scripting/scripted_weapon.h
+  team.cpp
+  team.h
   trade.cpp
   trade.h
   weapon.h
@@ -954,6 +958,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     aio.cpp
     bot_faction.cpp
     bot_identity.cpp
+    building_lock.cpp
     bytes_be.cpp
     compression.cpp
     datafile.cpp

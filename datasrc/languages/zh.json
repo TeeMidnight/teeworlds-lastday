@@ -1784,6 +1784,356 @@
 			"context": "Mob Dialogue",
 			"or": "...",
 			"tr": "……"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Team",
+			"tr": "队伍"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Train destinations:",
+			"tr": "火车目的地："
+		},
+		{
+			"context": "Menu Main",
+			"or": "Travel: {}",
+			"tr": "前往：{}"
+		},
+		{
+			"context": "Menu Main",
+			"or": "No train destinations are available.",
+			"tr": "当前没有可乘火车抵达的世界。"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Building: {}",
+			"tr": "建筑：{}"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Lock: {}",
+			"tr": "建筑锁：{}"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Lock: owner only",
+			"tr": "建筑锁：仅自己"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Lock: team only",
+			"tr": "建筑锁：仅队伍"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Lock: everyone",
+			"tr": "建筑锁：所有人"
+		},
+		{
+			"context": "Menu Main",
+			"or": "owner only",
+			"tr": "仅自己"
+		},
+		{
+			"context": "Menu Main",
+			"or": "team only",
+			"tr": "仅队伍"
+		},
+		{
+			"context": "Menu Main",
+			"or": "everyone",
+			"tr": "所有人"
+		},
+		{
+			"context": "Menu Travel",
+			"or": "That train destination is no longer available.",
+			"tr": "该火车目的地已不可用。"
+		},
+		{
+			"context": "Building",
+			"or": "Aim at a building you own first.",
+			"tr": "请先瞄准你自己拥有的建筑。"
+		},
+		{
+			"context": "Building",
+			"or": "Only the owner can change this building's lock.",
+			"tr": "只有建筑所有者能修改建筑锁。"
+		},
+		{
+			"context": "Building",
+			"or": "Building lock: {}.",
+			"tr": "建筑锁已设为：{}。"
+		},
+		{
+			"context": "Building",
+			"or": "everyone",
+			"tr": "所有人"
+		},
+		{
+			"context": "Building",
+			"or": "team only",
+			"tr": "仅队伍"
+		},
+		{
+			"context": "Building",
+			"or": "owner only",
+			"tr": "仅自己"
+		},
+		{
+			"context": "Account",
+			"or": "Playing as a guest. Use /register <username> <password> to keep your progress on an account.",
+			"tr": "你正在以访客身份游玩。使用 /register <用户名> <密码> 可将进度保存到账号。"
+		},
+		{
+			"context": "TEAM",
+			"or": "Team",
+			"tr": "队伍"
+		},
+		{
+			"context": "Menu Team",
+			"or": "You are not in a team.",
+			"tr": "你还没有加入队伍。"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Use /team create <name> or type a name in the reason box below.",
+			"tr": "使用 /team create <名字>，或在下方理由框输入名字。"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Create team (reason box = name)",
+			"tr": "创建队伍（理由框填写名字）"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Team: {}",
+			"tr": "队伍：{}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Leader: {}",
+			"tr": "队长：{}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Leader: (offline)",
+			"tr": "队长：（离线）"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Friendly fire: {}",
+			"tr": "友伤：{}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "ON",
+			"tr": "开"
+		},
+		{
+			"context": "Menu Team",
+			"or": "OFF",
+			"tr": "关"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Members: {} ({} online)",
+			"tr": "成员：{}（{} 在线）"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Toggle friendly fire",
+			"tr": "切换友伤"
+		},
+		{
+			"context": "Menu Team",
+			"or": "{} {}",
+			"tr": "{} {}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "{} (offline) {}",
+			"tr": "{}（离线）{}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "  Kick this member",
+			"tr": "  踢出该成员"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Leave team",
+			"tr": "离开队伍"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Disband team",
+			"tr": "解散队伍"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Online teams:",
+			"tr": "在线队伍："
+		},
+		{
+			"context": "Menu Team",
+			"or": "{}  ({} online / {} members)",
+			"tr": "{}（{} 在线 / {} 成员）"
+		},
+		{
+			"context": "Menu Team",
+			"or": "  Join {}",
+			"tr": "  加入 {}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "No team has an online member right now.",
+			"tr": "目前没有队伍有在线成员。"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Online players:",
+			"tr": "在线玩家："
+		},
+		{
+			"context": "Menu Team",
+			"or": "{}  {}",
+			"tr": "{}  {}"
+		},
+		{
+			"context": "Team",
+			"or": "You have no player identity yet.",
+			"tr": "你还没有玩家身份。"
+		},
+		{
+			"context": "Team",
+			"or": "You are already in a team. Leave it first.",
+			"tr": "你已经在一个队伍中，请先离开。"
+		},
+		{
+			"context": "Team",
+			"or": "Enter a team name.",
+			"tr": "请输入队伍名字。"
+		},
+		{
+			"context": "Team",
+			"or": "That team name is not usable.",
+			"tr": "该队伍名字不可用。"
+		},
+		{
+			"context": "Team",
+			"or": "That team name is already taken.",
+			"tr": "该队伍名字已被占用。"
+		},
+		{
+			"context": "Team",
+			"or": "Could not create the team.",
+			"tr": "创建队伍失败。"
+		},
+		{
+			"context": "Team",
+			"or": "That team no longer exists.",
+			"tr": "该队伍已不存在。"
+		},
+		{
+			"context": "Team",
+			"or": "Could not join the team.",
+			"tr": "加入队伍失败。"
+		},
+		{
+			"context": "Team",
+			"or": "You are not in a team.",
+			"tr": "你还没有加入队伍。"
+		},
+		{
+			"context": "Team",
+			"or": "Only the leader can kick members.",
+			"tr": "只有队长可以踢人。"
+		},
+		{
+			"context": "Team",
+			"or": "The leader cannot be kicked.",
+			"tr": "不能踢出队长。"
+		},
+		{
+			"context": "Team",
+			"or": "That player is not on your team.",
+			"tr": "该玩家不在你的队伍中。"
+		},
+		{
+			"context": "Team",
+			"or": "Only the leader can change friendly fire.",
+			"tr": "只有队长可以修改友伤设置。"
+		},
+		{
+			"context": "Team",
+			"or": "Only the leader can disband the team.",
+			"tr": "只有队长可以解散队伍。"
+		},
+		{
+			"context": "Team",
+			"or": "Team created.",
+			"tr": "队伍创建成功。"
+		},
+		{
+			"context": "Team",
+			"or": "Joined the team.",
+			"tr": "已加入队伍。"
+		},
+		{
+			"context": "Team",
+			"or": "Left the team.",
+			"tr": "已离开队伍。"
+		},
+		{
+			"context": "Team",
+			"or": "Friendly fire toggled.",
+			"tr": "友伤设置已切换。"
+		},
+		{
+			"context": "Team",
+			"or": "Friendly fire enabled.",
+			"tr": "已开启友伤。"
+		},
+		{
+			"context": "Team",
+			"or": "Friendly fire disabled.",
+			"tr": "已关闭友伤。"
+		},
+		{
+			"context": "Team",
+			"or": "Team disbanded.",
+			"tr": "队伍已解散。"
+		},
+		{
+			"context": "Team",
+			"or": "Member kicked.",
+			"tr": "成员已被踢出。"
+		},
+		{
+			"context": "Team",
+			"or": "Team action failed",
+			"tr": "队伍操作失败"
+		},
+		{
+			"context": "Team",
+			"or": "Team",
+			"tr": "队伍"
+		},
+		{
+			"context": "Team",
+			"or": "Usage: /team create <name>, /team leave, /team disband, /team ff on|off",
+			"tr": "用法：/team create <名字>、/team leave、/team disband、/team ff on|off"
+		},
+		{
+			"context": "Drill",
+			"or": "This building is locked.",
+			"tr": "这座建筑已上锁。"
+		},
+		{
+			"context": "Building",
+			"or": "Health Jar",
+			"tr": "生命罐"
 		}
 	]
 }

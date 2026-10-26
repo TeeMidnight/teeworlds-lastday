@@ -101,6 +101,17 @@ bool CDatabaseSQLite::Init()
 		" username TEXT NOT NULL UNIQUE,"
 		" password TEXT NOT NULL,"
 		" data JSON NOT NULL DEFAULT '{}');"
+		// guild-style teams: unlimited members, one account per team
+		"CREATE TABLE IF NOT EXISTS teams ("
+		" \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,"
+		" name TEXT NOT NULL UNIQUE,"
+		" leader TEXT NOT NULL,"
+		" friendly_fire INTEGER NOT NULL DEFAULT 0,"
+		" created_at INTEGER NOT NULL DEFAULT 0);"
+		"CREATE TABLE IF NOT EXISTS team_members ("
+		" account TEXT PRIMARY KEY,"
+		" team_id INTEGER NOT NULL);"
+		"CREATE INDEX IF NOT EXISTS team_members_team ON team_members(team_id);"
 		"CREATE TABLE IF NOT EXISTS world_saves ("
 		" \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,"
 		" map TEXT NOT NULL UNIQUE,"
@@ -202,6 +213,278 @@ bool CDatabaseSQLite::InsertPlayer(const SPlayerData &Player)
 	bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
 		dbg_msg("database", "failed to insert Player '%s': %s", Player.m_aUsername, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::EnsureGuestPlayer(const Uuid &Uuid, const char *pUsername)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || !pUsername || !pUsername[0])
+		return false;
+
+	char aUuid[UUID_MAXSTRSIZE];
+	format_uuid(Uuid, aUuid, sizeof(aUuid));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT OR IGNORE INTO players (uuid, username, password) VALUES (?1, ?2, '!guest');",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aUuid, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, pUsername, -1, SQLITE_TRANSIENT);
+
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	const int Changes = Ok ? sqlite3_changes(m_pDB) : 0;
+	if(!Ok)
+		dbg_msg("database", "failed to ensure guest '%s': %s", pUsername, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok && Changes > 0;
+}
+
+bool CDatabaseSQLite::CreateTeam(const char *pName, const Uuid &Leader, bool FriendlyFire, CDatabase::STeamData &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || !pName || !pName[0])
+		return false;
+
+	char aLeader[UUID_MAXSTRSIZE];
+	format_uuid(Leader, aLeader, sizeof(aLeader));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT INTO teams (name, leader, friendly_fire, created_at) VALUES (?1, ?2, ?3, 0);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, pName, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, aLeader, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 3, FriendlyFire ? 1 : 0);
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	sqlite3_finalize(pStmt);
+	if(!Ok)
+		return false;
+
+	const int Id = (int) sqlite3_last_insert_rowid(m_pDB);
+	// Add the leader without taking the database lock again (the public helper
+	// would deadlock on the non-recursive mutex).
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT OR REPLACE INTO team_members (account, team_id) VALUES (?1, ?2);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aLeader, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 2, Id);
+	const bool MemberOk = sqlite3_step(pStmt) == SQLITE_DONE;
+	sqlite3_finalize(pStmt);
+	if(!MemberOk)
+	{
+		char aDelete[128];
+		str_format(aDelete, sizeof(aDelete), "DELETE FROM teams WHERE id = %d;", Id);
+		sqlite3_exec(m_pDB, aDelete, nullptr, nullptr, nullptr);
+		return false;
+	}
+
+	mem_zero(&out, sizeof(out));
+	out.m_Id = Id;
+	str_copy(out.m_aName, pName, sizeof(out.m_aName));
+	out.m_Leader = Leader;
+	out.m_FriendlyFire = FriendlyFire;
+	return true;
+}
+
+bool CDatabaseSQLite::FindTeamByName(const char *pName, CDatabase::STeamData &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || !pName)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT id, name, leader, friendly_fire FROM teams WHERE name = ?1 LIMIT 1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, pName, -1, SQLITE_TRANSIENT);
+
+	bool Found = false;
+	if(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		Found = true;
+		mem_zero(&out, sizeof(out));
+		out.m_Id = sqlite3_column_int(pStmt, 0);
+		str_copy(out.m_aName, (const char *) sqlite3_column_text(pStmt, 1), sizeof(out.m_aName));
+		parse_uuid(&out.m_Leader, (const char *) sqlite3_column_text(pStmt, 2));
+		out.m_FriendlyFire = sqlite3_column_int(pStmt, 3) != 0;
+	}
+	sqlite3_finalize(pStmt);
+	return Found;
+}
+
+bool CDatabaseSQLite::FindTeamForMember(const Uuid &Account, CDatabase::STeamData &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT t.id, t.name, t.leader, t.friendly_fire FROM teams t "
+		   "JOIN team_members m ON m.team_id = t.id WHERE m.account = ?1 LIMIT 1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aAccount, -1, SQLITE_TRANSIENT);
+
+	bool Found = false;
+	if(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		Found = true;
+		mem_zero(&out, sizeof(out));
+		out.m_Id = sqlite3_column_int(pStmt, 0);
+		str_copy(out.m_aName, (const char *) sqlite3_column_text(pStmt, 1), sizeof(out.m_aName));
+		parse_uuid(&out.m_Leader, (const char *) sqlite3_column_text(pStmt, 2));
+		out.m_FriendlyFire = sqlite3_column_int(pStmt, 3) != 0;
+	}
+	sqlite3_finalize(pStmt);
+	return Found;
+}
+
+bool CDatabaseSQLite::ListTeams(array<CDatabase::STeamData> &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	out.clear();
+	if(!m_pDB)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT id, name, leader, friendly_fire FROM teams ORDER BY id;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	while(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		CDatabase::STeamData &Team = out.emplace();
+		Team.m_Id = sqlite3_column_int(pStmt, 0);
+		str_copy(Team.m_aName, (const char *) sqlite3_column_text(pStmt, 1), sizeof(Team.m_aName));
+		parse_uuid(&Team.m_Leader, (const char *) sqlite3_column_text(pStmt, 2));
+		Team.m_FriendlyFire = sqlite3_column_int(pStmt, 3) != 0;
+	}
+	sqlite3_finalize(pStmt);
+	return true;
+}
+
+bool CDatabaseSQLite::LoadTeamMembers(int TeamId, array<Uuid> &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	out.clear();
+	if(!m_pDB)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT account FROM team_members WHERE team_id = ?1 ORDER BY account;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_int(pStmt, 1, TeamId);
+	while(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		Uuid Account = UUID_ZEROED;
+		parse_uuid(&Account, (const char *) sqlite3_column_text(pStmt, 0));
+		if(Account != UUID_ZEROED)
+			out.add(Account);
+	}
+	sqlite3_finalize(pStmt);
+	return true;
+}
+
+bool CDatabaseSQLite::AddTeamMember(int TeamId, const Uuid &Account)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || TeamId <= 0)
+		return false;
+
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT OR REPLACE INTO team_members (account, team_id) VALUES (?1, ?2);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aAccount, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 2, TeamId);
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::RemoveTeamMember(int TeamId, const Uuid &Account)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "DELETE FROM team_members WHERE account = ?1 AND team_id = ?2;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aAccount, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 2, TeamId);
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::DeleteTeam(int TeamId)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || TeamId <= 0)
+		return false;
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB, "DELETE FROM team_members WHERE team_id = ?1;", -1, &pStmt, 0) == SQLITE_OK)
+	{
+		sqlite3_bind_int(pStmt, 1, TeamId);
+		sqlite3_step(pStmt);
+		sqlite3_finalize(pStmt);
+	}
+	if(sqlite3_prepare_v2(m_pDB, "DELETE FROM teams WHERE id = ?1;", -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_int(pStmt, 1, TeamId);
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::SetTeamLeader(int TeamId, const Uuid &Leader)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+	char aLeader[UUID_MAXSTRSIZE];
+	format_uuid(Leader, aLeader, sizeof(aLeader));
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB, "UPDATE teams SET leader = ?1 WHERE id = ?2;", -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aLeader, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 2, TeamId);
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::SetTeamFriendlyFire(int TeamId, bool FriendlyFire)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB, "UPDATE teams SET friendly_fire = ?1 WHERE id = ?2;", -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_int(pStmt, 1, FriendlyFire ? 1 : 0);
+	sqlite3_bind_int(pStmt, 2, TeamId);
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	sqlite3_finalize(pStmt);
 	return Ok;
 }

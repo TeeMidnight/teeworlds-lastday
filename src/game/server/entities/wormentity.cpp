@@ -23,11 +23,13 @@ const int WORM_BITE_COOLDOWN = 30;
 //////////////////////////////////////////////////
 
 CWormSegmentEntity::CWormSegmentEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo,
-	int Team, int Faction, CWormEntity *pWorm) :
+	int Team, int Faction, CWormEntity *pWorm, bool IsHead, bool Natural) :
 	CBotEntity(pWorld, Pos, BotID, TeeInfo, Team, Faction)
 {
 	m_pWorm = pWorm;
 	m_Despawning = false;
+	m_IsHead = IsHead;
+	m_Natural = Natural;
 	SetAI(nullptr);
 	// the worm drives the body: no input strategy and no physics tick
 	SetWormVisible(false);
@@ -108,10 +110,11 @@ void CWormSegmentEntity::Despawn()
 // worm
 //////////////////////////////////////////////////
 
-CWormEntity::CWormEntity(CGameWorld *pWorld, vec2 Pos, const SMobDef *pDef, Uuid HeadID, const char *pName) :
+CWormEntity::CWormEntity(CGameWorld *pWorld, vec2 Pos, const SMobDef *pDef, Uuid HeadID, const char *pName, bool Natural) :
 	CHitableEntity(pWorld, CGameWorld::ENTTYPE_WORM, 0, Pos, 48)
 {
 	m_pDef = pDef;
+	m_Natural = Natural;
 	str_copy(m_aName, pName && pName[0] ? pName : (pDef ? pDef->m_aName : "Burrower"), sizeof(m_aName));
 	m_MaxHealth = maximum(1, pDef ? pDef->m_Health : 10);
 	m_Health = m_MaxHealth;
@@ -149,7 +152,7 @@ CWormEntity::CWormEntity(CGameWorld *pWorld, vec2 Pos, const SMobDef *pDef, Uuid
 		Uuid BotID = (i == 0 && m_HeadID != UUID_ZEROED) ? m_HeadID : random_uuid();
 		if(pBots->BotByID(BotID))
 			BotID = random_uuid();
-		IBotEntity *pSegment = pBots->SpawnWormSegment(pWorld, this, BotID, TeeInfo, TEAM_RED, pDef->m_Faction);
+		IBotEntity *pSegment = pBots->SpawnWormSegment(pWorld, this, BotID, TeeInfo, TEAM_RED, pDef->m_Faction, i == 0, m_Natural);
 		if(pSegment)
 			m_lSegments.add(BotID);
 	}

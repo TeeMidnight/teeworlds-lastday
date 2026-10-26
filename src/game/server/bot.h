@@ -22,6 +22,9 @@
 enum
 {
 	BOT_MAX_PER_CLIENT = MAX_BOTS_07,
+	// Natural monster density: one monster per this many tiles of world width.
+	// Fixed content, NPCs, bosses and summons are not part of this budget.
+	BOT_NATURAL_TILES_PER_MONSTER = 48,
 };
 
 // A bot's social stance. The value is independent of the protocol team: two

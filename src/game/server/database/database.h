@@ -53,6 +53,16 @@ public:
 		char m_aPasswordHash[PASSWORD_SIZE];
 	};
 
+	// a guild-style team row. Members live in team_members, one account per
+	// team; the list is unlimited.
+	struct STeamData
+	{
+		int m_Id;
+		char m_aName[64];
+		Uuid m_Leader;
+		bool m_FriendlyFire;
+	};
+
 	// one persisted shop listing. The seller is an account uuid, so a listing
 	// outlives the session that posted it, and the item ids are stored by their
 	// source name ("lastday:stone") so they survive an id rehash.
@@ -91,6 +101,27 @@ public:
 
 	// register a brand-new player row (data column starts as '{}').
 	virtual bool InsertPlayer(const SPlayerData &Player) = 0;
+
+	// Ensure a guest profile row exists. Guests have no password and are keyed
+	// by a UUID derived from their nickname, so their inventory and loadout
+	// survive a reconnect without becoming a real account. Returns true when
+	// the row was created by this call (i.e. the guest is new).
+	virtual bool EnsureGuestPlayer(const Uuid &Uuid, const char *pUsername) = 0;
+
+	// --- teams ------------------------------------------------------------
+	// Create a team and add its leader as the first member, atomically enough
+	// for the game thread's usage (a failure deletes the half-created row).
+	virtual bool CreateTeam(const char *pName, const Uuid &Leader, bool FriendlyFire, STeamData &out) = 0;
+	virtual bool FindTeamByName(const char *pName, STeamData &out) = 0;
+	virtual bool FindTeamForMember(const Uuid &Account, STeamData &out) = 0;
+	virtual bool ListTeams(array<STeamData> &out) = 0;
+	virtual bool LoadTeamMembers(int TeamId, array<Uuid> &out) = 0;
+        // Moves the account into this team (one account, one team).
+	virtual bool AddTeamMember(int TeamId, const Uuid &Account) = 0;
+	virtual bool RemoveTeamMember(int TeamId, const Uuid &Account) = 0;
+	virtual bool DeleteTeam(int TeamId) = 0;
+	virtual bool SetTeamLeader(int TeamId, const Uuid &Leader) = 0;
+	virtual bool SetTeamFriendlyFire(int TeamId, bool FriendlyFire) = 0;
 
 	// load a player row by its primary key.
 	virtual bool LoadByUuid(const Uuid &Uuid, SPlayerData &out) = 0;

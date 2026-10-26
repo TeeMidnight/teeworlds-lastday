@@ -11,6 +11,7 @@
 #include "gamecontroller.h"
 #include "player.h"
 #include "scripting/buff_system.h"
+#include "team.h"
 
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
@@ -58,6 +59,7 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 
 	m_AccountUuid = UUID_ZEROED;
 	m_LoggedIn = false;
+	m_Guest = false;
 }
 
 CPlayer::~CPlayer()
@@ -212,7 +214,10 @@ void CPlayer::Snap(int SnappingClient)
 	// the fields are raw content without a terminator, so they can hold the
 	// full identity string
 	str_copy_fixed(pTeeInfo->m_aName, Server()->ClientName(m_ClientID), sizeof(pTeeInfo->m_aName));
-	str_copy_fixed(pTeeInfo->m_aClan, Server()->ClientClan(m_ClientID), sizeof(pTeeInfo->m_aClan));
+	// The scoreboard clan is the player's team name. Players without a team
+	// deliberately show no clan at all; the client-supplied clan is ignored.
+	const char *pClan = GameServer()->Teams() ? GameServer()->Teams()->TeamNameFor(m_AccountUuid) : "";
+	str_utf8_copy_num(pTeeInfo->m_aClan, pClan, sizeof(pTeeInfo->m_aClan), 12);
 	for(int p = 0; p < NUM_SKINPARTS; p++)
 	{
 		str_copy_fixed(pTeeInfo->m_aaSkinPartNames[p], m_TeeInfos.m_aaSkinPartNames[p], sizeof(pTeeInfo->m_aaSkinPartNames[p]));
@@ -576,8 +581,15 @@ void CPlayer::UpdateDrillControl()
 	if(!pBest)
 		return;
 
+	if(!pBest->SetController(m_ClientID))
+	{
+		CLanguageScope LanguageScope(Language());
+		GameServer()->SendChat(-1, CHAT_WHISPER, m_ClientID,
+			Localize("This building is locked.", "Drill"));
+		return;
+	}
+
 	CLanguageScope LanguageScope(Language());
-	pBest->SetController(m_ClientID);
 	m_DrillControlID = pBest->GetID();
 	m_pCharacter->SetDrillControl(true);
 	GameServer()->SendChat(-1, CHAT_WHISPER, m_ClientID,

@@ -148,6 +148,59 @@ Hostile, neutral and friendly combat uses the `PLAYER_TEAM_HOSTILE` and
 swallowed by the survival mode's red team friendly-fire rule, and keep allied
 shots from hurting players, without changing the protocol teams.
 
+Natural monster density
+------------------------
+`sv_bots` is a boolean switch: 0 disables bots, 1 enables them. There is no
+per-server count any more. A world may hold at most one *naturally spawned*
+monster per 48 tiles of width (`width / 48`, minimum 1). Fixed content, NPCs,
+bosses and boss summons do not consume that budget; a worm counts as one
+monster even though its body is several tee links.
+
+Guest profiles
+---------------
+Logging in is optional. A client without an account joins immediately and gets a
+deterministic guest UUID derived from its current nickname. Its inventory,
+loadout, level and team membership are stored under that UUID in the normal
+player row (with an `@guest:<name>` username and no usable password), so a
+reconnect with the same nickname restores its progress. Registering converts the
+same live inventory into a real account instead of resetting it; logging into a
+different account loads that account's profile instead.
+
+Teams
+-----
+Teams are guilds: membership is unlimited and persisted in the `teams` and
+`team_members` SQLite/PostgreSQL tables. Every account (guest UUID included) can
+be in one team. The `Team` page of the vote menu lists the current guild, its
+leader, online/offline members and the online teams that can be joined, plus the
+online player list. `/team create <name>` founds a guild (the menu's reason box
+works for a short name), `/team leave`, `/team disband` and
+`/team ff on|off` manage it, and `/t <message>` is the team channel. A leader
+who disconnects hands the guild to another online member; with nobody else
+online the offline leader keeps it.
+
+The scoreboard clan of every player is their team name, and is empty when they
+are not in a team. The leader's friendly-fire switch only affects players who
+share that team: with it off their direct hits, projectiles and explosions are
+blocked; different teams and unteamed players can always fight.
+
+Building locks
+---------------
+Placeable buildings carry an owner account and a lock:
+
+- `self` — only the owner may use or dismantle it
+- `team` — the owner and their current team may use or dismantle it
+- `public` — anyone may
+
+New drills and health jars start at `self`; legacy saves without a lock load as
+`public`, preserving their old behaviour. Aim at a building while standing
+within four tiles and the main menu shows its name, current lock and — for the
+owner — the three lock actions directly on the top-level page. Drill control,
+harvest collection, health-jar healing and damage/dismantling all consult the
+lock. The owner/lock values are part of the world save. Scripts can read the
+same state through `lastday_entity.allowed_player_near`, `can_use` and
+`lock_mode`; the health jar uses `allowed_player_near` instead of owner-only
+proximity.
+
 World packs
 -----------
 A generated instance is a `.map` plus a `.json` sidecar holding its entrances,

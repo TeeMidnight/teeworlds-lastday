@@ -1497,6 +1497,12 @@ void CGameWorld::SaveToDatabase()
 		JsonWriter.WriteIntValue(round_to_int(Dir.x * 1000.0f));
 		JsonWriter.WriteAttribute("dy");
 		JsonWriter.WriteIntValue(round_to_int(Dir.y * 1000.0f));
+		char aOwner[UUID_MAXSTRSIZE];
+		format_uuid(pDrill->Access().m_Owner, aOwner, sizeof(aOwner));
+		JsonWriter.WriteAttribute("owner");
+		JsonWriter.WriteStrValue(aOwner);
+		JsonWriter.WriteAttribute("lock");
+		JsonWriter.WriteIntValue(pDrill->Access().m_LockMode);
 		JsonWriter.EndObject();
 	}
 	JsonWriter.EndArray();
@@ -1520,6 +1526,8 @@ void CGameWorld::SaveToDatabase()
 		JsonWriter.WriteIntValue(round_to_int(pEntity->GetPos().y));
 		JsonWriter.WriteAttribute("health");
 		JsonWriter.WriteIntValue(pEntity->Health());
+		JsonWriter.WriteAttribute("lock");
+		JsonWriter.WriteIntValue(pEntity->Access().m_LockMode);
 		JsonWriter.WriteAttribute("owner");
 		JsonWriter.WriteStrValue(aOwner);
 		JsonWriter.WriteAttribute("persistent");
@@ -1689,7 +1697,14 @@ void CGameWorld::RestoreFromDatabase()
 				Dir = normalize(Stored);
 		}
 
-		CDrillEntity *pDrill = new CDrillEntity(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY), DrillId, Def.m_MaxLength, Def.m_Power, -1);
+		Uuid Owner = UUID_ZEROED;
+		const json_value &rOwner = rDrill["owner"];
+		if(rOwner.type == json_string)
+			parse_uuid(&Owner, rOwner.u.string.ptr);
+		const json_value &rLock = rDrill["lock"];
+		// an old drill had no lock: keep its historical public behaviour
+		const int LockMode = rLock.type == json_integer ? clamp((int) (json_int_t) rLock, (int) BUILD_LOCK_PUBLIC, (int) BUILD_LOCK_TEAM) : BUILD_LOCK_PUBLIC;
+		CDrillEntity *pDrill = new CDrillEntity(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY), DrillId, Def.m_MaxLength, Def.m_Power, -1, Owner, LockMode);
 		pDrill->SetDirection(Dir);
 	}
 
@@ -1723,9 +1738,12 @@ void CGameWorld::RestoreFromDatabase()
 
 		const std::string Params = ReadJsonText(rEntity["params"]);
 		const std::string State = ReadJsonText(rEntity["state"]);
+		const json_value &rLock = rEntity["lock"];
+		// old props had no lock and were public; keep that behaviour on load
+		const int LockMode = rLock.type == json_integer ? clamp((int) (json_int_t) rLock, (int) BUILD_LOCK_PUBLIC, (int) BUILD_LOCK_TEAM) : BUILD_LOCK_PUBLIC;
 
 		pScripted->Spawn(rKind.u.string.ptr, this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY),
-			Params.c_str(), Owner, -1, Persistent, 0, Health, State.c_str(), true);
+			Params.c_str(), Owner, -1, Persistent, 0, Health, State.c_str(), true, LockMode);
 	}
 
 	// Backward compatibility: worlds saved before the scripted entity existed
@@ -1760,6 +1778,6 @@ void CGameWorld::RestoreFromDatabase()
 		const char *pOwnerName = rOwnerName.type == json_string ? rOwnerName.u.string.ptr : "";
 
 		pScripted->SpawnHealthJar(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY),
-			JarId, Owner, -1, pOwnerName, Def.m_Cooldown, Def.m_Range, Def.m_Health, "{}", true);
+			JarId, Owner, -1, pOwnerName, Def.m_Cooldown, Def.m_Range, Def.m_Health, "{}", true, BUILD_LOCK_PUBLIC);
 	}
 }

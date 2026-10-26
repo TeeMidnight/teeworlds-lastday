@@ -109,9 +109,11 @@ return the primitive id/name; new scripts should use the class attributes.
 
 `import lastday_entity` adds the scripted-prop surface (`spawn`, `exists`,
 `pos`, `health`, `damage`, `destroy`, `set_visual`, `set_health`,
-`set_persistent`, `owner_near`, `player_near`, `world_id`, health/items drops)
-and its own `snap_new_id` / `snap_free_id` for code that only imported the
-entity module.
+`set_persistent`, `owner_near`, `allowed_player_near`, `can_use`, `lock_mode`,
+`player_near`, `world_id`, health/items drops) and its own `snap_new_id` /
+`snap_free_id` for code that only imported the entity module. `allowed_player_near`
+respects the building lock (`self` / `team` / `public`); use it instead of
+`owner_near` for a placeable that should be shared with a team.
 
 ## Data formats
 
@@ -210,6 +212,9 @@ Entity (`datasrc/entities/<kind>.json`):
 
 Entity callbacks: `on_spawn`, `on_load`, `on_tick`, `on_hit`, `on_destroy`,
 `on_save`. Use `lastday_entity` for spawn/destroy/visuals/drops/owner checks.
+A persistent scripted entity also carries the building lock: damage and
+`destroy` are refused for clients the lock does not allow, and its owner/lock
+are saved with the world.
 
 A scripted entity does **not** reserve snapshot ids itself. The script asks for
 as many as it draws **once per entity lifetime** and reuses them for every

@@ -69,10 +69,11 @@ const char *FactionClan(int Faction)
 }
 } // namespace
 
-CMonsterEntity::CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const SMobDef *pDef, const char *pName) :
+CMonsterEntity::CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const SMobDef *pDef, const char *pName, bool Natural) :
 	CBotEntity(pWorld, Pos, BotID, CBotTeeInfo(), FactionTeam(pDef ? pDef->m_Faction : BOTFACTION_HOSTILE), pDef ? pDef->m_Faction : BOTFACTION_HOSTILE)
 {
 	m_pDef = pDef;
+	m_Natural = Natural;
 	m_SpawnPos = Pos;
 	m_SpawnWorldID = pWorld ? pWorld->WorldID() : 0;
 	m_LastSpeakTick = -1000;

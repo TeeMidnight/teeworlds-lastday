@@ -188,6 +188,25 @@ def parse_mob_dialogue():
 					l10n[(line, "Mob Dialogue")] = ""
 	return l10n
 
+def parse_team_messages():
+	"""Collects team action messages that are assembled in C++ rather than
+	passed through Localize literals. They use the "Team" localization context
+	at runtime, so the extractor has to read the same helpers."""
+	l10n = {}
+	patterns = [
+		re.compile(r'SetTeamError\([^,]+,\s*[^,]+,\s*"((?:[^"\\]|\\.)*)"'),
+		re.compile(r'SendSystemChat\([^,]+,\s*"Team",\s*"((?:[^"\\]|\\.)*)"'),
+	]
+	for path in ("src/game/server/team.cpp", "src/game/server/gamecontroller.cpp"):
+		if not os.path.isfile(path):
+			continue
+		source = open(path, encoding='utf-8').read()
+		for pattern in patterns:
+			for match in pattern.finditer(source):
+				if match.group(1):
+					l10n[(match.group(1), "Team")] = ""
+	return l10n
+
 def parse_script_chat():
 	"""Collects player-visible chat strings written by Python scripts.
 
@@ -324,6 +343,8 @@ if __name__ == '__main__':
 	l10n_server.update(parse_container_names())
 	# dialogue lines from mob/NPC json are looked up with "Mob Dialogue"
 	l10n_server.update(parse_mob_dialogue())
+	# team action messages assembled by helper calls
+	l10n_server.update(parse_team_messages())
 	# player-visible chat text written by Python scripts
 	l10n_server.update(parse_script_chat())
 

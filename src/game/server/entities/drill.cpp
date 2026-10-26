@@ -13,11 +13,14 @@
 #include "dropped_pickup.h"
 #include "resource.h"
 
-CDrillEntity::CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &ItemId, int MaxLength, int Power, int Owner) :
+CDrillEntity::CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &ItemId, int MaxLength, int Power, int Owner,
+	const Uuid &OwnerAccount, int LockMode) :
 	CHitableEntity(pGameWorld, CGameWorld::ENTTYPE_DRILL, 0, Pos, 24)
 {
 	m_ItemId = ItemId;
 	m_Owner = Owner;
+	m_Access.m_Owner = OwnerAccount;
+	m_Access.m_LockMode = LockMode;
 	m_Controller = -1;
 	m_MaxLength = maximum(64, MaxLength);
 	m_Power = maximum(1, Power);
@@ -44,10 +47,17 @@ void CDrillEntity::SetDirection(vec2 Dir)
 		m_Dir = normalize(Dir);
 }
 
-void CDrillEntity::SetController(int ClientID)
+bool CDrillEntity::SetController(int ClientID)
 {
 	if(m_Controller == ClientID)
-		return;
+		return true;
+
+	if(ClientID >= 0)
+	{
+		CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
+		if(!pPlayer || !GameServer()->CanUseBuilding(m_Access, pPlayer))
+			return false;
+	}
 
 	// release the previous controller's frozen character
 	if(m_Controller >= 0)
@@ -63,6 +73,7 @@ void CDrillEntity::SetController(int ClientID)
 	// fresh fire press for the next pass
 	m_State = m_Length > 0.0f ? STATE_RETRACTING : STATE_IDLE;
 	m_WaitRelease = true;
+	return true;
 }
 
 CResourceEntity *CDrillEntity::FindResource(vec2 *pOutPos)
@@ -266,8 +277,11 @@ bool CDrillEntity::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int
 	(void) Force;
 	(void) Source;
 	(void) Dmg;
-	(void) pFrom;
 	(void) Weapon;
+
+	// the lock protects the building from being dismantled by strangers
+	if(pFrom && !GameServer()->CanUseBuildingAsSource(m_Access, pFrom))
+		return false;
 
 	// dismantle: drop the drill item where the building stood, so whoever
 	// breaks it can pick it up (and a recycled client slot can never receive

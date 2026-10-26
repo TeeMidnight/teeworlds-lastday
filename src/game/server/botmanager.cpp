@@ -65,8 +65,9 @@ CBotManager::CBotManager(CGameContext *pGameServer)
 
 	ClearPlayerMap(-1);
 
-	dbg_msg("bot", "global manager ready, wanted=%d per world (0.7 tee ids %d..%d, 0.8 tee ids %d..%d)",
-		DesiredBotCount(), BOT_TEEID_07_MIN, BOT_TEEID_07_MAX, BOT_TEEID_08_MIN, BOT_TEEID_08_MAX);
+	dbg_msg("bot", "global manager ready, bots=%s, natural density=1/%d tiles (0.7 tee ids %d..%d, 0.8 tee ids %d..%d)",
+		Config()->m_SvBots ? "on" : "off", BOT_NATURAL_TILES_PER_MONSTER,
+		BOT_TEEID_07_MIN, BOT_TEEID_07_MAX, BOT_TEEID_08_MIN, BOT_TEEID_08_MAX);
 }
 
 CBotManager::~CBotManager()
@@ -497,7 +498,7 @@ IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 	const SMobDef *pMob = m_pGameServer->Mobs() ? m_pGameServer->Mobs()->RandomDef() : nullptr;
 	if(pMob)
 	{
-		IBotEntity *pMobEntity = SpawnMob(pWorld, pMob, SpawnPos, &BotID);
+		IBotEntity *pMobEntity = SpawnMob(pWorld, pMob, SpawnPos, &BotID, nullptr, true);
 		if(pMobEntity)
 			return pMobEntity;
 	}
@@ -510,6 +511,7 @@ IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 		return nullptr;
 
 	ApplySpawnAI(pBot);
+	pBot->SetNaturalMonster(true);
 
 	m_Bots.set(BotID, pBot);
 	m_lBotOrder.add(BotID);
@@ -519,13 +521,13 @@ IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 }
 
 IBotEntity *CBotManager::SpawnMob(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos,
-	const Uuid *pStableID, const char *pName)
+	const Uuid *pStableID, const char *pName, bool Natural)
 {
 	if(!pWorld || !pDef)
 		return nullptr;
 	if(pDef->m_IsWorm)
 	{
-		CWormEntity *pWorm = SpawnWorm(pWorld, pDef, Pos, pStableID);
+		CWormEntity *pWorm = SpawnWorm(pWorld, pDef, Pos, pStableID, Natural);
 		return pWorm ? pWorm->HeadSegment() : nullptr;
 	}
 
@@ -533,7 +535,7 @@ IBotEntity *CBotManager::SpawnMob(CGameWorld *pWorld, const SMobDef *pDef, vec2 
 	if(BotID == UUID_ZEROED || BotByID(BotID))
 		return nullptr;
 
-	CMonsterEntity *pBot = new CMonsterEntity(pWorld, Pos, BotID, pDef, pName);
+	CMonsterEntity *pBot = new CMonsterEntity(pWorld, Pos, BotID, pDef, pName, Natural);
 	m_Bots.set(BotID, pBot);
 	m_lBotOrder.add(BotID);
 	if(pBot->TeeID() != -1)
@@ -541,23 +543,23 @@ IBotEntity *CBotManager::SpawnMob(CGameWorld *pWorld, const SMobDef *pDef, vec2 
 	return pBot;
 }
 
-CWormEntity *CBotManager::SpawnWorm(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos, const Uuid *pStableID)
+CWormEntity *CBotManager::SpawnWorm(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos, const Uuid *pStableID, bool Natural)
 {
 	if(!pWorld || !pDef || !pDef->m_IsWorm)
 		return nullptr;
 	const Uuid HeadID = pStableID && *pStableID != UUID_ZEROED ? *pStableID : random_uuid();
 	if(BotByID(HeadID))
 		return nullptr;
-	return new CWormEntity(pWorld, Pos, pDef, HeadID, pDef->m_aName);
+	return new CWormEntity(pWorld, Pos, pDef, HeadID, pDef->m_aName, Natural);
 }
 
 IBotEntity *CBotManager::SpawnWormSegment(CGameWorld *pWorld, CWormEntity *pWorm, Uuid BotID,
-	const CBotTeeInfo &TeeInfo, int Team, int Faction)
+	const CBotTeeInfo &TeeInfo, int Team, int Faction, bool IsHead, bool Natural)
 {
 	if(!pWorld || !pWorm || BotID == UUID_ZEROED || BotByID(BotID))
 		return nullptr;
 
-	CWormSegmentEntity *pSegment = new CWormSegmentEntity(pWorld, pWorm->GetPos(), BotID, TeeInfo, Team, Faction, pWorm);
+	CWormSegmentEntity *pSegment = new CWormSegmentEntity(pWorld, pWorm->GetPos(), BotID, TeeInfo, Team, Faction, pWorm, IsHead, Natural);
 	m_Bots.set(BotID, pSegment);
 	m_lBotOrder.add(BotID);
 	if(pSegment->TeeID() != -1)
@@ -600,17 +602,18 @@ IBotEntity *CBotManager::SpawnNpc(CGameWorld *pWorld, const SNpcDef *pDef)
 	return pBot;
 }
 
-int CBotManager::DesiredBotCount() const
+int CBotManager::NaturalMonsterCap(CGameWorld *pWorld) const
 {
-	// sv_bots capped by what one client can be shown: it resolves at most
-	// BOT_MAX_PER_CLIENT bots, so any extra would exist but stay invisible.
-	int Count = Config()->m_SvBots;
-	if(Count < 0)
-		Count = 0;
-	return minimum(Count, (int) BOT_MAX_PER_CLIENT);
+	if(!pWorld || Config()->m_SvBots <= 0)
+		return 0;
+	// One natural monster per 48 tiles of world width. The cap is about the
+	// map, not the number a single client can see: a wide floor may hold more
+	// monsters than the 15 tee ids one peer resolves.
+	const int Width = pWorld->Collision()->GetWidth();
+	return maximum(1, Width / BOT_NATURAL_TILES_PER_MONSTER);
 }
 
-int CBotManager::LiveBotsInWorld(CGameWorld *pWorld) const
+int CBotManager::LiveNaturalMonstersInWorld(CGameWorld *pWorld) const
 {
 	int Count = 0;
 	for(int i = 0; i < m_lBotOrder.size(); i++)
@@ -618,10 +621,10 @@ int CBotManager::LiveBotsInWorld(CGameWorld *pWorld) const
 		IBotEntity *const *ppBot = m_Bots.get(m_lBotOrder[i]);
 		if(!ppBot || !*ppBot || (*ppBot)->GameWorld() != pWorld)
 			continue;
-		// Every body link occupies a bot slot the client can be shown, so a
-		// worm counts as its whole chain. Excluding the links would make the
-		// top-up loop spawn worm after worm around one existing creature.
-		Count++;
+		// A worm's head counts once; its body links return false. Fixed NPCs,
+		// friendly units and future bosses/summons also return false.
+		if((*ppBot)->IsNaturalMonster())
+			Count++;
 	}
 	return Count;
 }
@@ -631,9 +634,9 @@ void CBotManager::TickWorld(CGameWorld *pWorld)
 	if(!pWorld || !pWorld->m_BotConfigured)
 		return;
 
-	// a world that owns configured NPCs or fixed mobs respawns those instead
-	// of rolling random bots, so the population is exactly the definitions
-	if(pWorld->m_lBotDefinedNpcs.size() || pWorld->m_lBotDefinedMobs.size())
+	// a town world that owns configured NPCs respawns those instead of rolling
+	// random monsters, so its population is exactly the definitions
+	if(pWorld->m_lBotDefinedNpcs.size())
 	{
 		for(int i = 0; i < pWorld->m_lBotDefinedNpcs.size(); i++)
 		{
@@ -645,9 +648,16 @@ void CBotManager::TickWorld(CGameWorld *pWorld)
 		return;
 	}
 
-	// respawn up to the desired population
+	// Fixed content (a ranger, a future boss guard) respawns independently of
+	// the natural density budget and does not consume a natural slot.
+	TickFixedMobs(pWorld);
+
+	// top up the natural monster population to the density cap. The guard is
+	// generous because one spawn attempt may create a multi-link worm but only
+	// counts as a single natural monster.
+	const int Cap = NaturalMonsterCap(pWorld);
 	int Guard = 0;
-	while(LiveBotsInWorld(pWorld) < DesiredBotCount() && Guard++ < MAX_BOTS_07)
+	while(LiveNaturalMonstersInWorld(pWorld) < Cap && Guard++ < 256)
 	{
 		if(!CreateBot(pWorld))
 			break;

@@ -102,7 +102,9 @@ def _ready_to_drop(ctx, state):
     # same tick.
     if (now + ctx.entity.id) % OWNER_CHECK_TICKS != 0:
         return False
-    return ctx.entity.owner_near() >= 0
+    # The building lock is enforced in C++: only the owner, their team or
+    # everyone (depending on the lock) counts as an allowed visitor.
+    return ctx.entity.allowed_player_near() >= 0
 
 
 def _drop_health(ctx, state):

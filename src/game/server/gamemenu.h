@@ -115,6 +115,11 @@ private:
 	// the "Travel" page: the configured euclidean floors the train can reach
 	// (implemented in gamemenu.cpp)
 	static bool MenuTravel(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// Validate a destination and board the train. Returns false (and chats the
+	// reason) when the player is not on a platform or the destination is gone.
+	bool TravelTo(int ClientID, const char *pDestination);
+	// the "Team" page (implemented in menus/team_menu.cpp)
+	static bool MenuTeam(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// the "Language" page (implemented in gamemenu.cpp)
 	static bool MenuLanguage(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// loadout (weapon equipment) menu (implemented in menus/loadout_menu.cpp)

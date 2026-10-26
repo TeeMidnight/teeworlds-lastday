@@ -20,6 +20,7 @@
 #include "entities/resource.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
+#include "team.h"
 #include "item.h"
 #include "player.h"
 #include "trade.h"
@@ -322,13 +323,23 @@ void CGameController::Tick()
 
 bool CGameController::IsFriendlyFire(int ClientID1, int ClientID2, int Damage) const
 {
+	(void) Damage;
 	if(ClientID1 == ClientID2)
 		return false;
 
-	if(!GameServer()->m_apPlayers[ClientID1] || !GameServer()->m_apPlayers[ClientID2])
+	CPlayer *pPlayer1 = ClientID1 >= 0 && ClientID1 < MAX_CLIENTS ? GameServer()->m_apPlayers[ClientID1] : nullptr;
+	CPlayer *pPlayer2 = ClientID2 >= 0 && ClientID2 < MAX_CLIENTS ? GameServer()->m_apPlayers[ClientID2] : nullptr;
+	if(!pPlayer1 || !pPlayer2)
 		return false;
 
-	return true;
+	// Only a shared team can make a hit friendly. The leader's friendly-fire
+	// switch decides whether it is blocked; players without a team (or in
+	// different teams) can always fight each other.
+	CTeamSystem *pTeams = GameServer()->Teams();
+	if(!pTeams || !pTeams->SameTeam(pPlayer1->m_AccountUuid, pPlayer2->m_AccountUuid))
+		return false;
+	const SGameTeam *pTeam = pTeams->TeamFor(pPlayer1->m_AccountUuid);
+	return pTeam && !pTeam->m_FriendlyFire;
 }
 
 bool CGameController::IsFriendlyTeamFire(int Team1, int Team2, int Damage) const
@@ -443,10 +454,10 @@ bool CGameController::IsUsingBot() const
 // team
 bool CGameController::CanChangeTeam(CPlayer *pPlayer, int JoinTeam) const
 {
-	// joining the game (leaving spectator) requires a logged-in account;
-	// server bots/dummies are exempt
-	if(JoinTeam != TEAM_SPECTATORS && !pPlayer->IsDummy() && !pPlayer->m_LoggedIn)
-		return false;
+	// Guests may join the game with a nickname-derived profile. Logging in is
+	// optional and only upgrades the profile to a permanent account.
+	(void) pPlayer;
+	(void) JoinTeam;
 	return true;
 }
 
@@ -661,21 +672,19 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 		return;
 	}
 
+	const bool WasGuest = pPlayer->m_Guest;
 	pPlayer->m_AccountUuid = Row.m_Uuid;
 	pPlayer->m_LoggedIn = true;
+	pPlayer->m_Guest = false;
 	pSelf->GameServer()->EnsureNpcAggroFor(pPlayer);
 	pSelf->GameServer()->Trade()->RebindSeller(ClientID, pPlayer->m_AccountUuid);
 	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
 		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
 
-	// starting kit for a new account: hammer + pistol + 100 pistol bullets and
-	// a few bandages, so a fresh tee is not left without any way to heal before
-	// it has found its first grass
-	CItemSystem *pItem = pSelf->GameServer()->Item();
-	pItem->AddItem(ClientID, "hammer", 1, true);
-	pItem->AddItem(ClientID, "gun", 1, true);
-	pItem->AddItem(ClientID, "pistol_bullet", 100, true);
-	pItem->AddItem(ClientID, "bandage", 3, true);
+	// A guest upgrading to an account keeps the inventory it already earned;
+	// a completely fresh account gets the starting kit.
+	if(!WasGuest)
+		pSelf->GameServer()->GiveStartingKit(ClientID);
 
 	pPlayer->SaveStatus(pDB); // persist the initial status fields
 	pSelf->SendSystemChat(ClientID, "Account", "Account created. You are now logged in.");
@@ -724,6 +733,7 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 
 	pPlayer->m_AccountUuid = Row.m_Uuid;
 	pPlayer->m_LoggedIn = true;
+	pPlayer->m_Guest = false;
 	pSelf->GameServer()->EnsureNpcAggroFor(pPlayer);
 	pSelf->GameServer()->Trade()->RebindSeller(ClientID, pPlayer->m_AccountUuid);
 	if(pPlayer->GetTeam() == TEAM_SPECTATORS)
@@ -787,6 +797,96 @@ void CGameController::ComContainer(IConsole::IResult *pResult, void *pContext)
 	pSelf->GameServer()->GameMenu()->SetPlayerPage(ClientID, "CONTAINER");
 }
 
+void CGameController::ComTeam(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	const int ClientID = pCmdContext->m_ClientID;
+	CGameContext *pGame = pSelf->GameServer();
+	CPlayer *pPlayer = pGame->m_apPlayers[ClientID];
+	CTeamSystem *pTeams = pGame->Teams();
+	if(!pPlayer || !pTeams)
+		return;
+
+	const char *pArgs = pResult->NumArguments() > 0 ? pResult->GetString(0) : "";
+	if(!pArgs[0])
+	{
+		pGame->GameMenu()->SetPlayerPage(ClientID, "TEAM");
+		return;
+	}
+
+	char aError[128] = "";
+	if(str_startswith(pArgs, "create "))
+	{
+		const char *pName = str_skip_whitespaces_const(pArgs + str_length("create "));
+		if(pTeams->CreateTeam(pPlayer->m_AccountUuid, pName, aError, sizeof(aError)))
+		{
+			pSelf->SendSystemChat(ClientID, "Team", "Team created.");
+			pGame->GameMenu()->SetPlayerPage(ClientID, "TEAM");
+		}
+		else
+			pSelf->SendSystemChat(ClientID, "Team", aError);
+	}
+	else if(str_comp(pArgs, "leave") == 0)
+	{
+		if(pTeams->LeaveTeam(pPlayer->m_AccountUuid, aError, sizeof(aError)))
+			pSelf->SendSystemChat(ClientID, "Team", "Left the team.");
+		else
+			pSelf->SendSystemChat(ClientID, "Team", aError);
+	}
+	else if(str_comp(pArgs, "disband") == 0)
+	{
+		if(pTeams->DisbandTeam(pPlayer->m_AccountUuid, aError, sizeof(aError)))
+			pSelf->SendSystemChat(ClientID, "Team", "Team disbanded.");
+		else
+			pSelf->SendSystemChat(ClientID, "Team", aError);
+	}
+	else if(str_comp(pArgs, "ff on") == 0 || str_comp(pArgs, "ff off") == 0)
+	{
+		const bool Enabled = str_comp(pArgs, "ff on") == 0;
+		if(pTeams->SetFriendlyFire(pPlayer->m_AccountUuid, Enabled, aError, sizeof(aError)))
+			pSelf->SendSystemChat(ClientID, "Team", Enabled ? "Friendly fire enabled." : "Friendly fire disabled.");
+		else
+			pSelf->SendSystemChat(ClientID, "Team", aError);
+	}
+	else
+	{
+		pSelf->SendSystemChat(ClientID, "Team", "Usage: /team create <name>, /team leave, /team disband, /team ff on|off");
+		pGame->GameMenu()->SetPlayerPage(ClientID, "TEAM");
+	}
+}
+
+void CGameController::ComTeamChat(IConsole::IResult *pResult, void *pContext)
+{
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	const int ClientID = pCmdContext->m_ClientID;
+	CGameContext *pGame = pSelf->GameServer();
+	CPlayer *pPlayer = pGame->m_apPlayers[ClientID];
+	CTeamSystem *pTeams = pGame->Teams();
+	if(!pPlayer || !pTeams)
+		return;
+	const SGameTeam *pTeam = pTeams->TeamFor(pPlayer->m_AccountUuid);
+	if(!pTeam)
+	{
+		pSelf->SendSystemChat(ClientID, "Team", "You are not in a team.");
+		return;
+	}
+
+	const char *pText = pResult->NumArguments() > 0 ? pResult->GetString(0) : "";
+	if(!pText[0])
+		return;
+
+	char aBuf[512];
+	str_format(aBuf, sizeof(aBuf), "[%s] %s: %s", Localize("Team", "Team"), pGame->Server()->ClientName(ClientID), pText);
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pMember = pGame->m_apPlayers[i];
+		if(pMember && pTeams->TeamFor(pMember->m_AccountUuid) == pTeam)
+			pGame->SendChat(-1, CHAT_ALL, i, aBuf);
+	}
+}
+
 void CGameController::RegisterChatCommands(CCommandManager *pManager)
 {
 	pManager->AddCommand("about", "About the mod", "", Com_About, this);
@@ -795,6 +895,8 @@ void CGameController::RegisterChatCommands(CCommandManager *pManager)
 	pManager->AddCommand("login", "Log in to an account", "s[username] s[password]", ComLogin, this);
 	pManager->AddCommand("lang", "Set your language", "?s[code]", ComLanguage, this);
 	pManager->AddCommand("container", "Open the container you are aiming at", "", ComContainer, this);
+	pManager->AddCommand("team", "Team menu / create / leave / disband / friendly fire", "?r[args]", ComTeam, this);
+	pManager->AddCommand("t", "Team chat", "r[text]", ComTeamChat, this);
 }
 
 void CGameController::SendSystemChat(int TargetID, const char *pMsg)

@@ -5,6 +5,7 @@
 #define GAME_SERVER_ENTITIES_DRILL_H
 
 #include <game/item_id.h>
+#include <game/server/building.h>
 #include <game/server/entity.h>
 
 // A placed laser-tripod drill. It is a building: a pickup at its centre, three
@@ -26,7 +27,8 @@ public:
 	static constexpr float EXTEND_SPEED = 6.0f;
 	static constexpr float RETRACT_SPEED = 12.0f;
 
-	CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &ItemId, int MaxLength, int Power, int Owner);
+	CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &ItemId, int MaxLength, int Power, int Owner,
+		const Uuid &OwnerAccount = UUID_ZEROED, int LockMode = BUILD_LOCK_SELF);
 	~CDrillEntity() override;
 
 	void Tick() override;
@@ -34,9 +36,12 @@ public:
 	bool TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon) override;
 
 	int Controller() const { return m_Controller; }
-	void SetController(int ClientID);
+	// returns false when the building lock rejects this client
+	bool SetController(int ClientID);
 
 	const CItemID &ItemId() const { return m_ItemId; }
+	const CBuildAccess &Access() const { return m_Access; }
+	void SetLockMode(int Mode) { m_Access.m_LockMode = Mode; }
 	int MaxLength() const { return m_MaxLength; }
 	vec2 Dir() const { return m_Dir; }
 	void SetDirection(vec2 Dir);
@@ -55,6 +60,7 @@ private:
 	void SnapBeam(int ID, vec2 From, vec2 To, int SnappingClient);
 
 	CItemID m_ItemId;
+	CBuildAccess m_Access;
 	int m_Owner; // client that placed it, for returning the item on dismantle
 	int m_Controller; // client currently steering, -1 = none
 	int m_MaxLength;

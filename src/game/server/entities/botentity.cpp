@@ -60,6 +60,7 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	m_TeeInfo = TeeInfo;
 	m_Team = Team;
 	m_Faction = Faction;
+	m_Natural = false;
 	m_Alive = true;
 
 	m_pAI = nullptr;

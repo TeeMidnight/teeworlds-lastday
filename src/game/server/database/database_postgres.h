@@ -25,6 +25,17 @@ public:
 	virtual bool Init() override;
 	virtual bool FindByName(const char *pUsername, SPlayerData &out) override;
 	virtual bool InsertPlayer(const SPlayerData &Player) override;
+	virtual bool EnsureGuestPlayer(const Uuid &Uuid, const char *pUsername) override;
+	virtual bool CreateTeam(const char *pName, const Uuid &Leader, bool FriendlyFire, CDatabase::STeamData &out) override;
+	virtual bool FindTeamByName(const char *pName, CDatabase::STeamData &out) override;
+	virtual bool FindTeamForMember(const Uuid &Account, CDatabase::STeamData &out) override;
+	virtual bool ListTeams(array<CDatabase::STeamData> &out) override;
+	virtual bool LoadTeamMembers(int TeamId, array<Uuid> &out) override;
+	virtual bool AddTeamMember(int TeamId, const Uuid &Account) override;
+	virtual bool RemoveTeamMember(int TeamId, const Uuid &Account) override;
+	virtual bool DeleteTeam(int TeamId) override;
+	virtual bool SetTeamLeader(int TeamId, const Uuid &Leader) override;
+	virtual bool SetTeamFriendlyFire(int TeamId, bool FriendlyFire) override;
 	virtual bool LoadByUuid(const Uuid &Uuid, SPlayerData &out) override;
 	virtual bool GetJson(const Uuid &Uuid, const CJsonPath &Path, char *pOut, int Size) override;
 	virtual bool SetJson(const Uuid &Uuid, const CJsonPath &Path, const char *pValue) override;

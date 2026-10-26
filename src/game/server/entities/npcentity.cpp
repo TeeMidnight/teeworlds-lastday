@@ -130,7 +130,7 @@ void CNpcEntity::AddAggro(int ClientID, int Delta)
 	m_aSessionAggro[ClientID] = maximum(0, m_aSessionAggro[ClientID] + Delta);
 
 	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
-	if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
+	if(!pPlayer || pPlayer->m_AccountUuid == UUID_ZEROED)
 		return;
 	GameServer()->NpcAddAggro(m_pDef->m_Id.Value(), pPlayer->m_AccountUuid, Delta);
 	UpdateAggroCache(pPlayer->m_AccountUuid, Delta);
@@ -151,7 +151,7 @@ int CNpcEntity::CachedAggro(int ClientID)
 	if(!m_pDef || ClientID < 0 || ClientID >= MAX_CLIENTS)
 		return 0;
 	CPlayer *pPlayer = GameServer()->m_apPlayers[ClientID];
-	if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->m_AccountUuid == UUID_ZEROED)
+	if(!pPlayer || pPlayer->m_AccountUuid == UUID_ZEROED)
 		return m_aSessionAggro[ClientID];
 
 	SNpcAggroEntry *pEntry = nullptr;
@@ -201,7 +201,7 @@ int CNpcEntity::FindHatedPlayer()
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-		if(!pPlayer || !pPlayer->m_LoggedIn || pPlayer->GameWorld() != GameWorld())
+		if(!pPlayer || pPlayer->GameWorld() != GameWorld())
 			continue;
 		CCharacter *pChr = pPlayer->GetCharacter();
 		if(!pChr || !pChr->IsAlive())
@@ -479,7 +479,7 @@ void CNpcEntity::TickInteract()
 	{
 		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
 		CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
-		const bool InRange = pPlayer && pPlayer->m_LoggedIn && pPlayer->GameWorld() == GameWorld() &&
+		const bool InRange = pPlayer && pPlayer->GameWorld() == GameWorld() &&
 			pChr && pChr->IsAlive() && distance(pChr->GetPos(), m_Pos) <= NPC_INTERACT_RADIUS;
 
 		// tell the player once, when they first step into range

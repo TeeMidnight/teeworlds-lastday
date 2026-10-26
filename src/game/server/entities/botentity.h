@@ -47,6 +47,11 @@ public:
 	virtual int GetBotFaction() const = 0;
 	// The content definition behind a monster, or null for a generic bot.
 	virtual const SMobDef *MobDef() const { return nullptr; }
+	// Whether this bot occupies a natural monster slot. Fixed content, NPCs,
+	// bosses and summons return false and are therefore not capped by the
+	// per-world density rule.
+	virtual bool IsNaturalMonster() const { return false; }
+	virtual void SetNaturalMonster(bool Natural) { (void) Natural; }
 
 	// The key CWorldCore registers this bot's core under, so it must be unique
 	// among live entities and stay inside [0, MAX_TEES) for the bot's whole
@@ -124,6 +129,8 @@ public:
 	const CBotTeeInfo *GetTeeInfo() const override { return &m_TeeInfo; }
 	int GetBotTeam() const override { return m_Team; }
 	int GetBotFaction() const override { return m_Faction; }
+	bool IsNaturalMonster() const override { return m_Natural; }
+	void SetNaturalMonster(bool Natural) { m_Natural = Natural; }
 	int TeeID() const override { return m_TeeID; }
 	bool IsAlive() const override { return m_Alive; }
 	int GetHealth() const override { return m_Health; }
@@ -207,6 +214,7 @@ protected:
 	int m_TeeID;
 	int m_Team;
 	int m_Faction;
+	bool m_Natural;
 	bool m_Alive;
 
 	int m_Health;

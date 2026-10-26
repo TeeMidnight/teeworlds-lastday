@@ -90,7 +90,18 @@ bool CDatabasePostgres::Init()
 		" uuid UUID PRIMARY KEY,"
 		" username TEXT NOT NULL UNIQUE,"
 		" password TEXT NOT NULL,"
-		" data JSONB NOT NULL DEFAULT '{}');";
+		" data JSONB NOT NULL DEFAULT '{}');"
+		// guild-style teams: unlimited members, one account per team
+		"CREATE TABLE IF NOT EXISTS teams ("
+		" id SERIAL PRIMARY KEY,"
+		" name TEXT NOT NULL UNIQUE,"
+		" leader TEXT NOT NULL,"
+		" friendly_fire INTEGER NOT NULL DEFAULT 0,"
+		" created_at BIGINT NOT NULL DEFAULT 0);"
+		"CREATE TABLE IF NOT EXISTS team_members ("
+		" account TEXT PRIMARY KEY,"
+		" team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE);"
+		"CREATE INDEX IF NOT EXISTS team_members_team ON team_members(team_id);";
 
 	PGresult *pRes = PQexec(m_pConn, pCreate);
 	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
@@ -229,6 +240,259 @@ bool CDatabasePostgres::InsertPlayer(const SPlayerData &Player)
 	bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
 		dbg_msg("database", "failed to insert Player '%s': %s", Player.m_aUsername, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::EnsureGuestPlayer(const Uuid &Uuid, const char *pUsername)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || !pUsername || !pUsername[0])
+		return false;
+
+	char aUuid[UUID_MAXSTRSIZE];
+	format_uuid(Uuid, aUuid, sizeof(aUuid));
+
+	const char *apParams[2] = {aUuid, pUsername};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO players (uuid, username, password) VALUES ($1::uuid, $2, '!guest') "
+		"ON CONFLICT DO NOTHING;",
+		2, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	const bool Created = Ok && str_comp(PQcmdTuples(pRes), "1") == 0;
+	if(!Ok)
+		dbg_msg("database", "failed to ensure guest '%s': %s", pUsername, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Created;
+}
+
+bool CDatabasePostgres::CreateTeam(const char *pName, const Uuid &Leader, bool FriendlyFire, CDatabase::STeamData &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || !pName || !pName[0])
+		return false;
+
+	char aLeader[UUID_MAXSTRSIZE];
+	format_uuid(Leader, aLeader, sizeof(aLeader));
+	const char *apParams[3] = {pName, aLeader, FriendlyFire ? "1" : "0"};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO teams (name, leader, friendly_fire, created_at) VALUES ($1, $2, $3::int, 0) RETURNING id;",
+		3, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK || PQntuples(pRes) != 1)
+	{
+		dbg_msg("database", "failed to create team '%s': %s", pName, PQresultErrorMessage(pRes));
+		PQclear(pRes);
+		return false;
+	}
+	const int Id = str_toint(PQgetvalue(pRes, 0, 0));
+	PQclear(pRes);
+
+	char aId[16];
+	str_format(aId, sizeof(aId), "%d", Id);
+	const char *apMember[2] = {aLeader, aId};
+	pRes = PQexecParams(m_pConn,
+		"INSERT INTO team_members (account, team_id) VALUES ($1, $2::int);",
+		2, 0, apMember, 0, 0, 0);
+	const bool MemberOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!MemberOk)
+		dbg_msg("database", "failed to add team leader: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	if(!MemberOk)
+	{
+		char aDelete[96];
+		str_format(aDelete, sizeof(aDelete), "DELETE FROM teams WHERE id = %d;", Id);
+		PQexec(m_pConn, aDelete);
+		return false;
+	}
+
+	mem_zero(&out, sizeof(out));
+	out.m_Id = Id;
+	str_copy(out.m_aName, pName, sizeof(out.m_aName));
+	out.m_Leader = Leader;
+	out.m_FriendlyFire = FriendlyFire;
+	return true;
+}
+
+bool CDatabasePostgres::FindTeamByName(const char *pName, CDatabase::STeamData &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || !pName)
+		return false;
+	const char *apParams[1] = {pName};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"SELECT id, name, leader, friendly_fire FROM teams WHERE name = $1 LIMIT 1;",
+		1, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK || PQntuples(pRes) <= 0)
+	{
+		PQclear(pRes);
+		return false;
+	}
+	mem_zero(&out, sizeof(out));
+	out.m_Id = str_toint(PQgetvalue(pRes, 0, 0));
+	str_copy(out.m_aName, PQgetvalue(pRes, 0, 1), sizeof(out.m_aName));
+	parse_uuid(&out.m_Leader, PQgetvalue(pRes, 0, 2));
+	out.m_FriendlyFire = str_toint(PQgetvalue(pRes, 0, 3)) != 0;
+	PQclear(pRes);
+	return true;
+}
+
+bool CDatabasePostgres::FindTeamForMember(const Uuid &Account, CDatabase::STeamData &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+	const char *apParams[1] = {aAccount};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"SELECT t.id, t.name, t.leader, t.friendly_fire FROM teams t "
+		"JOIN team_members m ON m.team_id = t.id WHERE m.account = $1 LIMIT 1;",
+		1, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK || PQntuples(pRes) <= 0)
+	{
+		PQclear(pRes);
+		return false;
+	}
+	mem_zero(&out, sizeof(out));
+	out.m_Id = str_toint(PQgetvalue(pRes, 0, 0));
+	str_copy(out.m_aName, PQgetvalue(pRes, 0, 1), sizeof(out.m_aName));
+	parse_uuid(&out.m_Leader, PQgetvalue(pRes, 0, 2));
+	out.m_FriendlyFire = str_toint(PQgetvalue(pRes, 0, 3)) != 0;
+	PQclear(pRes);
+	return true;
+}
+
+bool CDatabasePostgres::ListTeams(array<CDatabase::STeamData> &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	out.clear();
+	if(!EnsureConnected())
+		return false;
+	PGresult *pRes = PQexec(m_pConn, "SELECT id, name, leader, friendly_fire FROM teams ORDER BY id;");
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+	for(int i = 0; i < PQntuples(pRes); i++)
+	{
+		CDatabase::STeamData &Team = out.emplace();
+		Team.m_Id = str_toint(PQgetvalue(pRes, i, 0));
+		str_copy(Team.m_aName, PQgetvalue(pRes, i, 1), sizeof(Team.m_aName));
+		parse_uuid(&Team.m_Leader, PQgetvalue(pRes, i, 2));
+		Team.m_FriendlyFire = str_toint(PQgetvalue(pRes, i, 3)) != 0;
+	}
+	PQclear(pRes);
+	return true;
+}
+
+bool CDatabasePostgres::LoadTeamMembers(int TeamId, array<Uuid> &out)
+{
+	CDatabaseLock Guard(m_Lock);
+	out.clear();
+	if(!EnsureConnected())
+		return false;
+	char aId[16];
+	str_format(aId, sizeof(aId), "%d", TeamId);
+	const char *apParams[1] = {aId};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"SELECT account FROM team_members WHERE team_id = $1::int ORDER BY account;",
+		1, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+	for(int i = 0; i < PQntuples(pRes); i++)
+	{
+		Uuid Account = UUID_ZEROED;
+		parse_uuid(&Account, PQgetvalue(pRes, i, 0));
+		if(Account != UUID_ZEROED)
+			out.add(Account);
+	}
+	PQclear(pRes);
+	return true;
+}
+
+bool CDatabasePostgres::AddTeamMember(int TeamId, const Uuid &Account)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+	char aId[16];
+	str_format(aId, sizeof(aId), "%d", TeamId);
+	const char *apParams[2] = {aAccount, aId};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO team_members (account, team_id) VALUES ($1, $2::int) "
+		"ON CONFLICT (account) DO UPDATE SET team_id = EXCLUDED.team_id;",
+		2, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::RemoveTeamMember(int TeamId, const Uuid &Account)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+	char aId[16];
+	str_format(aId, sizeof(aId), "%d", TeamId);
+	const char *apParams[2] = {aAccount, aId};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"DELETE FROM team_members WHERE account = $1 AND team_id = $2::int;",
+		2, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::DeleteTeam(int TeamId)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+	char aId[16];
+	str_format(aId, sizeof(aId), "%d", TeamId);
+	const char *apParams[1] = {aId};
+	PGresult *pRes = PQexecParams(m_pConn, "DELETE FROM teams WHERE id = $1::int;", 1, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::SetTeamLeader(int TeamId, const Uuid &Leader)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+	char aLeader[UUID_MAXSTRSIZE];
+	format_uuid(Leader, aLeader, sizeof(aLeader));
+	char aId[16];
+	str_format(aId, sizeof(aId), "%d", TeamId);
+	const char *apParams[2] = {aLeader, aId};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"UPDATE teams SET leader = $1 WHERE id = $2::int;", 2, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::SetTeamFriendlyFire(int TeamId, bool FriendlyFire)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+	char aId[16];
+	str_format(aId, sizeof(aId), "%d", TeamId);
+	const char *apParams[2] = {FriendlyFire ? "1" : "0", aId};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"UPDATE teams SET friendly_fire = $1::int WHERE id = $2::int;", 2, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	PQclear(pRes);
 	return Ok;
 }

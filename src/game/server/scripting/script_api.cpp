@@ -439,7 +439,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		CItemID Id;
 		if(!CItemID::Parse(ItemId.c_str(), &Id) || Id.IsZero())
 			return -1;
-		CDrillEntity *pDrill = new CDrillEntity(pWorld, vec2(X, Y), Id, MaxLength, Power, Owner);
+		const Uuid OwnerAccount = pGame->m_apPlayers[Owner]->m_AccountUuid;
+		CDrillEntity *pDrill = new CDrillEntity(pWorld, vec2(X, Y), Id, MaxLength, Power, Owner, OwnerAccount);
 		return pDrill ? pDrill->GetID() : -1;
 	});
 

@@ -82,14 +82,14 @@ public:
 	// Spawns one content-defined monster. pStableID keeps a fixed spawn stable
 	// across world reloads; null generates a fresh identity for a random spawn.
 	IBotEntity *SpawnMob(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos,
-		const Uuid *pStableID = nullptr, const char *pName = nullptr);
+		const Uuid *pStableID = nullptr, const char *pName = nullptr, bool Natural = false);
 	// Spawns a segmented worm. The returned object is not an IBotEntity; its
 	// body segments are registered as bots and report through HeadSegment().
 	CWormEntity *SpawnWorm(CGameWorld *pWorld, const SMobDef *pDef, vec2 Pos,
-		const Uuid *pStableID = nullptr);
+		const Uuid *pStableID = nullptr, bool Natural = false);
 	// Creates and registers one body segment for a worm. Used by CWormEntity.
 	IBotEntity *SpawnWormSegment(CGameWorld *pWorld, CWormEntity *pWorm, Uuid BotID,
-		const CBotTeeInfo &TeeInfo, int Team, int Faction);
+		const CBotTeeInfo &TeeInfo, int Team, int Faction, bool IsHead, bool Natural);
 	// Respawns every fixed mob definition of a world whose entity is gone.
 	void TickFixedMobs(CGameWorld *pWorld);
 	// Puts a defined NPC back into the world after its death sequence.
@@ -181,11 +181,12 @@ private:
 	// holds a bot of the client's own world or of a live ring neighbour.
 	Uuid m_aaBotIDMaps[MAX_CLIENTS][BOT_MAX_PER_CLIENT];
 
-	// Bots this world wants, capped by what one client can be shown.
-	int DesiredBotCount() const;
-	// Top up one world's population.
+	// Natural monsters this world may hold: one per 48 tiles of width, and
+	// zero when sv_bots is off. Fixed content, NPCs and bosses do not count.
+	int NaturalMonsterCap(CGameWorld *pWorld) const;
+	// Top up one world's natural monster population.
 	void TickWorld(CGameWorld *pWorld);
-	int LiveBotsInWorld(CGameWorld *pWorld) const;
+	int LiveNaturalMonstersInWorld(CGameWorld *pWorld) const;
 
 	void ClearPlayerMap(int ClientID);
 	// Drop every slot pointing at one bot.

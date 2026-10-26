@@ -18,6 +18,7 @@
 
 #include <string>
 
+#include "building.h"
 #include "gamemenu.h"
 #include "gameworld.h"
 
@@ -28,6 +29,7 @@ class CContainerSystem;
 class CContainerEntity;
 class CNpcSystem;
 class CMobSystem;
+class CTeamSystem;
 class CTradeSystem;
 class CScriptedEntitySystem;
 
@@ -173,6 +175,8 @@ public:
 	CNpcSystem *m_pNpcSystem;
 	// data/mobs/*.json: content-defined factions, abilities and fixed spawns
 	CMobSystem *m_pMobSystem;
+	// guild-style player teams (teams / team_members tables)
+	CTeamSystem *m_pTeamSystem;
 
 	class CBuffSystem *m_pBuffSystem;
 
@@ -186,6 +190,7 @@ public:
 	CTradeSystem *Trade() const { return m_pTradeSystem; }
 	CNpcSystem *Npcs() const { return m_pNpcSystem; }
 	CMobSystem *Mobs() const { return m_pMobSystem; }
+	CTeamSystem *Teams() const { return m_pTeamSystem; }
 	class CBuffSystem *Buffs() const { return m_pBuffSystem; }
 	class CScriptedEntitySystem *ScriptedEntities() const { return m_pScriptedEntities; }
 
@@ -231,9 +236,14 @@ public:
 	// enough to the client to trade with
 	bool NpcInRange(int ClientID, int DefIndex);
 
-	// persist a player's status to the database (only when the player is
-	// logged in to an account); the write is queued on the database job pool
+	// persist a player's status to the database (logged-in account or guest
+	// nickname profile); the write is queued on the database job pool
 	void SavePlayerData(class CPlayer *pPlayer);
+
+	// Give a fresh player the initial hammer/gun/ammo/bandages.
+	void GiveStartingKit(int ClientID);
+	// Bind a nickname-derived guest profile and join the game without login.
+	void SetupGuestPlayer(int ClientID);
 
 	// remove Count copies of pItemId from the player's inventory and spawn
 	// a CDroppedPickup at the player, thrown with the given initial velocity
@@ -248,6 +258,23 @@ public:
 	// Both the main menu entry and the /container command resolve their target
 	// through this, so they can never disagree.
 	CContainerEntity *AimedContainer(int ClientID);
+
+	// --- building locks ---------------------------------------------------
+	// Whether an account may use a building. Public is open, self is the owner,
+	// team also accepts members of the owner's current team.
+	bool CanUseBuilding(const CBuildAccess &Access, const Uuid &Viewer) const;
+	bool CanUseBuilding(const CBuildAccess &Access, CPlayer *pPlayer) const;
+	// The account behind a hit source (character/projectile), or zero.
+	Uuid BuildUserAccount(CEntity *pFrom) const;
+	// A null source (world damage) is allowed; a player/bot source is resolved.
+	bool CanUseBuildingAsSource(const CBuildAccess &Access, CEntity *pFrom) const;
+	// The drill or persistent scripted prop under the cursor and within reach.
+	CEntity *AimedBuildable(int ClientID);
+	// Fills the access data and display name of a buildable entity.
+	bool BuildableAccess(CEntity *pEntity, CBuildAccess *pAccess) const;
+	const char *BuildableName(CEntity *pEntity, char *pBuf, int BufSize);
+	// Set the lock of the buildable the client is aiming at; only its owner can.
+	bool SetAimedBuildLock(int ClientID, int Mode);
 
 	// helper functions
 	class CCharacter *GetPlayerChar(int ClientID);

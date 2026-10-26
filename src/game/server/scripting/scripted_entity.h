@@ -10,6 +10,7 @@
 #include <base/tl/hashtable.h>
 
 #include <game/item_id.h>
+#include <game/server/building.h>
 #include <game/server/entity.h>
 
 #include <string>
@@ -89,7 +90,7 @@ public:
 
 	CScriptedEntity(CGameWorld *pGameWorld, vec2 Pos, const char *pKind, int Module,
 		int MaxHealth, int Health, float Radius, const Uuid &OwnerAccount, int OwnerClient, bool Persistent,
-		const char *pParams, const char *pState, const char *pVisual);
+		const char *pParams, const char *pState, const char *pVisual, int LockMode = BUILD_LOCK_SELF);
 	~CScriptedEntity() override;
 
 	void Tick() override;
@@ -130,6 +131,12 @@ public:
 	float Range() const { return m_Range; }
 	const Uuid &OwnerAccount() const { return m_OwnerAccount; }
 	int OwnerClient() const { return m_OwnerClient; }
+	const CBuildAccess &Access() const { return m_Access; }
+	void SetLockMode(int Mode) { m_Access.m_LockMode = Mode; }
+	// whether a client may use this prop (heal jar, future placeables)
+	bool CanUseClient(int ClientID);
+	// closest client allowed by the lock within the prop's range, or -1
+	int AllowedPlayerNear();
 	bool Persistent() const { return m_Persistent; }
 	const std::string &State() const { return m_State; }
 	const std::string &Params() const { return m_Params; }
@@ -154,6 +161,7 @@ private:
 	int m_MaxHealth;
 	float m_Range;
 	Uuid m_OwnerAccount;
+	CBuildAccess m_Access;
 	int m_OwnerClient;
 	bool m_Persistent;
 	std::string m_Params;
@@ -189,13 +197,14 @@ public:
 	CScriptedEntity *Spawn(const char *pKind, CGameWorld *pWorld, vec2 Pos,
 		const char *pParams = nullptr, const Uuid &OwnerAccount = UUID_ZEROED,
 		int OwnerClient = -1, int Persistent = -1, int MaxHealth = 0,
-		int Health = -1, const char *pState = nullptr, bool FromLoad = false);
+		int Health = -1, const char *pState = nullptr, bool FromLoad = false,
+		int LockMode = BUILD_LOCK_SELF);
 
 	// builds the placement params of a health jar and spawns the scripted kind
 	CScriptedEntity *SpawnHealthJar(CGameWorld *pWorld, vec2 Pos, const CItemID &ItemId,
 		const Uuid &OwnerAccount, int OwnerClient, const char *pOwnerName,
 		int Cooldown, int Range, int Health, const char *pState = nullptr,
-		bool FromLoad = false);
+		bool FromLoad = false, int LockMode = BUILD_LOCK_SELF);
 
 	const SScriptedEntityDef *GetDef(const char *pKind) const;
 	int NumDefs() const { return m_lDefs.size(); }

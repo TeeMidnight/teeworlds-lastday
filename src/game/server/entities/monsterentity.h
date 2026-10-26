@@ -24,7 +24,7 @@ struct SMobDef;
 class CMonsterEntity : public CBotEntity
 {
 public:
-	CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const SMobDef *pDef, const char *pName = nullptr);
+	CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const SMobDef *pDef, const char *pName = nullptr, bool Natural = false);
 
 	// --- IBotEntity ---
 	const char *BotTypeName() const override { return "monster"; }

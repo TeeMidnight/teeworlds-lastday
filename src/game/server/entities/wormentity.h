@@ -25,10 +25,11 @@ class CWormSegmentEntity : public CBotEntity
 {
 public:
 	CWormSegmentEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeInfo &TeeInfo,
-		int Team, int Faction, CWormEntity *pWorm);
+		int Team, int Faction, CWormEntity *pWorm, bool IsHead, bool Natural);
 	~CWormSegmentEntity() override;
 
 	const char *BotTypeName() const override { return "worm_segment"; }
+	bool IsNaturalMonster() const override { return m_IsHead && m_Natural; }
 
 	void Reset() override;
 	void Tick() override {}
@@ -48,6 +49,8 @@ public:
 private:
 	CWormEntity *m_pWorm;
 	bool m_Despawning;
+	bool m_IsHead;
+	bool m_Natural;
 };
 
 /*
@@ -60,7 +63,7 @@ private:
 class CWormEntity : public CHitableEntity
 {
 public:
-	CWormEntity(CGameWorld *pWorld, vec2 Pos, const SMobDef *pDef, Uuid HeadID, const char *pName);
+	CWormEntity(CGameWorld *pWorld, vec2 Pos, const SMobDef *pDef, Uuid HeadID, const char *pName, bool Natural = false);
 	~CWormEntity() override;
 
 	void Reset() override;
@@ -95,6 +98,7 @@ private:
 	int m_WanderTimer;
 	vec2 m_WanderDir;
 	Uuid m_HeadID;
+	bool m_Natural;
 	array<Uuid> m_lSegments;
 	array<vec2> m_lPath;
 };
