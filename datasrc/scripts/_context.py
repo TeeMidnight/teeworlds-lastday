@@ -198,6 +198,9 @@ class Entity:
     def set_visual(self, visual):
         return self._api().set_visual(self.id, visual)
 
+    def release_visual(self):
+        return self._api().release_visual(self.id)
+
     def set_health(self, health):
         return self._api().set_health(self.id, health)
 

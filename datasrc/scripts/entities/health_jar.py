@@ -13,6 +13,22 @@ import lastday
 DEFAULT_COOLDOWN = 45
 DEFAULT_RANGE = 96
 
+# Snapshot ids belong to one live entity. Allocate them once when the jar
+# appears and reuse the same ids for every set_visual() call; the C++ entity
+# releases them when it is destroyed. The ids ride in state so a script reload
+# or a second setup pass (on_spawn followed by on_load) keeps the same ones;
+# on_save removes the key before the state is persisted.
+_SNAP_ID_KEY = "_snap_ids"
+
+
+def _snap_ids(ctx):
+    ids = ctx.state.get(_SNAP_ID_KEY)
+    if not isinstance(ids, list) or len(ids) != 7:
+        ids = [ctx.snap_new_id() for _ in range(6)]
+        ids.append(ctx.snap_new_id())  # the centre pickup
+        ctx.state[_SNAP_ID_KEY] = ids
+    return ids
+
 
 def _normalize(ctx):
     """Fill the state keys a fresh or an old save may be missing."""
@@ -48,12 +64,12 @@ def _set_visual(ctx):
     if ctx.entity is None:
         return
 
-    # The entity no longer reserves snapshot ids up front: the script asks for
-    # exactly what it draws and hands the ids over in set_visual(). The entity
-    # owns them from here on and releases them when the visual is replaced or
-    # the jar is destroyed, so the script must not free them itself.
-    laser_ids = [ctx.snap_new_id() for _ in range(6)]
-    pickup_id = ctx.snap_new_id()
+    # Ask for the ids once per jar and reuse them for every visual update. The
+    # C++ entity owns them from then on and releases them when the jar is
+    # destroyed, so the script must not free them itself.
+    ids = _snap_ids(ctx)
+    laser_ids = ids[:6]
+    pickup_id = ids[6]
 
     # a jar: closed bottom, straight walls, sloped shoulders and a narrow lid.
     # The pickup in the middle is a snapshot primitive only; the real pickup is
@@ -74,7 +90,9 @@ def _set_visual(ctx):
 
 
 def on_spawn(ctx):
-    _normalize(ctx)
+    state = _normalize(ctx)
+    # A recycled entity id may still carry a stale saved key; start clean.
+    state.pop(_SNAP_ID_KEY, None)
     _set_visual(ctx)
 
 
@@ -122,6 +140,7 @@ def on_hit(ctx):
 
 def on_destroy(ctx):
     state = _normalize(ctx)
+    state.pop(_SNAP_ID_KEY, None)
     item = state["item"]
     if not item or ctx.entity is None:
         return
@@ -132,4 +151,7 @@ def on_destroy(ctx):
 
 
 def on_save(ctx):
-    _normalize(ctx)
+    state = _normalize(ctx)
+    # The world is being torn down; the C++ destructor returns the ids, and
+    # dropping the key keeps the persisted state free of runtime handles.
+    state.pop(_SNAP_ID_KEY, None)

@@ -176,11 +176,25 @@ Entity callbacks: `on_spawn`, `on_load`, `on_tick`, `on_hit`, `on_destroy`,
 `on_save`. Use `lastday_entity` for spawn/destroy/visuals/drops/owner checks.
 
 A scripted entity does **not** reserve snapshot ids itself. The script asks for
-as many as it draws and passes them in the visual:
+as many as it draws **once per entity lifetime** and reuses them for every
+visual update:
 
 ```python
+_SNAP_IDS = {}
+
+def _snap_ids(ctx):
+    ids = _SNAP_IDS.get(ctx.entity.id)
+    if ids is None:
+        ids = [ctx.snap_new_id() for _ in range(2)]
+        _SNAP_IDS[ctx.entity.id] = ids
+    return ids
+
 def on_spawn(ctx):
-    ids = [ctx.snap_new_id() for _ in range(2)]
+    _SNAP_IDS.pop(ctx.entity.id, None)  # a recycled entity id starts clean
+    _set_visual(ctx)
+
+def _set_visual(ctx):
+    ids = _snap_ids(ctx)
     ctx.entity.set_visual({
         "lasers": [
             {"id": ids[0], "x1": -16, "y1": 0, "x2": 16, "y2": 0},
@@ -189,11 +203,12 @@ def on_spawn(ctx):
     })
 ```
 
-The entity takes ownership of those ids: `set_visual()` releases the previous
-ones, and the destructor releases the current ones. Scripts must not free an id
-that they passed to `set_visual()`; allocate fresh ids when replacing a visual.
-A primitive with `id < 0` (for example because the pool is exhausted) is not
-drawn.
+`set_visual()` only replaces the geometry; it does not allocate or release ids.
+The entity keeps the union of the ids it has been given and releases all of them
+when it is destroyed. `ctx.entity.release_visual()` drops the current visual and
+returns the ids early; allocate fresh ones before setting a visual again after
+that. Scripts must not free ids that they passed in. A primitive with `id < 0`
+(for example because the pool is exhausted) is not drawn.
 
 Bot AI: `sv_bot_ai` selects `chase` (default), `wander`, `stand`, a bare
 example name (`guard`), or `script:scripts/bot_ai/<name>.py`. Scripts implement

@@ -66,7 +66,7 @@ public:
 	enum
 	{
 		// one entity can draw at most this many beams / pickups, and therefore
-		// hand over at most this many snapshot ids in one set_visual() call.
+		// use at most this many snapshot ids in one set_visual() call.
 		MAX_VISUAL_LASERS = 12,
 		MAX_VISUAL_PICKUPS = 4,
 	};
@@ -107,11 +107,13 @@ public:
 	void CallSave();
 
 	// Visual primitives, set by lastday_entity.set_visual(). Every primitive
-	// carries a snapshot id that the script allocated (ctx.snap_new_id()); the
-	// entity takes ownership of those ids, releases them when the visual is
-	// replaced and when the entity is destroyed. The entity never reserves an
-	// id of its own in advance.
+	// carries a snapshot id that the script allocated once (ctx.snap_new_id())
+	// and keeps reusing; the entity takes ownership of those ids and releases
+	// them when it is destroyed or when release_visual() is called. Replacing
+	// the visual geometry must not allocate new ids.
 	void SetVisual(const char *pJson);
+	// drops the current visual and returns its owned ids to the floor pool
+	void ReleaseVisual();
 	const array<SVisualLaser> &Lasers() const { return m_lLasers; }
 	const array<SVisualPickup> &Pickups() const { return m_lPickups; }
 
@@ -136,8 +138,10 @@ public:
 private:
 	bool CallEvent(const char *pEvent, int Player, CEntity *pFrom, int Damage, int Weapon);
 	void SnapBeam(int ID, vec2 From, vec2 To, int SnappingClient);
-	// returns every snapshot id currently owned by the visual to its floor pool
+	// returns every snapshot id currently owned by the entity to its floor pool
 	void ReleaseVisualIDs();
+	// adds ID to the owned set; false for a negative id (not drawn)
+	bool TrackSnapID(int ID);
 
 	char m_aKind[64];
 	int m_Module;
@@ -155,6 +159,8 @@ private:
 
 	array<SVisualLaser> m_lLasers;
 	array<SVisualPickup> m_lPickups;
+	// union of the script-allocated ids this entity has used; freed on destroy
+	array<int> m_lSnapIDs;
 
 	bool m_bKilled;
 	// ctx["destroy"] observed in the last callback

@@ -254,18 +254,35 @@ CScriptedEntity::~CScriptedEntity()
 
 void CScriptedEntity::ReleaseVisualIDs()
 {
-	for(int i = 0; i < m_lLasers.size(); i++)
-		if(m_lLasers[i].m_ID >= 0)
-			Server()->SnapFreeID(m_lLasers[i].m_ID, SnapIDWorld());
-	for(int i = 0; i < m_lPickups.size(); i++)
-		if(m_lPickups[i].m_ID >= 0)
-			Server()->SnapFreeID(m_lPickups[i].m_ID, SnapIDWorld());
+	for(int i = 0; i < m_lSnapIDs.size(); i++)
+		Server()->SnapFreeID(m_lSnapIDs[i], SnapIDWorld());
+	m_lSnapIDs.clear();
+}
+
+bool CScriptedEntity::TrackSnapID(int ID)
+{
+	if(ID < 0)
+		return false;
+	// The same ids are passed again on every set_visual() call; only the first
+	// sighting owns them.
+	for(int i = 0; i < m_lSnapIDs.size(); i++)
+		if(m_lSnapIDs[i] == ID)
+			return true;
+	m_lSnapIDs.add(ID);
+	return true;
+}
+
+void CScriptedEntity::ReleaseVisual()
+{
+	ReleaseVisualIDs();
+	m_lLasers.clear();
+	m_lPickups.clear();
 }
 
 void CScriptedEntity::SetVisual(const char *pJson)
 {
-	// Replacing the visual returns the previous ids before taking the new ones.
-	ReleaseVisualIDs();
+	// Replacing the geometry keeps the ids the script already owns: an animated
+	// visual calls set_visual() with the same ids, it does not allocate more.
 	m_lLasers.clear();
 	m_lPickups.clear();
 	if(!pJson || !pJson[0])
@@ -298,6 +315,8 @@ void CScriptedEntity::SetVisual(const char *pJson)
 		{
 			continue;
 		}
+		if(!TrackSnapID(Laser.m_ID))
+			Laser.m_ID = -1;
 		m_lLasers.add(Laser);
 	}
 
@@ -323,6 +342,8 @@ void CScriptedEntity::SetVisual(const char *pJson)
 		{
 			continue;
 		}
+		if(!TrackSnapID(Pickup.m_ID))
+			Pickup.m_ID = -1;
 		m_lPickups.add(Pickup);
 	}
 }
@@ -758,6 +779,14 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		if(!pEntity)
 			return false;
 		pEntity->SetHealth(Health);
+		return true;
+	});
+
+	m.def("release_visual", [](int EntityID) -> bool {
+		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
+		if(!pEntity)
+			return false;
+		pEntity->ReleaseVisual();
 		return true;
 	});
 
