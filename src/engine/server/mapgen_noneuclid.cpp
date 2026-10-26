@@ -370,8 +370,17 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 
 			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
 
+			const int VariantIndex = PickStructVariant(Struct, Seed, (s + 1) * 100000 + 13);
+			if(VariantIndex < 0)
+			{
+				dbg_msg("mapgen", "struct id '%s' has no usable variant", Struct.m_aId);
+				continue;
+			}
+			const CStructVariant &Variant = Struct.m_lVariants[VariantIndex];
+			const char *pStructMapName = Variant.m_aBaseMap;
+
 			char aStructPath[IO_MAX_PATH_LENGTH];
-			str_format(aStructPath, sizeof(aStructPath), "maps/struct/%s.map", Struct.m_aBaseMap);
+			str_format(aStructPath, sizeof(aStructPath), "maps/struct/%s.map", pStructMapName);
 
 			CDataFileReader StructFile;
 			if(!StructFile.Open(Storage(), aStructPath, IStorage::TYPE_ALL))
@@ -452,7 +461,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 
 			if(!pStructGameTiles)
 			{
-				dbg_msg("mapgen", "the struct map '%s' has no game layer, skipping", Struct.m_aBaseMap);
+				dbg_msg("mapgen", "the struct map '%s' has no game layer, skipping", pStructMapName);
 				for(int st = 0; st < lStructTemplates.size(); st++)
 					delete[] lStructTemplates[st].m_pTiles;
 				continue;
@@ -580,7 +589,15 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 			}
 
 			if(MergedAnchors > 0)
-				dbg_msg("mapgen", "merged struct '%s' into '%s' (%d anchor(s))", Struct.m_aBaseMap, pFloorName, MergedAnchors);
+			{
+				char aLogName[96];
+				if(Struct.m_aId[0])
+					str_format(aLogName, sizeof(aLogName), "%s/%s", Struct.m_aId,
+						Variant.m_aSubId[0] ? Variant.m_aSubId : pStructMapName);
+				else
+					str_copy(aLogName, pStructMapName, sizeof(aLogName));
+				dbg_msg("mapgen", "merged struct '%s' into '%s' (%d anchor(s))", aLogName, pFloorName, MergedAnchors);
+			}
 
 			delete[] pStructGameTiles;
 			for(int st = 0; st < lStructTemplates.size(); st++)

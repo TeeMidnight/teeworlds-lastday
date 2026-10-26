@@ -266,6 +266,18 @@
             "base_seed": 3303
         }
     },
+    "structs": [
+        {
+            "id": "desert_ruin"
+        },
+        {
+            "id": "ruined_gate",
+            "variant": "broken"
+        },
+        {
+            "id": "watchtower"
+        }
+    ],
     "entrances": [
         {
             "entrance": "Verdant"

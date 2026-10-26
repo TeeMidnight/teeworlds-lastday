@@ -222,6 +222,75 @@ void CMapGen::WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEn
 	pWriter->EndArray();
 }
 
+
+// ---------------------------------------------------------------------------
+// structure catalog
+// ---------------------------------------------------------------------------
+void CMapGen::LoadStructCatalog()
+{
+	m_lStructCatalog.clear();
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseFile("maps/struct/catalog.json", m_pStorage, IStorage::TYPE_ALL);
+	if(!pJson || pJson->type != json_object)
+	{
+		dbg_msg("mapgen", "no struct catalog at maps/struct/catalog.json");
+		return;
+	}
+
+	const json_value &rStructs = (*pJson)["structs"];
+	for(unsigned i = 0; i < rStructs.u.array.length; i++)
+	{
+		const json_value &rEntry = rStructs[i];
+		if(rEntry.type != json_object)
+			continue;
+		const json_value &rId = rEntry["id"];
+		if(rId.type != json_string || !rId.u.string.ptr[0])
+			continue;
+
+		CStructCatalogEntry &Entry = m_lStructCatalog.emplace();
+		str_copy(Entry.m_aId, rId.u.string.ptr, sizeof(Entry.m_aId));
+		Entry.m_GenerateProba = clamp(JsonFloat(rEntry["proba"], 1.0f), 0.0f, 1.0f);
+		Entry.m_PasteAir = JsonBool(rEntry["paste_air"], true);
+		Entry.m_Count = maximum(0, JsonInt(rEntry["count"], 0));
+		Entry.m_Margin = maximum(0, JsonInt(rEntry["margin"], 24));
+		Entry.m_MinSeparation = maximum(0, JsonInt(rEntry["min_separation"], 48));
+		Entry.m_FlatWidth = maximum(0, JsonInt(rEntry["flat_width"], 0));
+		Entry.m_SurfaceOffset = JsonInt(rEntry["surface_offset"], 0);
+
+		const json_value &rVariants = rEntry["variants"];
+		for(unsigned v = 0; v < rVariants.u.array.length; v++)
+		{
+			const json_value &rVariant = rVariants[v];
+			if(rVariant.type != json_object)
+				continue;
+			const json_value &rBase = rVariant["base"];
+			if(rBase.type != json_string || !rBase.u.string.ptr[0])
+				continue;
+			CStructVariant &Variant = Entry.m_lVariants.emplace();
+			Variant.m_aSubId[0] = 0;
+			const json_value &rSubId = rVariant["sub_id"];
+			if(rSubId.type == json_string)
+				str_copy(Variant.m_aSubId, rSubId.u.string.ptr, sizeof(Variant.m_aSubId));
+			str_copy(Variant.m_aBaseMap, rBase.u.string.ptr, sizeof(Variant.m_aBaseMap));
+		}
+		if(!Entry.m_lVariants.size())
+			dbg_msg("mapgen", "struct catalog entry '%s' has no usable variant", Entry.m_aId);
+	}
+	dbg_msg("mapgen", "loaded %d struct id(s) from maps/struct/catalog.json", m_lStructCatalog.size());
+}
+
+const CStructCatalogEntry *CMapGen::FindStructCatalog(const char *pId) const
+{
+	if(!pId || !pId[0])
+		return nullptr;
+	for(int i = 0; i < m_lStructCatalog.size(); i++)
+	{
+		if(str_comp(m_lStructCatalog[i].m_aId, pId) == 0)
+			return &m_lStructCatalog[i];
+	}
+	return nullptr;
+}
+
 CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 {
 	m_pStorage = pStorage;
@@ -236,6 +305,8 @@ CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 	m_GenWorkerActive = false;
 	m_UseMapPacks = true;
 	m_DeleteGeneratedFiles = false;
+
+	LoadStructCatalog();
 
 	// load the floor instructions from the "maps/worlds" directory; each
 	// "<floorname>.json" file holds the config of one generated floor
@@ -336,14 +407,99 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 		const json_value &rStruct = rStructsArray[j];
 		if(rStruct.type != json_object)
 			continue;
-		CInstruction::CStruct &Struct = pFloor->m_Structs.emplace();
-		str_copy(Struct.m_aBaseMap, rStruct["base"], sizeof(Struct.m_aBaseMap));
-		Struct.m_GenerateProba = clamp(JsonFloat(rStruct["proba"], 0.0f), 0.0f, 1.0f);
 
-		// whether empty struct tiles overwrite the base map inside the struct
-		// region (default true, matching the previous hardcoded behavior)
+		CInstruction::CStruct &Struct = pFloor->m_Structs.emplace();
+
+		// Defaults match the old inline format, so a legacy entry that only
+		// has "base" keeps behaving exactly as before. A catalog entry starts
+		// from its own defaults below.
+		Struct.m_aId[0] = 0;
+		Struct.m_aSubId[0] = 0;
+		Struct.m_aBaseMap[0] = 0;
+		Struct.m_GenerateProba = 0.0f;
+		Struct.m_PasteAir = true;
+		Struct.m_Count = 0;
+		Struct.m_Margin = 24;
+		Struct.m_MinSeparation = 48;
+		Struct.m_FlatWidth = 0;
+		Struct.m_SurfaceOffset = 0;
+
+		const json_value &rId = rStruct["id"];
+		const json_value &rBaseValue = rStruct["base"];
+		const char *pId = rId.type == json_string ? rId.u.string.ptr : "";
+		const char *pBase = rBaseValue.type == json_string ? rBaseValue.u.string.ptr : "";
+
+		auto HasNumber = [](const json_value &rValue) -> bool
+		{
+			return rValue.type == json_integer || rValue.type == json_double;
+		};
+
+		if(pId[0])
+		{
+			str_copy(Struct.m_aId, pId, sizeof(Struct.m_aId));
+			const CStructCatalogEntry *pCatalogEntry = FindStructCatalog(pId);
+			if(pCatalogEntry)
+			{
+				Struct.m_GenerateProba = pCatalogEntry->m_GenerateProba;
+				Struct.m_PasteAir = pCatalogEntry->m_PasteAir;
+				Struct.m_Count = pCatalogEntry->m_Count;
+				Struct.m_Margin = pCatalogEntry->m_Margin;
+				Struct.m_MinSeparation = pCatalogEntry->m_MinSeparation;
+				Struct.m_FlatWidth = pCatalogEntry->m_FlatWidth;
+				Struct.m_SurfaceOffset = pCatalogEntry->m_SurfaceOffset;
+				for(int v = 0; v < pCatalogEntry->m_lVariants.size(); v++)
+					Struct.m_lVariants.add(pCatalogEntry->m_lVariants[v]);
+				if(Struct.m_lVariants.size())
+					str_copy(Struct.m_aBaseMap, Struct.m_lVariants[0].m_aBaseMap, sizeof(Struct.m_aBaseMap));
+			}
+			else
+				dbg_msg("mapgen", "floor '%s': struct id '%s' is not in maps/struct/catalog.json", pFloorName, pId);
+		}
+
+		// A literal "base" still works. It also pins a catalog id to one map,
+		// which is useful when debugging a single variant.
+		if(pBase[0])
+		{
+			Struct.m_lVariants.clear();
+			CStructVariant &Variant = Struct.m_lVariants.emplace();
+			Variant.m_aSubId[0] = 0;
+			str_copy(Variant.m_aBaseMap, pBase, sizeof(Variant.m_aBaseMap));
+			str_copy(Struct.m_aBaseMap, pBase, sizeof(Struct.m_aBaseMap));
+		}
+
+		if(!Struct.m_lVariants.size())
+		{
+			dbg_msg("mapgen", "floor '%s': struct entry %u has no base map or catalog id, skipping", pFloorName, j);
+			pFloor->m_Structs.remove_index(pFloor->m_Structs.size() - 1);
+			continue;
+		}
+
+		// Optional pin: place exactly this variant of the id. Without it the
+		// generator chooses a variant from the seed.
+		const json_value &rVariant = rStruct["variant"];
+		if(rVariant.type == json_string)
+			str_copy(Struct.m_aSubId, rVariant.u.string.ptr, sizeof(Struct.m_aSubId));
+		else if(rStruct["sub_id"].type == json_string)
+			str_copy(Struct.m_aSubId, rStruct["sub_id"].u.string.ptr, sizeof(Struct.m_aSubId));
+
+		// World overrides win over the catalog defaults. Only a present field
+		// overrides, so a catalog default of count 0 is not clobbered by the
+		// absent-field fallback.
+		if(HasNumber(rStruct["proba"]))
+			Struct.m_GenerateProba = clamp(JsonFloat(rStruct["proba"], Struct.m_GenerateProba), 0.0f, 1.0f);
+		if(HasNumber(rStruct["count"]))
+			Struct.m_Count = maximum(0, JsonInt(rStruct["count"], Struct.m_Count));
+		if(HasNumber(rStruct["margin"]))
+			Struct.m_Margin = maximum(0, JsonInt(rStruct["margin"], Struct.m_Margin));
+		if(HasNumber(rStruct["min_separation"]))
+			Struct.m_MinSeparation = maximum(0, JsonInt(rStruct["min_separation"], Struct.m_MinSeparation));
+		if(HasNumber(rStruct["flat_width"]))
+			Struct.m_FlatWidth = maximum(0, JsonInt(rStruct["flat_width"], Struct.m_FlatWidth));
+		if(HasNumber(rStruct["surface_offset"]))
+			Struct.m_SurfaceOffset = JsonInt(rStruct["surface_offset"], Struct.m_SurfaceOffset);
 		const json_value &rPasteAir = rStruct["paste_air"];
-		Struct.m_PasteAir = rPasteAir.type == json_boolean ? (bool) rPasteAir : true;
+		if(rPasteAir.type == json_boolean)
+			Struct.m_PasteAir = (bool) rPasteAir;
 
 		// the struct may carry its own entrances, configured here in
 		// worlds.json (a single object or an array); serialize them for

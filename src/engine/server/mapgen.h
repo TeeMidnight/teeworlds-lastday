@@ -16,6 +16,31 @@ struct _json_value;
 typedef struct _json_value json_value;
 struct CStructEntrance;
 
+// A structure catalog lives in maps/struct/catalog.json. One catalog entry is
+// one structure id; it owns one or more variants, each with its own base map
+// file and a short sub id. A floor refers to the id, optionally pins a variant
+// with "variant" / "sub_id", and the generator picks a variant deterministically
+// when the entry does not pin one. Listing the same id twice with two different
+// sub ids places both variants in the same world.
+struct CStructVariant
+{
+	char m_aSubId[32];
+	char m_aBaseMap[64];
+};
+
+struct CStructCatalogEntry
+{
+	char m_aId[64];
+	array<CStructVariant> m_lVariants;
+	float m_GenerateProba;
+	int m_Count;
+	int m_Margin;
+	int m_MinSeparation;
+	int m_FlatWidth;
+	int m_SurfaceOffset;
+	bool m_PasteAir;
+};
+
 // Maps a deterministic 32-bit hash onto [0,1). Probabilities in the floor
 // configs are fractions of this range (0.25 = 25%), which gives content far
 // finer control than whole percentages.
@@ -359,15 +384,41 @@ struct CInstruction
 	};
 
 	// -----------------------------------------------------------------
-	// structure pasting (used by the non euclidean worlds)
+	// structure pasting (non euclidean base maps and euclidean floors)
 	// -----------------------------------------------------------------
 	struct CStruct
 	{
+		// The catalog identity of this entry (empty for a legacy inline
+		// "base" entry) and the optional pinned variant. m_aBaseMap stays the
+		// resolved first variant so older tooling keeps a usable file name.
+		char m_aId[64];
+		char m_aSubId[32];
+		array<CStructVariant> m_lVariants;
 		char m_aBaseMap[64];
 		float m_GenerateProba; // 0..1 chance to paste this struct
 		bool m_PasteAir; // whether empty struct tiles overwrite the base (default true)
 		array<char> m_EntrancesJson; // serialized entrances json of this struct (optional)
 		array<char> m_ResourcesJson; // serialized resources json of this struct (optional)
+
+		// Euclidean placement. A static floor finds its paste anchors in the
+		// base map (the flag stands), but a euclidean floor has no authored
+		// base map to carry them. It scatters the structure along the generated
+		// ground line instead: m_Count placements per instance, each on a flat
+		// stretch of surface, m_Margin tiles away from the map edge and the
+		// ring's shared strip, and m_MinSeparation tiles from another struct.
+		// m_Count == 0 keeps the static (flag stand) behaviour.
+		int m_Count;
+		int m_Margin;
+		int m_MinSeparation;
+		// How wide the flat ground span under the structure has to be. 0 means
+		// the whole paste region, which only fits on perfectly level ground; a
+		// narrower span lets a wide structure bridge a gentle slope while its
+		// base still rests on a predictable line.
+		int m_FlatWidth;
+		// Vertical offset of the structure's bottom content row from the tile
+		// above the ground line. 0 sits the structure exactly on the ground;
+		// negative floats it above, positive sinks it into the ground.
+		int m_SurfaceOffset;
 	};
 
 	char m_aFloorName[64]; // unique floor/map name (the file name)
@@ -417,6 +468,13 @@ private:
 
 	class IStorage *Storage() { return m_pStorage; };
 	class IConsole *Console() { return m_pConsole; };
+
+	// The structure catalog, loaded once from maps/struct/catalog.json. Floor
+	// entries refer to these ids; the variants inside an entry are the map
+	// files that may be pasted for that id.
+	array<CStructCatalogEntry> m_lStructCatalog;
+	void LoadStructCatalog();
+	const CStructCatalogEntry *FindStructCatalog(const char *pId) const;
 
 	// keyed by str_quickhash of the floor name
 	hash_table<unsigned, CInstruction *, 4> m_lInstructions;

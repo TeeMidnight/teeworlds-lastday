@@ -514,6 +514,29 @@ static inline bool RollChance(int Seed, int Salt, float Probability)
 	return HashToUnitFloat(DeterministicHash(Seed, Salt)) < Probability;
 }
 
+// Chooses the variant of a structure for this instance. A pinned sub id wins;
+// otherwise the variant is a deterministic function of the seed and salt, so
+// the same generated instance always pastes the same variant. Returns -1 when
+// the entry has no usable map.
+static inline int PickStructVariant(const CInstruction::CStruct &rStruct, int Seed, int Salt)
+{
+	const int NumVariants = rStruct.m_lVariants.size();
+	if(NumVariants <= 0)
+		return -1;
+	if(rStruct.m_aSubId[0])
+	{
+		for(int i = 0; i < NumVariants; i++)
+		{
+			if(str_comp(rStruct.m_lVariants[i].m_aSubId, rStruct.m_aSubId) == 0)
+				return i;
+		}
+		return 0; // pinned variant not found: fall back to the first
+	}
+	if(NumVariants == 1)
+		return 0;
+	return (int) (DeterministicHash(Seed, Salt) % (unsigned) NumVariants);
+}
+
 // deterministic 1-in-N roll, matching the "random" field of the automapper
 static inline bool RollOneIn(int Seed, int Salt, int Chance)
 {

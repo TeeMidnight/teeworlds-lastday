@@ -284,6 +284,17 @@
             "base_seed": 1101
         }
     },
+    "structs": [
+        {
+            "id": "ruined_gate"
+        },
+        {
+            "id": "watchtower"
+        },
+        {
+            "id": "camp"
+        }
+    ],
     "entrances": [
         {
             "entrance": "Connector"

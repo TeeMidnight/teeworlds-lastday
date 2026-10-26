@@ -254,6 +254,17 @@
             "base_seed": 4404
         }
     },
+    "structs": [
+        {
+            "id": "frost_gate"
+        },
+        {
+            "id": "frost_shrine"
+        },
+        {
+            "id": "camp"
+        }
+    ],
     "entrances": [
         {
             "entrance": "Hollow"

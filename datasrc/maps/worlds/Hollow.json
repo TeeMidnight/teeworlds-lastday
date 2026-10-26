@@ -220,6 +220,23 @@
             "base_seed": 2202
         }
     },
+    "structs": [
+        {
+            "id": "jungle_shrine"
+        },
+        {
+            "id": "ruined_gate",
+            "variant": "mossy"
+        },
+        {
+            "id": "ruined_gate",
+            "variant": "broken"
+        },
+        {
+            "id": "camp",
+            "variant": "abandoned"
+        }
+    ],
     "entrances": [
         {
             "entrance": "Highlands"

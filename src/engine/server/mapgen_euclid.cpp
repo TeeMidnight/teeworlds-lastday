@@ -108,6 +108,756 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 	dbg_msg("worldgen", "surface resources: %d node(s)", Placed);
 }
 
+
+// ---------------------------------------------------------------------------
+// euclidean structure pasting
+//
+// A euclidean floor has no authored base map, so it cannot carry the flag
+// stand anchors a static floor uses. Instead the structures listed in its
+// "structs" block are scattered along the generated ground line: each one is
+// dropped onto a flat stretch of surface, clear of the entrances, the spawn
+// points, the ring's shared strip and the other structures. Their tiles merge
+// into the terrain/game layers and their world-space quads merge into a
+// world-parallax group of the generated map, which is what lets a structure be
+// drawn from coloured quads instead of a baked tileset.
+// ---------------------------------------------------------------------------
+
+struct SImageRequest
+{
+	char m_aName[64];
+	int m_Width;
+	int m_Height;
+	bool m_Optional;
+};
+
+// One tile layer of a struct map that is merged into a layer of the generated
+// map. Only layers of the struct's "Template" group are collected.
+struct SEuclidStructTemplateLayer
+{
+	char m_aName[32];
+	int m_Width;
+	int m_Height;
+	CTile *m_pTiles;
+};
+
+// One quad layer of a struct map, restricted to world-space groups (parallax
+// 100). Background groups (sky, parallax 0) are deliberately not collected:
+// pasting a screen sized sky quad over a generated world would hide it.
+struct SEuclidStructQuadLayer
+{
+	char m_aImage[32];
+	int m_OffsetX; // group offset, map pixels
+	int m_OffsetY;
+	array<CQuad> m_lQuads;
+};
+
+// A struct map decoded into memory. The caller owns the tile buffers and must
+// call FreeEuclidStructMap.
+struct SEuclidStructMap
+{
+	CTile *m_pGameTiles;
+	int m_GameWidth;
+	int m_GameHeight;
+	int m_RedX, m_RedY, m_BlueX, m_BlueY;
+	int m_MinX, m_MinY, m_MaxX, m_MaxY;
+	array<SEuclidStructTemplateLayer> m_lTemplates;
+	array<SEuclidStructQuadLayer> m_lQuadLayers;
+
+	// the paste region (struct coordinates), derived from the flag stands
+	int m_RegionX1, m_RegionY1, m_RegionX2, m_RegionY2;
+	int m_BottomLeftX, m_BottomLeftY;
+	int m_TopRightX, m_TopRightY;
+	int m_StructLeftX, m_StructTopY;
+	int m_ContentWidth;
+	int m_ContentHeight;
+
+	// The columns (struct coordinates) where the structure actually touches
+	// the ground: the solid tiles of its bottom two content rows. Placement
+	// requires level ground under exactly these, so a gate or tower rests on
+	// its pillars/legs instead of floating over a dip between them. -1 when the
+	// structure has no collision at its foot (art only); the configured
+	// flat_width is used then.
+	int m_ContactMinX;
+	int m_ContactMaxX;
+};
+
+struct SEuclidPlacementRect
+{
+	int m_X0, m_Y0, m_X1, m_Y1;
+};
+
+static void FreeEuclidStructMap(SEuclidStructMap &rMap)
+{
+	delete[] rMap.m_pGameTiles;
+	rMap.m_pGameTiles = nullptr;
+	for(int i = 0; i < rMap.m_lTemplates.size(); i++)
+		delete[] rMap.m_lTemplates[i].m_pTiles;
+	rMap.m_lTemplates.clear();
+	rMap.m_lQuadLayers.clear();
+}
+
+static CCreatorImage *FindRequestedImage(const array<SImageRequest> &lRequests,
+	const array<CCreatorImage *> &lCreatorImages, const char *pName)
+{
+	if(!pName || !pName[0])
+		return nullptr;
+	for(int i = 0; i < lRequests.size(); i++)
+	{
+		if(str_comp(lRequests[i].m_aName, pName) == 0)
+			return lCreatorImages[i];
+	}
+	return nullptr;
+}
+
+// Decodes a struct map: the game layer, the template tile layers and the
+// world-space quad layers. The paste region is the one bounded by the red and
+// blue flag stands, exactly like the static (non euclidean) merge; a euclidean
+// structure therefore has to carry both flags even though they are consumed by
+// the merge and never reach the generated map.
+static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, SEuclidStructMap &rMap)
+{
+	rMap.m_pGameTiles = nullptr;
+	rMap.m_GameWidth = 0;
+	rMap.m_GameHeight = 0;
+	rMap.m_RedX = rMap.m_RedY = rMap.m_BlueX = rMap.m_BlueY = -1;
+	rMap.m_MinX = rMap.m_MinY = 1 << 30;
+	rMap.m_MaxX = rMap.m_MaxY = -1;
+	rMap.m_RegionX1 = rMap.m_RegionY1 = 0;
+	rMap.m_RegionX2 = rMap.m_RegionY2 = -1;
+	rMap.m_BottomLeftX = rMap.m_BottomLeftY = 0;
+	rMap.m_TopRightX = rMap.m_TopRightY = 0;
+	rMap.m_StructLeftX = rMap.m_StructTopY = 0;
+	rMap.m_ContentWidth = 0;
+	rMap.m_ContentHeight = 0;
+	rMap.m_ContactMinX = rMap.m_ContactMaxX = -1;
+
+	char aPath[IO_MAX_PATH_LENGTH];
+	str_format(aPath, sizeof(aPath), "maps/struct/%s.map", pBaseMap);
+
+	CDataFileReader File;
+	if(!File.Open(pStorage, aPath, IStorage::TYPE_ALL))
+	{
+		dbg_msg("mapgen", "failed to open the struct map '%s'", aPath);
+		return false;
+	}
+
+	int GroupsStart, GroupsNum, LayersStart, LayersNum, ImagesStart, ImagesNum;
+	File.GetType(MAPITEMTYPE_GROUP, &GroupsStart, &GroupsNum);
+	File.GetType(MAPITEMTYPE_LAYER, &LayersStart, &LayersNum);
+	File.GetType(MAPITEMTYPE_IMAGE, &ImagesStart, &ImagesNum);
+
+	// external image names, so a quad layer can be resolved to a creator image
+	struct SStructImageName
+	{
+		char m_aName[32];
+	};
+	array<SStructImageName> lImageNames;
+	for(int i = 0; i < ImagesNum; i++)
+	{
+		CMapItemImage *pImage = (CMapItemImage *) File.GetItem(ImagesStart + i, 0, 0);
+		SStructImageName &Name = lImageNames.emplace();
+		Name.m_aName[0] = 0;
+		if(pImage && pImage->m_External)
+		{
+			const char *pImageName = (const char *) File.GetData(pImage->m_ImageName);
+			if(pImageName)
+				str_copy(Name.m_aName, pImageName, sizeof(Name.m_aName));
+		}
+	}
+
+	for(int g = 0; g < GroupsNum; g++)
+	{
+		CMapItemGroup *pGroup = (CMapItemGroup *) File.GetItem(GroupsStart + g, 0, 0);
+		if(!pGroup)
+			continue;
+		char aGroupName[32];
+		IntsToStr(pGroup->m_aName, sizeof(pGroup->m_aName) / sizeof(int), aGroupName);
+		const bool IsTemplateGroup = str_comp(aGroupName, "Template") == 0;
+
+		// Only world-space quads are structure art. Sky/quads at another
+		// parallax belong to the struct's own preview canvas.
+		const bool IsWorldGroup = pGroup->m_ParallaxX == 100 && pGroup->m_ParallaxY == 100;
+
+		for(int l = 0; l < pGroup->m_NumLayers; l++)
+		{
+			const int LayerItem = LayersStart + pGroup->m_StartLayer + l;
+			if(LayerItem < 0 || LayerItem >= LayersStart + LayersNum)
+				continue;
+			CMapItemLayer *pLayer = (CMapItemLayer *) File.GetItem(LayerItem, 0, 0);
+			if(!pLayer)
+				continue;
+
+			if(pLayer->m_Type == LAYERTYPE_TILES || pLayer->m_Type == LAYERTYPE_GAME)
+			{
+				CMapItemLayerTilemap *pTilemap = (CMapItemLayerTilemap *) pLayer;
+				char aLayerName[32];
+				IntsToStr(pTilemap->m_aName, sizeof(pTilemap->m_aName) / sizeof(int), aLayerName);
+				CTile *pTiles = LoadTiles(&File, pTilemap->m_Data, pTilemap->m_Width, pTilemap->m_Height);
+
+				if(pTilemap->m_Flags & TILESLAYERFLAG_GAME)
+				{
+					delete[] rMap.m_pGameTiles;
+					rMap.m_pGameTiles = pTiles;
+					rMap.m_GameWidth = pTilemap->m_Width;
+					rMap.m_GameHeight = pTilemap->m_Height;
+				}
+				else if(IsTemplateGroup)
+				{
+					SEuclidStructTemplateLayer &Template = rMap.m_lTemplates.emplace();
+					str_copy(Template.m_aName, aLayerName, sizeof(Template.m_aName));
+					Template.m_Width = pTilemap->m_Width;
+					Template.m_Height = pTilemap->m_Height;
+					Template.m_pTiles = pTiles;
+				}
+				else
+					delete[] pTiles;
+			}
+			else if(pLayer->m_Type == LAYERTYPE_QUADS && IsWorldGroup)
+			{
+				CMapItemLayerQuads *pQuadsLayer = (CMapItemLayerQuads *) pLayer;
+				SEuclidStructQuadLayer &QuadLayer = rMap.m_lQuadLayers.emplace();
+				QuadLayer.m_OffsetX = pGroup->m_OffsetX;
+				QuadLayer.m_OffsetY = pGroup->m_OffsetY;
+				QuadLayer.m_aImage[0] = 0;
+				if(pQuadsLayer->m_Image >= 0 && pQuadsLayer->m_Image < lImageNames.size())
+					str_copy(QuadLayer.m_aImage, lImageNames[pQuadsLayer->m_Image].m_aName, sizeof(QuadLayer.m_aImage));
+
+				if(pQuadsLayer->m_NumQuads > 0)
+				{
+					CQuad *pSrc = (CQuad *) File.GetData(pQuadsLayer->m_Data);
+					if(pSrc)
+					{
+						QuadLayer.m_lQuads.set_size(pQuadsLayer->m_NumQuads);
+						mem_copy(QuadLayer.m_lQuads.base_ptr(), pSrc, sizeof(CQuad) * pQuadsLayer->m_NumQuads);
+					}
+				}
+			}
+		}
+	}
+
+	if(!rMap.m_pGameTiles)
+	{
+		dbg_msg("mapgen", "the euclid struct map '%s' has no game layer, skipping", pBaseMap);
+		FreeEuclidStructMap(rMap);
+		return false;
+	}
+
+	ScanStructTiles(rMap.m_pGameTiles, rMap.m_GameWidth, rMap.m_GameHeight,
+		&rMap.m_RedX, &rMap.m_RedY, &rMap.m_BlueX, &rMap.m_BlueY,
+		&rMap.m_MinX, &rMap.m_MinY, &rMap.m_MaxX, &rMap.m_MaxY);
+	for(int t = 0; t < rMap.m_lTemplates.size(); t++)
+	{
+		SEuclidStructTemplateLayer &Template = rMap.m_lTemplates[t];
+		ScanStructTiles(Template.m_pTiles, Template.m_Width, Template.m_Height,
+			&rMap.m_RedX, &rMap.m_RedY, &rMap.m_BlueX, &rMap.m_BlueY,
+			&rMap.m_MinX, &rMap.m_MinY, &rMap.m_MaxX, &rMap.m_MaxY);
+	}
+
+	// A euclidean structure needs both flags: there is no other way to know
+	// where its content starts and ends, and a missing flag would make the
+	// bounding box of the art decide the paste region.
+	if(rMap.m_RedX < 0 || rMap.m_RedY < 0 || rMap.m_BlueX < 0 || rMap.m_BlueY < 0)
+	{
+		dbg_msg("mapgen", "the euclid struct map '%s' has no red/blue flag stand anchors, skipping", pBaseMap);
+		FreeEuclidStructMap(rMap);
+		return false;
+	}
+
+	// The same region math as CMapGen::GenerateNoneuclid. The red flag sits
+	// one tile left of and one tile below the content's bottom-left corner, the
+	// blue flag one tile right of and one tile above its top-right corner.
+	const bool HasContent = rMap.m_MaxX >= 0 && rMap.m_MaxY >= 0;
+	rMap.m_BottomLeftX = rMap.m_RedX + 1;
+	rMap.m_BottomLeftY = rMap.m_RedY - 1;
+	rMap.m_TopRightX = rMap.m_BlueX - 1;
+	rMap.m_TopRightY = rMap.m_BlueY + 1;
+	rMap.m_StructLeftX = rMap.m_BottomLeftX;
+	rMap.m_StructTopY = rMap.m_TopRightY;
+	rMap.m_RegionX1 = rMap.m_StructLeftX;
+	rMap.m_RegionY1 = rMap.m_StructTopY;
+	rMap.m_RegionX2 = rMap.m_TopRightX;
+	rMap.m_RegionY2 = rMap.m_BottomLeftY;
+	(void) HasContent;
+	rMap.m_ContentWidth = rMap.m_RegionX2 - rMap.m_RegionX1 + 1;
+	rMap.m_ContentHeight = rMap.m_RegionY2 - rMap.m_RegionY1 + 1;
+	if(rMap.m_ContentWidth <= 0 || rMap.m_ContentHeight <= 0)
+	{
+		dbg_msg("mapgen", "the euclid struct map '%s' has an empty paste region, skipping", pBaseMap);
+		FreeEuclidStructMap(rMap);
+		return false;
+	}
+
+	// Footprint contact points: the bottom two content rows of the game layer.
+	// They are where the structure's own collision meets the ground.
+	int ContactMinX = 1 << 30;
+	int ContactMaxX = -1;
+	for(int y = maximum(rMap.m_RegionY1, rMap.m_RegionY2 - 1); y <= rMap.m_RegionY2; y++)
+	{
+		for(int x = rMap.m_RegionX1; x <= rMap.m_RegionX2; x++)
+		{
+			const int Index = rMap.m_pGameTiles[y * rMap.m_GameWidth + x].m_Index;
+			if(Index == 0 || Index >= ENTITY_OFFSET)
+				continue;
+			ContactMinX = minimum(ContactMinX, x);
+			ContactMaxX = maximum(ContactMaxX, x);
+		}
+	}
+	if(ContactMaxX >= 0)
+	{
+		rMap.m_ContactMinX = ContactMinX;
+		rMap.m_ContactMaxX = ContactMaxX;
+	}
+	return true;
+}
+
+// Pastes the struct's tiles into the already emitted creator layers. The merge
+// is additive (transparent paste): the generated terrain stays where the
+// structure has no tile, so a quad-only structure does not punch holes into the
+// ground and a structure never erases an entrance frame or a spawn point.
+static void PasteEuclidStructTiles(const SEuclidStructMap &rMap,
+	int OffsetX, int OffsetY,
+	CCreatorLayerTilemap *pTerrain, CCreatorLayerTilemap *pGame, CCreatorLayerTilemap *pUnhookable)
+{
+	if(pGame && rMap.m_pGameTiles)
+	{
+		PasteTiles(pGame->m_pTiles, pGame->m_Width, pGame->m_Height,
+			rMap.m_pGameTiles, rMap.m_GameWidth, rMap.m_GameHeight,
+			OffsetX, OffsetY, false, rMap.m_RegionX1, rMap.m_RegionY1, rMap.m_RegionX2, rMap.m_RegionY2, true);
+	}
+
+	for(int t = 0; t < rMap.m_lTemplates.size(); t++)
+	{
+		const SEuclidStructTemplateLayer &Template = rMap.m_lTemplates[t];
+		CCreatorLayerTilemap *pDst = pTerrain;
+		if(pUnhookable && str_comp(Template.m_aName, "Unhookable") == 0)
+			pDst = pUnhookable;
+		if(!pDst)
+			continue;
+		PasteTiles(pDst->m_pTiles, pDst->m_Width, pDst->m_Height,
+			Template.m_pTiles, Template.m_Width, Template.m_Height,
+			OffsetX, OffsetY, false, rMap.m_RegionX1, rMap.m_RegionY1, rMap.m_RegionX2, rMap.m_RegionY2);
+	}
+}
+
+// Merges the struct's world-space quads into the "Structures" group. Quads are
+// translated in fixed point (the map stores 22.10 pixel coordinates) by the
+// paste offset and by the struct group's own offset; the pivot (point 4) moves
+// with them. Envelopes are not carried over: the generated maps already use
+// their envelope table for the day/night cycle, and a structure that needs an
+// animated quad can be drawn as a static one instead.
+struct SEuclidDestQuadLayer
+{
+	char m_aImage[32];
+	CCreatorLayerQuads *m_pLayer;
+};
+
+static void PasteEuclidStructQuads(const SEuclidStructMap &rMap, int OffsetX, int OffsetY,
+	const char *pStructName, CCreatorGroupInfo *pGroup,
+	const array<SImageRequest> &lRequests, const array<CCreatorImage *> &lCreatorImages)
+{
+	if(!rMap.m_lQuadLayers.size())
+		return;
+
+	array<SEuclidDestQuadLayer> lDestLayers;
+
+	for(int l = 0; l < rMap.m_lQuadLayers.size(); l++)
+	{
+		const SEuclidStructQuadLayer &Src = rMap.m_lQuadLayers[l];
+
+		SEuclidDestQuadLayer *pDest = nullptr;
+		for(int d = 0; d < lDestLayers.size(); d++)
+		{
+			if(str_comp(lDestLayers[d].m_aImage, Src.m_aImage) == 0)
+			{
+				pDest = &lDestLayers[d];
+				break;
+			}
+		}
+		if(!pDest)
+		{
+			SEuclidDestQuadLayer &NewDest = lDestLayers.emplace();
+			str_copy(NewDest.m_aImage, Src.m_aImage, sizeof(NewDest.m_aImage));
+
+			char aLayerName[32];
+			if(lDestLayers.size() == 1)
+				str_copy(aLayerName, pStructName, sizeof(aLayerName));
+			else
+				str_format(aLayerName, sizeof(aLayerName), "%s_%d", pStructName, lDestLayers.size());
+
+			NewDest.m_pLayer = pGroup->AddQuadsLayer(aLayerName);
+			NewDest.m_pLayer->m_pImage = FindRequestedImage(lRequests, lCreatorImages, Src.m_aImage);
+			pDest = &NewDest;
+		}
+
+		// group offsets are map pixels; quad corners are fixed point pixels
+		const int FixedX = (OffsetX * 32 + Src.m_OffsetX) * 1024;
+		const int FixedY = (OffsetY * 32 + Src.m_OffsetY) * 1024;
+
+		for(int q = 0; q < Src.m_lQuads.size(); q++)
+		{
+			const CQuad &SrcQuad = Src.m_lQuads[q];
+			CCreatorQuad *pDst = pDest->m_pLayer->AddQuad(vec2(0.0f, 0.0f), vec2(0.0f, 0.0f));
+			for(int k = 0; k < 4; k++)
+			{
+				pDst->m_aPoints[k] = ivec2(SrcQuad.m_aPoints[k].x + FixedX, SrcQuad.m_aPoints[k].y + FixedY);
+				pDst->m_aTexcoords[k] = ivec2(SrcQuad.m_aTexcoords[k].x, SrcQuad.m_aTexcoords[k].y);
+				pDst->m_aColors[k] = ColorRGBA(
+					SrcQuad.m_aColors[k].r, SrcQuad.m_aColors[k].g,
+					SrcQuad.m_aColors[k].b, SrcQuad.m_aColors[k].a);
+			}
+			pDst->m_Pos = ivec2(SrcQuad.m_aPoints[4].x + FixedX, SrcQuad.m_aPoints[4].y + FixedY);
+			pDst->m_pColorEnv = nullptr;
+			pDst->m_pPosEnv = nullptr;
+		}
+	}
+}
+
+// Scatters every euclidean structure over the generated ground line and merges
+// the placed ones. Called after the terrain/game layers were emitted and before
+// the foreground and night shade groups, so the structure art sits over the
+// terrain but under the final shade.
+static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed, CGeneratedWorld *pWorld,
+	IStorage *pStorage, CCreatorGroupInfo *pStructGroup,
+	CCreatorLayerTilemap *pTerrainLayer, CCreatorLayerTilemap *pGameLayer,
+	CCreatorLayerTilemap *pUnhookableLayer, CCreatorLayerTilemap *pWallLayer,
+	CCreatorLayerTilemap *pDoodadsLayer,
+	const array<SImageRequest> &lRequests, const array<CCreatorImage *> &lCreatorImages)
+{
+	const CInstruction::CGeneration &Gen = pInstruction->m_Generation;
+	const int Width = Gen.m_Width;
+	const int Height = Gen.m_Height;
+	const int SharedMargin = Gen.m_Ring.m_Enabled ? Gen.m_Ring.m_SharedMargin : 0;
+	if(pWorld->m_Surface.size() < Width || pWorld->m_lLayers.size() < 3)
+		return;
+
+	array<SEuclidPlacementRect> lOccupied;
+	int TotalPlaced = 0;
+
+	for(int s = 0; s < pInstruction->m_Structs.size(); s++)
+	{
+		const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
+		if(Struct.m_Count <= 0)
+			continue;
+
+		const int VariantIndex = PickStructVariant(Struct, Seed, (s + 1) * 100000 + 13);
+		if(VariantIndex < 0)
+		{
+			dbg_msg("mapgen", "euclid struct '%s': no usable variant", Struct.m_aId);
+			continue;
+		}
+		const CStructVariant &Variant = Struct.m_lVariants[VariantIndex];
+		const char *pStructMapName = Variant.m_aBaseMap;
+
+		SEuclidStructMap StructMap;
+		if(!LoadEuclidStructMap(pStorage, pStructMapName, StructMap))
+			continue;
+
+		const int RegionWidth = StructMap.m_ContentWidth;
+		const int RegionHeight = StructMap.m_ContentHeight;
+
+		// Place on a flat span that may be narrower than the whole paste
+		// region: a gate or a tower can bridge a gentle slope at its feet.
+		// The span is the structure's actual foot contact (bottom collision
+		// tiles) when it has one, so two pillars cannot land on different
+		// levels; an art-only structure falls back to the configured width.
+		int ContactStart = 0; // the span that has to be level
+		int ContactEnd = RegionWidth - 1;
+		int FullStart = 0;    // every foot contact, used to pick the base line
+		int FullEnd = RegionWidth - 1;
+		if(StructMap.m_ContactMaxX >= 0)
+		{
+			FullStart = clamp(StructMap.m_ContactMinX - StructMap.m_RegionX1, 0, RegionWidth - 1);
+			FullEnd = clamp(StructMap.m_ContactMaxX - StructMap.m_RegionX1, FullStart, RegionWidth - 1);
+			ContactStart = FullStart;
+			ContactEnd = FullEnd;
+
+			// A wide camp can have its footprint spread over several tiles of
+			// terrain. The optional flat_width caps the part that has to be
+			// level; the outer contacts may sit a little higher and simply sink
+			// into the ground, which is what a real foundation does.
+			const int FlatWidth = clamp(Struct.m_FlatWidth, 0, RegionWidth);
+			if(FlatWidth > 0 && ContactEnd - ContactStart + 1 > FlatWidth)
+			{
+				const int Centre = (ContactStart + ContactEnd) / 2;
+				ContactStart = clamp(Centre - FlatWidth / 2, 0, RegionWidth - FlatWidth);
+				ContactEnd = ContactStart + FlatWidth - 1;
+			}
+		}
+		else
+		{
+			const int FlatWidth = clamp(Struct.m_FlatWidth > 0 ? Struct.m_FlatWidth : RegionWidth, 1, RegionWidth);
+			ContactStart = (RegionWidth - FlatWidth) / 2;
+			ContactEnd = ContactStart + FlatWidth - 1;
+			FullStart = ContactStart;
+			FullEnd = ContactEnd;
+		}
+
+		const int RangeStart = Struct.m_Margin + SharedMargin;
+		const int RangeEnd = Width - Struct.m_Margin - SharedMargin - RegionWidth;
+		if(RangeEnd < RangeStart)
+		{
+			dbg_msg("mapgen", "euclid struct '%s': no room on a %d tile wide floor", pStructMapName, Width);
+			FreeEuclidStructMap(StructMap);
+			continue;
+		}
+
+		for(int p = 0; p < Struct.m_Count; p++)
+		{
+			// Keep the per-instance determinism of the rest of the generator;
+			// the salt is distinct from the static anchor rolls.
+			if(!RollChance(Seed, (s + 1) * 1000 + (p + 1) * 37, Struct.m_GenerateProba))
+				continue;
+
+			// One placement per equal band, so the structures cover the whole
+			// width instead of clustering where the first flat spot happens.
+			const int Span = RangeEnd - RangeStart + 1;
+			const int BandStart = RangeStart + (int) ((long long) Span * p / Struct.m_Count);
+			const int BandEnd = RangeStart + (int) ((long long) Span * (p + 1) / Struct.m_Count) - 1;
+			if(BandEnd < BandStart)
+				continue;
+			const int BandLength = BandEnd - BandStart + 1;
+			const int StartX = BandStart + (int) (DeterministicHash(Seed, (s + 1) * 100000 + (p + 1) * 777 + 13) % (unsigned) BandLength);
+
+			auto IsEligible = [&](int ContentX, int *pRegionVar, int *pFullVar, int *pFlatVar) -> bool
+			{
+				const int FlatStart = ContentX + ContactStart;
+				const int FlatEnd = ContentX + ContactEnd;
+				const int FullFlatStart = ContentX + FullStart;
+				const int FullFlatEnd = ContentX + FullEnd;
+				int FlatMinY = 1 << 30;
+				int FlatMaxY = -1;
+				int FullMinY = 1 << 30;
+				int FullMaxY = -1;
+				int RegionMinY = 1 << 30;
+				int RegionMaxY = -1;
+				for(int tx = ContentX; tx < ContentX + RegionWidth; tx++)
+				{
+					if(tx < 0 || tx >= pWorld->m_Surface.size())
+						return false;
+					const int SurfaceY = pWorld->m_Surface[tx];
+					RegionMinY = minimum(RegionMinY, SurfaceY);
+					RegionMaxY = maximum(RegionMaxY, SurfaceY);
+					if(tx >= FlatStart && tx <= FlatEnd)
+					{
+						FlatMinY = minimum(FlatMinY, SurfaceY);
+						FlatMaxY = maximum(FlatMaxY, SurfaceY);
+					}
+					if(tx >= FullFlatStart && tx <= FullFlatEnd)
+					{
+						FullMinY = minimum(FullMinY, SurfaceY);
+						FullMaxY = maximum(FullMaxY, SurfaceY);
+					}
+				}
+				// Two tiles of tolerance under the feet, and four across the
+				// whole footprint. The terrain is procedural, so demanding a
+				// perfectly level 20 tile footprint would leave most floors
+				// without room for a structure. Aligning to the lower ground
+				// line embeds the higher contacts by at most two tiles, which
+				// reads as a foundation rather than a floating structure.
+				if(FlatMaxY - FlatMinY > 2)
+					return false;
+				// The outer contacts may sit higher than the level span, but
+				// not so much that they would be buried completely.
+				if(FullMaxY - FullMinY > 4)
+					return false;
+				if(RegionMaxY - RegionMinY > 4)
+					return false;
+				*pRegionVar = RegionMaxY - RegionMinY;
+				*pFullVar = FullMaxY - FullMinY;
+				*pFlatVar = FlatMaxY - FlatMinY;
+
+				const int BaseY = FlatMaxY; // the lower ground line under the feet
+				const int AnchorY = BaseY - 1 + Struct.m_SurfaceOffset;
+				const int TopY = AnchorY - (RegionHeight - 1);
+				if(TopY < 0 || AnchorY >= Height)
+					return false;
+
+				const SEuclidPlacementRect Candidate = {ContentX, TopY, ContentX + RegionWidth - 1, AnchorY};
+
+				// Do not cover a surface entrance. An unrestricted x range is
+				// ignored rather than treated as "the whole map": an entrance
+				// that spans the world does not pin a single structure.
+				const int Pad = Gen.m_SurfaceEntrances.m_Frame + 3;
+				for(int e = 0; e < pWorld->m_lEntrances.size(); e++)
+				{
+					const CGeneratedWorld::CEntrance &Entrance = pWorld->m_lEntrances[e];
+					if(Entrance.m_StartX == INT_MIN || Entrance.m_EndX == INT_MAX)
+						continue;
+					if(ContentX <= Entrance.m_EndX + Pad && Candidate.m_X1 >= Entrance.m_StartX - Pad)
+						return false;
+				}
+
+				// Keep the configured gap from the structures already placed.
+				const int Sep = Struct.m_MinSeparation;
+				for(int o = 0; o < lOccupied.size(); o++)
+				{
+					const SEuclidPlacementRect &Other = lOccupied[o];
+					if(Candidate.m_X0 <= Other.m_X1 + Sep && Candidate.m_X1 >= Other.m_X0 - Sep &&
+						Candidate.m_Y0 <= Other.m_Y1 + Sep && Candidate.m_Y1 >= Other.m_Y0 - Sep)
+						return false;
+				}
+				return true;
+			};
+
+			// Score every eligible column in the band and take the flattest,
+			// not the first one. Now that the art is drawn behind the terrain,
+			// a column whose ground rises in front of the structure hides a
+			// large part of it; the flattest available shelf reads best.
+			int ChosenX = -1;
+			int BestScore = INT_MAX;
+			for(int attempt = 0; attempt < BandLength; attempt++)
+			{
+				const int ContentX = BandStart + (StartX - BandStart + attempt) % BandLength;
+				int RegionVar = 0, FullVar = 0, FlatVar = 0;
+				if(!IsEligible(ContentX, &RegionVar, &FullVar, &FlatVar))
+					continue;
+				const int Score = RegionVar * 100 + FullVar * 10 + FlatVar;
+				if(Score < BestScore)
+				{
+					BestScore = Score;
+					ChosenX = ContentX;
+				}
+			}
+			if(ChosenX < 0)
+			{
+				dbg_msg("mapgen", "euclid struct '%s': no flat ground in band %d/%d",
+					pStructMapName, p + 1, Struct.m_Count);
+				continue;
+			}
+
+			const int BaseY = [&]() {
+				// Align to the lowest ground under any foot contact, so no
+				// contact floats; the higher ones sink into the terrain.
+				const int FlatStart = ChosenX + FullStart;
+				const int FlatEnd = ChosenX + FullEnd;
+				int MaxY = 0;
+				for(int tx = FlatStart; tx <= FlatEnd; tx++)
+					MaxY = maximum(MaxY, pWorld->m_Surface[tx]);
+				return MaxY;
+			}();
+			const int AnchorY = BaseY - 1 + Struct.m_SurfaceOffset;
+			const int OffsetX = ChosenX - StructMap.m_BottomLeftX;
+			const int OffsetY = AnchorY - StructMap.m_BottomLeftY;
+
+			// Cut a level shelf for the structure. The structures are drawn
+			// behind the terrain, so a hillside in front would hide their lower
+			// part; levelling the footprint makes the ground meet the plinth
+			// instead of covering the art. Only higher ground is cut away, the
+			// lower ground under an arch is left alone.
+			if(pTerrainLayer && pGameLayer)
+			{
+				for(int tx = ChosenX; tx < ChosenX + RegionWidth && tx < Width; tx++)
+				{
+					if(tx < 0 || tx >= pWorld->m_Surface.size())
+						continue;
+					const int SurfaceY = pWorld->m_Surface[tx];
+					if(SurfaceY >= BaseY)
+						continue;
+					for(int ty = maximum(0, SurfaceY); ty < BaseY; ty++)
+					{
+						CTile &Terrain = pTerrainLayer->m_pTiles[ty * Width + tx];
+						Terrain.m_Index = TILE_AIR;
+						Terrain.m_Flags = 0;
+						Terrain.m_Skip = 0;
+						if(pGameLayer)
+						{
+							CTile &Game = pGameLayer->m_pTiles[ty * Width + tx];
+							Game.m_Index = TILE_AIR;
+							Game.m_Flags = 0;
+							Game.m_Skip = 0;
+						}
+						if(pWallLayer && ty < pWallLayer->m_Height && tx < pWallLayer->m_Width)
+						{
+							CTile &Wall = pWallLayer->m_pTiles[ty * pWallLayer->m_Width + tx];
+							Wall.m_Index = TILE_AIR;
+							Wall.m_Flags = 0;
+							Wall.m_Skip = 0;
+						}
+						if(pDoodadsLayer && ty < pDoodadsLayer->m_Height && tx < pDoodadsLayer->m_Width)
+						{
+							CTile &Doodad = pDoodadsLayer->m_pTiles[ty * pDoodadsLayer->m_Width + tx];
+							Doodad.m_Index = TILE_AIR;
+							Doodad.m_Flags = 0;
+							Doodad.m_Skip = 0;
+						}
+					}
+					pWorld->m_Surface[tx] = BaseY;
+				}
+			}
+
+			// Nothing should grow in front of the structure either.
+			if(pDoodadsLayer)
+			{
+				for(int ty = maximum(0, AnchorY - (RegionHeight - 1)); ty <= minimum(pDoodadsLayer->m_Height - 1, AnchorY); ty++)
+				{
+					for(int tx = maximum(0, ChosenX); tx <= minimum(pDoodadsLayer->m_Width - 1, ChosenX + RegionWidth - 1); tx++)
+					{
+						CTile &Doodad = pDoodadsLayer->m_pTiles[ty * pDoodadsLayer->m_Width + tx];
+						Doodad.m_Index = TILE_AIR;
+						Doodad.m_Flags = 0;
+						Doodad.m_Skip = 0;
+					}
+				}
+			}
+
+			PasteEuclidStructTiles(StructMap, OffsetX, OffsetY, pTerrainLayer, pGameLayer, pUnhookableLayer);
+			if(pStructGroup)
+				PasteEuclidStructQuads(StructMap, OffsetX, OffsetY, pStructMapName,
+					pStructGroup, lRequests, lCreatorImages);
+
+			// The structure claims this piece of ground. A spawn point inside
+			// it would drop the player inside a wall, so it is moved out of the
+			// way by clearing the entity cell; the floor keeps its other spawns.
+			{
+				CGeneratedWorld::CLayer &Game = pWorld->m_lLayers[CGeneratedWorld::LAYER_GAME];
+				for(int ty = maximum(0, AnchorY - (RegionHeight - 1)); ty <= minimum(Height - 1, AnchorY); ty++)
+				{
+					for(int tx = maximum(0, ChosenX); tx <= minimum(Width - 1, ChosenX + RegionWidth - 1); tx++)
+					{
+						CTile &Tile = Game.m_pTiles[ty * Width + tx];
+						if(Tile.m_Index >= ENTITY_OFFSET)
+						{
+							Tile.m_Index = TILE_AIR;
+							Tile.m_Flags = 0;
+						}
+					}
+				}
+			}
+
+			// Drop the resources that were scattered onto this ground, instead
+			// of leaving them buried in a wall or unreachable under a platform.
+			for(int r = pWorld->m_lResources.size() - 1; r >= 0; r--)
+			{
+				const CGeneratedWorld::CResource &Resource = pWorld->m_lResources[r];
+				if(Resource.m_X >= ChosenX && Resource.m_X < ChosenX + RegionWidth &&
+					Resource.m_Y >= AnchorY - (RegionHeight - 1) && Resource.m_Y <= AnchorY)
+					pWorld->m_lResources.remove_index(r);
+			}
+
+			SEuclidPlacementRect &Occupied = lOccupied.emplace();
+			Occupied.m_X0 = ChosenX;
+			Occupied.m_Y0 = AnchorY - (RegionHeight - 1);
+			Occupied.m_X1 = ChosenX + RegionWidth - 1;
+			Occupied.m_Y1 = AnchorY;
+
+			TotalPlaced++;
+			char aLogName[96];
+			if(Struct.m_aId[0])
+				str_format(aLogName, sizeof(aLogName), "%s/%s", Struct.m_aId,
+					Variant.m_aSubId[0] ? Variant.m_aSubId : pStructMapName);
+			else
+				str_copy(aLogName, pStructMapName, sizeof(aLogName));
+			dbg_msg("mapgen", "euclid struct '%s': anchor tile (%d,%d), region %dx%d, %d quad(s)",
+				aLogName, ChosenX, AnchorY, RegionWidth, RegionHeight, StructMap.m_lQuadLayers.size());
+		}
+
+		FreeEuclidStructMap(StructMap);
+	}
+
+	if(TotalPlaced > 0)
+		dbg_msg("mapgen", "euclid structures: %d placement(s)", TotalPlaced);
+}
+
 // ---------------------------------------------------------------------------
 // euclidean floor generation
 // ---------------------------------------------------------------------------
@@ -193,13 +943,6 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 	// read from the png rather than assumed: the cloud sheets are 2048x1024 and
 	// the mountain sheets 1024x512, and declaring them as 1024x1024 made the
 	// client sample the wrong region.
-	struct SImageRequest
-	{
-		char m_aName[64];
-		int m_Width;
-		int m_Height;
-		bool m_Optional;
-	};
 	array<SImageRequest> lRequests;
 
 	// Reads the pixel size from a png header (IHDR); false when unreadable, in
@@ -268,6 +1011,35 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		for(int q = 0; q < Layer.m_Quads.size(); q++)
 			if(Layer.m_Quads[q].m_aImage[0])
 				AddImageRequest(Layer.m_Quads[q].m_aImage, 1024, 1024, true);
+	}
+
+	// Euclidean structure art may name its own images, so those have to join
+	// the same request table before the creator images are created. The struct
+	// maps are small and are opened once more by the merge below.
+	for(int s = 0; s < pInstruction->m_Structs.size(); s++)
+	{
+		const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
+		if(Struct.m_Count <= 0)
+			continue;
+		for(int v = 0; v < Struct.m_lVariants.size(); v++)
+		{
+			char aStructPath[IO_MAX_PATH_LENGTH];
+			str_format(aStructPath, sizeof(aStructPath), "maps/struct/%s.map", Struct.m_lVariants[v].m_aBaseMap);
+			CDataFileReader StructFile;
+			if(!StructFile.Open(Storage(), aStructPath, IStorage::TYPE_ALL))
+				continue;
+			int StructImagesStart = 0, StructImagesNum = 0;
+			StructFile.GetType(MAPITEMTYPE_IMAGE, &StructImagesStart, &StructImagesNum);
+			for(int i = 0; i < StructImagesNum; i++)
+			{
+				CMapItemImage *pImage = (CMapItemImage *) StructFile.GetItem(StructImagesStart + i, 0, 0);
+				if(!pImage || !pImage->m_External)
+					continue;
+				const char *pImageName = (const char *) StructFile.GetData(pImage->m_ImageName);
+				if(pImageName && pImageName[0])
+					AddImageRequest(pImageName, pImage->m_Width, pImage->m_Height, true);
+			}
+		}
 	}
 
 	array<CCreatorImage *> lCreatorImages; // parallel to lRequests
@@ -368,6 +1140,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 
 	array<CTile> lWallTiles;
 	bool WallDarkened = false;
+	const char *pWallSet = Gen.m_aMainRuleSet;
 	if(SubWidth > 0 && SubHeight > 0)
 	{
 		lWallTiles.set_size(SubWidth * SubHeight);
@@ -388,7 +1161,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 
 		const CAutoMapper::CRuleSet *pCaveSet = Gen.m_aCaveRuleSet[0] ? Mapper.FindRuleSet(Gen.m_aCaveRuleSet) : nullptr;
 		const bool CaveMatches = pCaveSet && str_comp(pCaveSet->m_aSource, pMainSource) == 0;
-		const char *pWallSet = CaveMatches ? Gen.m_aCaveRuleSet : Gen.m_aMainRuleSet;
+		pWallSet = CaveMatches ? Gen.m_aCaveRuleSet : Gen.m_aMainRuleSet;
 		if(!Mapper.Proceed(pWallSet, lWallTiles.base_ptr(), SubWidth, SubHeight, Ring.m_NoiseSeed + 0x51ed, !Ring.m_Enabled, Gen.m_WrapMargin, nullptr, Ring.m_OffsetX))
 			dbg_msg("mapgen", "cave rule set '%s' is unknown, the wall stays plain", pWallSet);
 		WallDarkened = !CaveMatches;
@@ -983,8 +1756,31 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		if(Gen.m_Layers[i].m_Role == CInstruction::LAYERROLE_BACKGROUND && !Gen.m_Layers[i].m_IsTerrain)
 			EmitLayer(Gen.m_Layers[i]);
 
+	// 1b. The structure art group has to be created BEFORE the Game group:
+	// groups are drawn in file order, so this puts the structures behind the
+	// terrain and its cave wall. A structure that is partly buried in a hill is
+	// then hidden by the ground instead of painting over it, while its visible
+	// upper part still sits in front of the sky and the background layers.
+	CCreatorGroupInfo *pStructGroup = nullptr;
+	for(int i = 0; i < pInstruction->m_Structs.size(); i++)
+	{
+		if(pInstruction->m_Structs[i].m_Count <= 0)
+			continue;
+		pStructGroup = Creator.AddGroup("Structures");
+		pStructGroup->m_ParallaxX = 100;
+		pStructGroup->m_ParallaxY = 100;
+		pStructGroup->m_OffsetX = 0;
+		pStructGroup->m_OffsetY = 0;
+		break;
+	}
+
 	// 2. the terrain and the game layer, always at parallax 100 so the collision
 	//    lines up with the drawn tiles
+	CCreatorLayerTilemap *pCreatorTerrain = nullptr;
+	CCreatorLayerTilemap *pCreatorGame = nullptr;
+	CCreatorLayerTilemap *pCreatorUnhookable = nullptr;
+	CCreatorLayerTilemap *pCreatorWall = nullptr;
+	CCreatorLayerTilemap *pCreatorDoodads = nullptr;
 	{
 		CCreatorGroupInfo *pGroup = Creator.AddGroup("Game");
 		pGroup->m_ParallaxX = 100;
@@ -1002,6 +1798,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			pLayer->m_pImage = pWallImage;
 			if(WallDarkened)
 				pLayer->m_Color = ColorRGBA(120, 120, 140, 255);
+			pCreatorWall = pLayer;
 		}
 
 		// The terrain layer first, then the game layer, so the collision sits
@@ -1022,6 +1819,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			}
 			if(lCreatorImages.size() && lCreatorImages[0])
 				pLayer->m_pImage = lCreatorImages[0];
+			pCreatorTerrain = pLayer;
 			TerrainEmitted = true;
 		}
 		if(!TerrainEmitted && pMainLayer)
@@ -1033,6 +1831,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			mem_copy(pTiles, pMainLayer->m_pTiles, sizeof(CTile) * pMainLayer->m_Width * pMainLayer->m_Height);
 			if(lCreatorImages.size() && lCreatorImages[0])
 				pLayer->m_pImage = lCreatorImages[0];
+			pCreatorTerrain = pLayer;
 		}
 
 		// The vegetation stands in front of the terrain (it is drawn over it)
@@ -1043,6 +1842,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			CTile *pTiles = pLayer->AddTiles(SubWidth, SubHeight);
 			mem_copy(pTiles, lDoodadTiles.base_ptr(), sizeof(CTile) * SubWidth * SubHeight);
 			pLayer->m_pImage = pDoodadsImage;
+			pCreatorDoodads = pLayer;
 		}
 
 		if(pUnhookableLayer)
@@ -1061,6 +1861,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			if(!pFrameImage && lCreatorImages.size())
 				pFrameImage = lCreatorImages[0]; // no dedicated sheet: the terrain's
 			pLayer->m_pImage = pFrameImage;
+			pCreatorUnhookable = pLayer;
 		}
 
 		if(pGameLayer)
@@ -1069,7 +1870,36 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			pLayer->m_Flags = TILESLAYERFLAG_GAME;
 			CTile *pTiles = pLayer->AddTiles(pGameLayer->m_Width, pGameLayer->m_Height);
 			mem_copy(pTiles, pGameLayer->m_pTiles, sizeof(CTile) * pGameLayer->m_Width * pGameLayer->m_Height);
+			pCreatorGame = pLayer;
 		}
+	}
+
+	// 2b. the euclidean structures: their tiles merge into the terrain and game
+	//     layers above, their quads into a world-parallax group placed after the
+	//     terrain, so the art sits in the world and the collision stays exact.
+	PasteEuclideanStructures(pInstruction, Seed, pWorld, Storage(), pStructGroup,
+		pCreatorTerrain, pCreatorGame, pCreatorUnhookable, pCreatorWall, pCreatorDoodads,
+		lRequests, lCreatorImages);
+
+	// 2c. Re-run the automapper on the finished terrain. A structure cuts a level
+	// shelf into a slope, and without a second pass the exposed interior tiles
+	// would lack the grass/edge variants the rest of the ground has. The cave
+	// wall gets the same treatment so its new cut face is styled too. Structure
+	// art is quads, so this pass cannot destroy it; a structure that carries its
+	// own tile template should ship those tiles already styled.
+	if(pCreatorTerrain && pMainSet)
+	{
+		if(!Mapper.Proceed(Gen.m_aMainRuleSet, pCreatorTerrain->m_pTiles,
+			   pCreatorTerrain->m_Width, pCreatorTerrain->m_Height,
+			   Ring.m_NoiseSeed, !Ring.m_Enabled, Gen.m_WrapMargin, nullptr, Ring.m_OffsetX))
+			dbg_msg("mapgen", "automap rule set '%s' is unknown, the terrain stays unstyled", Gen.m_aMainRuleSet);
+	}
+	if(pCreatorWall)
+	{
+		if(!Mapper.Proceed(pWallSet, pCreatorWall->m_pTiles,
+			   pCreatorWall->m_Width, pCreatorWall->m_Height,
+			   Ring.m_NoiseSeed + 0x51ed, !Ring.m_Enabled, Gen.m_WrapMargin, nullptr, Ring.m_OffsetX))
+			dbg_msg("mapgen", "cave rule set '%s' is unknown, the wall stays plain", pWallSet);
 	}
 
 	// 3. the foreground layers, only now that the game layer exists, so they are
