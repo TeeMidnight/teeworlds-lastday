@@ -48,20 +48,27 @@ def _set_visual(ctx):
     if ctx.entity is None:
         return
 
+    # The entity no longer reserves snapshot ids up front: the script asks for
+    # exactly what it draws and hands the ids over in set_visual(). The entity
+    # owns them from here on and releases them when the visual is replaced or
+    # the jar is destroyed, so the script must not free them itself.
+    laser_ids = [ctx.snap_new_id() for _ in range(6)]
+    pickup_id = ctx.snap_new_id()
+
     # a jar: closed bottom, straight walls, sloped shoulders and a narrow lid.
     # The pickup in the middle is a snapshot primitive only; the real pickup is
     # the HealthDrop the jar spits out.
     ctx.entity.set_visual({
         "lasers": [
-            {"x1": -32, "y1": 48, "x2": 32, "y2": 48},
-            {"x1": -32, "y1": 48, "x2": -32, "y2": -24},
-            {"x1": 32, "y1": 48, "x2": 32, "y2": -24},
-            {"x1": -32, "y1": -24, "x2": -14, "y2": -48},
-            {"x1": 32, "y1": -24, "x2": 14, "y2": -48},
-            {"x1": -14, "y1": -48, "x2": 14, "y2": -48},
+            {"id": laser_ids[0], "x1": -32, "y1": 48, "x2": 32, "y2": 48},
+            {"id": laser_ids[1], "x1": -32, "y1": 48, "x2": -32, "y2": -24},
+            {"id": laser_ids[2], "x1": 32, "y1": 48, "x2": 32, "y2": -24},
+            {"id": laser_ids[3], "x1": -32, "y1": -24, "x2": -14, "y2": -48},
+            {"id": laser_ids[4], "x1": 32, "y1": -24, "x2": 14, "y2": -48},
+            {"id": laser_ids[5], "x1": -14, "y1": -48, "x2": 14, "y2": -48},
         ],
         "pickups": [
-            {"x": 0, "y": 0, "type": 0},
+            {"id": pickup_id, "x": 0, "y": 0, "type": 0},
         ],
     })
 

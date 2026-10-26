@@ -170,6 +170,26 @@ Entity (`datasrc/entities/<kind>.json`):
 Entity callbacks: `on_spawn`, `on_load`, `on_tick`, `on_hit`, `on_destroy`,
 `on_save`. Use `lastday_entity` for spawn/destroy/visuals/drops/owner checks.
 
+A scripted entity does **not** reserve snapshot ids itself. The script asks for
+as many as it draws and passes them in the visual:
+
+```python
+def on_spawn(ctx):
+    ids = [ctx.snap_new_id() for _ in range(2)]
+    ctx.entity.set_visual({
+        "lasers": [
+            {"id": ids[0], "x1": -16, "y1": 0, "x2": 16, "y2": 0},
+            {"id": ids[1], "x1": 0, "y1": -16, "x2": 0, "y2": 16},
+        ],
+    })
+```
+
+The entity takes ownership of those ids: `set_visual()` releases the previous
+ones, and the destructor releases the current ones. Scripts must not free an id
+that they passed to `set_visual()`; allocate fresh ids when replacing a visual.
+A primitive with `id < 0` (for example because the pool is exhausted) is not
+drawn.
+
 Bot AI: `sv_bot_ai` selects `chase` (default), `wander`, `stand`, a bare
 example name (`guard`), or `script:scripts/bot_ai/<name>.py`. Scripts implement
 `on_spawn`, `on_tick`, `on_action`, `on_damaged`, `on_hit` and drive the

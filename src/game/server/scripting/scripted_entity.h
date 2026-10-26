@@ -65,8 +65,8 @@ class CScriptedEntity : public CHitableEntity
 public:
 	enum
 	{
-		// one entity can draw at most this many beams / pickups. The snapshot id
-		// pool is process wide, so a kind gets a fixed, small allowance.
+		// one entity can draw at most this many beams / pickups, and therefore
+		// hand over at most this many snapshot ids in one set_visual() call.
 		MAX_VISUAL_LASERS = 12,
 		MAX_VISUAL_PICKUPS = 4,
 	};
@@ -75,12 +75,16 @@ public:
 	{
 		vec2 m_From;
 		vec2 m_To;
+		// snapshot id allocated by the script; -1 means "do not draw"
+		int m_ID = -1;
 	};
 
 	struct SVisualPickup
 	{
 		vec2 m_Pos;
 		int m_Type;
+		// snapshot id allocated by the script; -1 means "do not draw"
+		int m_ID = -1;
 	};
 
 	CScriptedEntity(CGameWorld *pGameWorld, vec2 Pos, const char *pKind, int Module,
@@ -102,7 +106,11 @@ public:
 	// lets on_save refresh the state before CGameWorld reads it
 	void CallSave();
 
-	// visual primitives, set by lastday_entity.set_visual()
+	// Visual primitives, set by lastday_entity.set_visual(). Every primitive
+	// carries a snapshot id that the script allocated (ctx.snap_new_id()); the
+	// entity takes ownership of those ids, releases them when the visual is
+	// replaced and when the entity is destroyed. The entity never reserves an
+	// id of its own in advance.
 	void SetVisual(const char *pJson);
 	const array<SVisualLaser> &Lasers() const { return m_lLasers; }
 	const array<SVisualPickup> &Pickups() const { return m_lPickups; }
@@ -128,6 +136,8 @@ public:
 private:
 	bool CallEvent(const char *pEvent, int Player, CEntity *pFrom, int Damage, int Weapon);
 	void SnapBeam(int ID, vec2 From, vec2 To, int SnappingClient);
+	// returns every snapshot id currently owned by the visual to its floor pool
+	void ReleaseVisualIDs();
 
 	char m_aKind[64];
 	int m_Module;
@@ -145,10 +155,6 @@ private:
 
 	array<SVisualLaser> m_lLasers;
 	array<SVisualPickup> m_lPickups;
-
-	// snapshot ids reserved for this entity for its whole life
-	int m_aLaserIDs[MAX_VISUAL_LASERS];
-	int m_aPickupIDs[MAX_VISUAL_PICKUPS];
 
 	bool m_bKilled;
 	// ctx["destroy"] observed in the last callback

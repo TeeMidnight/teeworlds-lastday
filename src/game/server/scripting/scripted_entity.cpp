@@ -239,11 +239,9 @@ CScriptedEntity::CScriptedEntity(CGameWorld *pGameWorld, vec2 Pos, const char *p
 
 	m_lLasers.hint_size(MAX_VISUAL_LASERS);
 	m_lPickups.hint_size(MAX_VISUAL_PICKUPS);
-	for(int i = 0; i < MAX_VISUAL_LASERS; i++)
-		m_aLaserIDs[i] = Server()->SnapNewID(SnapIDWorld());
-	for(int i = 0; i < MAX_VISUAL_PICKUPS; i++)
-		m_aPickupIDs[i] = Server()->SnapNewID(SnapIDWorld());
 
+	// No snapshot ids are reserved here: a script allocates exactly the ids it
+	// needs and hands them over in set_visual().
 	SetVisual(pVisual);
 
 	GameWorld()->InsertEntity(this);
@@ -251,14 +249,23 @@ CScriptedEntity::CScriptedEntity(CGameWorld *pGameWorld, vec2 Pos, const char *p
 
 CScriptedEntity::~CScriptedEntity()
 {
-	for(int i = 0; i < MAX_VISUAL_LASERS; i++)
-		Server()->SnapFreeID(m_aLaserIDs[i], SnapIDWorld());
-	for(int i = 0; i < MAX_VISUAL_PICKUPS; i++)
-		Server()->SnapFreeID(m_aPickupIDs[i], SnapIDWorld());
+	ReleaseVisualIDs();
+}
+
+void CScriptedEntity::ReleaseVisualIDs()
+{
+	for(int i = 0; i < m_lLasers.size(); i++)
+		if(m_lLasers[i].m_ID >= 0)
+			Server()->SnapFreeID(m_lLasers[i].m_ID, SnapIDWorld());
+	for(int i = 0; i < m_lPickups.size(); i++)
+		if(m_lPickups[i].m_ID >= 0)
+			Server()->SnapFreeID(m_lPickups[i].m_ID, SnapIDWorld());
 }
 
 void CScriptedEntity::SetVisual(const char *pJson)
 {
+	// Replacing the visual returns the previous ids before taking the new ones.
+	ReleaseVisualIDs();
 	m_lLasers.clear();
 	m_lPickups.clear();
 	if(!pJson || !pJson[0])
@@ -278,11 +285,14 @@ void CScriptedEntity::SetVisual(const char *pJson)
 		{
 			Laser.m_From = vec2(ReadFloat(rLaser["x1"], 0.0f), ReadFloat(rLaser["y1"], 0.0f));
 			Laser.m_To = vec2(ReadFloat(rLaser["x2"], 0.0f), ReadFloat(rLaser["y2"], 0.0f));
+			Laser.m_ID = ReadInt(rLaser["id"], -1);
 		}
 		else if(rLaser.type == json_array && rLaser.u.array.length >= 4)
 		{
 			Laser.m_From = vec2(ReadFloat(rLaser[0], 0.0f), ReadFloat(rLaser[1], 0.0f));
 			Laser.m_To = vec2(ReadFloat(rLaser[2], 0.0f), ReadFloat(rLaser[3], 0.0f));
+			if(rLaser.u.array.length >= 5)
+				Laser.m_ID = ReadInt(rLaser[4], -1);
 		}
 		else
 		{
@@ -300,11 +310,14 @@ void CScriptedEntity::SetVisual(const char *pJson)
 		{
 			Pickup.m_Pos = vec2(ReadFloat(rPickup["x"], 0.0f), ReadFloat(rPickup["y"], 0.0f));
 			Pickup.m_Type = ReadInt(rPickup["type"], PICKUP_HEALTH);
+			Pickup.m_ID = ReadInt(rPickup["id"], -1);
 		}
 		else if(rPickup.type == json_array && rPickup.u.array.length >= 3)
 		{
 			Pickup.m_Pos = vec2(ReadFloat(rPickup[0], 0.0f), ReadFloat(rPickup[1], 0.0f));
 			Pickup.m_Type = ReadInt(rPickup[2], PICKUP_HEALTH);
+			if(rPickup.u.array.length >= 4)
+				Pickup.m_ID = ReadInt(rPickup[3], -1);
 		}
 		else
 		{
@@ -491,11 +504,13 @@ void CScriptedEntity::Snap(int SnappingClient)
 	for(int i = 0; i < m_lPickups.size(); i++)
 	{
 		const SVisualPickup &Pickup = m_lPickups[i];
+		if(Pickup.m_ID < 0)
+			continue;
 		const vec2 Pos = m_Pos + Pickup.m_Pos;
 		if(NetworkClipped(SnappingClient, Pos))
 			continue;
 
-		CNetObj_Pickup *pObj = static_cast<CNetObj_Pickup *>(Server()->SnapNewItem(NETOBJTYPE_PICKUP, m_aPickupIDs[i], sizeof(CNetObj_Pickup)));
+		CNetObj_Pickup *pObj = static_cast<CNetObj_Pickup *>(Server()->SnapNewItem(NETOBJTYPE_PICKUP, Pickup.m_ID, sizeof(CNetObj_Pickup)));
 		if(!pObj)
 			continue;
 		pObj->m_X = round_to_int(Pos.x);
@@ -506,7 +521,9 @@ void CScriptedEntity::Snap(int SnappingClient)
 	for(int i = 0; i < m_lLasers.size(); i++)
 	{
 		const SVisualLaser &Laser = m_lLasers[i];
-		SnapBeam(m_aLaserIDs[i], m_Pos + Laser.m_From, m_Pos + Laser.m_To, SnappingClient);
+		if(Laser.m_ID < 0)
+			continue;
+		SnapBeam(Laser.m_ID, m_Pos + Laser.m_From, m_Pos + Laser.m_To, SnappingClient);
 	}
 }
 
