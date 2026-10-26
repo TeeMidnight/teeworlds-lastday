@@ -512,6 +512,19 @@ static void PasteEuclidStructQuads(const SEuclidStructMap &rMap, int OffsetX, in
 	}
 }
 
+// A unique structure is pasted on exactly one instance of a floor. The seed is
+// derived from the floor name and the structure id, so two different unique
+// structures naturally land on different instances.
+static int UniqueStructureSeed(const CInstruction::CStruct &Struct, const CInstruction::CGeneration &Gen, const char *pFloorName, int Seed)
+{
+	if(!Struct.m_Unique)
+		return -1;
+	if(!Gen.m_Ring.m_Enabled || Gen.m_Ring.m_Size <= 1)
+		return Seed;
+	const unsigned Hash = str_quickhash(pFloorName) ^ (str_quickhash(Struct.m_aId) * 2654435761u);
+	return 1 + (int) (Hash % (unsigned) Gen.m_Ring.m_Size);
+}
+
 // Scatters every euclidean structure over the generated ground line and merges
 // the placed ones. Called after the terrain/game layers were emitted and before
 // the foreground and night shade groups, so the structure art sits over the
@@ -537,6 +550,8 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 	{
 		const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
 		if(Struct.m_Count <= 0)
+			continue;
+		if(Struct.m_Unique && Seed != UniqueStructureSeed(Struct, Gen, pInstruction->m_aFloorName, Seed))
 			continue;
 
 		const int VariantIndex = PickStructVariant(Struct, Seed, (s + 1) * 100000 + 13);
@@ -853,6 +868,48 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 						aUsedX[NumUsed] = SpotX;
 						aUsedY[NumUsed] = SpotY;
 						NumUsed++;
+					}
+				}
+			}
+
+			// Creatures carried by this variant. The spot search is the same
+			// reachable-floor scan containers use, so a boss or guard never
+			// spawns inside a wall. All creatures of one placement share a
+			// group key; the boss's death persists the whole encounter.
+			if(Variant.m_NumMobs > 0 && pGameLayer)
+			{
+				int TotalMobs = 0;
+				for(int m = 0; m < Variant.m_NumMobs; m++)
+					TotalMobs += maximum(1, Variant.m_aMobs[m].m_Count);
+				int MobIndex = 0;
+				const int Group = (s + 1) * 100000 + (p + 1) * 100 + 90;
+				for(int m = 0; m < Variant.m_NumMobs; m++)
+				{
+					const CStructMob &MobDef = Variant.m_aMobs[m];
+					const int Count = maximum(1, MobDef.m_Count);
+					for(int c = 0; c < Count; c++)
+					{
+						const int PreferredX = ChosenX + (RegionWidth * (MobIndex + 1)) / (TotalMobs + 1);
+						int SpotX = 0;
+						int SpotY = 0;
+						if(!FindContainerSpot(pGameLayer->m_pTiles, pGameLayer->m_Width, pGameLayer->m_Height,
+							   ChosenX, AnchorY - (RegionHeight - 1), ChosenX + RegionWidth - 1, AnchorY,
+							   PreferredX, &SpotX, &SpotY))
+						{
+							dbg_msg("mapgen", "euclid struct '%s': no floor spot for mob '%s'", pStructMapName, MobDef.m_aMob);
+							continue;
+						}
+
+						SGeneratedMob &Spawn = pWorld->m_lMobs.emplace();
+						Spawn.m_ID = Group * 10 + MobIndex;
+						Spawn.m_Group = Group;
+						str_copy(Spawn.m_aMob, MobDef.m_aMob, sizeof(Spawn.m_aMob));
+						Spawn.m_Boss = MobDef.m_Boss;
+						Spawn.m_X = SpotX;
+						Spawn.m_Y = SpotY;
+						dbg_msg("mapgen", "euclid struct '%s': mob '%s'%s at (%d,%d), group %d",
+							pStructMapName, MobDef.m_aMob, MobDef.m_Boss ? " (boss)" : "", SpotX, SpotY, Group);
+						MobIndex++;
 					}
 				}
 			}
@@ -2047,6 +2104,14 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		lContainerJson.add(0);
 	}
 
+	array<char> lMobJson;
+	{
+		memory_stream<char> Stream(&lMobJson);
+		CJsonWriter Writer(&Stream);
+		WriteMobs(&Writer, pWorld->m_lMobs);
+		lMobJson.add(0);
+	}
+
 	// The world geometry, as a third json item. The horizontal wrap is a
 	// property of the world: a generated floor is a cylinder, a hand drawn map
 	// has real edges. It goes here rather than in CMapItemInfo (fixed at version
@@ -2084,6 +2149,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		BuildGeneratedWorldMeta(lEntranceJson.base_ptr(), lEntranceJson.size(),
 			lResourceJson.base_ptr(), lResourceJson.size(),
 			lContainerJson.base_ptr(), lContainerJson.size(),
+			lMobJson.base_ptr(), lMobJson.size(),
 			lWorldJson.base_ptr(), lWorldJson.size(), pOut->m_Meta);
 	delete pWorld;
 

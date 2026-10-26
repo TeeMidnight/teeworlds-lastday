@@ -55,6 +55,7 @@ private:
 	void RemoveEntities();
 
 	array<CEntity *> m_alpEntityLists[NUM_ENTTYPES];
+	array<int> m_lDefeatedBossGroups;
 	array<CEntity *> m_lpFlagEntityList;
 
 	class CGameContext *m_pGameServer;
@@ -191,6 +192,12 @@ public:
 	// containers placed by the generated world metadata (map structures)
 	void SpawnContainers(const char *pJsonData);
 	void SpawnContainers(const json_value &rContainers);
+	// creatures placed by generated map structures (bosses and their guards)
+	void SpawnMobs(const char *pJsonData);
+	void SpawnMobs(const json_value &rMobs);
+	// persistent encounter groups whose boss has already been defeated
+	bool IsBossDefeated(int Group) const;
+	void MarkBossDefeated(int Group);
 	// Roll the initial loot of containers that were not restored from a world
 	// save. Called once after RestoreFromDatabase during the world load.
 	void InitContainerLoot();
@@ -258,6 +265,8 @@ public:
 	// The closest container to Pos within Radius. Containers do not cross the
 	// ring boundary, so only this world is searched.
 	CContainerEntity *ClosestContainer(vec2 Pos, float Radius);
+	// removes freshly spawned mobs whose boss encounter was already cleared
+	void DestroyDefeatedBossGroups();
 	// The container whose map-instance storage id matches, or null. Used by the
 	// world save restoration to put a stored stack back where it came from.
 	CContainerEntity *FindContainerByStorageID(int StorageID);

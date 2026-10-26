@@ -1,0 +1,51 @@
+{
+    "id": "frost_sanctum",
+    "unique": true,
+    "count": 1,
+    "margin": 48,
+    "min_separation": 120,
+    "flat_width": 0,
+    "paste_air": false,
+    "variants": [
+        {
+            "sub_id": "frost",
+            "base": "FrostShrine",
+            "containers": [ { "kind": "vault", "loot": "relic_hoard" } ],
+            "mobs": [
+                { "mob": "frost_warden", "count": 1, "boss": true },
+                { "mob": "spitter", "count": 2 },
+                { "mob": "raider", "count": 2 }
+            ]
+        },
+        {
+            "sub_id": "jungle",
+            "base": "JungleShrine",
+            "containers": [ { "kind": "vault", "loot": "relic_hoard" } ],
+            "mobs": [
+                { "mob": "frost_warden", "count": 1, "boss": true },
+                { "mob": "spitter", "count": 2 },
+                { "mob": "raider", "count": 2 }
+            ]
+        },
+        {
+            "sub_id": "desert",
+            "base": "DesertRuin",
+            "containers": [ { "kind": "vault", "loot": "relic_hoard" } ],
+            "mobs": [
+                { "mob": "frost_warden", "count": 1, "boss": true },
+                { "mob": "spitter", "count": 2 },
+                { "mob": "raider", "count": 2 }
+            ]
+        },
+        {
+            "sub_id": "grass",
+            "base": "Watchtower_Ruined",
+            "containers": [ { "kind": "vault", "loot": "relic_hoard" } ],
+            "mobs": [
+                { "mob": "frost_warden", "count": 1, "boss": true },
+                { "mob": "spitter", "count": 2 },
+                { "mob": "raider", "count": 2 }
+            ]
+        }
+    ]
+}

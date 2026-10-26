@@ -618,6 +618,32 @@ static inline void WriteContainers(CJsonWriter *pWriter, const array<SContainerS
 	pWriter->EndArray();
 }
 
+// serializes the placed creatures (see SGeneratedMob in worldgen.h) into the
+// generated world metadata
+static inline void WriteMobs(CJsonWriter *pWriter, const array<SGeneratedMob> &lEntries)
+{
+	pWriter->BeginArray();
+	for(int i = 0; i < lEntries.size(); i++)
+	{
+		const SGeneratedMob &Entry = lEntries[i];
+		pWriter->BeginObject();
+		pWriter->WriteAttribute("id");
+		pWriter->WriteIntValue(Entry.m_ID);
+		pWriter->WriteAttribute("group");
+		pWriter->WriteIntValue(Entry.m_Group);
+		pWriter->WriteAttribute("mob");
+		pWriter->WriteStrValue(Entry.m_aMob);
+		pWriter->WriteAttribute("boss");
+		pWriter->WriteBoolValue(Entry.m_Boss);
+		pWriter->WriteAttribute("pos_x");
+		pWriter->WriteIntValue(Entry.m_X);
+		pWriter->WriteAttribute("pos_y");
+		pWriter->WriteIntValue(Entry.m_Y);
+		pWriter->EndObject();
+	}
+	pWriter->EndArray();
+}
+
 // A container needs a free one-tile spot with solid ground below it and one
 // more air tile above (its box is taller than a tile). Scanning from the bottom
 // row up and outwards from PreferredX keeps the result deterministic and puts

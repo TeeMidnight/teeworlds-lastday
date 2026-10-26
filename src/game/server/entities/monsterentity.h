@@ -40,6 +40,11 @@ public:
 
 	const SMobDef *Def() const { return m_pDef; }
 	const SMobDef *MobDef() const override { return m_pDef; }
+	bool IsBoss() const { return m_pDef && m_pDef->m_IsBoss; }
+	void SetSpawnGroup(int Group) { m_SpawnGroup = Group; }
+	int SpawnGroup() const { return m_SpawnGroup; }
+	// removes a persisted encounter without running death loot/dialogue
+	void DespawnSilently();
 	// 0..1, used by the boss HUD and by a future health bar
 	float HealthFraction() const { return m_MaxHealth > 0 ? (float) m_Health / (float) m_MaxHealth : 0.0f; }
 
@@ -66,6 +71,7 @@ protected:
 	void TickAuras();
 	void TickDialogue();
 	void TickEnrage();
+	void TrySummon();
 	void DropLoot(CEntity *pKiller);
 
 	// dialogue / state
@@ -89,6 +95,8 @@ protected:
 	int m_HealTimer;
 	int m_ArmorTimer;
 	bool m_Enraged;
+	bool m_Summoned;
+	int m_SpawnGroup;
 
 	int m_RetaliateUntil;
 	Uuid m_LastAttackerBot;

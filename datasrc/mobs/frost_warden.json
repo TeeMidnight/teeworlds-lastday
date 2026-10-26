@@ -1,0 +1,53 @@
+{
+    "id": "frost_warden",
+    "name": "Frost Warden",
+    "faction": "hostile",
+    "group": "sanctum",
+    "type": "tee",
+    "boss": true,
+    "health": 120,
+    "armor": 8,
+    "speed_scale": 0.85,
+    "aggro_radius": 620,
+    "attack_range": 64,
+    "keep_distance": 180,
+    "jump_chance": 18,
+    "fight_hostile_groups": false,
+    "skin": {
+        "body":       {"name": "standard", "custom_color": true, "hue": 205, "sat": 120, "lgt": 190},
+        "marking":    {"name": "twinbelly", "custom_color": true, "hue": 210, "sat": 150, "lgt": 230},
+        "decoration": {"name": "hair",      "custom_color": true, "hue": 210, "sat": 90,  "lgt": 240},
+        "hands":      {"name": "standard", "custom_color": true, "hue": 205, "sat": 120, "lgt": 190},
+        "feet":       {"name": "standard", "custom_color": true, "hue": 210, "sat": 100, "lgt": 120},
+        "eyes":       {"name": "standard", "custom_color": false}
+    },
+    "ai": "boss",
+    "abilities": {
+        "melee": {"damage": 6, "cooldown": 20, "range": 64},
+        "ranged": {"enabled": true, "weapon": "shotgun", "damage": 3, "cooldown": 45, "range": 420, "min_range": 100, "force": 2, "span": 650, "sound": "shotgun"},
+        "leap": {"enabled": true, "cooldown": 150, "range": 320, "force_x": 7.0, "force_y": -8.0},
+        "enrage": {"health_percent": 40, "damage_bonus": 3, "speed_percent": 25}
+    },
+    "summon": {
+        "mob": "spitter",
+        "count": 2,
+        "health_percent": 55
+    },
+    "dialogue": {
+        "spawn": ["The sanctum wakes."],
+        "sight": ["You carry the smell of the surface. It will not save you."],
+        "combat": ["Kneel.", "The frost remembers every trespass."],
+        "hurt": ["A crack in the ice."],
+        "kill": ["Return to the cold."],
+        "death": ["The sanctum... falls silent..."],
+        "low_health": ["Then we will freeze together!"]
+    },
+    "drops": [
+        {"item": "warden_sigil", "count_min": 1, "count_max": 1, "chance": 1.00},
+        {"item": "ancient_core", "count_min": 2, "count_max": 3, "chance": 0.90},
+        {"item": "heaven_ore", "count_min": 1, "count_max": 2, "chance": 0.65},
+        {"item": "steel_ingot", "count_min": 3, "count_max": 5, "chance": 0.80},
+        {"item": "guardian_heart", "count_min": 1, "count_max": 1, "chance": 0.15},
+        {"item": "laser", "count_min": 1, "count_max": 1, "chance": 0.25}
+    ]
+}

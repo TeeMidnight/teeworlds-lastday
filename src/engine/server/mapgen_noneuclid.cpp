@@ -769,6 +769,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 	BuildGeneratedWorldMeta(lEntranceJson.base_ptr(), lEntranceJson.size(),
 		lResourceJson.base_ptr(), lResourceJson.size(),
 		lContainerJson.base_ptr(), lContainerJson.size(),
+		nullptr, 0,
 		nullptr, 0, pOut->m_Meta);
 
 	dbg_msg("mapgen", "generated map '%s_%d' from base '%s'", pFloorName, Seed, pInstruction->m_aBaseMap);

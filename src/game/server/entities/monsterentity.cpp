@@ -86,6 +86,8 @@ CMonsterEntity::CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const S
 	m_HealTimer = 0;
 	m_ArmorTimer = 0;
 	m_Enraged = false;
+	m_Summoned = false;
+	m_SpawnGroup = 0;
 	m_RetaliateUntil = 0;
 	m_LastAttackerBot = UUID_ZEROED;
 	m_LastAttackerClient = -1;
@@ -300,6 +302,7 @@ void CMonsterEntity::OnAction()
 		m_LeapTimer--;
 	TickAuras();
 	TickEnrage();
+	TrySummon();
 	TickDialogue();
 
 	CEntity *pTarget = FindMonsterTarget();
@@ -619,6 +622,27 @@ void CMonsterEntity::TickEnrage()
 	SayEvent(MOBDIALOGUE_LOW_HEALTH, true);
 }
 
+void CMonsterEntity::TrySummon()
+{
+	if(m_Summoned || !m_pDef || !m_pDef->m_IsBoss || !m_pDef->m_Summon.m_aMob[0] || m_MaxHealth <= 0)
+		return;
+	if(m_Health * 100 > m_MaxHealth * m_pDef->m_Summon.m_HealthPercent)
+		return;
+	if(!GameServer()->Mobs() || !GameServer()->BotManager())
+		return;
+
+	const SMobDef *pSummon = GameServer()->Mobs()->Find(m_pDef->m_Summon.m_aMob);
+	if(!pSummon)
+		return;
+	m_Summoned = true;
+	SayEvent(MOBDIALOGUE_COMBAT, true);
+	for(int i = 0; i < m_pDef->m_Summon.m_Count; i++)
+	{
+		const vec2 Offset((float) ((i % 2) * 2 - 1) * 48.0f, (float) (i / 2) * -32.0f);
+		GameServer()->BotManager()->SpawnMob(GameWorld(), pSummon, m_Pos + Offset, nullptr, nullptr, false);
+	}
+}
+
 void CMonsterEntity::TickDialogue()
 {
 	if(!m_pLastTarget)
@@ -768,5 +792,17 @@ void CMonsterEntity::Die(CEntity *pKiller, int Weapon)
 		return;
 	SayEvent(MOBDIALOGUE_DEATH, true);
 	DropLoot(pKiller);
+	if(IsBoss() && m_SpawnGroup != 0)
+		GameWorld()->MarkBossDefeated(m_SpawnGroup);
 	CBotEntity::Die(pKiller, Weapon);
+}
+
+void CMonsterEntity::DespawnSilently()
+{
+	if(!m_Alive)
+		return;
+	m_Alive = false;
+	if(GameWorld()->BotManager())
+		GameWorld()->BotManager()->OnBotDeath(m_BotID);
+	GameWorld()->DestroyEntity(this);
 }

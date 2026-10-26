@@ -33,6 +33,13 @@ struct CStructContainer
 	char m_aLoot[32];
 };
 
+struct CStructMob
+{
+	char m_aMob[64];
+	int m_Count;
+	bool m_Boss;
+};
+
 struct CStructVariant
 {
 	char m_aSubId[32];
@@ -40,9 +47,14 @@ struct CStructVariant
 	enum
 	{
 		MAX_CONTAINERS = 4,
+		MAX_MOBS = 8,
 	};
 	CStructContainer m_aContainers[MAX_CONTAINERS];
 	int m_NumContainers;
+	// creatures spawned inside the structure; the boss flag marks the one that
+	// owns the encounter's persistent defeated state
+	CStructMob m_aMobs[MAX_MOBS];
+	int m_NumMobs;
 };
 
 struct CStructCatalogEntry
@@ -56,6 +68,9 @@ struct CStructCatalogEntry
 	int m_FlatWidth;
 	int m_SurfaceOffset;
 	bool m_PasteAir;
+	// Unique floor content: only the one deterministic seed of a floor pastes
+	// this structure, so a ring floor holds exactly one instance of it.
+	bool m_Unique;
 };
 
 // Maps a deterministic 32-bit hash onto [0,1). Probabilities in the floor
@@ -76,6 +91,7 @@ inline float HashToUnitFloat(unsigned Hash)
 void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
 	const char *pContainers, int ContainersSize,
+	const char *pMobs, int MobsSize,
 	const char *pWorld, int WorldSize,
 	array<char> &Out);
 void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size);
@@ -83,6 +99,7 @@ bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
 	const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
 	const char *pContainers, int ContainersSize,
+	const char *pMobs, int MobsSize,
 	const char *pWorld, int WorldSize);
 bool LoadGeneratedWorldMeta(IStorage *pStorage, const char *pMapName, array<char> &OutJson);
 
@@ -438,6 +455,8 @@ struct CInstruction
 		// above the ground line. 0 sits the structure exactly on the ground;
 		// negative floats it above, positive sinks it into the ground.
 		int m_SurfaceOffset;
+		// only the deterministic unique seed of the floor pastes this entry
+		bool m_Unique;
 	};
 
 	char m_aFloorName[64]; // unique floor/map name (the file name)

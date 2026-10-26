@@ -22,6 +22,7 @@
 #include "entities/container.h"
 #include "entities/drill.h"
 #include "entities/dropped_pickup.h"
+#include "entities/monsterentity.h"
 #include "entities/resource.h"
 #include "scripting/scripted_entity.h"
 #include "entity.h"
@@ -29,6 +30,7 @@
 #include "gamecontroller.h"
 #include "gameworld.h"
 #include "item.h"
+#include "mobdata.h"
 
 #include <game/server/database/database.h>
 
@@ -485,6 +487,7 @@ void CGameWorld::InitCollision(IMap *pMap)
 			ApplyWorldJson((*pMeta)["world"]);
 			SpawnResources((*pMeta)["resources"]);
 			SpawnContainers((*pMeta)["containers"]);
+			SpawnMobs((*pMeta)["mobs"]);
 		}
 	}
 	if(HasMeta)
@@ -641,6 +644,81 @@ void CGameWorld::SpawnContainers(const char *pJsonData)
 	json_value *pJson = Parser.ParseString(pJsonData, "containers");
 	if(pJson)
 		SpawnContainers(*pJson);
+}
+
+void CGameWorld::SpawnMobs(const json_value &rMobs)
+{
+	if(rMobs.type != json_array)
+		return;
+	CMobSystem *pMobs = GameServer()->Mobs();
+	CBotManager *pBots = GameServer()->BotManager();
+	if(!pMobs || !pBots)
+		return;
+
+	for(unsigned i = 0; i < rMobs.u.array.length; i++)
+	{
+		const json_value &rEntry = rMobs[i];
+		if(rEntry.type != json_object)
+			continue;
+		const json_value &rMob = rEntry["mob"];
+		if(rMob.type != json_string)
+			continue;
+		const SMobDef *pDef = pMobs->Find(rMob.u.string.ptr);
+		if(!pDef)
+		{
+			dbg_msg("mob", "map '%s' spawns unknown mob '%s'", m_aMapName, rMob.u.string.ptr);
+			continue;
+		}
+		const int Group = (int) (json_int_t) rEntry["group"];
+		if(Group != 0 && IsBossDefeated(Group))
+			continue;
+		const int X = (int) (json_int_t) rEntry["pos_x"];
+		const int Y = (int) (json_int_t) rEntry["pos_y"];
+		IBotEntity *pBot = pBots->SpawnMob(this, pDef, vec2(X * 32.0f + 16.0f, Y * 32.0f + 16.0f), nullptr, nullptr, false);
+		if(!pBot || str_comp(pBot->BotTypeName(), "monster") != 0)
+			continue;
+		static_cast<CMonsterEntity *>(pBot)->SetSpawnGroup(Group);
+	}
+}
+
+void CGameWorld::SpawnMobs(const char *pJsonData)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(pJsonData, "mobs");
+	if(pJson)
+		SpawnMobs(*pJson);
+}
+
+bool CGameWorld::IsBossDefeated(int Group) const
+{
+	if(Group == 0)
+		return false;
+	for(int i = 0; i < m_lDefeatedBossGroups.size(); i++)
+		if(m_lDefeatedBossGroups[i] == Group)
+			return true;
+	return false;
+}
+
+void CGameWorld::MarkBossDefeated(int Group)
+{
+	if(Group == 0 || IsBossDefeated(Group))
+		return;
+	m_lDefeatedBossGroups.add(Group);
+}
+
+void CGameWorld::DestroyDefeatedBossGroups()
+{
+	if(!m_lDefeatedBossGroups.size())
+		return;
+	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_BOTENTITY); !r.empty(); r.pop_front())
+	{
+		IBotEntity *pBot = static_cast<IBotEntity *>(r.front());
+		if(!pBot || str_comp(pBot->BotTypeName(), "monster") != 0)
+			continue;
+		CMonsterEntity *pMonster = static_cast<CMonsterEntity *>(pBot);
+		if(IsBossDefeated(pMonster->SpawnGroup()))
+			pMonster->DespawnSilently();
+	}
 }
 
 void CGameWorld::InitContainerLoot()
@@ -1538,6 +1616,14 @@ void CGameWorld::SaveToDatabase()
 	}
 	JsonWriter.EndArray();
 
+	// Boss encounters already cleared in this instance. The whole group is
+	// skipped on reload, so a defeated boss and its guards stay gone.
+	JsonWriter.WriteAttribute("boss_dead");
+	JsonWriter.BeginArray();
+	for(int i = 0; i < m_lDefeatedBossGroups.size(); i++)
+		JsonWriter.WriteIntValue(m_lDefeatedBossGroups[i]);
+	JsonWriter.EndArray();
+
 	// future world attributes get their own fields of this object here
 	JsonWriter.EndObject();
 	lJson.add(0);
@@ -1546,7 +1632,7 @@ void CGameWorld::SaveToDatabase()
 	// were snapshotted above, so the job never touches the live world and the
 	// world may be unloaded right after this returns. An empty world still
 	// queues a job: it deletes the row.
-	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0 || lScripted.size() > 0 || lContainers.size() > 0);
+	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0 || lScripted.size() > 0 || lContainers.size() > 0 || m_lDefeatedBossGroups.size() > 0);
 }
 
 void CGameWorld::RestoreFromDatabase()
@@ -1570,6 +1656,10 @@ void CGameWorld::RestoreFromDatabase()
 	json_value *pJson = Parser.ParseString(aData.base_ptr(), "world save");
 	if(!pJson || pJson->type != json_object)
 		return;
+
+	const json_value &rBossDead = (*pJson)["boss_dead"];
+	for(unsigned i = 0; rBossDead.type == json_array && i < rBossDead.u.array.length; i++)
+		MarkBossDefeated((int) (json_int_t) rBossDead[i]);
 
 	CItemSystem *pItems = GameServer()->Item();
 	const json_value &rDrops = (*pJson)["drop"];
@@ -1780,4 +1870,8 @@ void CGameWorld::RestoreFromDatabase()
 		pScripted->SpawnHealthJar(this, vec2((float) (json_int_t) rX, (float) (json_int_t) rY),
 			JarId, Owner, -1, pOwnerName, Def.m_Cooldown, Def.m_Range, Def.m_Health, "{}", true, BUILD_LOCK_PUBLIC);
 	}
+
+	// Mobs are spawned during InitCollision, before the saved defeated list is
+	// known. Retire the encounters whose boss was already cleared.
+	DestroyDefeatedBossGroups();
 }

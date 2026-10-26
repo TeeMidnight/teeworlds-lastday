@@ -201,6 +201,29 @@ same state through `lastday_entity.allowed_player_near`, `can_use` and
 `lock_mode`; the health jar uses `allowed_player_near` instead of owner-only
 proximity.
 
+Boss sanctums
+-------------
+Each generated euclidean floor carries exactly one `frost_sanctum` structure.
+Its seed is derived from the floor name and the structure id, so the encounter
+exists on one deterministic instance per floor rather than on every instance.
+The catalog structure is `datasrc/maps/struct/frost_sanctum.json`; it pins a
+theme variant per floor (frost, jungle, desert or grass) and places a vault plus
+a boss and its guards. The world metadata now carries a `mobs` array, and the
+server spawns it as non-natural content: neither the boss nor its summons take a
+slot from the one-monster-per-48-tiles budget.
+
+The boss (`datasrc/mobs/frost_warden.json`) has armor, a shotgun volley, a
+leap and an enrage phase, and summons two spitters at 55% health. Its drops
+include the Warden Sigil accessory, ancient cores, heaven ore and a chance at a
+laser. The vault uses the existing relic loot table.
+
+Killing the boss records its spawn group in the world save (`boss_dead`). On a
+reload the whole group — boss and guards — is retired, so a cleared sanctum
+stays cleared instead of silently refilling. `MOD_VERSION` was bumped so old
+generated maps and packs are not reused; delete the old
+`generatedmaps/LastDay/<old version>` and `mappacks/LastDay/<old version>`
+directories if they are still present.
+
 World packs
 -----------
 A generated instance is a `.map` plus a `.json` sidecar holding its entrances,

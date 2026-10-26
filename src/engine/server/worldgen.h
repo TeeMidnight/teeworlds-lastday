@@ -25,6 +25,18 @@ struct SContainerSpawn
 	int m_Y;
 };
 
+// A creature placed by a generated structure. m_Group is the persistent boss
+// encounter key: when the boss dies the whole group is skipped on reload.
+struct SGeneratedMob
+{
+	int m_ID;
+	int m_Group;
+	char m_aMob[64];
+	bool m_Boss;
+	int m_X;
+	int m_Y;
+};
+
 // The result of generating one euclidean world. Owns its tile buffers; the
 // caller hands them to the map creator.
 class CGeneratedWorld
@@ -92,6 +104,7 @@ public:
 	array<CLayer> m_lLayers;
 	array<CResource> m_lResources;
 	array<SContainerSpawn> m_lContainers;
+	array<SGeneratedMob> m_lMobs;
 	array<CEntrance> m_lEntrances;
 
 	CLayer *AddLayer(const char *pName, int Width, int Height, bool IsGameLayer);

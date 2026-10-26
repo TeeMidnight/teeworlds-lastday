@@ -34,6 +34,7 @@ void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size)
 void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
 	const char *pContainers, int ContainersSize,
+	const char *pMobs, int MobsSize,
 	const char *pWorld, int WorldSize,
 	array<char> &Out)
 {
@@ -68,6 +69,8 @@ void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 	WriteBlob(pResources, ResourcesSize);
 	WritePart(",\"containers\":", (int) (sizeof(",\"containers\":") - 1));
 	WriteBlob(pContainers, ContainersSize);
+	WritePart(",\"mobs\":", (int) (sizeof(",\"mobs\":") - 1));
+	WriteBlob(pMobs, MobsSize);
 	const int WorldLen = TrimSize(pWorld, WorldSize);
 	if(WorldLen > 0)
 	{
@@ -81,6 +84,7 @@ bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
 	const char *pEntrances, int EntrancesSize,
 	const char *pResources, int ResourcesSize,
 	const char *pContainers, int ContainersSize,
+	const char *pMobs, int MobsSize,
 	const char *pWorld, int WorldSize)
 {
 	if(!pStorage || !pMapName || !pMapName[0])
@@ -88,7 +92,7 @@ bool SaveGeneratedWorldMeta(IStorage *pStorage, const char *pMapName,
 
 	array<char> lMeta;
 	BuildGeneratedWorldMeta(pEntrances, EntrancesSize, pResources, ResourcesSize,
-		pContainers, ContainersSize, pWorld, WorldSize, lMeta);
+		pContainers, ContainersSize, pMobs, MobsSize, pWorld, WorldSize, lMeta);
 
 	char aPath[IO_MAX_PATH_LENGTH];
 	GeneratedWorldMetaPath(pMapName, aPath, sizeof(aPath));
@@ -274,6 +278,26 @@ static void ReadStructContainers(const json_value &rValue, CStructContainer *pCo
 	}
 }
 
+static void ReadStructMobs(const json_value &rValue, CStructMob *pMobs, int *pNum)
+{
+	if(rValue.type != json_array)
+		return;
+	for(unsigned m = 0; m < rValue.u.array.length; m++)
+	{
+		const json_value &rEntry = rValue[m];
+		if(rEntry.type != json_object || *pNum >= CStructVariant::MAX_MOBS)
+			continue;
+		const json_value &rMob = rEntry["mob"];
+		if(rMob.type != json_string || !rMob.u.string.ptr[0])
+			continue;
+		CStructMob &Mob = pMobs[(*pNum)++];
+		mem_zero(&Mob, sizeof(Mob));
+		str_copy(Mob.m_aMob, rMob.u.string.ptr, sizeof(Mob.m_aMob));
+		Mob.m_Count = maximum(1, JsonInt(rEntry["count"], 1));
+		Mob.m_Boss = JsonBool(rEntry["boss"], false);
+	}
+}
+
 int CMapGen::ListStructDefsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
 {
 	(void) StorageType;
@@ -329,6 +353,7 @@ void CMapGen::LoadStructDefinition(const char *pDefaultId, const char *pFilePath
 	Entry.m_MinSeparation = maximum(0, JsonInt((*pJson)["min_separation"], 48));
 	Entry.m_FlatWidth = maximum(0, JsonInt((*pJson)["flat_width"], 0));
 	Entry.m_SurfaceOffset = JsonInt((*pJson)["surface_offset"], 0);
+	Entry.m_Unique = JsonBool((*pJson)["unique"], false);
 
 	const json_value &rVariants = (*pJson)["variants"];
 	for(unsigned v = 0; v < rVariants.u.array.length; v++)
@@ -343,11 +368,13 @@ void CMapGen::LoadStructDefinition(const char *pDefaultId, const char *pFilePath
 		CStructVariant &Variant = Entry.m_lVariants.emplace();
 		Variant.m_aSubId[0] = 0;
 		Variant.m_NumContainers = 0;
+		Variant.m_NumMobs = 0;
 		const json_value &rSubId = rVariant["sub_id"];
 		if(rSubId.type == json_string)
 			str_copy(Variant.m_aSubId, rSubId.u.string.ptr, sizeof(Variant.m_aSubId));
 		str_copy(Variant.m_aBaseMap, rBase.u.string.ptr, sizeof(Variant.m_aBaseMap));
 		ReadStructContainers(rVariant["containers"], Variant.m_aContainers, &Variant.m_NumContainers);
+		ReadStructMobs(rVariant["mobs"], Variant.m_aMobs, &Variant.m_NumMobs);
 	}
 
 	if(!Entry.m_lVariants.size())
@@ -509,6 +536,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 		Struct.m_MinSeparation = 48;
 		Struct.m_FlatWidth = 0;
 		Struct.m_SurfaceOffset = 0;
+		Struct.m_Unique = false;
 
 		const json_value &rId = rStruct["id"];
 		const json_value &rBaseValue = rStruct["base"];
@@ -533,6 +561,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 				Struct.m_MinSeparation = pCatalogEntry->m_MinSeparation;
 				Struct.m_FlatWidth = pCatalogEntry->m_FlatWidth;
 				Struct.m_SurfaceOffset = pCatalogEntry->m_SurfaceOffset;
+				Struct.m_Unique = pCatalogEntry->m_Unique;
 				for(int v = 0; v < pCatalogEntry->m_lVariants.size(); v++)
 					Struct.m_lVariants.add(pCatalogEntry->m_lVariants[v]);
 				if(Struct.m_lVariants.size())
@@ -550,6 +579,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 			CStructVariant &Variant = Struct.m_lVariants.emplace();
 			Variant.m_aSubId[0] = 0;
 			Variant.m_NumContainers = 0;
+			Variant.m_NumMobs = 0;
 			str_copy(Variant.m_aBaseMap, pBase, sizeof(Variant.m_aBaseMap));
 			str_copy(Struct.m_aBaseMap, pBase, sizeof(Struct.m_aBaseMap));
 		}
@@ -587,6 +617,9 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 		const json_value &rPasteAir = rStruct["paste_air"];
 		if(rPasteAir.type == json_boolean)
 			Struct.m_PasteAir = (bool) rPasteAir;
+		const json_value &rUnique = rStruct["unique"];
+		if(rUnique.type == json_boolean)
+			Struct.m_Unique = (bool) rUnique;
 
 		// A floor can name the container kinds itself. This wins over the
 		// catalog list, and is the only way an inline "base" structure (which

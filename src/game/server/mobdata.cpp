@@ -282,6 +282,15 @@ void CMobSystem::LoadDef(const char *pDefaultId, const char *pFilePath)
 	// its identity, faction and drops
 	const char *pType = (*pJson)["type"];
 	pDef->m_IsWorm = pType[0] && str_comp_nocase(pType, "worm") == 0;
+	pDef->m_IsBoss = ReadBool((*pJson)["boss"], false);
+	const json_value &rSummon = (*pJson)["summon"];
+	if(rSummon.type == json_object)
+	{
+		const char *pSummonMob = rSummon["mob"];
+		str_copy(pDef->m_Summon.m_aMob, pSummonMob, sizeof(pDef->m_Summon.m_aMob));
+		pDef->m_Summon.m_Count = clamp(ReadInt(rSummon["count"], pDef->m_Summon.m_Count), 0, 12);
+		pDef->m_Summon.m_HealthPercent = clamp(ReadInt(rSummon["health_percent"], pDef->m_Summon.m_HealthPercent), 1, 100);
+	}
 	if(pDef->m_IsWorm)
 	{
 		const json_value &rWorm = (*pJson)["worm"];

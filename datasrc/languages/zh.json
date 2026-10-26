@@ -2134,6 +2134,56 @@
 			"context": "Building",
 			"or": "Health Jar",
 			"tr": "生命罐"
+		},
+		{
+			"context": "Item Name",
+			"or": "Warden Sigil",
+			"tr": "守卫者徽记"
+		},
+		{
+			"context": "Item Desc: Warden Sigil",
+			"or": "A cold sigil torn from a sanctum guardian. Wearing it hardens the body.",
+			"tr": "从圣所守卫身上撕下的冰冷徽记。佩戴后身体会更坚韧。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The sanctum wakes.",
+			"tr": "圣所苏醒了。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "You carry the smell of the surface. It will not save you.",
+			"tr": "你身上有地表的气味。那救不了你。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Kneel.",
+			"tr": "跪下。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The frost remembers every trespass.",
+			"tr": "寒霜记得每一次擅闯。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "A crack in the ice.",
+			"tr": "冰面出现了裂痕。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Return to the cold.",
+			"tr": "回到寒冷中去吧。"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "The sanctum... falls silent...",
+			"tr": "圣所……归于寂静……"
+		},
+		{
+			"context": "Mob Dialogue",
+			"or": "Then we will freeze together!",
+			"tr": "那就一起冻僵吧！"
 		}
 	]
 }

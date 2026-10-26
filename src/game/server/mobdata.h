@@ -146,6 +146,15 @@ struct SMobWorm
 		m_Damage(2), m_BiteRadius(48.0f), m_ChaseRadius(520.0f) {}
 };
 
+struct SMobSummon
+{
+	char m_aMob[64];
+	int m_Count;
+	int m_HealthPercent; // summon once when health drops below this
+
+	SMobSummon() : m_Count(2), m_HealthPercent(50) { m_aMob[0] = '\0'; }
+};
+
 struct SMobDef
 {
 	char m_aId[64];
@@ -164,6 +173,8 @@ struct SMobDef
 	bool m_HasSkin;
 	CBotSkin m_Skin;
 	bool m_IsWorm;
+	bool m_IsBoss;
+	SMobSummon m_Summon;
 	SMobWorm m_Worm;
 	SMobMelee m_Melee;
 	SMobRanged m_Ranged;
@@ -177,7 +188,7 @@ struct SMobDef
 	SMobDef() :
 		m_Faction(BOTFACTION_HOSTILE), m_Health(10), m_Armor(0), m_SpeedScale(1.0f),
 		m_AggroRadius(360.0f), m_AttackRange(48.0f), m_KeepDistance(0.0f),
-		m_JumpChance(12), m_FightHostileGroups(true), m_HasSkin(false), m_IsWorm(false)
+		m_JumpChance(12), m_FightHostileGroups(true), m_HasSkin(false), m_IsWorm(false), m_IsBoss(false)
 	{
 		m_aId[0] = '\0';
 		m_aName[0] = '\0';

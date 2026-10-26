@@ -1,0 +1,9 @@
+{
+    "name": "Warden Sigil",
+    "desc": "A cold sigil torn from a sanctum guardian. Wearing it hardens the body.",
+    "item_type": ["accessory", "charm"],
+    "accessory": {
+        "health": 5,
+        "speed": 0.05
+    }
+}

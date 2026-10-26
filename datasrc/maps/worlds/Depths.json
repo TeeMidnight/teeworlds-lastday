@@ -256,6 +256,12 @@
     },
     "structs": [
         {
+            "id": "frost_sanctum",
+            "variant": "frost",
+            "count": 1,
+            "proba": 1.0
+        },
+        {
             "id": "frost_gate"
         },
         {

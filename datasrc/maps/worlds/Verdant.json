@@ -286,6 +286,12 @@
     },
     "structs": [
         {
+            "id": "frost_sanctum",
+            "variant": "grass",
+            "count": 1,
+            "proba": 1.0
+        },
+        {
             "id": "ruined_gate"
         },
         {

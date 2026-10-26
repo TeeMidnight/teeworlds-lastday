@@ -222,6 +222,12 @@
     },
     "structs": [
         {
+            "id": "frost_sanctum",
+            "variant": "jungle",
+            "count": 1,
+            "proba": 1.0
+        },
+        {
             "id": "jungle_shrine"
         },
         {
