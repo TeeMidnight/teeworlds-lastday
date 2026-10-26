@@ -58,10 +58,59 @@ collision on this side reaches it and the drag is forwarded to the real bot at
 the end of the tick. Since bot ids and real client ids never overlap, a world
 can hold player and bot proxies at the same time.
 
+Storage containers
+-------------------
+Generated map structures carry storage containers. A container holds one
+unlimited stack per item kind, so its `capacity` is the number of *different*
+kinds it can hold, not the number of items. Kinds live in
+`datasrc/containers.json`:
+
+| kind | capacity |
+|---|---|
+| crate | 1 |
+| chest | 2 |
+| vault | 3 |
+
+The first contents of a generated container come from a loot table in
+`datasrc/loot/<table>.json`; there is one file per table, and a table is not
+tied to a container kind. A table rolls `rolls_min..rolls_max` *distinct* item
+kinds (capped by the container capacity); entries are chosen by weight and
+carry a descriptive `rarity` of common / uncommon / rare / legendary. Item ids
+use the normal namespaced form, so an addon item is written as
+`addon:steel_ingot`.
+
+The roll happens once, deterministically, when the instance is first loaded and
+its result becomes world state. A container players emptied is still saved (as
+an empty item list), so reloading or regenerating the same instance cannot
+refill it.
+
+Structures are also one JSON file each, under `datasrc/maps/struct/<id>.json`.
+A variant lists its containers and, for each container, the loot table that
+structure wants it to use:
+
+    "containers": [
+        { "kind": "chest", "loot": "supply_cache" },
+        { "kind": "crate", "loot": "scavenger_cache" }
+    ]
+
+The generator places each one on a reachable floor tile inside the pasted
+region and records its kind, loot table and stable map-instance id in the
+instance metadata, so the server can spawn it and put its contents back later.
+
+Containers are used from the world: aim at one and open the main menu (or type
+`/container`). The Container page lists the container's slots and the player's
+inventory; click a slot to take a stack back or an inventory item to store it.
+The vote reason box carries an optional amount, exactly like the inventory
+menu's use/drop actions. Container contents are world state: they are written
+with the instance's world save when the world is unloaded, keyed by the stable
+id, so they survive a world reload. Cached instances keep the containers they
+were generated with: after editing a structure file or a world's `structs`,
+remove the floor's pack (or pick unused seeds) to regenerate them.
+
 World packs
 -----------
 A generated instance is a `.map` plus a `.json` sidecar holding its entrances,
-resources and ring geometry. A world pack bundles a shard of one floor into a
+resources, containers and ring geometry. A world pack bundles a shard of one floor into a
 single datafile-v5 file, one item per map:
 
     header (magic, json size, map size, flags)
