@@ -16,8 +16,10 @@
 #include <climits>
 
 #include "botmanager.h"
+#include "container.h"
 #include "entities/botentity.h"
 #include "entities/character.h"
+#include "entities/container.h"
 #include "entities/drill.h"
 #include "entities/dropped_pickup.h"
 #include "entities/resource.h"
@@ -482,6 +484,7 @@ void CGameWorld::InitCollision(IMap *pMap)
 			ParseEntrances((*pMeta)["entrances"]);
 			ApplyWorldJson((*pMeta)["world"]);
 			SpawnResources((*pMeta)["resources"]);
+			SpawnContainers((*pMeta)["containers"]);
 		}
 	}
 	if(HasMeta)
@@ -594,6 +597,70 @@ void CGameWorld::SpawnResources(const char *pJsonData)
 	json_value *pJson = Parser.ParseString(pJsonData, "resources");
 	if(pJson)
 		SpawnResources(*pJson);
+}
+
+void CGameWorld::SpawnContainers(const json_value &rContainers)
+{
+	if(rContainers.type != json_array)
+		return;
+	CContainerSystem *pContainers = GameServer()->Containers();
+	if(!pContainers)
+		return;
+
+	for(unsigned i = 0; i < rContainers.u.array.length; i++)
+	{
+		const json_value &rEntry = rContainers[i];
+		if(rEntry.type != json_object)
+			continue;
+
+		const json_value &rKind = rEntry["kind"];
+		if(rKind.type != json_string)
+			continue;
+
+		const SContainerDef *pDef = pContainers->Find(rKind.u.string.ptr);
+		if(!pDef)
+		{
+			dbg_msg("container", "map '%s' spawns unknown container kind '%s'", m_aMapName, rKind.u.string.ptr);
+			continue;
+		}
+
+		const int X = (int) (json_int_t) rEntry["pos_x"];
+		const int Y = (int) (json_int_t) rEntry["pos_y"];
+		const int StorageID = (int) (json_int_t) rEntry["id"];
+		const json_value &rLoot = rEntry["loot"];
+		const char *pLoot = rLoot.type == json_string ? rLoot.u.string.ptr : "";
+
+		new CContainerEntity(this, vec2(X * 32.0f + 16.0f, Y * 32.0f + 16.0f),
+			pDef->m_aKind, pDef->m_aName, pLoot, pDef->m_Capacity, pDef->m_Pickup, StorageID);
+	}
+}
+
+void CGameWorld::SpawnContainers(const char *pJsonData)
+{
+	CJsonParser Parser;
+	json_value *pJson = Parser.ParseString(pJsonData, "containers");
+	if(pJson)
+		SpawnContainers(*pJson);
+}
+
+void CGameWorld::InitContainerLoot()
+{
+	CContainerSystem *pContainers = GameServer()->Containers();
+	if(!pContainers)
+		return;
+
+	// The deterministic seed keeps the first roll of a map instance stable;
+	// the result is what gets persisted, so later loads restore it instead of
+	// rolling again.
+	const unsigned MapHash = str_quickhash(m_aMapName);
+	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_CONTAINER); !r.empty(); r.pop_front())
+	{
+		CContainerEntity *pContainer = static_cast<CContainerEntity *>(r.front());
+		if(pContainer->IsMarkedForDestroy() || pContainer->Initialized())
+			continue;
+		const unsigned Seed = MapHash ^ ((unsigned) pContainer->StorageID() * 2654435761u) ^ 0x85ebca6bu;
+		pContainers->FillLoot(pContainer, Seed);
+	}
 }
 
 void CGameWorld::ParseEntrances(const json_value &rEntrances)
@@ -1066,6 +1133,37 @@ CEntity *CGameWorld::ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pN
 	return pClosest;
 }
 
+CContainerEntity *CGameWorld::ClosestContainer(vec2 Pos, float Radius)
+{
+	float ClosestDist = Radius * 100.0f;
+	CContainerEntity *pClosest = nullptr;
+
+	for(auto &pEnt : m_alpEntityLists[ENTTYPE_CONTAINER])
+	{
+		CContainerEntity *pContainer = static_cast<CContainerEntity *>(pEnt);
+		if(pContainer->IsMarkedForDestroy())
+			continue;
+		const float Dist = distance(pContainer->GetPos(), Pos);
+		if(Dist < pContainer->GetProximityRadius() + Radius && Dist < ClosestDist)
+		{
+			ClosestDist = Dist;
+			pClosest = pContainer;
+		}
+	}
+	return pClosest;
+}
+
+CContainerEntity *CGameWorld::FindContainerByStorageID(int StorageID)
+{
+	for(auto &pEnt : m_alpEntityLists[ENTTYPE_CONTAINER])
+	{
+		CContainerEntity *pContainer = static_cast<CContainerEntity *>(pEnt);
+		if(!pContainer->IsMarkedForDestroy() && pContainer->StorageID() == StorageID)
+			return pContainer;
+	}
+	return nullptr;
+}
+
 CResourceEntity *CGameWorld::ClosestResource(vec2 Pos, float Radius)
 {
 	float ClosestDist = Radius * 100.0f;
@@ -1291,6 +1389,17 @@ void CGameWorld::SaveToDatabase()
 			lDrills.add(pDrill);
 	}
 
+	// Collect every container whose loot has been initialized. An emptied
+	// container must be saved too: otherwise the next load would roll its loot
+	// again and refill it.
+	array<CContainerEntity *> lContainers;
+	for(TypeRange r = DoTypeRange(CGameWorld::ENTTYPE_CONTAINER); !r.empty(); r.pop_front())
+	{
+		CContainerEntity *pContainer = static_cast<CContainerEntity *>(r.front());
+		if(!pContainer->IsMarkedForDestroy() && pContainer->Initialized())
+			lContainers.add(pContainer);
+	}
+
 	// collect the persistent scripted props (the health jar among them). Only
 	// persistent kinds are world content; a transient visual prop comes back
 	// from its own spawn point or not at all.
@@ -1330,6 +1439,40 @@ void CGameWorld::SaveToDatabase()
 		JsonWriter.WriteIntValue(round_to_int(pPickup->GetPos().x));
 		JsonWriter.WriteAttribute("y");
 		JsonWriter.WriteIntValue(round_to_int(pPickup->GetPos().y));
+		JsonWriter.EndObject();
+	}
+	JsonWriter.EndArray();
+
+	// container contents: the stable map-instance id and one entry per used
+	// slot. The position and the kind are not stored: both are map structure
+	// content and are recreated from the generated world metadata.
+	JsonWriter.WriteAttribute("container");
+	JsonWriter.BeginArray();
+	for(int i = 0; i < lContainers.size(); i++)
+	{
+		const CContainerEntity *pContainer = lContainers[i];
+		JsonWriter.BeginObject();
+		JsonWriter.WriteAttribute("id");
+		JsonWriter.WriteIntValue(pContainer->StorageID());
+		JsonWriter.WriteAttribute("kind");
+		JsonWriter.WriteStrValue(pContainer->Kind());
+		JsonWriter.WriteAttribute("items");
+		JsonWriter.BeginArray();
+		for(int s = 0; s < pContainer->Capacity(); s++)
+		{
+			const CContainerEntity::SSlot &Slot = pContainer->Slot(s);
+			if(Slot.m_Id.IsZero() || Slot.m_Count <= 0)
+				continue;
+			char aUuid[UUID_MAXSTRSIZE];
+			Slot.m_Id.FormatUuid(aUuid, sizeof(aUuid));
+			JsonWriter.BeginObject();
+			JsonWriter.WriteAttribute("item");
+			JsonWriter.WriteStrValue(aUuid);
+			JsonWriter.WriteAttribute("count");
+			JsonWriter.WriteIntValue(Slot.m_Count);
+			JsonWriter.EndObject();
+		}
+		JsonWriter.EndArray();
 		JsonWriter.EndObject();
 	}
 	JsonWriter.EndArray();
@@ -1395,7 +1538,7 @@ void CGameWorld::SaveToDatabase()
 	// were snapshotted above, so the job never touches the live world and the
 	// world may be unloaded right after this returns. An empty world still
 	// queues a job: it deletes the row.
-	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0 || lScripted.size() > 0);
+	pDB->QueueWorldSave(m_aMapName, lJson.base_ptr(), lDrops.size() > 0 || lDrills.size() > 0 || lScripted.size() > 0 || lContainers.size() > 0);
 }
 
 void CGameWorld::RestoreFromDatabase()
@@ -1463,6 +1606,56 @@ void CGameWorld::RestoreFromDatabase()
 			continue;
 
 		new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f), DropId, Count);
+	}
+
+	// container contents: find the container the map structure spawned with the
+	// same stable id and put its stacks back in slot order
+	const json_value &rContainers = (*pJson)["container"];
+	for(unsigned i = 0; rContainers.type == json_array && i < rContainers.u.array.length; i++)
+	{
+		const json_value &rEntry = rContainers[i];
+		if(rEntry.type != json_object)
+			continue;
+		const json_value &rID = rEntry["id"];
+		if(rID.type != json_integer)
+			continue;
+		CContainerEntity *pContainer = FindContainerByStorageID((int) (json_int_t) rID);
+		if(!pContainer)
+		{
+			dbg_msg("container", "world '%s': saved container %d no longer exists", m_aMapName, (int) (json_int_t) rID);
+			continue;
+		}
+		// The map content may have changed since the save: a different kind at
+		// the same stable id means the stored stacks belong to another prop.
+		// Leave this one uninitialized so it rolls fresh loot instead.
+		const json_value &rKind = rEntry["kind"];
+		if(rKind.type == json_string && str_comp(rKind.u.string.ptr, pContainer->Kind()) != 0)
+		{
+			dbg_msg("container", "world '%s': container %d changed from '%s' to '%s'",
+				m_aMapName, (int) (json_int_t) rID, rKind.u.string.ptr, pContainer->Kind());
+			continue;
+		}
+		// A saved entry always wins, even with an empty item list: the players
+		// already emptied this container, so InitContainerLoot must not refill it.
+		pContainer->SetInitialized(true);
+
+		const json_value &rItems = rEntry["items"];
+		for(unsigned s = 0; rItems.type == json_array && s < rItems.u.array.length; s++)
+		{
+			const json_value &rItem = rItems[s];
+			if(rItem.type != json_object)
+				continue;
+			const json_value &rItemId = rItem["item"];
+			const json_value &rCount = rItem["count"];
+			if(rItemId.type != json_string || rCount.type != json_integer)
+				continue;
+			CItemID Id;
+			if(!CItemID::Parse(rItemId.u.string.ptr, &Id) || Id.IsZero())
+				continue;
+			if(!pItems->IsKnownItem(Id))
+				continue;
+			pContainer->RestoreSlot(Id, maximum(1, (int) (json_int_t) rCount));
+		}
 	}
 
 	// placed drills: item id, position and the last beam direction

@@ -770,6 +770,23 @@ void CGameController::ComLanguage(IConsole::IResult *pResult, void *pContext)
 	pSelf->GameServer()->SendChat(-1, CHAT_ALL, ClientID, Msg.c_str());
 }
 
+void CGameController::ComContainer(IConsole::IResult *pResult, void *pContext)
+{
+	(void) pResult;
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	const int ClientID = pCmdContext->m_ClientID;
+
+	// both this command and the main menu entry resolve their target the same
+	// way, so there is exactly one definition of "the container I am using"
+	if(!pSelf->GameServer()->AimedContainer(ClientID))
+	{
+		pSelf->SendSystemChat(ClientID, "Container", "Aim at a container first.");
+		return;
+	}
+	pSelf->GameServer()->GameMenu()->SetPlayerPage(ClientID, "CONTAINER");
+}
+
 void CGameController::RegisterChatCommands(CCommandManager *pManager)
 {
 	pManager->AddCommand("about", "About the mod", "", Com_About, this);
@@ -777,6 +794,7 @@ void CGameController::RegisterChatCommands(CCommandManager *pManager)
 	pManager->AddCommand("register", "Register a new account", "s[username] s[password]", ComRegister, this);
 	pManager->AddCommand("login", "Log in to an account", "s[username] s[password]", ComLogin, this);
 	pManager->AddCommand("lang", "Set your language", "?s[code]", ComLanguage, this);
+	pManager->AddCommand("container", "Open the container you are aiming at", "", ComContainer, this);
 }
 
 void CGameController::SendSystemChat(int TargetID, const char *pMsg)

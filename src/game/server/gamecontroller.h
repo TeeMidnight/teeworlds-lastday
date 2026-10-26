@@ -137,6 +137,7 @@ public:
 	static void ComRegister(IConsole::IResult *pResult, void *pContext);
 	static void ComLogin(IConsole::IResult *pResult, void *pContext);
 	static void ComLanguage(IConsole::IResult *pResult, void *pContext);
+	static void ComContainer(IConsole::IResult *pResult, void *pContext);
 	void RegisterChatCommands(CCommandManager *pManager);
 
 	bool CanCharacterPickup(class CCharacter *pChr) const { return true; }

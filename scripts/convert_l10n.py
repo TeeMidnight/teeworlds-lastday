@@ -121,6 +121,24 @@ def parse_world_names():
 		l10n[(name, WORLD_NAME_CTXT)] = ""
 	return l10n
 
+def parse_container_names():
+	"""Collects the display names of the storage containers. They live in
+	datasrc/containers.json and are looked up by name with the "Container Name"
+	context, so the translator needs them next to the other server strings."""
+	l10n = {}
+	containers_file = "datasrc/containers.json"
+	if not os.path.isfile(containers_file):
+		return l10n
+
+	with open(containers_file, encoding='utf-8') as f:
+		containers = json.load(f)
+	if not isinstance(containers, dict):
+		return l10n
+	for container in containers.get("containers", []):
+		if isinstance(container, dict) and container.get("name"):
+			l10n[(container["name"], "Container Name")] = ""
+	return l10n
+
 def parse_tips():
 	"""Collects the periodic chat tips from datasrc/tips.json. The server
 	reads the same file at runtime and looks each entry up with the "Tip"
@@ -271,6 +289,8 @@ if __name__ == '__main__':
 	l10n_server.update(parse_world_names())
 	# tips also live in a json file and are looked up by their text
 	l10n_server.update(parse_tips())
+	# container display names are data looked up with "Container Name"
+	l10n_server.update(parse_container_names())
 	# player-visible chat text written by Python scripts
 	l10n_server.update(parse_script_chat())
 

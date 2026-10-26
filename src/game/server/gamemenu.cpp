@@ -77,6 +77,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	Register("INVENTORY", "Inventory", MenuInventory, nullptr); // Localize("Inventory", "INVENTORY")
 	Register("ITEMVIEW", "Item", MenuItemView, nullptr, "INVENTORY"); // Localize("Item", "ITEMVIEW")
 	Register("CRAFT", "Craft", MenuCraft, nullptr); // Localize("Craft", "CRAFT")
+	Register("CONTAINER", "Container", MenuContainer, nullptr); // Localize("Container", "CONTAINER")
 	Register("LOADOUT", "Loadout", MenuLoadout, nullptr); // Localize("Loadout", "LOADOUT")
 	Register("WEAPONPICK", "Choose Weapon", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Weapon", "WEAPONPICK")
 	Register("ACCESSORYPICK", "Choose Accessory", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Accessory", "ACCESSORYPICK")
@@ -288,6 +289,11 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->SetPlayerPage(ClientID, "CRAFT");
 			return false;
 		}
+		else if(str_comp(VoteStatus.m_aCmd, "PAGE CONTAINER") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "CONTAINER");
+			return false;
+		}
 		else if(str_comp(VoteStatus.m_aCmd, "PAGE LOADOUT") == 0)
 		{
 			pMenu->SetPlayerPage(ClientID, "LOADOUT");
@@ -343,6 +349,12 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	{
 		pMenu->AddOption(Localize("Inventory", "Menu Main"), "PAGE INVENTORY", "★");
 		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
+		// The entry is always present: the server cannot see when the client
+		// opens the vote menu, so a page that only exists while a container is
+		// aimed at could be missing from a list drawn earlier. Resolving the
+		// target when the page opens (and telling the player to aim if there is
+		// none) is reliable.
+		pMenu->AddOption(Localize("Container", "Menu Main"), "PAGE CONTAINER", "★");
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
 		// A train only boards from a platform. The page stays listed as a

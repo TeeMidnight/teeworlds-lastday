@@ -24,6 +24,8 @@
 class CBotManager;
 class CDatabase;
 class CItemSystem;
+class CContainerSystem;
+class CContainerEntity;
 class CNpcSystem;
 class CTradeSystem;
 class CScriptedEntitySystem;
@@ -126,7 +128,8 @@ class CGameContext : public IGameServer
 	void AddBroadcast(int ClientID, const char *pText, int Priority, int LifeSpan);
 	void ResetBroadcastState(int ClientID);
 	void FlushBroadcasts();
-	// submit the resource under this client's cursor as a realtime broadcast
+	// submit the resource or container under this client's cursor as a
+	// realtime broadcast
 	void UpdateCursorResourceBroadcast(int ClientID);
 
 	CGameContext(int Resetting);
@@ -162,6 +165,8 @@ public:
 
 	CItemSystem *m_pItemSystem;
 
+	CContainerSystem *m_pContainerSystem;
+
 	CTradeSystem *m_pTradeSystem;
 
 	CNpcSystem *m_pNpcSystem;
@@ -174,6 +179,7 @@ public:
 	CGameMenu *GameMenu() const { return m_pGameMenu; }
 	CDatabase *Database() const { return m_pDatabase; }
 	CItemSystem *Item() const { return m_pItemSystem; }
+	CContainerSystem *Containers() const { return m_pContainerSystem; }
 	CTradeSystem *Trade() const { return m_pTradeSystem; }
 	CNpcSystem *Npcs() const { return m_pNpcSystem; }
 	class CBuffSystem *Buffs() const { return m_pBuffSystem; }
@@ -233,6 +239,11 @@ public:
 	CCommandManager m_CommandManager;
 
 	CCommandManager *CommandManager() { return &m_CommandManager; }
+
+	// The container the player is aiming at and is close enough to use, or null.
+	// Both the main menu entry and the /container command resolve their target
+	// through this, so they can never disagree.
+	CContainerEntity *AimedContainer(int ClientID);
 
 	// helper functions
 	class CCharacter *GetPlayerChar(int ClientID);

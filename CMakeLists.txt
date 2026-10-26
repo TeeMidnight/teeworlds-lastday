@@ -780,6 +780,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   bot.h
   botmanager.cpp
   botmanager.h
+  container.cpp
+  container.h
   database/account.cpp
   database/account.h
   database/database.cpp
@@ -794,6 +796,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/botentity.h
   entities/character.cpp
   entities/character.h
+  entities/container.cpp
+  entities/container.h
   entities/drill.cpp
   entities/drill.h
   entities/dropped_pickup.cpp
@@ -824,6 +828,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   item.h
   item_craft.cpp
   item_use.cpp
+  menus/container_menu.cpp
   menus/item_menu.cpp
   menus/item_menu.h
   menus/loadout_menu.cpp

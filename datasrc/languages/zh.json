@@ -1364,6 +1364,126 @@
 			"context": "Menu Inventory",
 			"or": "Its owner standing close makes it drop a health pickup.",
 			"tr": "主人站在附近时，它会掉出一枚生命拾取物。"
+		},
+		{
+			"context": "CONTAINER",
+			"or": "Container",
+			"tr": "容器"
+		},
+		{
+			"context": "Container",
+			"or": "Aim at a container first.",
+			"tr": "请先用准星对准一个容器。"
+		},
+		{
+			"context": "Container",
+			"or": "Stored {} item(s).",
+			"tr": "已存入 {} 件物品。"
+		},
+		{
+			"context": "Container",
+			"or": "Stored: {} x{}",
+			"tr": "已存入：{} x{}"
+		},
+		{
+			"context": "Container",
+			"or": "That container is empty.",
+			"tr": "这个容器是空的。"
+		},
+		{
+			"context": "Container",
+			"or": "The container is full.",
+			"tr": "容器已满。"
+		},
+		{
+			"context": "Container",
+			"or": "Took back {} item(s).",
+			"tr": "取回 {} 件物品。"
+		},
+		{
+			"context": "Container",
+			"or": "You have nothing to store.",
+			"tr": "你没有可存放的物品。"
+		},
+		{
+			"context": "Container Name",
+			"or": "Chest",
+			"tr": "箱子"
+		},
+		{
+			"context": "Container Name",
+			"or": "Crate",
+			"tr": "木箱"
+		},
+		{
+			"context": "Container Name",
+			"or": "Vault",
+			"tr": "保险库"
+		},
+		{
+			"context": "Menu Container",
+			"or": "   {} x{}",
+			"tr": "   {} x{}"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Aim at a container first.",
+			"tr": "请先用准星对准一个容器。"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Click a container slot to take its stack back.",
+			"tr": "点击容器栏位可取回整堆物品。"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Click one of your items to store it.",
+			"tr": "点击你的物品即可存入。"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Store everything",
+			"tr": "全部存入"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Take everything",
+			"tr": "全部取回"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Use a number as the vote reason to move that many.",
+			"tr": "在投票理由里填数字可一次移动多个。"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Your inventory is empty.",
+			"tr": "你的背包是空的。"
+		},
+		{
+			"context": "Menu Container",
+			"or": "{}. (empty)",
+			"tr": "{}. （空）"
+		},
+		{
+			"context": "Menu Container",
+			"or": "{}. {} x{}",
+			"tr": "{}. {} x{}"
+		},
+		{
+			"context": "Menu Container",
+			"or": "{}: {} of {} slots used",
+			"tr": "{}：已用 {}/{} 格"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Container",
+			"tr": "容器"
+		},
+		{
+			"context": "Tip",
+			"or": "Aim at a container in a ruin and open the menu to store your goods.",
+			"tr": "在废墟中瞄准容器并打开菜单，就能存放你的物资。"
 		}
 	]
 }

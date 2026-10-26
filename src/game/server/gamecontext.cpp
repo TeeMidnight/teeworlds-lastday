@@ -21,8 +21,10 @@
 #include <generated/server_data.h>
 
 #include "botmanager.h"
+#include "container.h"
 #include "entities/botentity.h"
 #include "entities/character.h"
+#include "entities/container.h"
 #include "entities/dropped_pickup.h"
 #include "scripting/scripted_entity.h"
 #include "entities/laser.h"
@@ -53,6 +55,12 @@ enum
 // the node's own proximity radius is added on top of this
 constexpr float CursorResourceRadius = 20.0f;
 
+// a container is a bigger prop, so its cursor radius is a little more generous
+constexpr float CursorContainerRadius = 28.0f;
+
+// how far a player may stand from the container they open
+constexpr float ContainerReach = 4.0f * 32.0f;
+
 void CGameContext::Construct(int Resetting)
 {
 	m_Resetting = 0;
@@ -65,6 +73,7 @@ void CGameContext::Construct(int Resetting)
 	m_pBotManager = 0;
 	m_pDatabase = 0;
 	m_pItemSystem = 0;
+	m_pContainerSystem = 0;
 	m_pTradeSystem = 0;
 	m_pNpcSystem = 0;
 	m_pBuffSystem = 0;
@@ -119,6 +128,7 @@ void CGameContext::Clear()
 	CGameMenu *pGameMenu = m_pGameMenu;
 	CDatabase *pDatabase = m_pDatabase;
 	CItemSystem *pItemSystem = m_pItemSystem;
+	CContainerSystem *pContainerSystem = m_pContainerSystem;
 	CTradeSystem *pTradeSystem = m_pTradeSystem;
 	CNpcSystem *pNpcSystem = m_pNpcSystem;
 	CBuffSystem *pBuffSystem = m_pBuffSystem;
@@ -147,6 +157,7 @@ void CGameContext::Clear()
 	m_pGameMenu = pGameMenu;
 	m_pDatabase = pDatabase;
 	m_pItemSystem = pItemSystem;
+	m_pContainerSystem = pContainerSystem;
 	m_pTradeSystem = pTradeSystem;
 	m_pNpcSystem = pNpcSystem;
 	m_pBuffSystem = pBuffSystem;
@@ -456,14 +467,49 @@ void CGameContext::UpdateCursorResourceBroadcast(int ClientID)
 	// the cursor's world position, the same point the drill aims at
 	const vec2 CursorPos = pChar->GetPos() + pChar->AimVector();
 	CResourceEntity *pRes = pWorld->ClosestResource(CursorPos, CursorResourceRadius);
-	if(!pRes)
-		return;
-
 	CLanguageScope LanguageScope(LanguageOf(ClientID));
 	char aBuf[256];
-	str_format(aBuf, sizeof(aBuf), "%s %d/%d",
-		ItemIDDisplayName(pRes->Item()), pRes->RemainingHardness(), pRes->MaxHardness());
+	if(pRes)
+	{
+		str_format(aBuf, sizeof(aBuf), "%s %d/%d",
+			ItemIDDisplayName(pRes->Item()), pRes->RemainingHardness(), pRes->MaxHardness());
+		AddBroadcast(ClientID, aBuf, BROADCAST_PRIORITY_RESOURCEINFO, BROADCAST_DURATION_REALTIME);
+		return;
+	}
+
+	// a container under the cursor names itself and how many item kinds it can
+	// hold. This is also where a player learns that the menu can open it.
+	CContainerEntity *pContainer = pWorld->ClosestContainer(CursorPos, CursorContainerRadius);
+	if(!pContainer)
+		return;
+	str_format(aBuf, sizeof(aBuf), "%s %d/%d", Localize(pContainer->Name(), "Container Name"),
+		pContainer->UsedSlots(), pContainer->Capacity());
 	AddBroadcast(ClientID, aBuf, BROADCAST_PRIORITY_RESOURCEINFO, BROADCAST_DURATION_REALTIME);
+}
+
+CContainerEntity *CGameContext::AimedContainer(int ClientID)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return nullptr;
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	if(!pPlayer || pPlayer->IsDummy() || pPlayer->m_MapLoading)
+		return nullptr;
+	CCharacter *pChr = pPlayer->GetCharacter();
+	if(!pChr || !pChr->IsAlive())
+		return nullptr;
+	CGameWorld *pWorld = pPlayer->GameWorld();
+	if(!pWorld)
+		return nullptr;
+
+	const vec2 CursorPos = pChr->GetPos() + pChr->AimVector();
+	CContainerEntity *pContainer = pWorld->ClosestContainer(CursorPos, CursorContainerRadius);
+	if(!pContainer)
+		return nullptr;
+	// the cursor can be far away from the tee; the tee itself has to be able to
+	// reach the container it is opening
+	if(distance(pContainer->GetPos(), pChr->GetPos()) > ContainerReach)
+		return nullptr;
+	return pContainer;
 }
 
 void CGameContext::SendEmoticon(int ClientID, int Emoticon)
@@ -1546,6 +1592,10 @@ void CGameContext::OnInit()
 	m_pItemSystem = new CItemSystem();
 	m_pItemSystem->Init(this, Storage());
 
+	// container kinds (data/containers.json) placed by map structures
+	m_pContainerSystem = new CContainerSystem();
+	m_pContainerSystem->Init(this, Storage());
+
 	// buffs: data/buffs/*.json + per-tick Python modules
 	m_pBuffSystem = new CBuffSystem();
 	m_pBuffSystem->Init(this, Storage());
@@ -1753,6 +1803,9 @@ void CGameContext::OnShutdown()
 
 	delete m_pItemSystem;
 	m_pItemSystem = 0;
+
+	delete m_pContainerSystem;
+	m_pContainerSystem = 0;
 
 	delete m_pTradeSystem;
 	m_pTradeSystem = 0;
@@ -2077,6 +2130,10 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 	}
 	// restore the saved state (dropped items etc.) of this world
 	pNewWorld->RestoreFromDatabase();
+	// containers that had no saved entry are freshly generated map content:
+	// roll their initial loot now, after the restore had a chance to claim the
+	// ones with saved (possibly empty) contents
+	pNewWorld->InitContainerLoot();
 
 	m_pWorlds.set(MapID, pNewWorld);
 }

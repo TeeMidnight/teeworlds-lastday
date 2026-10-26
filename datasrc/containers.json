@@ -1,0 +1,8 @@
+{
+	"comment": "Storage container kinds spawned by map structures. capacity is the number of different item kinds a container holds (each kind is one unlimited stack), not the number of items. display picks the client pickup sprite drawn in the middle of the box. The loot table is not chosen here: the structure definition pairs each container with a table under datasrc/loot/.",
+	"containers": [
+		{ "kind": "crate", "name": "Crate", "capacity": 1, "display": "hammer" },
+		{ "kind": "chest", "name": "Chest", "capacity": 2, "display": "armor" },
+		{ "kind": "vault", "name": "Vault", "capacity": 3, "display": "laser" }
+	]
+}

@@ -107,6 +107,9 @@ private:
 	// shows one item: description + actions ("use", ...)
 	static bool MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// storage container opened from the aimed-at world entity (implemented in
+	// menus/container_menu.cpp)
+	static bool MenuContainer(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// the "Server Vote" page (implemented in menus/vote_menu.cpp)
 	static bool MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// the "Travel" page: the configured euclidean floors the train can reach

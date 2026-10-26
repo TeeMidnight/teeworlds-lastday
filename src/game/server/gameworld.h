@@ -12,6 +12,7 @@
 class CEntity;
 class CCharacter;
 class CResourceEntity;
+class CContainerEntity;
 struct _json_value;
 typedef struct _json_value json_value;
 struct SNpcDef;
@@ -36,6 +37,8 @@ public:
 		ENTTYPE_RESOURCE,
 		ENTTYPE_DROPPEDPICKUP,
 		ENTTYPE_DRILL,
+		// a storage container placed by a generated map structure
+		ENTTYPE_CONTAINER,
 		ENTTYPE_BOTENTITY,
 		// generic scripted prop (data/entities/*.json + data/scripts/entities/*.py)
 		ENTTYPE_SCRIPTED,
@@ -150,8 +153,9 @@ public:
 	// the number written (at most Max).
 	int RingNeighbours(CGameWorld **ppWorlds, vec2 *pOffsets, int Max);
 
-	// persist the whole state of this world (dropped item pickups today,
-	// and any future world attributes added later) into the world_saves row
+	// persist the whole state of this world (dropped item pickups, placed
+	// drills, scripted props, container contents and any future world
+	// attributes) into the world_saves row
 	// of m_aMapName. Called when the world is unloaded and when the server
 	// shuts down; never while the world is running.
 	void SaveToDatabase();
@@ -179,6 +183,12 @@ public:
 	void ParseEntrances(const json_value &rEntrances);
 	void SpawnResources(const char *pJsonData);
 	void SpawnResources(const json_value &rResources);
+	// containers placed by the generated world metadata (map structures)
+	void SpawnContainers(const char *pJsonData);
+	void SpawnContainers(const json_value &rContainers);
+	// Roll the initial loot of containers that were not restored from a world
+	// save. Called once after RestoreFromDatabase during the world load.
+	void InitContainerLoot();
 	// apply the world geometry object (wrap / ring) read from the generated
 	// world metadata or, for older maps, from an embedded json map item
 	void ApplyWorldJson(const json_value &rWorld);
@@ -239,6 +249,13 @@ public:
 	// ring neighbour. Respawning nodes are invisible, so they never win the
 	// lookup and cannot hide a live node behind them.
 	CResourceEntity *ClosestResource(vec2 Pos, float Radius);
+
+	// The closest container to Pos within Radius. Containers do not cross the
+	// ring boundary, so only this world is searched.
+	CContainerEntity *ClosestContainer(vec2 Pos, float Radius);
+	// The container whose map-instance storage id matches, or null. Used by the
+	// world save restoration to put a stored stack back where it came from.
+	CContainerEntity *FindContainerByStorageID(int StorageID);
 
 	/*
 		Function: interserct_CEntity
