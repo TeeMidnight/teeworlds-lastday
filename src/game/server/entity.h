@@ -38,6 +38,9 @@ private:
 	CEntity *m_pNextTypeEntity;
 
 	int m_ID;
+	// map (world) id whose floor pool owns m_ID. Kept separately because a
+	// character can be rebound to another world before it is destroyed.
+	unsigned m_IDWorldID;
 	int m_ObjType;
 	int m_ObjFlag;
 
@@ -96,6 +99,8 @@ public:
 
 	/* Getters */
 	int GetID() const { return m_ID; }
+	// world whose floor pool owns GetID(); stable across SetGameWorld()
+	unsigned SnapIDWorld() const { return m_IDWorldID; }
 	const vec2 &GetPos() const { return m_Pos; }
 
 	// The client id to credit for a hit this entity lands, or a negative

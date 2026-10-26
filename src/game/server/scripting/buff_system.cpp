@@ -193,13 +193,15 @@ void CBuffSystem::CallEvent(SBuffInstance &Buff, int ClientID, const char *pEven
 	SScriptContext Ctx;
 	Ctx.m_pGameServer = m_pGameServer;
 	Ctx.m_ClientID = ClientID;
+	CPlayer *pPlayer = m_pGameServer->m_apPlayers[ClientID];
+	if(pPlayer && pPlayer->GetCharacter())
+		Ctx.m_WorldID = pPlayer->GetCharacter()->GameWorld()->WorldID();
 	Ctx.m_Now = m_pGameServer->Server()->Tick();
 	Ctx.m_TickSpeed = m_pGameServer->Server()->TickSpeed();
 	str_copy(Ctx.m_aEvent, pEvent, sizeof(Ctx.m_aEvent));
 	str_copy(Ctx.m_aBuff, pDef->m_aId, sizeof(Ctx.m_aBuff));
 	Ctx.m_State = Buff.m_State;
 
-	CPlayer *pPlayer = m_pGameServer->m_apPlayers[ClientID];
 	if(pPlayer && pPlayer->GetCharacter())
 		Ctx.m_Pos = pPlayer->GetCharacter()->GetPos();
 

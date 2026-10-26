@@ -20,5 +20,11 @@ def on_selftest(ctx):
     ctx.result["player_id"] = ctx.Player(3).id
     ctx.result["drop_near"] = ctx.HealthDrop.near(ctx.Vec2(0.0, 0.0), 96.0)
 
+    # per-floor snapshot id allocation through the host bridge
+    snap_id = ctx.snap_new_id()
+    ctx.result["snap_id"] = snap_id
+    ctx.result["snap_freed"] = ctx.snap_free_id(snap_id) if snap_id >= 0 else False
+    ctx.result["world"] = ctx.world
+
     ctx.consumed = True
     return True

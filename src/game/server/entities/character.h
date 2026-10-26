@@ -82,6 +82,9 @@ public:
 	class CPlayer *GetPlayer() { return m_pPlayer; }
 	int GetCID();
 
+	// current physics velocity (used by scripted callbacks)
+	vec2 Velocity() const { return m_Core.m_Vel; }
+
 	// ring proxies: the core position a neighbouring world mirrors, and the hook
 	// drag a proxy received that belongs to this character
 	vec2 CorePos() const { return m_Core.m_Pos; }

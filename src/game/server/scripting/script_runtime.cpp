@@ -7,6 +7,7 @@
 #include <engine/storage.h>
 
 #include <game/server/gamecontext.h>
+#include <game/server/gameworld.h>
 
 #include <base/tl/array.h>
 
@@ -19,6 +20,29 @@ namespace py = pybind11;
 
 namespace
 {
+// Installs the callback's world for the duration of one Python call, including
+// nested host calls and every early return of CScriptRuntime::Call.
+class CActiveWorldScope
+{
+public:
+	CActiveWorldScope(CScriptRuntime *pRuntime, CGameWorld *pWorld) :
+		m_pRuntime(pRuntime), m_pPrev(nullptr), m_Set(pWorld != nullptr)
+	{
+		if(m_Set)
+			m_pPrev = m_pRuntime->SetActiveWorld(pWorld);
+	}
+	~CActiveWorldScope()
+	{
+		if(m_Set)
+			m_pRuntime->SetActiveWorld(m_pPrev);
+	}
+
+private:
+	CScriptRuntime *m_pRuntime;
+	CGameWorld *m_pPrev;
+	bool m_Set;
+};
+
 struct SWatchdog
 {
 	SWatchdog(int TimeoutMs) { py_watchdog_begin(TimeoutMs); }
@@ -97,6 +121,8 @@ public:
 	array<SModule *> m_Modules;
 	// module handle for data/scripts/_context.py (the class-based context layer)
 	int m_ContextModule = -1;
+	// world of the callback that is currently executing (see ActiveWorld())
+	CGameWorld *m_pActiveWorld = nullptr;
 	std::string m_LastError;
 };
 
@@ -247,6 +273,40 @@ const char *CScriptRuntime::ModulePath(int Module) const
 	return m_pImpl->m_Modules[Module]->m_Path.c_str();
 }
 
+CGameWorld *CScriptRuntime::ActiveWorld() const
+{
+	if(m_pImpl && m_pImpl->m_pActiveWorld)
+		return m_pImpl->m_pActiveWorld;
+
+	CGameContext *pGame = m_pGameServer;
+	if(!pGame)
+		return nullptr;
+
+	CGameWorld *pWorld = pGame->MainWorld();
+	if(pWorld)
+		return pWorld;
+
+	// Before the main world exists (or for a fresh server) use any loaded world
+	// so console driven calls still have a sane default.
+	CGameWorld *pFirst = nullptr;
+	pGame->m_pWorlds.for_each([](CGameWorld *&pEntry, void *pUser) -> void
+	{
+		CGameWorld **ppOut = static_cast<CGameWorld **>(pUser);
+		if(!*ppOut && pEntry)
+			*ppOut = pEntry;
+	}, &pFirst);
+	return pFirst;
+}
+
+CGameWorld *CScriptRuntime::SetActiveWorld(CGameWorld *pWorld)
+{
+	if(!m_pImpl)
+		return nullptr;
+	CGameWorld *pPrev = m_pImpl->m_pActiveWorld;
+	m_pImpl->m_pActiveWorld = pWorld;
+	return pPrev;
+}
+
 bool CScriptRuntime::HasFunction(int Module, const char *pFunction) const
 {
 	if(!Ready() || !pFunction || Module < 0 || Module >= (int) m_pImpl->m_Modules.size())
@@ -273,6 +333,9 @@ bool CScriptRuntime::Call(int Module, const char *pFunction, SScriptContext &Ctx
 
 	try
 	{
+		CGameWorld *pCallbackWorld = m_pGameServer && Ctx.m_WorldID ? m_pGameServer->WorldByID(Ctx.m_WorldID) : nullptr;
+		CActiveWorldScope WorldScope(this, pCallbackWorld);
+
 		py::dict PyCtx;
 		PyCtx["event"] = (const char *) Ctx.m_aEvent;
 		PyCtx["player"] = Ctx.m_ClientID;

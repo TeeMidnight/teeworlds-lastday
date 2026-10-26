@@ -28,45 +28,20 @@ namespace py = pybind11;
 
 namespace
 {
-// The world of the CScriptedEntity callback that is currently running. A module
-// function called from on_spawn/on_tick/on_hit/on_destroy must spawn its helpers
-// into that same world, including when the callback runs while a ring
-// neighbour is being snapshotted.
-CGameWorld *s_pActiveWorld = nullptr;
-
-struct SActiveWorldScope
-{
-	CGameWorld *m_pPrev;
-	explicit SActiveWorldScope(CGameWorld *pWorld) : m_pPrev(s_pActiveWorld) { s_pActiveWorld = pWorld; }
-	~SActiveWorldScope() { s_pActiveWorld = m_pPrev; }
-};
-
 CGameContext *Game()
 {
 	CScriptRuntime *pRuntime = CScriptRuntime::Get();
 	return pRuntime ? pRuntime->GameServer() : nullptr;
 }
 
+// The runtime installs the callback's world for the duration of Call(), so a
+// module function called from on_spawn/on_tick/on_hit/on_destroy spawns its
+// helpers into that same world, including when the callback runs while a ring
+// neighbour is being snapshotted.
 CGameWorld *ActiveWorldOrMain()
 {
-	if(s_pActiveWorld)
-		return s_pActiveWorld;
-
-	CGameContext *pGame = Game();
-	if(!pGame)
-		return nullptr;
-
-	CGameWorld *pWorld = pGame->MainWorld();
-	if(pWorld)
-		return pWorld;
-
-	CGameWorld *pFirst = nullptr;
-	pGame->m_pWorlds.for_each([](CGameWorld *&pEntry, void *pUser) -> void {
-		CGameWorld **ppOut = static_cast<CGameWorld **>(pUser);
-		if(!*ppOut && pEntry)
-			*ppOut = pEntry;
-	}, &pFirst);
-	return pFirst;
+	CScriptRuntime *pRuntime = CScriptRuntime::Get();
+	return pRuntime ? pRuntime->ActiveWorld() : nullptr;
 }
 
 CScriptedEntity *FindScriptedEntity(int EntityID)
@@ -265,9 +240,9 @@ CScriptedEntity::CScriptedEntity(CGameWorld *pGameWorld, vec2 Pos, const char *p
 	m_lLasers.hint_size(MAX_VISUAL_LASERS);
 	m_lPickups.hint_size(MAX_VISUAL_PICKUPS);
 	for(int i = 0; i < MAX_VISUAL_LASERS; i++)
-		m_aLaserIDs[i] = Server()->SnapNewID();
+		m_aLaserIDs[i] = Server()->SnapNewID(SnapIDWorld());
 	for(int i = 0; i < MAX_VISUAL_PICKUPS; i++)
-		m_aPickupIDs[i] = Server()->SnapNewID();
+		m_aPickupIDs[i] = Server()->SnapNewID(SnapIDWorld());
 
 	SetVisual(pVisual);
 
@@ -277,9 +252,9 @@ CScriptedEntity::CScriptedEntity(CGameWorld *pGameWorld, vec2 Pos, const char *p
 CScriptedEntity::~CScriptedEntity()
 {
 	for(int i = 0; i < MAX_VISUAL_LASERS; i++)
-		Server()->SnapFreeID(m_aLaserIDs[i]);
+		Server()->SnapFreeID(m_aLaserIDs[i], SnapIDWorld());
 	for(int i = 0; i < MAX_VISUAL_PICKUPS; i++)
-		Server()->SnapFreeID(m_aPickupIDs[i]);
+		Server()->SnapFreeID(m_aPickupIDs[i], SnapIDWorld());
 }
 
 void CScriptedEntity::SetVisual(const char *pJson)
@@ -375,7 +350,6 @@ bool CScriptedEntity::CallEvent(const char *pEvent, int Player, CEntity *pFrom, 
 
 	(void) pFrom;
 
-	SActiveWorldScope Scope(GameWorld());
 	if(!pRuntime->Call(m_Module, pEvent, Ctx))
 	{
 		const int Now = Server()->Tick();
@@ -859,5 +833,30 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		CCharacter *pChr = static_cast<CCharacter *>(pEntity->GameWorld()->ClosestEntity(
 			pEntity->GetPos(), Radius, CGameWorld::ENTTYPE_CHARACTER, nullptr, true));
 		return pChr && pChr->IsAlive() ? pChr->GetCID() : -1;
+	});
+
+	m.def("exists", [](int EntityID) -> bool {
+		return FindScriptedEntity(EntityID) != nullptr;
+	});
+
+	m.def("world_id", [](int EntityID) -> unsigned {
+		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
+		return pEntity ? pEntity->GameWorld()->WorldID() : 0;
+	});
+
+	// Snapshot ids of the world the callback runs in. The pool is per floor, so
+	// every instance of one floor can safely share it.
+	m.def("snap_new_id", []() -> int {
+		CGameWorld *pWorld = ActiveWorldOrMain();
+		if(!pWorld)
+			return -1;
+		return pWorld->Server()->SnapNewID(pWorld->WorldID());
+	});
+
+	m.def("snap_free_id", [](int ID) -> bool {
+		CGameWorld *pWorld = ActiveWorldOrMain();
+		if(!pWorld)
+			return false;
+		return pWorld->Server()->SnapFreeID(ID, pWorld->WorldID());
 	});
 }

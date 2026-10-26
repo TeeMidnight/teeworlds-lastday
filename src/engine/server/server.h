@@ -48,6 +48,8 @@ public:
 	int NewID();
 	void TimeoutIDs();
 	void FreeID(int ID);
+	// whether ID is currently allocated (state 1) in this pool
+	bool Owns(int ID) const { return ID >= 0 && ID < MAX_IDS && m_aIDs[ID].m_State == 1; }
 };
 
 class CServerBan : public CNetBan
@@ -179,7 +181,24 @@ public:
 	array<unsigned char> m_SnapshotDeltaData;
 	array<unsigned char> m_SnapshotCompData;
 	array<unsigned char> m_DemoSnapshotData;
-	CSnapIDPool m_IDPool;
+	// One snapshot id pool per floor. Ring neighbours of the same floor are
+	// snapped into the same client snapshot, so they share a pool; a different
+	// floor never shares a snapshot with this one and gets its own pool.
+	struct SFloorIDPool
+	{
+		char m_aFloor[64];
+		CSnapIDPool m_Pool;
+	};
+	// Floor name -> pool. The key is the pool's own m_aFloor buffer, so it
+	// stays valid for as long as the entry exists.
+	struct CFloorKey
+	{
+		static unsigned hash(const char *pKey) { return str_quickhash(pKey); }
+		static bool equal(const char *pA, const char *pB) { return str_comp(pA, pB) == 0; }
+	};
+	hash_table<const char *, SFloorIDPool *, 8, CFloorKey> m_pFloorIDPools;
+	CSnapIDPool *IDPoolForMap(unsigned MapID);
+	CSnapIDPool *IDPoolForFloor(const char *pFloor);
 	CNetServer m_NetServer;
 
 	// Compatibility layer for 0.7 peers: the server itself speaks 0.8, so every
@@ -220,6 +239,9 @@ public:
 		bool m_Loaded;
 		// engine/server/mapgen.h EWorldKind of this map, -1 when unknown
 		int m_WorldKind;
+		// floor name of the map: "Depths" for "Depths_23", the map name for a
+		// hand authored map. Snapshot ids are pooled per floor.
+		char m_aFloor[64];
 
 		// Ring geometry of a generated instance, read from its world json. When
 		// enabled, offset_x is the global column of this instance's local x = 0
@@ -255,6 +277,7 @@ public:
 	bool m_ServerInfoNeedsUpdate;
 
 	CServer();
+	virtual ~CServer();
 
 	virtual void SetClientName(int ClientID, const char *pName);
 	virtual void SetClientClan(int ClientID, char const *pClan);
@@ -342,13 +365,14 @@ public:
 
 	void RegisterCommands();
 
-	virtual int SnapNewID();
-	virtual void SnapFreeID(int ID);
+	virtual int SnapNewID(unsigned MapID);
+	virtual bool SnapFreeID(int ID, unsigned MapID);
 	virtual void *SnapNewItem(int Type, int ID, int Size);
 	void SnapSetStaticsize(int ItemType, int Size);
 
 	virtual bool SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent = nullptr);
 	virtual const char *GetMapName(unsigned MapID);
+	virtual const char *GetMapFloorName(unsigned MapID);
 	virtual int GetMapWorldKind(unsigned MapID);
 	virtual int GetTrainDestinationCount();
 	virtual bool GetTrainDestination(int Index, const char **ppName, int *pRingSize);

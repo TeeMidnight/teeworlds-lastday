@@ -45,6 +45,42 @@
 
 volatile sig_atomic_t InterruptSignaled = 0;
 
+// The floor part of a map name. Generated instances are named
+// "<floor>_<seed>" ("Depths_23"), and every instance of one floor shares the
+// same snapshot id pool because a ring snapshotted one instance together with
+// its neighbours. A hand authored map is its own floor.
+static void FloorNameFromMapName(const char *pMapName, char *pOut, int OutSize)
+{
+	if(!pOut || OutSize <= 0)
+		return;
+	pOut[0] = '\0';
+	if(!pMapName)
+		return;
+
+	const char *pShort = pMapName;
+	for(const char *p = pMapName; *p; p++)
+		if(*p == '/' || *p == '\\')
+			pShort = p + 1;
+
+	int Len = str_length(pShort);
+	const char *pUnderscore = 0;
+	for(const char *p = pShort; *p; p++)
+		if(*p == '_')
+			pUnderscore = p;
+
+	// only a numeric suffix marks a generated instance, matching LoadMap
+	if(pUnderscore && pUnderscore[1] && str_is_number(pUnderscore + 1) == 0)
+	{
+		const int BaseLen = (int) (pUnderscore - pShort);
+		if(BaseLen > 0)
+			Len = BaseLen;
+	}
+
+	str_copy(pOut, pShort, OutSize);
+	if(Len < OutSize)
+		pOut[Len] = '\0';
+}
+
 CSnapIDPool::CSnapIDPool()
 {
 	Reset();
@@ -286,6 +322,17 @@ CServer::CServer() // : m_DemoRecorder(&m_SnapshotDelta)
 	m_GeneratedRconPassword = 0;
 
 	Init();
+}
+
+CServer::~CServer()
+{
+	m_pFloorIDPools.for_each([](SFloorIDPool *&pPool, void *pUser) -> void
+	{
+		(void) pUser;
+		delete pPool;
+		pPool = nullptr;
+	}, nullptr);
+	m_pFloorIDPools.clear();
 }
 
 void CServer::SetClientName(int ClientID, const char *pName)
@@ -1554,6 +1601,9 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	// fields, otherwise they land in a stale hash-table slot and the client
 	// never receives the correct no-fade/offset flags.
 	const unsigned MapID = pInfo->m_MapID;
+	// Cache the floor name before anything can grow m_MapInfos and invalidate
+	// pInfo. Snapshot ids are pooled per floor, not per map instance.
+	FloorNameFromMapName(pInfo->GetMapName(), pInfo->m_aFloor, sizeof(pInfo->m_aFloor));
 	char aBuf[IO_MAX_PATH_LENGTH];
 	str_format(aBuf, sizeof(aBuf), "maps/%s.map", pInfo->m_aName);
 	bool IsGenerated = false;
@@ -1892,8 +1942,12 @@ int CServer::Run()
 			// load new map
 			if(m_CurrentGameTick >= 0x6FFFFFFF) //	force reload to make sure the ticks stay within a valid range
 			{
-				// reinit snapshot ids
-				m_IDPool.TimeoutIDs();
+				// reinit snapshot ids of every floor pool
+				m_pFloorIDPools.for_each([](SFloorIDPool *&pPool, void *pUser) -> void
+				{
+					(void) pUser;
+					pPool->m_Pool.TimeoutIDs();
+				}, nullptr);
 
 				bool aSpecs[MAX_CLIENTS];
 				for(int c = 0; c < MAX_CLIENTS; c++)
@@ -2225,14 +2279,62 @@ void CServer::RegisterCommands()
 	m_pGameServer->OnConsoleInit();
 }
 
-int CServer::SnapNewID()
+CSnapIDPool *CServer::IDPoolForFloor(const char *pFloor)
 {
-	return m_IDPool.NewID();
+	if(!pFloor)
+		pFloor = "";
+	if(SFloorIDPool **ppPool = m_pFloorIDPools.get(pFloor))
+		return &(*ppPool)->m_Pool;
+
+	SFloorIDPool *pNew = new SFloorIDPool();
+	str_copy(pNew->m_aFloor, pFloor, sizeof(pNew->m_aFloor));
+	m_pFloorIDPools.set(pNew->m_aFloor, pNew);
+	dbg_msg("server", "snapshot id pool created for floor '%s'", pFloor[0] ? pFloor : "(unknown)");
+	return &pNew->m_Pool;
 }
 
-void CServer::SnapFreeID(int ID)
+CSnapIDPool *CServer::IDPoolForMap(unsigned MapID)
 {
-	m_IDPool.FreeID(ID);
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	if(pInfo && pInfo->m_aFloor[0])
+		return IDPoolForFloor(pInfo->m_aFloor);
+
+	// A map that is known but not loaded yet has no cached floor name.
+	char aFloor[64];
+	FloorNameFromMapName(pInfo ? pInfo->GetMapName() : "", aFloor, sizeof(aFloor));
+	return IDPoolForFloor(aFloor);
+}
+
+int CServer::SnapNewID(unsigned MapID)
+{
+	return IDPoolForMap(MapID)->NewID();
+}
+
+bool CServer::SnapFreeID(int ID, unsigned MapID)
+{
+	if(ID < 0)
+		return false;
+
+	// IDs may repeat across floors, so unlike SnapNewID this cannot fall back
+	// to a scan of every pool: the floor of the allocation has to decide which
+	// pool receives the id.
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	char aFloor[64];
+	if(pInfo && pInfo->m_aFloor[0])
+		str_copy(aFloor, pInfo->m_aFloor, sizeof(aFloor));
+	else
+		FloorNameFromMapName(pInfo ? pInfo->GetMapName() : "", aFloor, sizeof(aFloor));
+
+	SFloorIDPool **ppPool = m_pFloorIDPools.get(aFloor);
+	if(!ppPool || !(*ppPool)->m_Pool.Owns(ID))
+	{
+		dbg_msg("server", "SnapFreeID: id %d is not allocated for floor '%s' (map %u)",
+			ID, aFloor[0] ? aFloor : "(unknown)", MapID);
+		return false;
+	}
+
+	(*ppPool)->m_Pool.FreeID(ID);
+	return true;
 }
 
 void *CServer::SnapNewItem(int Type, int ID, int Size)
@@ -2252,21 +2354,11 @@ void CServer::SnapSetStaticsize(int ItemType, int Size)
 // reuse the neighbour shift, since their axes are unrelated.
 static bool SameRingFloor(CServer::CMapInfo *pA, CServer::CMapInfo *pB)
 {
-	const char *pNameA = pA->GetMapName();
-	const char *pNameB = pB->GetMapName();
-	const char *pSeedA = 0;
-	const char *pSeedB = 0;
-	for(const char *p = pNameA; *p; p++)
-		if(*p == '_')
-			pSeedA = p;
-	for(const char *p = pNameB; *p; p++)
-		if(*p == '_')
-			pSeedB = p;
-	if(!pSeedA || !pSeedB)
-		return false;
-	const int LenA = (int) (pSeedA - pNameA);
-	const int LenB = (int) (pSeedB - pNameB);
-	return LenA == LenB && str_comp_num(pNameA, pNameB, LenA) == 0;
+	char aFloorA[64];
+	char aFloorB[64];
+	FloorNameFromMapName(pA->GetMapName(), aFloorA, sizeof(aFloorA));
+	FloorNameFromMapName(pB->GetMapName(), aFloorB, sizeof(aFloorB));
+	return aFloorA[0] && str_comp(aFloorA, aFloorB) == 0;
 }
 
 bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
@@ -2371,6 +2463,16 @@ const char *CServer::GetMapName(unsigned MapID)
 {
 	CMapInfo *pInfo = m_MapInfos[MapID];
 	return pInfo ? pInfo->GetMapName() : "";
+}
+
+const char *CServer::GetMapFloorName(unsigned MapID)
+{
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	if(!pInfo)
+		return "";
+	if(!pInfo->m_aFloor[0])
+		FloorNameFromMapName(pInfo->GetMapName(), pInfo->m_aFloor, sizeof(pInfo->m_aFloor));
+	return pInfo->m_aFloor;
 }
 
 void CServer::SetMapMeta(unsigned MapID, const void *pData, int Size)

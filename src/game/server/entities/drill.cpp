@@ -27,7 +27,7 @@ CDrillEntity::CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &Item
 	m_WaitRelease = false;
 
 	for(int i = 0; i < 4; i++)
-		m_aBeamIDs[i] = Server()->SnapNewID();
+		m_aBeamIDs[i] = Server()->SnapNewID(SnapIDWorld());
 
 	GameWorld()->InsertEntity(this);
 }
@@ -35,7 +35,7 @@ CDrillEntity::CDrillEntity(CGameWorld *pGameWorld, vec2 Pos, const CItemID &Item
 CDrillEntity::~CDrillEntity()
 {
 	for(int i = 0; i < 4; i++)
-		Server()->SnapFreeID(m_aBeamIDs[i]);
+		Server()->SnapFreeID(m_aBeamIDs[i], SnapIDWorld());
 }
 
 void CDrillEntity::SetDirection(vec2 Dir)

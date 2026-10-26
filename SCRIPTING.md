@@ -8,9 +8,11 @@ PocketPy. The script sources live in `datasrc/scripts/` and are copied to
 ## Layout
 
 - `src/game/server/scripting/script_runtime.*` — VM lifetime, module loading,
-  watchdog, exception isolation, JSON state/result transfer.
+  watchdog, exception isolation, JSON state/result transfer, and the active
+  world of the running callback.
 - `src/game/server/scripting/script_api.cpp` — embedded `lastday` module
-  (players, items, buffs, projectiles, lasers, sounds, tuning).
+  (players, items, buffs, projectiles, lasers, sounds, tuning, worlds and
+  per-floor snapshot ids).
 - `datasrc/scripts/_context.py` — class-based callback context. Every callback
   receives one `Context` object.
 - `src/game/server/scripting/buff_system.*` — buff definitions and per-tick
@@ -37,11 +39,12 @@ def on_tick(ctx):
 
 Useful fields:
 
-- `ctx.player` — player wrapper (`.id`, `.pos`, `.health`, `.alive`,
-  `.heal()`, `.damage()`, `.chat()`, `.item_count()`, `.give_item()`,
-  `.add_buff()`, `.forget()`, ...) or `None`.
-- `ctx.entity` — scripted entity wrapper (`.id`, `.pos`, `.health`,
-  `.damage()`, `.destroy()`, `.set_visual()`, ...) or `None`.
+- `ctx.player` — player wrapper (`.id`, `.pos`, `.velocity`, `.health`,
+  `.alive`, `.team`, `.name`, `.weapon`, `.heal()`, `.damage()`, `.chat()`,
+  `.teleport()`, `.item_count()`, `.give_item()`, `.add_buff()`, `.forget()`,
+  ...) or `None`.
+- `ctx.entity` — scripted entity wrapper (`.id`, `.pos`, `.health`, `.exists`,
+  `.world_id`, `.damage()`, `.destroy()`, `.set_visual()`, ...) or `None`.
 - `ctx.item` — item wrapper (`.id`, `.count(player)`, `.give()`, `.take()`).
 - `ctx.buff` — active buff wrapper (`.id`, `.stacks`, `.state`, `.remove()`).
 - `ctx.pos`, `ctx.dir` — `Vec2` with `.x`, `.y`, indexing, `.length()`,
@@ -50,6 +53,14 @@ Useful fields:
 - `ctx.extra` — `Extra` for subsystem-specific values (missing keys read as 0).
 - `ctx.params`, `ctx.state`, `ctx.result` — plain dictionaries.
 - `ctx.now`, `ctx.tick_speed`, `ctx.range_scale`, `ctx.weapon`, `ctx.kind`.
+- `ctx.world`, `ctx.world_name`, `ctx.floor_name`, `ctx.world_kind` — the map
+  and floor the callback runs in. Generated instances share a floor name
+  (`Depths_1` and `Depths_23` are both floor `Depths`).
+- `ctx.snap_new_id()` / `ctx.snap_free_id(id)` — snapshot ids for custom
+  snapshot items. Ids are pooled per floor: all instances of one floor share
+  a pool, while an unrelated floor has its own, so ring neighbours can be
+  snapped together without collisions. The context passes its own world when
+  freeing, because the same numeric id may be live on two different floors.
 - Output flags: `ctx.consumed`, `ctx.reload_ticks`, `ctx.destroy`.
 - Constructor classes: `ctx.Projectile`, `ctx.Laser`, `ctx.HealthDrop`,
   `ctx.DroppedPickup`, `ctx.MeleeSwing`. Their constructors call the existing
@@ -67,6 +78,33 @@ def on_fire(ctx):
 
 `ctx["player"]` etc. still work as a compatibility shim for older scripts and
 return the primitive id/name; new scripts should use the class attributes.
+
+## Host API
+
+`import lastday` exposes the server bridge:
+
+- players: `player_pos`, `player_health`, `player_armor_value`,
+  `player_alive`, `player_max_health`, `player_range_scale`,
+  `player_speed_scale`, `player_team`, `player_name`, `player_velocity`,
+  `player_heal`, `player_armor`, `player_damage`, `player_forget`,
+  `player_teleport`, `player_weapon`, `player_weapon_id`,
+  `player_set_weapon`, `chat`.
+- items / buffs: `item_count`, `item_give`, `item_take`, `buff_add`,
+  `buff_remove`, `buff_stacks`.
+- entities: `create_projectile`, `create_laser`, `sound`, `hammer_hit`,
+  `tuning`, `random_int`, `random_int_range`, `log`.
+- server / worlds: `tick`, `tick_speed`, `active_world`, `world_name`,
+  `floor_name`, `world_kind`.
+- snapshot ids: `snap_new_id()`, `snap_new_id_for(world_id)`,
+  `snap_free_id(id)`, `snap_free_id_for(id, world_id)`. The `_for` variants
+  name the world explicitly; the plain ones use the callback's world. Freeing
+  needs the world because different floors may hold the same numeric id.
+
+`import lastday_entity` adds the scripted-prop surface (`spawn`, `exists`,
+`pos`, `health`, `damage`, `destroy`, `set_visual`, `set_health`,
+`set_persistent`, `owner_near`, `player_near`, `world_id`, health/items drops)
+and its own `snap_new_id` / `snap_free_id` for code that only imported the
+entity module.
 
 ## Data formats
 

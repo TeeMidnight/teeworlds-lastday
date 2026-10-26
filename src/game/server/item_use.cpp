@@ -70,6 +70,7 @@ int CItemSystem::UseItem(int ClientID, const CItemID &Id, int Count)
 			SScriptContext Ctx;
 			Ctx.m_pGameServer = pGameServer;
 			Ctx.m_ClientID = ClientID;
+			Ctx.m_WorldID = pChr ? pChr->GameWorld()->WorldID() : 0;
 			Ctx.m_ItemId = Id;
 			Ctx.m_Now = pGameServer->Server()->Tick();
 			Ctx.m_TickSpeed = pGameServer->Server()->TickSpeed();

@@ -5,6 +5,8 @@
 
 #include <base/system.h>
 
+#include <engine/server.h>
+
 #include <game/server/entities/character.h>
 #include <game/server/entities/laser.h>
 #include <game/server/entities/projectile.h>
@@ -161,6 +163,59 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return pChr ? pChr->SpeedScale() : 1.0f;
 	});
 
+	m.def("player_team", [](int ClientID) {
+		CPlayer *pPlayer = Player(ClientID);
+		return pPlayer ? pPlayer->GetTeam() : TEAM_SPECTATORS;
+	});
+
+	m.def("player_name", [](int ClientID) -> std::string {
+		CGameContext *pGame = Game();
+		if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS || !pGame->m_apPlayers[ClientID])
+			return "";
+		const char *pName = pGame->Server()->ClientName(ClientID);
+		return pName ? pName : "";
+	});
+
+	m.def("player_velocity", [](int ClientID) {
+		CCharacter *pChr = Character(ClientID);
+		if(!pChr)
+			return Vec2Tuple(0.0f, 0.0f);
+		const vec2 Vel = pChr->Velocity();
+		return Vec2Tuple(Vel.x, Vel.y);
+	});
+
+	m.def("player_teleport", [](int ClientID, float x, float y) {
+		CCharacter *pChr = Character(ClientID);
+		if(!pChr || !ValidPos(x, y))
+			return false;
+		pChr->MoveTo(pChr->GameWorld(), vec2(x, y), false);
+		return true;
+	});
+
+	// the item id in the active weapon slot ("" when the slot is empty)
+	m.def("player_weapon", [](int ClientID) -> std::string {
+		CCharacter *pChr = Character(ClientID);
+		if(!pChr)
+			return "";
+		const CItemID Weapon = pChr->GetActiveWeapon();
+		const char *pName = Weapon.SourceName();
+		return pName ? pName : "";
+	});
+
+	// the usable weapon id (a weapon manager id, matching context weapon params)
+	m.def("player_weapon_id", [](int ClientID) {
+		CCharacter *pChr = Character(ClientID);
+		return pChr ? (int) pChr->GetUsableWeapon() : -1;
+	});
+
+	m.def("player_set_weapon", [](int ClientID, int Slot) {
+		CCharacter *pChr = Character(ClientID);
+		if(!pChr || Slot < 0 || Slot >= NUM_WEAPONS)
+			return false;
+		pChr->SetWeapon(Slot);
+		return true;
+	});
+
 	m.def("item_count", [](int ClientID, const std::string &ItemId) {
 		CGameContext *pGame = Game();
 		if(!pGame)
@@ -219,6 +274,83 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 
 	m.def("random_int", []() { return random_int(); });
 
+	m.def("random_int_range", [](int Min, int Max) {
+		if(Max <= Min)
+			return Min;
+		return Min + (int) (random_int() % (unsigned) (Max - Min + 1));
+	});
+
+	// ---- server clock, worlds and snapshot ids ----------------------------
+	m.def("tick", []() {
+		CGameContext *pGame = Game();
+		return pGame ? pGame->Server()->Tick() : 0;
+	});
+
+	m.def("tick_speed", []() {
+		CGameContext *pGame = Game();
+		return pGame ? pGame->Server()->TickSpeed() : 0;
+	});
+
+	// The world the current callback runs in (0 outside a callback when no
+	// world is loaded yet).
+	m.def("active_world", []() -> unsigned {
+		CScriptRuntime *pRuntime = CScriptRuntime::Get();
+		CGameWorld *pWorld = pRuntime ? pRuntime->ActiveWorld() : nullptr;
+		return pWorld ? pWorld->WorldID() : 0;
+	});
+
+	m.def("world_name", [](unsigned WorldID) -> std::string {
+		CGameContext *pGame = Game();
+		const char *pName = pGame ? pGame->Server()->GetMapName(WorldID) : "";
+		return pName ? pName : "";
+	});
+
+	// "Depths" for every Depths_<seed> instance, the map name otherwise.
+	m.def("floor_name", [](unsigned WorldID) -> std::string {
+		CGameContext *pGame = Game();
+		const char *pName = pGame ? pGame->Server()->GetMapFloorName(WorldID) : "";
+		return pName ? pName : "";
+	});
+
+	m.def("world_kind", [](unsigned WorldID) {
+		CGameContext *pGame = Game();
+		return pGame ? pGame->Server()->GetMapWorldKind(WorldID) : -1;
+	});
+
+	// Snapshot ids are pooled per floor. snap_new_id()/snap_free_id() use the
+	// callback's world; the _for variants are for console or delayed code that
+	// names the world explicitly. Freeing takes the world because the same
+	// numeric id may be live on two different floors.
+	m.def("snap_new_id", []() -> int {
+		CScriptRuntime *pRuntime = CScriptRuntime::Get();
+		CGameWorld *pWorld = pRuntime ? pRuntime->ActiveWorld() : nullptr;
+		if(!pWorld)
+			return -1;
+		return pWorld->Server()->SnapNewID(pWorld->WorldID());
+	});
+
+	m.def("snap_new_id_for", [](unsigned WorldID) -> int {
+		CGameContext *pGame = Game();
+		if(!pGame || !pGame->WorldByID(WorldID))
+			return -1;
+		return pGame->Server()->SnapNewID(WorldID);
+	});
+
+	m.def("snap_free_id", [](int ID) -> bool {
+		CScriptRuntime *pRuntime = CScriptRuntime::Get();
+		CGameWorld *pWorld = pRuntime ? pRuntime->ActiveWorld() : nullptr;
+		if(!pWorld)
+			return false;
+		return pWorld->Server()->SnapFreeID(ID, pWorld->WorldID());
+	});
+
+	m.def("snap_free_id_for", [](int ID, unsigned WorldID) -> bool {
+		CGameContext *pGame = Game();
+		if(!pGame)
+			return false;
+		return pGame->Server()->SnapFreeID(ID, WorldID);
+	});
+
 	m.def("tuning", [](const std::string &Name) -> float {
 		CGameContext *pGame = Game();
 		if(!pGame)
@@ -250,11 +382,4 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		CGameContext *pGame = Game();
 		return pGame && pGame->Buffs() ? pGame->Buffs()->Stacks(ClientID, BuffId.c_str()) : 0;
 	});
-	m.def("entity_spawn", [](const std::string &, float, float, const std::string &) { return -1; });
-	m.def("entity_destroy", [](int) { return false; });
-	m.def("entity_pos", [](int) { return Vec2Tuple(0.0f, 0.0f); });
-	m.def("entity_health", [](int) { return 0; });
-	m.def("entity_damage", [](int, int, int, int) { return false; });
-	m.def("entity_set_visual", [](int, const std::string &) { return false; });
-	m.def("bot_set_input", [](int, int, bool, bool, float, float) { return false; });
 }

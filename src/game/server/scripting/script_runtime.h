@@ -12,6 +12,7 @@
 #include <string>
 
 class CGameContext;
+class CGameWorld;
 class IStorage;
 
 // One callback context. The scripting layer copies the plain fields into a
@@ -87,6 +88,14 @@ public:
 
 	CGameContext *GameServer() const { return m_pGameServer; }
 	IStorage *Storage() const { return m_pStorage; }
+
+	// World the running callback belongs to. Call() sets it from
+	// SScriptContext::m_WorldID, so host functions such as snap_new_id() act on
+	// the caller's floor without every script having to pass a world id.
+	// Outside a callback it falls back to the main world.
+	CGameWorld *ActiveWorld() const;
+	// Sets the active world and returns the previous one (for scopes).
+	CGameWorld *SetActiveWorld(CGameWorld *pWorld);
 
 	int TimeoutMs() const { return m_TimeoutMs; }
 	void SetTimeoutMs(int TimeoutMs) { m_TimeoutMs = TimeoutMs; }

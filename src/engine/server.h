@@ -52,8 +52,14 @@ public:
 	virtual void SetClientCountry(int ClientID, int Country) = 0;
 	virtual void SetClientScore(int ClientID, int Score) = 0;
 
-	virtual int SnapNewID() = 0;
-	virtual void SnapFreeID(int ID) = 0;
+	// Snapshot ids are scoped per floor: every instance of the same floor
+	// ("Depths_1", "Depths_23", ...) shares one id pool, while a different
+	// floor has its own. Ring neighbours are snapped into the same client
+	// snapshot and must therefore not collide; unrelated floors never are.
+	virtual int SnapNewID(unsigned MapID) = 0;
+	// IDs are not globally unique across floors, so the floor of the allocation
+	// has to be supplied here as well.
+	virtual bool SnapFreeID(int ID, unsigned MapID) = 0;
 	virtual void *SnapNewItem(int Type, int ID, int Size) = 0;
 
 	virtual void SnapSetStaticsize(int ItemType, int Size) = 0;
@@ -82,6 +88,10 @@ public:
 
 	// canonical map name of a loaded/known map, or "" when unknown
 	virtual const char *GetMapName(unsigned MapID) = 0;
+
+	// floor name of a map: the part before the generated "_<seed>" suffix, or
+	// the whole map name for a hand authored map ("" when unknown).
+	virtual const char *GetMapFloorName(unsigned MapID) { return GetMapName(MapID); }
 
 	// Metadata JSON of a generated map, kept in memory when the map came from
 	// a pack (or from its sidecar). The game world uses it instead of relying

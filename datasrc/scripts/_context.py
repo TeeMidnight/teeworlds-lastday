@@ -73,6 +73,33 @@ class Player:
     def speed_scale(self):
         return lastday.player_speed_scale(self.id)
 
+    @property
+    def team(self):
+        return lastday.player_team(self.id)
+
+    @property
+    def name(self):
+        return lastday.player_name(self.id)
+
+    @property
+    def velocity(self):
+        x, y = lastday.player_velocity(self.id)
+        return Vec2(x, y)
+
+    @property
+    def weapon(self):
+        return lastday.player_weapon(self.id)
+
+    @property
+    def weapon_id(self):
+        return lastday.player_weapon_id(self.id)
+
+    def teleport(self, x, y):
+        return lastday.player_teleport(self.id, float(x), float(y))
+
+    def set_weapon(self, slot):
+        return lastday.player_set_weapon(self.id, int(slot))
+
     def heal(self, amount):
         return lastday.player_heal(self.id, amount)
 
@@ -138,11 +165,10 @@ class Entity:
         self.id = entity_id
 
     def _api(self):
-        try:
-            import lastday_entity
-            return lastday_entity
-        except Exception:
-            return lastday
+        # The entity surface lives in lastday_entity; the old no-op shims that
+        # were mirrored onto lastday are gone.
+        import lastday_entity
+        return lastday_entity
 
     @property
     def pos(self):
@@ -152,6 +178,14 @@ class Entity:
     @property
     def health(self):
         return self._api().health(self.id)
+
+    @property
+    def exists(self):
+        return self._api().exists(self.id)
+
+    @property
+    def world_id(self):
+        return self._api().world_id(self.id)
 
     def damage(self, amount, from_client=-1, weapon=-1):
         return self._api().damage(self.id, amount, from_client, weapon)
@@ -345,6 +379,8 @@ class Context:
         self.buff = Buff(buff_id, self.player, raw["state"]) if buff_id else None
         self.weapon = raw["weapon"] if raw["weapon"] else None
         self.kind = raw["kind"]
+        # world (map) id of this callback; 0 when the source has no world
+        self.world = raw["world"]
         self.pos = Vec2(raw["pos"][0], raw["pos"][1])
         self.dir = Vec2(raw["dir"][0], raw["dir"][1])
         # Constructor-style classes are available directly on the context, so
@@ -388,6 +424,29 @@ class Context:
 
     def __contains__(self, key):
         return hasattr(self, key)
+
+    @property
+    def world_name(self):
+        return lastday.world_name(self.world)
+
+    @property
+    def floor_name(self):
+        return lastday.floor_name(self.world)
+
+    @property
+    def world_kind(self):
+        return lastday.world_kind(self.world)
+
+    # Snapshot ids are pooled per floor. Allocate one for a custom snapshot
+    # item and free it when the item goes away.
+    def snap_new_id(self):
+        return lastday.snap_new_id()
+
+    def snap_free_id(self, snap_id):
+        snap_id = int(snap_id)
+        if self.world:
+            return lastday.snap_free_id_for(snap_id, self.world)
+        return lastday.snap_free_id(snap_id)
 
     def heal(self, amount):
         return self.player.heal(amount) if self.player is not None else 0
