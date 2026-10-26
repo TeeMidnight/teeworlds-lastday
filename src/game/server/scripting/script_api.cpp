@@ -7,6 +7,8 @@
 
 #include <engine/server.h>
 
+#include <game/localization.h>
+
 #include <game/server/entities/character.h>
 #include <game/server/entities/laser.h>
 #include <game/server/entities/projectile.h>
@@ -88,6 +90,17 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS)
 			return false;
 		pGame->SendChat(-1, CHAT_WHISPER, ClientID, Message.c_str());
+		return true;
+	});
+
+	// Same as chat(), but the message is looked up in the recipient's language
+	// using Context. Scripts should use this for player-visible text.
+	m.def("chat_localized", [](int ClientID, const std::string &Message, const std::string &Context) {
+		CGameContext *pGame = Game();
+		if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS)
+			return false;
+		CLanguageScope LanguageScope(pGame->LanguageOf(ClientID));
+		pGame->SendChat(-1, CHAT_WHISPER, ClientID, Localize(Message.c_str(), Context.c_str()));
 		return true;
 	});
 

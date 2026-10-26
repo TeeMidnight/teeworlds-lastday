@@ -5,7 +5,7 @@ HEAL_PER_SECOND = 1
 
 
 def on_apply(ctx):
-    ctx.player.chat("Regeneration")
+    ctx.player.chat("Regeneration", "Buff")
 
 
 def on_tick(ctx):
@@ -15,4 +15,4 @@ def on_tick(ctx):
 
 
 def on_remove(ctx):
-    ctx.player.chat("Regeneration fades")
+    ctx.player.chat("Regeneration fades", "Buff")

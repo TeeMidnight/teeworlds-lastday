@@ -34,8 +34,7 @@ PocketPy. The script sources live in `datasrc/scripts/` and are copied to
 
 ```python
 def on_use(ctx):
-    ctx.player.heal(4)       # Player class
-    ctx.consumed = True
+    return ctx.player.heal(4) > 0   # True consumes one copy
 
 def on_tick(ctx):
     if ctx.now % ctx.tick_speed == 0:
@@ -66,7 +65,8 @@ Useful fields:
   a pool, while an unrelated floor has its own, so ring neighbours can be
   snapped together without collisions. The context passes its own world when
   freeing, because the same numeric id may be live on two different floors.
-- Output flags: `ctx.consumed`, `ctx.reload_ticks`, `ctx.destroy`.
+- Output flags: `ctx.reload_ticks`, `ctx.destroy`; `ctx.consumed` is still
+  honored by the bot fallback and older item scripts.
 - Constructor classes: `ctx.Projectile`, `ctx.Laser`, `ctx.HealthDrop`,
   `ctx.DroppedPickup`, `ctx.MeleeSwing`. Their constructors call the existing
   C++ `new CProjectile(...)` / `new CLaser(...)` / etc. The returned object
@@ -93,7 +93,7 @@ return the primitive id/name; new scripts should use the class attributes.
   `player_speed_scale`, `player_team`, `player_name`, `player_velocity`,
   `player_heal`, `player_armor`, `player_damage`, `player_forget`,
   `player_teleport`, `player_weapon`, `player_weapon_id`,
-  `player_set_weapon`, `chat`.
+  `player_set_weapon`, `chat`, `chat_localized`.
 - items / buffs: `item_count`, `item_give`, `item_take`, `buff_add`,
   `buff_remove`, `buff_stacks`.
 - entities: `create_projectile`, `create_laser`, `sound`, `hammer_hit`,
@@ -123,8 +123,23 @@ Item (`datasrc/items/<category>/<id>.json`):
 }
 ```
 
-The item script may implement `on_use`; C++ removes one copy only when the
-script sets `ctx.consumed`.
+The item script may implement `on_use`; its return value decides whether C++
+removes one copy. Return `True` when the effect actually applied, `False` when
+nothing changed (full health, no forgetting to restore, ...). For compatibility
+`ctx.consumed = True` is still accepted as a fallback.
+
+Player-visible script text should use the localized form of `chat`:
+
+```python
+def on_apply(ctx):
+    ctx.player.chat("Regeneration", "Buff")
+```
+
+The second argument is the localization context. `scripts/convert_l10n.py`
+extracts these `chat("text", "context")` calls from `datasrc/scripts/**/*.py`
+alongside the C++ `Localize(...)` calls, so language files contain the same keys
+as the runtime lookup. Keep the literals in double quotes so extraction stays
+simple.
 
 Buff (`datasrc/buffs/<id>.json`):
 

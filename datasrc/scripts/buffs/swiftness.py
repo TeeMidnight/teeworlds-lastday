@@ -6,8 +6,8 @@ absent so the runtime does not call an empty handler every tick.
 
 
 def on_apply(ctx):
-    ctx.player.chat("Swiftness")
+    ctx.player.chat("Swiftness", "Buff")
 
 
 def on_remove(ctx):
-    ctx.player.chat("Swiftness fades")
+    ctx.player.chat("Swiftness fades", "Buff")

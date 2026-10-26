@@ -39,6 +39,10 @@ ITEM_CATEGORY_CTXT = "Item Category"
 WORLD_NAME_CTXT = "World Name"
 # context used for the periodic chat tips
 TIP_CTXT = "Tip"
+# Script chat: ctx.player.chat("text", "context"). The second argument is the
+# localization context; keep the literals in double quotes so this stays simple
+# to extract.
+SOURCE_SCRIPT_CHAT_RE = re.compile(r'\.chat\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"')
 
 def item_types_of(item):
 	"""Normalizes the item_type field (a single string or a list) to a list of types."""
@@ -133,6 +137,27 @@ def parse_tips():
 	for tip in tips.get("tips", []):
 		if isinstance(tip, str) and tip:
 			l10n[(tip, TIP_CTXT)] = ""
+	return l10n
+
+def parse_script_chat():
+	"""Collects player-visible chat strings written by Python scripts.
+
+	The runtime localizes Player.chat(text, context); the same pair has to be
+	present in the language files, so extract it from the script sources."""
+	l10n = {}
+	scripts_dir = "datasrc/scripts"
+	if not os.path.isdir(scripts_dir):
+		return l10n
+
+	for root, dirs, files in os.walk(scripts_dir):
+		dirs[:] = sorted(d for d in dirs if d != "__pycache__")
+		for filename in sorted(files):
+			if not filename.endswith(".py"):
+				continue
+			with open(os.path.join(root, filename), encoding='utf-8') as f:
+				source = f.read()
+			for match in SOURCE_SCRIPT_CHAT_RE.finditer(source):
+				l10n[(match.group(1), match.group(2))] = ""
 	return l10n
 
 def parse_source():
@@ -246,6 +271,8 @@ if __name__ == '__main__':
 	l10n_server.update(parse_world_names())
 	# tips also live in a json file and are looked up by their text
 	l10n_server.update(parse_tips())
+	# player-visible chat text written by Python scripts
+	l10n_server.update(parse_script_chat())
 
 	# item names, descriptions and types live in their own "item strings" section;
 	# categories are folder names, so they are collected the same way

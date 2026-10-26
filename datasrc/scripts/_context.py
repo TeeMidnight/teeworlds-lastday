@@ -124,8 +124,10 @@ class Player:
     def forget(self, delta):
         return lastday.player_forget(self.id, delta)
 
-    def chat(self, text):
-        return lastday.chat(self.id, text)
+    def chat(self, text, context=""):
+        if context:
+            return lastday.chat_localized(self.id, str(text), str(context))
+        return lastday.chat(self.id, str(text))
 
     def item_count(self, item_id):
         return lastday.item_count(self.id, str(item_id))
@@ -482,8 +484,8 @@ class Context:
     def heal(self, amount):
         return self.player.heal(amount) if self.player is not None else 0
 
-    def chat(self, text):
-        return self.player.chat(text) if self.player is not None else False
+    def chat(self, text, context=""):
+        return self.player.chat(text, context) if self.player is not None else False
 
 
 def make_context(raw):

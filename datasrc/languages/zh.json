@@ -536,6 +536,26 @@
 			"tr": "你必须登录才能加入游戏。请使用 /login <用户名> <密码>。"
 		},
 		{
+			"context": "Buff",
+			"or": "Regeneration",
+			"tr": "再生"
+		},
+		{
+			"context": "Buff",
+			"or": "Regeneration fades",
+			"tr": "再生消退"
+		},
+		{
+			"context": "Buff",
+			"or": "Swiftness",
+			"tr": "迅捷"
+		},
+		{
+			"context": "Buff",
+			"or": "Swiftness fades",
+			"tr": "迅捷消退"
+		},
+		{
 			"context": "CRAFT",
 			"or": "Craft",
 			"tr": "建造"
