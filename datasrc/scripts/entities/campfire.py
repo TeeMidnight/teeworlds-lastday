@@ -33,12 +33,13 @@ LINE_RADIUS = 3.0
 SNAP_ID_KEY = "_snap_ids"
 BASE_SEGMENT_COUNT = 8
 
-# Rising wave. The flame starts at the base (phase 0) and widens as the phase
-# advances to SPREAD_PHASES - 1. The cone is centred on the fire, so it reads
-# as one tall flame instead of two side jets.
+# Rising wave. The flame starts wide at the base (phase 0) and tapers to the
+# tip as the phase advances to SPREAD_PHASES - 1, like a real flame. It is one
+# central cone instead of two side jets.
 SPREAD_PHASES = 5
 FLAME_RISE = 86.0
-FLAME_SIDE = 38.0
+FLAME_BASE_WIDTH = 38.0
+FLAME_TIP_WIDTH = 3.0
 
 PUFF_SPAN_MIN = 12
 PUFF_SPAN_MAX = 18
@@ -117,11 +118,11 @@ def _spawn_puff(ctx, state, t):
     t = max(0.0, min(1.0, t))
 
     rise = 6.0 + (FLAME_RISE - 6.0) * t
-    # One central cone: the horizontal offset is symmetric around the fire and
-    # grows with height. The campfire is the projectile's ignore target, so the
-    # flame may cross the prop's own hitbox.
-    spread = 3.0 + FLAME_SIDE * t
-    lateral = spread * (_random01() * 2.0 - 1.0)
+    # A real flame is widest at the base and narrows to the tip. The campfire is
+    # the projectile's ignore target, so the flame may cross the prop's own
+    # hitbox without being absorbed at the base.
+    width = FLAME_TIP_WIDTH + (FLAME_BASE_WIDTH - FLAME_TIP_WIDTH) * (1.0 - t)
+    lateral = width * (_random01() * 2.0 - 1.0)
     x = base_x + lateral
     y = base_y - rise - _random01() * 4.0
 

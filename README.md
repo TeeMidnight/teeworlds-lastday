@@ -239,9 +239,10 @@ wider, slower-firing variant. Both eat `fuel_canister` ammo.
 
 The same particle backs the `campfire` scripted prop. Its base is a
 laser-drawn stone ring with crossed sticks; each emission advances a phase from
-that base outward, so a tall central cone visibly grows from the bottom. It emits
-friendly puffs (owner sentinel `-4`) on a short timer, so it burns hostile bots but
-never players, friendly units or neutral units. It is a proper building:
+that base outward, so a tall central flame visibly grows from the bottom, widest
+at the base and tapering to the tip. It emits friendly puffs (owner sentinel
+`-4`) on a short timer, so it burns hostile bots but never players, friendly
+units or neutral units. It is a proper building:
 `spawn_owned` records the placer's account, the lock and the saved owner, and
 the item drops back when the fire is dismantled. A campfire is persistent world
 content; its flames are not. The scripts are
