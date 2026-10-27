@@ -51,6 +51,55 @@ static void BuildPermutation(unsigned Seed, int *pPerm)
 		pPerm[PERM_SIZE + i] = pPerm[i];
 }
 
+// The permutation table only depends on Seed, and the generator evaluates the
+// same handful of seeds for every one of the 200k tiles in a floor. Building
+// the table inside every Perlin call made generation spend most of its time
+// shuffling 256 entries; keep one table per distinct seed instead.
+//
+// The cache is thread local: the server generates on its worker thread and the
+// tools generate on the main thread, and the tables are immutable once built.
+struct SPermCacheEntry
+{
+	bool m_Valid;
+	unsigned m_Seed;
+	int m_aPerm[PERM_SIZE * 2];
+};
+
+static const int *CachedPermutation(unsigned Seed)
+{
+	enum
+	{
+		CACHE_SIZE = 128,
+		CACHE_PROBES = 16
+	};
+	static thread_local SPermCacheEntry s_aCache[CACHE_SIZE];
+
+	// Open addressing instead of a direct-mapped slot: two hot seeds that hash
+	// to the same slot must not evict each other on every single sample.
+	const unsigned Start = Seed & (CACHE_SIZE - 1);
+	for(unsigned i = 0; i < CACHE_PROBES; i++)
+	{
+		SPermCacheEntry &Entry = s_aCache[(Start + i) & (CACHE_SIZE - 1)];
+		if(Entry.m_Valid && Entry.m_Seed == Seed)
+			return Entry.m_aPerm;
+		if(!Entry.m_Valid)
+		{
+			BuildPermutation(Seed, Entry.m_aPerm);
+			Entry.m_Seed = Seed;
+			Entry.m_Valid = true;
+			return Entry.m_aPerm;
+		}
+	}
+
+	// The probe window is full (far more distinct seeds than a floor uses):
+	// replace the natural slot rather than scanning the whole table.
+	SPermCacheEntry &Entry = s_aCache[Start];
+	BuildPermutation(Seed, Entry.m_aPerm);
+	Entry.m_Seed = Seed;
+	Entry.m_Valid = true;
+	return Entry.m_aPerm;
+}
+
 // the 12 gradient directions of the classic 3D implementation
 static float Grad3D(int Hash, float X, float Y, float Z)
 {
@@ -98,8 +147,7 @@ static int WrapCoord(int Value)
 
 float Perlin2D(unsigned Seed, float X, float Y)
 {
-	int aPerm[PERM_SIZE * 2];
-	BuildPermutation(Seed, aPerm);
+	const int *aPerm = CachedPermutation(Seed);
 
 	const int Xi = FastFloor(X);
 	const int Yi = FastFloor(Y);
@@ -134,8 +182,7 @@ float Perlin2D(unsigned Seed, float X, float Y)
 
 float Perlin3D(unsigned Seed, float X, float Y, float Z)
 {
-	int aPerm[PERM_SIZE * 2];
-	BuildPermutation(Seed, aPerm);
+	const int *aPerm = CachedPermutation(Seed);
 
 	const int Xi = FastFloor(X);
 	const int Yi = FastFloor(Y);

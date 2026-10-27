@@ -315,6 +315,32 @@ bool CAutoMapper::Proceed(const char *pRuleSetName, CTile *pTiles, int Width, in
 			if(pSource[Index].m_Index == 0)
 				continue;
 
+			// Every shipped rule set only inspects the eight direct neighbours,
+			// but the old loop resolved the clamp/wrap for every condition of
+			// every rule. Resolve the nine indices once per tile instead; the
+			// fallback below still handles a hypothetical wider condition.
+			int aNeighbour[9];
+			const bool MarginColumn = WrapX && MarginX > 0 && (x < MarginX || x >= Width - MarginX);
+			for(int dy = -1; dy <= 1; dy++)
+			{
+				const int CheckY = clamp(y + dy, 0, Height - 1);
+				for(int dx = -1; dx <= 1; dx++)
+				{
+					int CheckX;
+					if(!WrapX || MarginColumn)
+						CheckX = clamp(x + dx, 0, Width - 1);
+					else
+					{
+						CheckX = x + dx;
+						if(CheckX < 0)
+							CheckX += Width;
+						else if(CheckX >= Width)
+							CheckX -= Width;
+					}
+					aNeighbour[(dy + 1) * 3 + (dx + 1)] = CheckY * Width + CheckX;
+				}
+			}
+
 			pTile->m_Index = RemapIndex(BaseTile, pRemap);
 			pTile->m_Flags = 0;
 
@@ -327,12 +353,18 @@ bool CAutoMapper::Proceed(const char *pRuleSetName, CTile *pTiles, int Width, in
 				{
 					const CRuleCondition &Condition = Rule.m_aConditions[j];
 
-					// the original clamps to the layer bounds, so a condition
-					// outside the map reads the border tile; a cylindrical world
-					// wraps the horizontal axis instead
-					const int CheckY = clamp(y + Condition.m_Y, 0, Height - 1);
-					const int CheckX = WrapX ? ResolveSampleX(x, x + Condition.m_X, Width, MarginX) : clamp(x + Condition.m_X, 0, Width - 1);
-					const int CheckIndex = CheckY * Width + CheckX;
+					int CheckIndex;
+					if(Condition.m_X >= -1 && Condition.m_X <= 1 && Condition.m_Y >= -1 && Condition.m_Y <= 1)
+						CheckIndex = aNeighbour[(Condition.m_Y + 1) * 3 + (Condition.m_X + 1)];
+					else
+					{
+						// the original clamps to the layer bounds, so a condition
+						// outside the map reads the border tile; a cylindrical world
+						// wraps the horizontal axis instead
+						const int CheckY = clamp(y + Condition.m_Y, 0, Height - 1);
+						const int CheckX = WrapX ? ResolveSampleX(x, x + Condition.m_X, Width, MarginX) : clamp(x + Condition.m_X, 0, Width - 1);
+						CheckIndex = CheckY * Width + CheckX;
+					}
 
 					if(CheckIndex < 0 || CheckIndex >= MaxIndex)
 					{
