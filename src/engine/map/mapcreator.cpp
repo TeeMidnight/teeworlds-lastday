@@ -2,22 +2,19 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system.h>
-
 #include <engine/console.h>
-#include <engine/storage.h>
-
 #include <engine/shared/config.h>
 #include <engine/shared/datafile.h>
 #include <engine/shared/linereader.h>
-
+#include <engine/storage.h>
 #include <game/gamecore.h>
 #include <game/layers.h>
 #include <game/mapitems.h>
 
 #include "generatedmaps.h"
 #include "mapcreator.h"
-
 #include "mapitems.h"
+
 #include <spng.h>
 
 class CImageInfo

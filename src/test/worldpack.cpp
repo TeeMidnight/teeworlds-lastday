@@ -1,15 +1,14 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "test.h"
-
-#include <gtest/gtest.h>
-
 #include <base/tl/array.h>
-
 #include <engine/shared/datafile.h>
 #include <engine/shared/worldpack.h>
 #include <engine/storage.h>
+
+#include "test.h"
+
+#include <gtest/gtest.h>
 
 // A minimal v4 map: the pack only has to keep the bytes intact, and the entry
 // check refuses anything that is not a datafile.

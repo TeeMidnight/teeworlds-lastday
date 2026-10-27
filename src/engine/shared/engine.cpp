@@ -2,16 +2,15 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <stdlib.h> // srand
-
 #include <base/math.h>
 #include <base/system.h>
-
 #include <engine/console.h>
 #include <engine/engine.h>
 #include <engine/shared/config.h>
 #include <engine/shared/network.h>
 #include <engine/storage.h>
+
+#include <stdlib.h> // srand
 
 static int HostLookupThread(void *pUser)
 {

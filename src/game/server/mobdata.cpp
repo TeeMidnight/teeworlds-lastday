@@ -2,40 +2,36 @@
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system.h>
-
 #include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
-
 #include <generated/protocol.h>
 
 #include "entities/botentity.h"
 #include "gamecontext.h"
 #include "mobdata.h"
 
-namespace
-{
-const char *gs_pSkinParts[NUM_SKINPARTS] = {"body", "marking", "decoration", "hands", "feet", "eyes"};
+static const char *gs_pSkinParts[NUM_SKINPARTS] = {"body", "marking", "decoration", "hands", "feet", "eyes"};
 
-int PackHsla(int Hue, int Sat, int Lgt, int Alp)
+static int PackHsla(int Hue, int Sat, int Lgt, int Alp)
 {
 	return ((Alp & 0xff) << 24) | ((Hue & 0xff) << 16) | ((Sat & 0xff) << 8) | (Lgt & 0xff);
 }
 
-int ReadInt(const json_value &Value, int Default)
+static int ReadInt(const json_value &Value, int Default)
 {
 	if(Value.type == json_integer || Value.type == json_double)
 		return (int) (json_int_t) Value;
 	return Default;
 }
 
-float ReadFloat(const json_value &Value, float Default)
+static float ReadFloat(const json_value &Value, float Default)
 {
 	if(Value.type == json_integer || Value.type == json_double)
 		return (float) (double) Value;
 	return Default;
 }
 
-bool ReadBool(const json_value &Value, bool Default)
+static bool ReadBool(const json_value &Value, bool Default)
 {
 	if(Value.type == json_boolean)
 		return (bool) Value;
@@ -44,7 +40,7 @@ bool ReadBool(const json_value &Value, bool Default)
 	return Default;
 }
 
-int WeaponFromName(const char *pName)
+static int WeaponFromName(const char *pName)
 {
 	if(!pName || !pName[0])
 		return WEAPON_GUN;
@@ -57,7 +53,7 @@ int WeaponFromName(const char *pName)
 	return WEAPON_GUN;
 }
 
-void CopyLine(SDialogueSet *pSet, const char *pText)
+static void CopyLine(SDialogueSet *pSet, const char *pText)
 {
 	if(!pText || !pText[0] || pSet->m_NumLines >= MAX_MOB_DIALOGUE_LINES)
 		return;
@@ -65,7 +61,7 @@ void CopyLine(SDialogueSet *pSet, const char *pText)
 	pSet->m_NumLines++;
 }
 
-int DialogueEventFromName(const char *pName)
+static int DialogueEventFromName(const char *pName)
 {
 	if(!pName || !pName[0])
 		return -1;
@@ -87,7 +83,6 @@ int DialogueEventFromName(const char *pName)
 		return MOBDIALOGUE_LOW_HEALTH;
 	return -1;
 }
-} // namespace
 
 CMobSystem::~CMobSystem()
 {

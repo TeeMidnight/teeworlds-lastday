@@ -2,10 +2,8 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
-
 #include <engine/shared/config.h>
 #include <engine/shared/memheap.h>
-
 #include <game/localization_format.h>
 
 #include "entities/character.h"

@@ -7,7 +7,6 @@
 
 #include <base/tl/array.h>
 #include <base/tl/hashtable.h>
-
 #include <engine/shared/memheap.h>
 
 class CLocalizationDatabase

@@ -6,6 +6,7 @@
 #define ENGINE_STORAGE_H
 
 #include <base/hash.h>
+
 #include "kernel.h"
 
 class IStorage : public IInterface

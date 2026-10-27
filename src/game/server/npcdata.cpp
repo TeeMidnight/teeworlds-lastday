@@ -2,44 +2,40 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system.h>
-
 #include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
-
 #include <game/server/database/database.h>
 
 #include "gamecontext.h"
 #include "npcdata.h"
 
-namespace
-{
-const char *gs_pSkinParts[NUM_SKINPARTS] = {"body", "marking", "decoration", "hands", "feet", "eyes"};
+static const char *gs_pSkinParts[NUM_SKINPARTS] = {"body", "marking", "decoration", "hands", "feet", "eyes"};
 
 // The TeeInfo skin part colours handed to clients pack H, S, L and A into one
 // int: alpha in the top byte, then hue, saturation and lightness. Only the
 // marking part is drawn with alpha, and the client keeps its alpha even for
 // team colours, so dropping it made a custom marking invisible. A missing
 // "alp" means opaque, matching the client's own skin files.
-int PackHsla(int Hue, int Sat, int Lgt, int Alp)
+static int PackHsla(int Hue, int Sat, int Lgt, int Alp)
 {
 	return ((Alp & 0xff) << 24) | ((Hue & 0xff) << 16) | ((Sat & 0xff) << 8) | (Lgt & 0xff);
 }
 
-int ReadInt(const json_value &Value, int Default)
+static int ReadInt(const json_value &Value, int Default)
 {
 	if(Value.type == json_integer || Value.type == json_double)
 		return (int) (json_int_t) Value;
 	return Default;
 }
 
-float ReadFloat(const json_value &Value, float Default)
+static float ReadFloat(const json_value &Value, float Default)
 {
 	if(Value.type == json_integer || Value.type == json_double)
 		return (float) (double) Value;
 	return Default;
 }
 
-bool ReadBool(const json_value &Value, bool Default)
+static bool ReadBool(const json_value &Value, bool Default)
 {
 	if(Value.type == json_boolean)
 		return (bool) Value;
@@ -49,7 +45,7 @@ bool ReadBool(const json_value &Value, bool Default)
 }
 
 // the persistable name of an item id: its namespaced source, or the uuid
-void ItemSourceName(const CItemID &Id, char *pOut, int Size)
+static void ItemSourceName(const CItemID &Id, char *pOut, int Size)
 {
 	const char *pSource = Id.SourceName();
 	if(pSource && pSource[0])
@@ -57,7 +53,6 @@ void ItemSourceName(const CItemID &Id, char *pOut, int Size)
 	else
 		Id.FormatUuid(pOut, Size);
 }
-} // namespace
 
 CNpcSystem::CNpcSystem()
 {

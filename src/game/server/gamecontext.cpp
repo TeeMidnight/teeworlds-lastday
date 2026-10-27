@@ -3,7 +3,6 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
-
 #include <engine/engine.h>
 #include <engine/map.h>
 #include <engine/server/mapgen.h>
@@ -12,11 +11,12 @@
 #include <engine/shared/jsonwriter.h>
 #include <engine/shared/memheap.h>
 #include <engine/storage.h>
-
 #include <game/collision.h>
 #include <game/gamecore.h>
 #include <game/localization.h>
 #include <game/localization_format.h>
+#include <game/server/database/database.h>
+#include <game/server/database/database_util.h>
 #include <game/version.h>
 #include <generated/server_data.h>
 
@@ -27,7 +27,6 @@
 #include "entities/container.h"
 #include "entities/drill.h"
 #include "entities/dropped_pickup.h"
-#include "scripting/scripted_entity.h"
 #include "entities/laser.h"
 #include "entities/projectile.h"
 #include "entities/resource.h"
@@ -36,17 +35,15 @@
 #include "item.h"
 #include "mobdata.h"
 #include "npcdata.h"
-#include "team.h"
 #include "player.h"
 #include "scripting/buff_system.h"
 #include "scripting/script_commands.h"
 #include "scripting/script_runtime.h"
+#include "scripting/scripted_entity.h"
+#include "team.h"
 #include "trade.h"
 #include "weapon.h"
 #include "weaponmanager.h"
-
-#include <game/server/database/database.h>
-#include <game/server/database/database_util.h>
 
 enum
 {

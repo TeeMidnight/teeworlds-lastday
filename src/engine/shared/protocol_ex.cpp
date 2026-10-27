@@ -1,10 +1,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "protocol_ex.h"
-
 #include "config.h"
 #include "protocol.h"
+#include "protocol_ex.h"
 #include "uuid_manager.h"
 
 void RegisterUuids(class CUuidManager *pManager)

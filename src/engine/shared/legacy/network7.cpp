@@ -2,11 +2,10 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "network7.h"
-
 #include <engine/shared/snapshot.h>
-
 #include <generated/protocol7.h>
+
+#include "network7.h"
 
 namespace legacy
 {

@@ -23,12 +23,12 @@
 // them, so the tool and the server never disagree about a floor's shape.
 
 #include <base/system.h>
-
+#include <base/tl/array.h>
 #include <engine/console.h>
 #include <engine/kernel.h>
+#include <engine/map.h>
 #include <engine/map/generatedmaps.h>
 #include <engine/server/mapgen.h>
-#include <engine/map.h>
 #include <engine/shared/config.h>
 #include <engine/shared/datafile.h>
 #include <engine/shared/jsonparser.h>
@@ -36,10 +36,6 @@
 #include <engine/shared/worldpack.h>
 #include <engine/storage.h>
 #include <game/mapitems.h>
-
-#include <base/tl/array.h>
-
-namespace {
 
 enum
 {
@@ -54,7 +50,7 @@ struct SFloorNames
 	char m_aaNames[MAX_TOOL_FLOORS][64];
 };
 
-int CollectFloorCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+static int CollectFloorCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
 {
 	(void) StorageType;
 	if(IsDir)
@@ -75,7 +71,7 @@ int CollectFloorCallback(const char *pFilename, int IsDir, int StorageType, void
 	return 0;
 }
 
-bool GenerateFloor(CMapGen &rGen, IStorage *pStorage, const char *pFloor, int Seed)
+static bool GenerateFloor(CMapGen &rGen, IStorage *pStorage, const char *pFloor, int Seed)
 {
 	if(!rGen.RequestNewMap(pFloor, Seed))
 	{
@@ -97,7 +93,7 @@ bool GenerateFloor(CMapGen &rGen, IStorage *pStorage, const char *pFloor, int Se
 // style array of Count four byte tiles.
 // Decompresses a tile data chunk (skip run length encoded) into a flat array of
 // four byte tiles, the same layout the map stores.
-void DecodeTiles(CDataFileReader &Reader, int DataIndex, int Count, unsigned char *pOut)
+static void DecodeTiles(CDataFileReader &Reader, int DataIndex, int Count, unsigned char *pOut)
 {
 	const int Size = Reader.GetDataSize(DataIndex);
 	const unsigned char *pStart = (const unsigned char *) Reader.GetData(DataIndex);
@@ -126,7 +122,7 @@ void DecodeTiles(CDataFileReader &Reader, int DataIndex, int Count, unsigned cha
 // also covers the automapper and the map writer, not just the in memory
 // generator. A couple of columns at the outer edge of each strip are skipped:
 // the automapper clamps there and those columns are beyond the transfer.
-bool RingCheck(IStorage *pStorage, CMapGen &rGen, const char *pFloor)
+static bool RingCheck(IStorage *pStorage, CMapGen &rGen, const char *pFloor)
 {
 	if(!rGen.RequestNewMap(pFloor, 1) || !rGen.RequestNewMap(pFloor, 2))
 	{
@@ -233,7 +229,7 @@ bool RingCheck(IStorage *pStorage, CMapGen &rGen, const char *pFloor)
 // Prints the world geometry json (MAPITEMTYPE_JSON id 2) of a generated map,
 // so a caller can confirm the horizontal wrap and the ring metadata a floor
 // wrote without decoding the map by hand.
-bool DumpWorldJson(IStorage *pStorage, const char *pMap)
+static bool DumpWorldJson(IStorage *pStorage, const char *pMap)
 {
 	// current maps keep the world geometry in the metadata sidecar
 	array<char> aMeta;
@@ -293,7 +289,7 @@ bool DumpWorldJson(IStorage *pStorage, const char *pMap)
 }
 
 // Reads a whole file from the save path into memory.
-bool ReadSaveFile(IStorage *pStorage, const char *pPath, array<char> &Out)
+static bool ReadSaveFile(IStorage *pStorage, const char *pPath, array<char> &Out)
 {
 	void *pData = nullptr;
 	unsigned Size = 0;
@@ -308,7 +304,7 @@ bool ReadSaveFile(IStorage *pStorage, const char *pPath, array<char> &Out)
 // Packs one floor's generated instances (map + world json sidecar) into a v5
 // datafile. Each map becomes one item, so the metadata and the terrain travel
 // together and one file replaces a directory of .map/.json pairs.
-bool PackFloor(IStorage *pStorage, CMapGen &rGen, const char *pFloor, const char *pOut, const int *pSeeds, int NumSeeds)
+static bool PackFloor(IStorage *pStorage, CMapGen &rGen, const char *pFloor, const char *pOut, const int *pSeeds, int NumSeeds)
 {
 	CWorldPackWriter Writer;
 	if(!Writer.Open(pStorage, pOut, pFloor, 0, 5))
@@ -364,7 +360,7 @@ bool PackFloor(IStorage *pStorage, CMapGen &rGen, const char *pFloor, const char
 
 // Extracts every map of a pack back into the generated map directory as a plain
 // v4 map plus its json sidecar, so the existing server path can serve it.
-bool UnpackFloor(IStorage *pStorage, const char *pPack)
+static bool UnpackFloor(IStorage *pStorage, const char *pPack)
 {
 	CWorldPackReader Reader;
 	if(!Reader.Open(pStorage, pPack, IStorage::TYPE_SAVE))
@@ -397,7 +393,7 @@ bool UnpackFloor(IStorage *pStorage, const char *pPack)
 // Appends generated instances to an append-only pack. Unlike "pack", an
 // existing file is never rewritten: each map is one blob plus one index
 // record, so a running server can add a map while clients read the others.
-bool PackAppend(IStorage *pStorage, CMapGen &rGen, const char *pPack, const char *pFloor, const int *pSeeds, int NumSeeds)
+static bool PackAppend(IStorage *pStorage, CMapGen &rGen, const char *pPack, const char *pFloor, const int *pSeeds, int NumSeeds)
 {
 	CMapPackWriter Writer;
 	if(!Writer.Open(pStorage, pPack))
@@ -441,7 +437,7 @@ bool PackAppend(IStorage *pStorage, CMapGen &rGen, const char *pPack, const char
 	return Added > 0;
 }
 
-bool PackCompact(IStorage *pStorage, const char *pPack)
+static bool PackCompact(IStorage *pStorage, const char *pPack)
 {
 	int Maps = 0, Before = 0, After = 0;
 	if(!CMapPackWriter::Compact(pStorage, pPack, &Maps, &Before, &After))
@@ -453,7 +449,7 @@ bool PackCompact(IStorage *pStorage, const char *pPack)
 	return true;
 }
 
-bool PackList(IStorage *pStorage, const char *pPack)
+static bool PackList(IStorage *pStorage, const char *pPack)
 {
 	CMapPackReader Reader;
 	if(!Reader.Open(pStorage, pPack, IStorage::TYPE_SAVE))
@@ -471,7 +467,7 @@ bool PackList(IStorage *pStorage, const char *pPack)
 	return true;
 }
 
-bool PackGet(IStorage *pStorage, const char *pPack, const char *pName)
+static bool PackGet(IStorage *pStorage, const char *pPack, const char *pName)
 {
 	CMapPackReader Reader;
 	if(!Reader.Open(pStorage, pPack, IStorage::TYPE_SAVE))
@@ -496,7 +492,7 @@ bool PackGet(IStorage *pStorage, const char *pPack, const char *pName)
 
 // Loads one instance the way the server does: bytes from the floor's pack,
 // fed straight into the engine map. No cache file is created.
-bool AcquireInstance(IStorage *pStorage, CMapGen &rGen, const char *pFloor, int Seed)
+static bool AcquireInstance(IStorage *pStorage, CMapGen &rGen, const char *pFloor, int Seed)
 {
 	CMapGen::SMapInstance Instance;
 	if(!rGen.AcquireMap(pFloor, Seed, &Instance))
@@ -529,7 +525,7 @@ bool AcquireInstance(IStorage *pStorage, CMapGen &rGen, const char *pFloor, int 
 	return Loaded;
 }
 
-void PrintUsage(const char *pProgram)
+static void PrintUsage(const char *pProgram)
 {
 	dbg_msg("mapgentool", "usage: %s list", pProgram);
 	dbg_msg("mapgentool", "       %s <floor> [seed...]", pProgram);
@@ -547,8 +543,6 @@ void PrintUsage(const char *pProgram)
 	dbg_msg("mapgentool", "runs the mapgen world generator without the server and writes");
 	dbg_msg("mapgentool", GENERATED_MAPS_DIR "/<floor>_<seed>.map into the storage save path");
 }
-
-} // namespace
 
 int main(int argc, const char **argv)
 {

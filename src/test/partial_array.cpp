@@ -1,14 +1,12 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <gtest/gtest.h>
-
 #include <base/tl/partial_array.h>
-
 #include <engine/shared/protocol.h>
-
 #include <game/gamecore.h>
 #include <game/server/bot.h>
+
+#include <gtest/gtest.h>
 
 // A small part size keeps the "one part costs one allocation" behaviour
 // observable without allocating megabytes.

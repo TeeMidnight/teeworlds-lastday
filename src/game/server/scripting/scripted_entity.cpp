@@ -1,34 +1,27 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/scripting/scripted_entity.h>
-
 #include <base/math.h>
 #include <base/system.h>
 #include <base/tl/stream.h>
-
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
 #include <engine/storage.h>
-
-#include <generated/protocol.h>
-
 #include <game/server/entities/character.h>
 #include <game/server/entities/dropped_pickup.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gameworld.h>
 #include <game/server/player.h>
 #include <game/server/scripting/script_runtime.h>
+#include <game/server/scripting/scripted_entity.h>
+#include <generated/protocol.h>
 
 #include <pybind11/embed.h>
-
 #include <string>
 
 namespace py = pybind11;
 
-namespace
-{
-CGameContext *Game()
+static CGameContext *Game()
 {
 	CScriptRuntime *pRuntime = CScriptRuntime::Get();
 	return pRuntime ? pRuntime->GameServer() : nullptr;
@@ -38,13 +31,13 @@ CGameContext *Game()
 // module function called from on_spawn/on_tick/on_hit/on_destroy spawns its
 // helpers into that same world, including when the callback runs while a ring
 // neighbour is being snapshotted.
-CGameWorld *ActiveWorldOrMain()
+static CGameWorld *ActiveWorldOrMain()
 {
 	CScriptRuntime *pRuntime = CScriptRuntime::Get();
 	return pRuntime ? pRuntime->ActiveWorld() : nullptr;
 }
 
-CScriptedEntity *FindScriptedEntity(int EntityID)
+static CScriptedEntity *FindScriptedEntity(int EntityID)
 {
 	CGameWorld *pWorld = ActiveWorldOrMain();
 	if(pWorld)
@@ -76,12 +69,12 @@ CScriptedEntity *FindScriptedEntity(int EntityID)
 	return Find.m_pFound;
 }
 
-bool ValidPos(float X, float Y)
+static bool ValidPos(float X, float Y)
 {
 	return absolute(X) < 1.0e7f && absolute(Y) < 1.0e7f;
 }
 
-py::tuple Vec2Tuple(float X, float Y)
+static py::tuple Vec2Tuple(float X, float Y)
 {
 	py::tuple Result(2);
 	Result[0] = py::cast(X);
@@ -89,7 +82,7 @@ py::tuple Vec2Tuple(float X, float Y)
 	return Result;
 }
 
-std::string JsonDumps(py::handle Value)
+static std::string JsonDumps(py::handle Value)
 {
 	try
 	{
@@ -108,7 +101,7 @@ std::string JsonDumps(py::handle Value)
 
 // A module argument that should be json is accepted either as a ready made
 // string or as a Python dict/list which is dumped here.
-std::string JsonArg(const py::object &Value)
+static std::string JsonArg(const py::object &Value)
 {
 	if(Value.is_none())
 		return "{}";
@@ -117,7 +110,7 @@ std::string JsonArg(const py::object &Value)
 	return JsonDumps(Value);
 }
 
-int ReadInt(const json_value &Value, int Default)
+static int ReadInt(const json_value &Value, int Default)
 {
 	if(Value.type == json_integer)
 		return (int) (json_int_t) Value;
@@ -126,12 +119,12 @@ int ReadInt(const json_value &Value, int Default)
 	return Default;
 }
 
-bool HasNumber(const json_value &Value)
+static bool HasNumber(const json_value &Value)
 {
 	return Value.type == json_integer || Value.type == json_double;
 }
 
-float ReadFloat(const json_value &Value, float Default)
+static float ReadFloat(const json_value &Value, float Default)
 {
 	if(Value.type == json_integer)
 		return (float) (json_int_t) Value;
@@ -140,7 +133,7 @@ float ReadFloat(const json_value &Value, float Default)
 	return Default;
 }
 
-void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
+static void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
 {
 	switch(Value.type)
 	{
@@ -179,7 +172,7 @@ void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
 	}
 }
 
-bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
+static bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
 {
 	const int Len = str_length(pFilename);
 	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
@@ -190,7 +183,6 @@ bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
 	pId[Len - 5] = '\0';
 	return true;
 }
-} // namespace
 
 std::string ScriptJsonToString(const struct _json_value *pValue)
 {

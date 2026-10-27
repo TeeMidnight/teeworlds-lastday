@@ -8,11 +8,12 @@
 #include <base/math.h>
 #include <base/system.h>
 #include <base/tl/partial_array.h>
-
 #include <engine/console.h>
 #include <engine/shared/protocol.h>
 #include <generated/protocol.h>
+
 #include "collision.h"
+
 #include <math.h>
 
 class CTuneParam

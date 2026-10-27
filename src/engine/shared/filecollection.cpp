@@ -5,7 +5,6 @@
 
 #include <base/math.h>
 #include <base/tl/algorithm.h>
-
 #include <engine/storage.h>
 
 #include "filecollection.h"

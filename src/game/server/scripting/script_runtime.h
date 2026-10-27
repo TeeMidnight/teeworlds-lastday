@@ -6,7 +6,6 @@
 
 #include <base/system.h>
 #include <base/vmath.h>
-
 #include <game/item_id.h>
 
 #include <string>

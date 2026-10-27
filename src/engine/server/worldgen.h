@@ -6,7 +6,6 @@
 
 #include <base/tl/array.h>
 #include <base/vmath.h>
-
 #include <game/mapitems.h>
 
 struct CInstruction;

@@ -3,7 +3,6 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
-
 #include <engine/console.h>
 #include <engine/shared/config.h>
 #include <engine/storage.h>

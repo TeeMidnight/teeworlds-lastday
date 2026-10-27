@@ -4,6 +4,9 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #ifndef ENGINE_SHARED_JOBS_H
 #define ENGINE_SHARED_JOBS_H
+
+#include <base/system/lock.h>
+
 typedef int (*JOBFUNC)(void *pData);
 
 class CJobPool;

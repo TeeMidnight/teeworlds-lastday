@@ -1,28 +1,23 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/scripting/scripted_bot_ai.h>
-
 #include <base/system.h>
 #include <engine/storage.h>
-
 #include <game/server/botmanager.h>
 #include <game/server/entities/botentity.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gameworld.h>
 #include <game/server/scripting/script_runtime.h>
+#include <game/server/scripting/scripted_bot_ai.h>
 
 #include <pybind11/embed.h>
-
 #include <string>
 
 namespace py = pybind11;
 
-namespace
-{
-const char *const gs_apBotAINames[] = {"chase", "wander", "stand"};
+static const char *const gs_apBotAINames[] = {"chase", "wander", "stand"};
 
-bool ScriptExists(const char *pPath)
+static bool ScriptExists(const char *pPath)
 {
 	if(!pPath || !pPath[0])
 		return false;
@@ -41,7 +36,7 @@ bool ScriptExists(const char *pPath)
 
 // Resolves a sv_bot_ai / set_ai value to a script path. A bare name is looked
 // up under scripts/bot_ai/, which is where the shipped examples live.
-bool BuildScriptPath(const char *pName, char *pPath, int PathSize)
+static bool BuildScriptPath(const char *pName, char *pPath, int PathSize)
 {
 	if(!pName || !pName[0])
 		return false;
@@ -63,7 +58,7 @@ bool BuildScriptPath(const char *pName, char *pPath, int PathSize)
 	return true;
 }
 
-bool IsNativeName(const char *pName)
+static bool IsNativeName(const char *pName)
 {
 	if(!pName)
 		return false;
@@ -73,7 +68,7 @@ bool IsNativeName(const char *pName)
 	return false;
 }
 
-bool JsonBoolTrue(const std::string &Json, const char *pKey)
+static bool JsonBoolTrue(const std::string &Json, const char *pKey)
 {
 	const std::string Key = std::string("\"") + pKey + "\"";
 	size_t Pos = Json.find(Key);
@@ -88,7 +83,7 @@ bool JsonBoolTrue(const std::string &Json, const char *pKey)
 	return Json.compare(Pos, 4, "true") == 0;
 }
 
-std::string JsonEscape(const char *pText)
+static std::string JsonEscape(const char *pText)
 {
 	std::string Out;
 	for(const char *p = pText; p && *p; p++)
@@ -107,7 +102,7 @@ std::string JsonEscape(const char *pText)
 	return Out;
 }
 
-py::tuple Vec2Tuple(float x, float y)
+static py::tuple Vec2Tuple(float x, float y)
 {
 	py::tuple Result(2);
 	Result[0] = py::cast(x);
@@ -115,7 +110,7 @@ py::tuple Vec2Tuple(float x, float y)
 	return Result;
 }
 
-CGameContext *Game()
+static CGameContext *Game()
 {
 	CScriptRuntime *pRuntime = CScriptRuntime::Get();
 	return pRuntime ? pRuntime->GameServer() : nullptr;
@@ -130,7 +125,7 @@ struct SEntityLookup
 	CEntity *m_pEntity;
 };
 
-CEntity *FindWorldEntityByID(CGameWorld *pWorld, int ID)
+static CEntity *FindWorldEntityByID(CGameWorld *pWorld, int ID)
 {
 	if(!pWorld || ID < 0)
 		return nullptr;
@@ -146,7 +141,7 @@ CEntity *FindWorldEntityByID(CGameWorld *pWorld, int ID)
 	return nullptr;
 }
 
-CEntity *FindEntityByID(int ID)
+static CEntity *FindEntityByID(int ID)
 {
 	CGameContext *pGame = Game();
 	if(!pGame || ID < 0)
@@ -162,7 +157,7 @@ CEntity *FindEntityByID(int ID)
 	return Data.m_pEntity;
 }
 
-CBotEntity *FindBotByID(int ID)
+static CBotEntity *FindBotByID(int ID)
 {
 	CEntity *pEnt = FindEntityByID(ID);
 	if(!pEnt || pEnt->ObjType() != CGameWorld::ENTTYPE_BOTENTITY)
@@ -170,7 +165,7 @@ CBotEntity *FindBotByID(int ID)
 	return static_cast<CBotEntity *>(pEnt);
 }
 
-CEntity *FindTargetNear(CBotEntity *pBot, float Radius)
+static CEntity *FindTargetNear(CBotEntity *pBot, float Radius)
 {
 	if(!pBot)
 		return nullptr;
@@ -188,7 +183,7 @@ CEntity *FindTargetNear(CBotEntity *pBot, float Radius)
 	return pTarget;
 }
 
-bool IsVisibleWorld(CGameWorld *pWorld, CGameWorld *pOther)
+static bool IsVisibleWorld(CGameWorld *pWorld, CGameWorld *pOther)
 {
 	if(pWorld == pOther)
 		return true;
@@ -201,7 +196,7 @@ bool IsVisibleWorld(CGameWorld *pWorld, CGameWorld *pOther)
 	return false;
 }
 
-bool HasLineOfSight(CBotEntity *pBot, CEntity *pTarget)
+static bool HasLineOfSight(CBotEntity *pBot, CEntity *pTarget)
 {
 	if(!pBot || !pTarget || pTarget == pBot)
 		return false;
@@ -213,7 +208,7 @@ bool HasLineOfSight(CBotEntity *pBot, CEntity *pTarget)
 
 // --- embedded module lastday_bot -----------------------------------------
 
-bool BotSetInput(int Entity, int Direction, bool Jump, bool Fire, float TargetX, float TargetY)
+static bool BotSetInput(int Entity, int Direction, bool Jump, bool Fire, float TargetX, float TargetY)
 {
 	CBotEntity *pBot = FindBotByID(Entity);
 	if(!pBot || !pBot->IsAlive())
@@ -233,7 +228,7 @@ bool BotSetInput(int Entity, int Direction, bool Jump, bool Fire, float TargetX,
 	return true;
 }
 
-py::tuple BotGetPos(int Entity)
+static py::tuple BotGetPos(int Entity)
 {
 	CBotEntity *pBot = FindBotByID(Entity);
 	if(!pBot)
@@ -241,14 +236,14 @@ py::tuple BotGetPos(int Entity)
 	return Vec2Tuple(pBot->GetPos().x, pBot->GetPos().y);
 }
 
-int BotFindTarget(int Entity, float Radius)
+static int BotFindTarget(int Entity, float Radius)
 {
 	CBotEntity *pBot = FindBotByID(Entity);
 	CEntity *pTarget = FindTargetNear(pBot, Radius);
 	return pTarget ? pTarget->GetID() : -1;
 }
 
-bool BotHasLineOfSight(int Entity, int TargetEntity)
+static bool BotHasLineOfSight(int Entity, int TargetEntity)
 {
 	CBotEntity *pBot = FindBotByID(Entity);
 	if(!pBot)
@@ -256,7 +251,7 @@ bool BotHasLineOfSight(int Entity, int TargetEntity)
 	return HasLineOfSight(pBot, FindEntityByID(TargetEntity));
 }
 
-bool BotSetAI(int Entity, const std::string &Name)
+static bool BotSetAI(int Entity, const std::string &Name)
 {
 	CBotEntity *pBot = FindBotByID(Entity);
 	if(!pBot || Name.empty())
@@ -268,7 +263,7 @@ bool BotSetAI(int Entity, const std::string &Name)
 	return pBot->RequestAI(Name.c_str());
 }
 
-void BotLog(const std::string &Message)
+static void BotLog(const std::string &Message)
 {
 	dbg_msg("bot", "%s", Message.c_str());
 }
@@ -362,7 +357,6 @@ public:
 		pBot->AimCursor();
 	}
 };
-} // namespace
 
 const char *const *BotAIList(int *pCount)
 {

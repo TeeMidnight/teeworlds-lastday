@@ -3,6 +3,7 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system.h>
+
 #include "eventhandler.h"
 #include "gamecontext.h"
 #include "player.h"

@@ -5,9 +5,10 @@
 #ifndef BASE_TL_STRING_H
 #define BASE_TL_STRING_H
 
-#include "allocator.h"
 #include <base/system/mem.h>
 #include <base/system/string.h>
+
+#include "allocator.h"
 
 template<class ALLOCATOR>
 class string_base : private ALLOCATOR

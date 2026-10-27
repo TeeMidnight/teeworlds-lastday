@@ -4,9 +4,8 @@
 #ifndef GAME_LOCALIZATION_FORMAT_H
 #define GAME_LOCALIZATION_FORMAT_H
 
-#include <game/localization.h>
-
 #include <base/system/string.h>
+#include <game/localization.h>
 
 #include <format>
 #include <stdexcept>

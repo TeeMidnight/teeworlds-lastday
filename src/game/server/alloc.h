@@ -5,9 +5,9 @@
 #ifndef GAME_SERVER_ALLOC_H
 #define GAME_SERVER_ALLOC_H
 
-#include <new>
-
 #include <base/system.h>
+
+#include <new>
 
 #define MACRO_ALLOC_HEAP() \
 public: \

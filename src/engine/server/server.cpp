@@ -5,7 +5,6 @@
 
 #include <base/math.h>
 #include <base/system.h>
-
 #include <engine/config.h>
 #include <engine/console.h>
 #include <engine/engine.h>
@@ -13,8 +12,6 @@
 #include <engine/map/generatedmaps.h>
 #include <engine/masterserver.h>
 #include <engine/server.h>
-#include <engine/storage.h>
-
 #include <engine/shared/compression.h>
 #include <engine/shared/config.h>
 #include <engine/shared/datafile.h>
@@ -31,16 +28,15 @@
 #include <engine/shared/protocol.h>
 #include <engine/shared/protocol_ex.h>
 #include <engine/shared/snapshot.h>
-
+#include <engine/storage.h>
 #include <game/mapitems.h>
-
-#include <mastersrv/mastersrv.h>
 
 #include "mapgen.h"
 #include "register.h"
 #include "server.h"
 #include "worldgen.h"
 
+#include <mastersrv/mastersrv.h>
 #include <signal.h>
 
 volatile sig_atomic_t InterruptSignaled = 0;

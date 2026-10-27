@@ -3,10 +3,10 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
+#include <base/system/mem.h>
+
 #include <stdlib.h>
 #include <string.h>
-
-#include <base/system/mem.h>
 
 void *mem_alloc(unsigned size)
 {

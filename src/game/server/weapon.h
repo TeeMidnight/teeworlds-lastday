@@ -6,7 +6,6 @@
 
 #include <base/system.h>
 #include <base/vmath.h>
-
 #include <game/server/ammo.h>
 
 class CCharacter;

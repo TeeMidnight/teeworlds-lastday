@@ -2,9 +2,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <gtest/gtest.h>
-
 #include <base/system.h>
+
+#include <gtest/gtest.h>
 
 static void Nothing(void *pUser)
 {

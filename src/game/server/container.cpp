@@ -2,15 +2,12 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
-
 #include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
-
-#include <generated/protocol.h>
-
 #include <game/server/entities/container.h>
 #include <game/server/gamecontext.h>
 #include <game/server/item.h>
+#include <generated/protocol.h>
 
 #include "container.h"
 
@@ -37,8 +34,6 @@ static int ContainerPickupFromName(const char *pName)
 	return PICKUP_ARMOR;
 }
 
-namespace
-{
 // Deterministic xorshift32, so a generated map instance always rolls the same
 // first loot; the roll is persisted afterwards.
 struct SLootRandom
@@ -63,14 +58,14 @@ struct SLootRandom
 	}
 };
 
-int LootJsonInt(const json_value &rValue, int Default)
+static int LootJsonInt(const json_value &rValue, int Default)
 {
 	if(rValue.type == json_integer || rValue.type == json_double)
 		return (int) (json_int_t) rValue;
 	return Default;
 }
 
-int RarityFromName(const char *pName)
+static int RarityFromName(const char *pName)
 {
 	if(!pName || !pName[0])
 		return 0;
@@ -83,7 +78,7 @@ int RarityFromName(const char *pName)
 	return 0;
 }
 
-const char *RarityName(int Rarity)
+static const char *RarityName(int Rarity)
 {
 	switch(Rarity)
 	{
@@ -93,7 +88,6 @@ const char *RarityName(int Rarity)
 	default: return "common";
 	}
 }
-} // namespace
 
 CContainerSystem::~CContainerSystem()
 {

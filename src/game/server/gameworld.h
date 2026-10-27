@@ -7,6 +7,7 @@
 
 #include <game/gamecore.h>
 #include <game/layers.h>
+
 #include "eventhandler.h"
 
 class CEntity;

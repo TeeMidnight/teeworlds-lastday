@@ -2,11 +2,9 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <game/server/entities/drill.h>
-
 #include <game/server/gamecontext.h>
 #include <game/server/item.h>
 #include <game/server/player.h>
-
 #include <generated/protocol.h>
 
 #include "character.h"

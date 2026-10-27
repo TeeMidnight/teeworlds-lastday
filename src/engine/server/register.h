@@ -7,6 +7,7 @@
 
 #include <base/uuid.h>
 #include <engine/shared/network.h>
+
 #include <mastersrv/mastersrv.h>
 
 class CRegister

@@ -5,13 +5,11 @@
 #ifndef GAME_SERVER_PLAYER_H
 #define GAME_SERVER_PLAYER_H
 
-#include "alloc.h"
-
 #include <base/uuid.h>
-
+#include <game/server/item.h>
 #include <generated/protocol.h>
 
-#include <game/server/item.h>
+#include "alloc.h"
 
 class CDatabase;
 class CGameWorld;

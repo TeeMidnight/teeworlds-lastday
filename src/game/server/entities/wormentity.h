@@ -7,10 +7,9 @@
 #include <base/tl/array.h>
 #include <base/uuid.h>
 #include <base/vmath.h>
+#include <game/server/mobdata.h>
 
 #include "botentity.h"
-
-#include <game/server/mobdata.h>
 
 class CWormEntity;
 

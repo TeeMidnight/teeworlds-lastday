@@ -1,16 +1,13 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/item.h>
-
 #include <base/system.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
-
-#include <game/server/gamecontext.h>
-#include <game/server/scripting/script_runtime.h>
-
 #include <game/localization_format.h>
+#include <game/server/gamecontext.h>
+#include <game/server/item.h>
+#include <game/server/scripting/script_runtime.h>
 
 // ---------------------------------------------------------------
 // CItemSystem::CInventory (inventory / item loading lives here; use effects
@@ -55,9 +52,8 @@ void CItemSystem::CInventory::ClearSlot(int Index)
 // ---------------------------------------------------------------
 // CItemSystem
 // ---------------------------------------------------------------
-namespace {
 // the "local" part of a namespaced id: "lastday:item/stone" -> "stone"
-void LocalItemName(const char *pId, char *pOut, int OutSize)
+static void LocalItemName(const char *pId, char *pOut, int OutSize)
 {
 	const char *pName = pId ? pId : "";
 	const char *pColon = str_find(pName, ":");
@@ -77,7 +73,7 @@ struct CJsonListData
 	char m_aPath[IO_MAX_PATH_LENGTH];
 };
 
-bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
+static bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
 {
 	const int Len = str_length(pFilename);
 	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
@@ -88,7 +84,6 @@ bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
 	pId[Len - 5] = '\0';
 	return true;
 }
-} // namespace
 
 // items are grouped by one level of folders under data/items, mirroring the
 // crafting categories. the folder name is the item's category (weapon, tool,

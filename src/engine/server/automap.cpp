@@ -3,7 +3,6 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/math.h>
 #include <base/system.h>
-
 #include <engine/shared/jsonparser.h>
 
 #include "automap.h"

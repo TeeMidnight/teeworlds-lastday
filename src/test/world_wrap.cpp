@@ -7,17 +7,15 @@
 // These cover the tile lookup (which used to clamp at the edge, making the seam
 // read as a wall) and the move across it (which used to measure as a jump the
 // width of the world).
-#include <gtest/gtest.h>
-
 #include <game/collision.h>
 
-namespace {
+#include <gtest/gtest.h>
 
 // a world 8 tiles wide, clear except the last column
-const int W = 8;
-const int H = 4;
+static const int W = 8;
+static const int H = 4;
 
-void Fill(int *pTiles, bool SolidAtSeam)
+static void Fill(int *pTiles, bool SolidAtSeam)
 {
 	for(int i = 0; i < W * H; i++)
 		pTiles[i] = 0;
@@ -27,8 +25,6 @@ void Fill(int *pTiles, bool SolidAtSeam)
 			pTiles[y * W + (W - 1)] = CCollision::COLFLAG_SOLID;
 	}
 }
-
-} // namespace
 
 // A lookup one tile left of the map must read the rightmost column, not clamp
 // onto column 0; otherwise the seam is a wall.

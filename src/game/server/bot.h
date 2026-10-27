@@ -7,7 +7,6 @@
 
 #include <base/system.h>
 #include <base/uuid.h>
-
 #include <engine/shared/protocol.h>
 #include <generated/protocol.h>
 

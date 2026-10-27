@@ -5,15 +5,12 @@
 
 #include <base/math.h>
 #include <base/tl/stream.h>
-
-#include <generated/server_data.h>
-
 #include <engine/server/mapgen.h>
 #include <engine/server/worldgen.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
-
-#include <climits>
+#include <game/server/database/database.h>
+#include <generated/server_data.h>
 
 #include "botmanager.h"
 #include "container.h"
@@ -24,24 +21,21 @@
 #include "entities/dropped_pickup.h"
 #include "entities/monsterentity.h"
 #include "entities/resource.h"
-#include "scripting/scripted_entity.h"
 #include "entity.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "gameworld.h"
 #include "item.h"
 #include "mobdata.h"
-
-#include <game/server/database/database.h>
+#include "scripting/scripted_entity.h"
 
 #include <algorithm>
+#include <climits>
 
-namespace
-{
 // CJsonWriter only writes typed values, so a state/params document that is
 // already parsed is walked here and written back as a nested object instead of
 // being escaped into a string.
-void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
+static void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
 {
 	switch(Value.type)
 	{
@@ -82,7 +76,7 @@ void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
 
 // The stored form of a scripted entity's state: a nested json object when the
 // text parses, its raw string otherwise (so a damaged document is not lost).
-void WriteJsonText(CJsonWriter &Writer, const char *pAttribute, const std::string &Text)
+static void WriteJsonText(CJsonWriter &Writer, const char *pAttribute, const std::string &Text)
 {
 	CJsonParser Parser;
 	json_value *pJson = Parser.ParseString(Text.c_str(), pAttribute);
@@ -95,7 +89,7 @@ void WriteJsonText(CJsonWriter &Writer, const char *pAttribute, const std::strin
 
 // Reads a value written by WriteJsonText back into the text the script layer
 // expects, accepting both the nested object and the legacy string form.
-std::string ReadJsonText(const json_value &Value)
+static std::string ReadJsonText(const json_value &Value)
 {
 	if(Value.type == json_object || Value.type == json_array)
 		return ScriptJsonToString(&Value);
@@ -103,7 +97,6 @@ std::string ReadJsonText(const json_value &Value)
 		return Value.u.string.ptr;
 	return "{}";
 }
-} // namespace
 
 //////////////////////////////////////////////////
 // game world

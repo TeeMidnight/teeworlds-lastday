@@ -5,9 +5,7 @@
 #define GAME_SERVER_DATABASE_DATABASE_UTIL_H
 
 #include <base/tl/array.h>
-
 #include <engine/shared/jobs.h>
-
 #include <game/server/database/database.h>
 #include <game/server/database/jsonpath.h>
 

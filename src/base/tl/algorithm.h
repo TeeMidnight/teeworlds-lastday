@@ -5,9 +5,9 @@
 #ifndef BASE_TL_ALGORITHM_H
 #define BASE_TL_ALGORITHM_H
 
-#include <algorithm>
-
 #include "range.h"
+
+#include <algorithm>
 
 /*
 	insert 4

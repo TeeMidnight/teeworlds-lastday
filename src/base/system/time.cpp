@@ -3,9 +3,9 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
-#include <time.h>
-
 #include <base/system/time.h>
+
+#include <time.h>
 
 /* -----  time ----- */
 int64 time_get()

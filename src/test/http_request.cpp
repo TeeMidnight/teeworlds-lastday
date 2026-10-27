@@ -1,12 +1,12 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "test.h"
-#include <gtest/gtest.h>
-
 #include <base/system.h>
-
 #include <engine/shared/http_request.h>
+
+#include "test.h"
+
+#include <gtest/gtest.h>
 
 // PostData must replace the body, not append to it; memory_stream appends.
 TEST(HttpRequest, PostDataReplacesInsteadOfAppending)

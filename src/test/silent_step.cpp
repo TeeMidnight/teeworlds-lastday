@@ -4,18 +4,16 @@
 // Silent step: while a character creeps, its self-propelled horizontal speed is
 // half of the normal control speed. The state lives in CCharacterCore, so the
 // player (toggled by the scoreboard flag) and an NPC share one physics path.
-#include <gtest/gtest.h>
-
 #include <game/collision.h>
 #include <game/gamecore.h>
 
-namespace {
+#include <gtest/gtest.h>
 
-const int W = 32;
-const int H = 4;
+static const int W = 32;
+static const int H = 4;
 
 // a flat floor from row 2 down
-void MakeFloor(int *pTiles)
+static void MakeFloor(int *pTiles)
 {
 	for(int i = 0; i < W * H; i++)
 		pTiles[i] = 0;
@@ -25,7 +23,7 @@ void MakeFloor(int *pTiles)
 }
 
 // place the tee one physics box above the floor with the given input
-void InitCore(CCharacterCore &Core, CWorldCore &World, CCollision &Coll)
+static void InitCore(CCharacterCore &Core, CWorldCore &World, CCollision &Coll)
 {
 	Core.Init(&World, &Coll);
 	Core.Reset();
@@ -34,13 +32,11 @@ void InitCore(CCharacterCore &Core, CWorldCore &World, CCollision &Coll)
 	Core.m_Input.m_Direction = 1;
 }
 
-void StepN(CCharacterCore &Core, int Ticks, bool LastDay = true)
+static void StepN(CCharacterCore &Core, int Ticks, bool LastDay = true)
 {
 	for(int i = 0; i < Ticks; i++)
 		Core.Tick(true, LastDay);
 }
-
-} // namespace
 
 // Both cores saturate at their control speed, and the silent one sits exactly at
 // half of the other.

@@ -2,14 +2,14 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <algorithm>
-#include <limits.h>
-
 #include <base/tl/algorithm.h>
 
 #include "compression.h"
 #include "snapshot.h"
 #include "uuid_manager.h"
+
+#include <algorithm>
+#include <limits.h>
 
 // CSnapshot
 

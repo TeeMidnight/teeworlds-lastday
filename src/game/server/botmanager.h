@@ -9,11 +9,9 @@
 #include <base/tl/hashtable.h>
 #include <base/uuid.h>
 #include <base/vmath.h>
-
 #include <engine/shared/protocol.h>
-#include <generated/protocol.h>
-
 #include <game/server/bot.h>
+#include <generated/protocol.h>
 
 class CConfig;
 class CGameContext;

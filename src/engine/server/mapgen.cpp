@@ -1,23 +1,19 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
+#include <base/math.h>
 #include <base/system.h>
 #include <base/tl/algorithm.h>
 #include <base/tl/stream.h>
-
-#include <base/math.h>
 #include <base/vmath.h>
-#include <climits>
-
 #include <engine/engine.h>
 #include <engine/map/generatedmaps.h>
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
-#include <engine/shared/mappack.h>
-#include <engine/storage.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
-
+#include <engine/shared/mappack.h>
+#include <engine/storage.h>
 #include <game/gamecore.h>
 #include <game/mapitems.h>
 
@@ -25,6 +21,8 @@
 #include "mapgen.h"
 #include "noise.h"
 #include "worldgen.h"
+
+#include <climits>
 
 void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size)
 {

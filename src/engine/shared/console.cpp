@@ -2,17 +2,16 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <new>
-
 #include <base/math.h>
 #include <base/system.h>
-
 #include <engine/shared/protocol.h>
 #include <engine/storage.h>
 
 #include "config.h"
 #include "console.h"
 #include "linereader.h"
+
+#include <new>
 
 // todo: rework this
 

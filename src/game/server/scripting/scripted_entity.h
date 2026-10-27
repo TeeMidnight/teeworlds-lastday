@@ -5,10 +5,9 @@
 #define GAME_SERVER_SCRIPTING_SCRIPTED_ENTITY_H
 
 #include <base/system.h>
-#include <base/uuid.h>
 #include <base/tl/array.h>
 #include <base/tl/hashtable.h>
-
+#include <base/uuid.h>
 #include <game/item_id.h>
 #include <game/server/building.h>
 #include <game/server/entity.h>

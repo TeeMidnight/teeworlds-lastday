@@ -1,13 +1,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/scripting/scripted_weapon.h>
-
 #include <base/system.h>
 #include <base/tl/array.h>
-
 #include <engine/server.h>
-
 #include <game/server/entities/character.h>
 #include <game/server/entities/resource.h>
 #include <game/server/entity.h>
@@ -15,7 +11,7 @@
 #include <game/server/gameworld.h>
 #include <game/server/player.h>
 #include <game/server/scripting/script_runtime.h>
-
+#include <game/server/scripting/scripted_weapon.h>
 #include <generated/protocol.h>
 #include <generated/server_data.h>
 
@@ -23,14 +19,12 @@
 
 namespace py = pybind11;
 
-namespace
-{
 // Server-data damage of the weapon this scripted definition replaces. The
 // Python scripts use it as the fallback for ctx["ammo"]["damage"] == 0 (the
 // native weapon classes do the same with g_pData). Sword and hand have no
 // meaningful entry of their own: the sword renders as ninja but hits like the
 // hammer (hammer damage + 2) and the bare hand always deals 1.
-int ScriptedWeaponBaseDamage(const char *pName, int SnapStyle)
+static int ScriptedWeaponBaseDamage(const char *pName, int SnapStyle)
 {
 	if(str_comp(pName, "hand") == 0)
 		return 1;
@@ -41,18 +35,17 @@ int ScriptedWeaponBaseDamage(const char *pName, int SnapStyle)
 	return 0;
 }
 
-CGameContext *ScriptGame()
+static CGameContext *ScriptGame()
 {
 	CScriptRuntime *pRuntime = CScriptRuntime::Get();
 	return pRuntime ? pRuntime->GameServer() : nullptr;
 }
 
-CCharacter *ScriptCharacter(int ClientID)
+static CCharacter *ScriptCharacter(int ClientID)
 {
 	CGameContext *pGame = ScriptGame();
 	return pGame ? pGame->GetPlayerChar(ClientID) : nullptr;
 }
-} // namespace
 
 CScriptedWeapon::CScriptedWeapon(const char *pName, const char *pScript, int SnapStyle,
 	bool FullAuto, int FireDelay, int DefaultAmmo, int MaxAmmo) :

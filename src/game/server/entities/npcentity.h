@@ -5,9 +5,9 @@
 #ifndef GAME_SERVER_ENTITIES_NPCENTITY_H
 #define GAME_SERVER_ENTITIES_NPCENTITY_H
 
-#include "botentity.h"
-
 #include <game/server/mobdata.h>
+
+#include "botentity.h"
 
 struct SNpcDef;
 

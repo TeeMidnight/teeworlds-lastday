@@ -4,9 +4,10 @@
 #ifndef BASE_TL_STREAM_H
 #define BASE_TL_STREAM_H
 
-#include <base/system/mem.h>
 #include <base/system/fs.h>
 #include <base/system/io.h>
+#include <base/system/mem.h>
+
 #include "array.h"
 
 // A stream is either writable, readable or both. The writing half is pure

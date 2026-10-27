@@ -1,20 +1,18 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/database/account.h>
-
 #include <base/system.h>
+#include <game/server/database/account.h>
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
-namespace {
-const int SALT_LEN = 16;
-const int HASH_LEN = 32; // SHA-256
-const int ITERATIONS = 100000;
+static const int SALT_LEN = 16;
+static const int HASH_LEN = 32; // SHA-256
+static const int ITERATIONS = 100000;
 
-void ToHex(const unsigned char *pData, int Len, char *pOut)
+static void ToHex(const unsigned char *pData, int Len, char *pOut)
 {
 	static const char aHex[] = "0123456789abcdef";
 	for(int i = 0; i < Len; i++)
@@ -25,7 +23,7 @@ void ToHex(const unsigned char *pData, int Len, char *pOut)
 	pOut[Len * 2] = '\0';
 }
 
-int FromHexNibble(char c)
+static int FromHexNibble(char c)
 {
 	if(c >= '0' && c <= '9')
 		return c - '0';
@@ -36,7 +34,7 @@ int FromHexNibble(char c)
 	return -1;
 }
 
-bool FromHex(const char *pHex, int Len, unsigned char *pOut)
+static bool FromHex(const char *pHex, int Len, unsigned char *pOut)
 {
 	for(int i = 0; i < Len; i++)
 	{
@@ -48,7 +46,6 @@ bool FromHex(const char *pHex, int Len, unsigned char *pOut)
 	}
 	return true;
 }
-} // anonymous namespace
 
 void HashPassword(char *pOut, int Size, const char *pPassword)
 {

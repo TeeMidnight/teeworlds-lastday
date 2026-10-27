@@ -2,13 +2,13 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* Bot layer ported from teeworlds-carbon (c) TeeMidnight, zlib license.                     */
+#include <game/localization.h>
+#include <game/localization_format.h>
 #include <game/server/botmanager.h>
 #include <game/server/entities/character.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/npcdata.h>
-#include <game/localization.h>
-#include <game/localization_format.h>
 #include <game/server/player.h>
 
 #include "npcentity.h"

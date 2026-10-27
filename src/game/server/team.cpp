@@ -7,14 +7,11 @@
 #include "player.h"
 #include "team.h"
 
-namespace
-{
-void SetTeamError(char *pError, int ErrorSize, const char *pText)
+static void SetTeamError(char *pError, int ErrorSize, const char *pText)
 {
 	if(pError && ErrorSize > 0)
 		str_copy(pError, pText, ErrorSize);
 }
-} // namespace
 
 CTeamSystem::CTeamSystem() :
 	m_pGameServer(nullptr), m_pDatabase(nullptr)

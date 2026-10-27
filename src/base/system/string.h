@@ -6,8 +6,9 @@
 #ifndef BASE_SYSTEM_STRING_H
 #define BASE_SYSTEM_STRING_H
 
-#include <time.h>
 #include <base/system/base.h>
+
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {

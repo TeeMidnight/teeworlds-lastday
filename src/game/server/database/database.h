@@ -12,7 +12,6 @@
 #include <base/system.h>
 #include <base/tl/array.h>
 #include <base/uuid.h>
-
 #include <game/server/database/jsonpath.h>
 
 class IEngine;

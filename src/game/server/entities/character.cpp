@@ -3,7 +3,6 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <engine/shared/config.h>
-
 #include <game/collision.h>
 #include <game/server/botmanager.h>
 #include <game/server/gamecontext.h>

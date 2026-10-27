@@ -3,28 +3,25 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 // Euclidean floor generation: the procedural terrain, its cave wall, its
 // background, the vegetation doodads and the layer assembly.
+#include <base/math.h>
 #include <base/system.h>
 #include <base/tl/stream.h>
-
-#include <base/math.h>
 #include <base/vmath.h>
-#include <climits>
-
 #include <engine/map/generatedmaps.h>
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
-
 #include <game/gamecore.h>
 #include <game/mapitems.h>
 
 #include "automap.h"
 #include "mapgen.h"
+#include "mapgen_internal.h"
 #include "noise.h"
 #include "worldgen.h"
 
-#include "mapgen_internal.h"
+#include <climits>
 
 // ---------------------------------------------------------------------------
 // surface resources

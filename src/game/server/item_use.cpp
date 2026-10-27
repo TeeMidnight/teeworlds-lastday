@@ -1,12 +1,10 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/item.h>
-
 #include <base/system.h>
-
 #include <game/server/entities/character.h>
 #include <game/server/gamecontext.h>
+#include <game/server/item.h>
 #include <game/server/player.h>
 #include <game/server/scripting/script_runtime.h>
 

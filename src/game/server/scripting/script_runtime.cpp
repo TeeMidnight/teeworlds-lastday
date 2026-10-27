@@ -1,25 +1,19 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/scripting/script_runtime.h>
-
 #include <base/system.h>
+#include <base/tl/array.h>
 #include <engine/storage.h>
-
 #include <game/server/gamecontext.h>
 #include <game/server/gameworld.h>
-
-#include <base/tl/array.h>
+#include <game/server/scripting/script_runtime.h>
 
 #include <pocketpy.h>
 #include <pybind11/embed.h>
-
 #include <string>
 
 namespace py = pybind11;
 
-namespace
-{
 // Installs the callback's world for the duration of one Python call, including
 // nested host calls and every early return of CScriptRuntime::Call.
 class CActiveWorldScope
@@ -49,7 +43,7 @@ struct SWatchdog
 	~SWatchdog() { py_watchdog_end(); }
 };
 
-py::tuple Vec2Tuple(float x, float y)
+static py::tuple Vec2Tuple(float x, float y)
 {
 	py::tuple Result(2);
 	Result[0] = py::cast(x);
@@ -57,7 +51,7 @@ py::tuple Vec2Tuple(float x, float y)
 	return Result;
 }
 
-bool ToBool(py::handle Value)
+static bool ToBool(py::handle Value)
 {
 	// PocketPy's pybind11 subset only casts a real bool to bool. Scripts often
 	// write ctx["consumed"] = 1, so accept integer truthiness as well.
@@ -78,7 +72,7 @@ bool ToBool(py::handle Value)
 	return false;
 }
 
-std::string JsonDumps(py::handle Value)
+static std::string JsonDumps(py::handle Value)
 {
 	try
 	{
@@ -91,7 +85,7 @@ std::string JsonDumps(py::handle Value)
 	}
 }
 
-py::object JsonLoads(const std::string &Text)
+static py::object JsonLoads(const std::string &Text)
 {
 	try
 	{
@@ -103,7 +97,6 @@ py::object JsonLoads(const std::string &Text)
 		return py::dict();
 	}
 }
-} // namespace
 
 class CScriptRuntime::CImpl
 {

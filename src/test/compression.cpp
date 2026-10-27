@@ -2,9 +2,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <gtest/gtest.h>
-
 #include <engine/shared/compression.h>
+
+#include <gtest/gtest.h>
 
 static const int DATA[] = {0, 1, -1, 32, 64, 256, -512, 12345, -123456, 1234567, 12345678, 123456789, 2147483647, (-2147483647 - 1)};
 static const int NUM = sizeof(DATA) / sizeof(int);

@@ -1,32 +1,27 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/weapon.h>
-#include <game/server/weaponmanager.h>
-
 #include <base/system.h>
 #include <engine/server.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
-
 #include <game/server/entities/character.h>
 #include <game/server/entity.h>
 #include <game/server/gamecontext.h>
 #include <game/server/scripting/script_runtime.h>
 #include <game/server/scripting/scripted_weapon.h>
-
+#include <game/server/weapon.h>
+#include <game/server/weaponmanager.h>
 #include <generated/protocol.h>
 #include <generated/server_data.h>
 
-namespace
-{
 struct SScriptedWeaponListData
 {
 	CWeaponManager *m_pManager;
 	IStorage *m_pStorage;
 };
 
-bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
+static bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
 {
 	const int Len = str_length(pFilename);
 	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
@@ -38,14 +33,14 @@ bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
 	return true;
 }
 
-int ReadInt(const json_value &Value, int Default)
+static int ReadInt(const json_value &Value, int Default)
 {
 	if(Value.type == json_integer || Value.type == json_double)
 		return (int) (json_int_t) Value;
 	return Default;
 }
 
-int SnapStyleFromName(const char *pName)
+static int SnapStyleFromName(const char *pName)
 {
 	if(str_comp_nocase(pName, "hammer") == 0)
 		return WEAPON_HAMMER;
@@ -69,7 +64,7 @@ int SnapStyleFromName(const char *pName)
 // snap_style accepts either the protocol integer (preferred, unambiguous) or a
 // protocol weapon name ("gun", "ninja", ...). "hand" maps to -1 (no weapon
 // rendered by the client).
-int SnapStyleFromJson(const json_value &Value, const char *pName)
+static int SnapStyleFromJson(const json_value &Value, const char *pName)
 {
 	if(Value.type == json_integer)
 		return (int) (json_int_t) Value;
@@ -80,7 +75,7 @@ int SnapStyleFromJson(const json_value &Value, const char *pName)
 	return SnapStyleFromName(pName);
 }
 
-int DefaultFireDelayFromName(const char *pName)
+static int DefaultFireDelayFromName(const char *pName)
 {
 	if(str_comp_nocase(pName, "shotgun") == 0 || str_comp_nocase(pName, "grenade") == 0)
 		return 500;
@@ -90,7 +85,6 @@ int DefaultFireDelayFromName(const char *pName)
 		return 500;
 	return 125;
 }
-} // namespace
 
 // Static registry: CWeaponRegistrar writes the weapon instances here during
 // static initialization. A function-local static avoids cross-TU static

@@ -1,22 +1,18 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/scripting/script_commands.h>
-
 #include <engine/console.h>
 #include <engine/shared/config.h>
-
 #include <game/server/gamecontext.h>
 #include <game/server/item.h>
 #include <game/server/player.h>
 #include <game/server/scripting/buff_system.h>
+#include <game/server/scripting/script_commands.h>
 #include <game/server/scripting/script_runtime.h>
 #include <game/server/scripting/scripted_entity.h>
 #include <game/server/weaponmanager.h>
 
-namespace
-{
-void ConReloadScripts(IConsole::IResult *pResult, void *pUserData)
+static void ConReloadScripts(IConsole::IResult *pResult, void *pUserData)
 {
 	(void) pResult;
 	CGameContext *pGameServer = static_cast<CGameContext *>(pUserData);
@@ -32,7 +28,7 @@ void ConReloadScripts(IConsole::IResult *pResult, void *pUserData)
 		ScriptsOk && ItemsOk ? "scripts reloaded" : "some scripts failed to reload; see the log");
 }
 
-void ConScriptSelfTest(IConsole::IResult *pResult, void *pUserData)
+static void ConScriptSelfTest(IConsole::IResult *pResult, void *pUserData)
 {
 	(void) pResult;
 	CGameContext *pGameServer = static_cast<CGameContext *>(pUserData);
@@ -62,7 +58,7 @@ void ConScriptSelfTest(IConsole::IResult *pResult, void *pUserData)
 	pGameServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "script", aBuf);
 }
 
-void ConBuff(IConsole::IResult *pResult, void *pUserData)
+static void ConBuff(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pGameServer = static_cast<CGameContext *>(pUserData);
 	const int ClientID = pResult->GetInteger(0);
@@ -80,7 +76,7 @@ void ConBuff(IConsole::IResult *pResult, void *pUserData)
 	pGameServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "script", aBuf);
 }
 
-void ConGiveItem(IConsole::IResult *pResult, void *pUserData)
+static void ConGiveItem(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pGameServer = static_cast<CGameContext *>(pUserData);
 	const int ClientID = pResult->GetInteger(0);
@@ -95,7 +91,6 @@ void ConGiveItem(IConsole::IResult *pResult, void *pUserData)
 	str_format(aBuf, sizeof(aBuf), "gave %d x '%s' to client %d", Count, pItemId, ClientID);
 	pGameServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "script", aBuf);
 }
-} // namespace
 
 void RegisterScriptCommands(CGameContext *pGameServer)
 {

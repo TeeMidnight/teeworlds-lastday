@@ -5,15 +5,12 @@
 // is unique across every world, so a snapshot tee id names exactly one bot even
 // when a client is shown its own and its ring neighbours' bots. This covers the
 // pure allocator the manager delegates to (PickBotTeeID in bot.h).
-#include <gtest/gtest.h>
-
+#include <base/tl/array.h>
 #include <game/server/bot.h>
 
-#include <base/tl/array.h>
+#include <gtest/gtest.h>
 
-namespace {
-
-bool UsedContains(const array<int> &Used, int Id)
+static bool UsedContains(const array<int> &Used, int Id)
 {
 	for(int i = 0; i < Used.size(); i++)
 		if(Used[i] == Id)
@@ -21,15 +18,13 @@ bool UsedContains(const array<int> &Used, int Id)
 	return false;
 }
 
-Uuid MakeBot(int Index)
+static Uuid MakeBot(int Index)
 {
 	Uuid Bot;
 	for(int i = 0; i < (int) sizeof(Bot.m_aData); i++)
 		Bot.m_aData[i] = (unsigned char) (Index * 131 + i * 17 + 7);
 	return Bot;
 }
-
-} // namespace
 
 TEST(BotIdentity, SameBotKeepsItsTeeID)
 {

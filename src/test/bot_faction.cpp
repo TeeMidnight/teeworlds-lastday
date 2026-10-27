@@ -1,9 +1,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <gtest/gtest.h>
-
 #include <game/server/bot.h>
+
+#include <gtest/gtest.h>
 
 TEST(BotFaction, ParsesKnownNames)
 {

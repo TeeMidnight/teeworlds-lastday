@@ -4,9 +4,9 @@
 #ifndef GAME_SERVER_ENTITIES_MONSTERENTITY_H
 #define GAME_SERVER_ENTITIES_MONSTERENTITY_H
 
-#include "botentity.h"
-
 #include <game/server/mobdata.h>
+
+#include "botentity.h"
 
 class CCharacter;
 struct SMobDef;

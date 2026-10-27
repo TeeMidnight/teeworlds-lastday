@@ -7,7 +7,6 @@
 #include <base/tl/array.h>
 #include <base/tl/hashtable.h>
 #include <base/uuid.h>
-
 #include <game/server/database/database.h>
 
 class CGameContext;

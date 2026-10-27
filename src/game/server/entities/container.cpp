@@ -1,18 +1,15 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/entities/container.h>
-
 #include <base/math.h>
-
-#include <climits>
-
-#include <generated/protocol.h>
-
+#include <game/server/entities/container.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gameworld.h>
+#include <generated/protocol.h>
 
 #include "container.h"
+
+#include <climits>
 
 CContainerEntity::CContainerEntity(CGameWorld *pGameWorld, vec2 Pos, const char *pKind, const char *pName,
 	const char *pLootTable, int Capacity, int Pickup, int StorageID) :

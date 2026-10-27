@@ -5,7 +5,6 @@
 #define ENGINE_SERVER_AUTOMAP_H
 
 #include <base/tl/array.h>
-
 #include <game/mapitems.h>
 
 // A port of the Teeworlds 0.7 editor automapper (src/game/editor/auto_map.cpp),

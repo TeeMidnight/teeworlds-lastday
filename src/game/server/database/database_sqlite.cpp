@@ -2,16 +2,14 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* SQLite (embedded) backend for the database. */
-#include <game/server/database/database_sqlite.h>
-
 #include <base/system.h>
+#include <game/server/database/database_sqlite.h>
 
 #include <sqlite3.h>
 
-namespace {
 // convert a dot-notation json path ("inventory.0.count") into a SQLite
 // json path ("$.inventory[0].count")
-bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
+static bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
 {
 	int Offset = 0;
 	if(Offset + 1 < Size)
@@ -52,7 +50,6 @@ bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
 	pOut[Offset] = '\0';
 	return true;
 }
-} // anonymous namespace
 
 CDatabaseSQLite::CDatabaseSQLite(const SConfig &Config)
 {

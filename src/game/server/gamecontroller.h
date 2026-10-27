@@ -7,9 +7,7 @@
 
 #include <base/tl/array.h>
 #include <base/vmath.h>
-
 #include <game/commands.h>
-
 #include <generated/protocol.h>
 
 /*

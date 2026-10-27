@@ -37,6 +37,7 @@ CommentPragmas: ''
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ConstructorInitializerIndentWidth: 8
 ContinuationIndentWidth: 8
+IncludeBlocks: Regroup
 IncludeCategories:
   - Regex:           '^<(base|engine|game|generated)'
     Priority:        -2

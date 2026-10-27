@@ -5,11 +5,11 @@
 #include <base/math.h>
 #include <base/uuid.h>
 #include <engine/shared/config.h>
-#include <cmath>
-
 #include <game/collision.h>
 #include <game/localization_format.h>
 #include <game/mapitems.h>
+#include <game/server/database/account.h>
+#include <game/server/database/database.h>
 #include <game/version.h>
 #include <generated/server_data.h>
 
@@ -20,15 +20,14 @@
 #include "entities/resource.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
-#include "team.h"
 #include "item.h"
 #include "player.h"
+#include "team.h"
 #include "trade.h"
 #include "weapon.h"
 #include "weaponmanager.h"
 
-#include <game/server/database/account.h>
-#include <game/server/database/database.h>
+#include <cmath>
 
 CGameController::CGameController(CGameContext *pGameServer)
 {

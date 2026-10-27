@@ -2,18 +2,17 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "test.h"
-#include <gtest/gtest.h>
-
 #include <base/system.h>
-
+#include <engine/shared/compression.h>
 #include <engine/shared/legacy/network7.h>
 #include <engine/shared/legacy/network_translator.h>
-#include <engine/shared/compression.h>
 #include <engine/shared/snapshot.h>
-
 #include <generated/protocol.h>
 #include <generated/protocol7.h>
+
+#include "test.h"
+
+#include <gtest/gtest.h>
 
 // Tests for the 0.7 handshake, the frozen 0.7 delta codec and snapshot
 // translation in both directions.

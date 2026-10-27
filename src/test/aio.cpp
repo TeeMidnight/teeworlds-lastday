@@ -1,10 +1,11 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "test.h"
-#include <gtest/gtest.h>
-
 #include <base/system.h>
+
+#include "test.h"
+
+#include <gtest/gtest.h>
 
 static const int BUF_SIZE = 64 * 1024;
 

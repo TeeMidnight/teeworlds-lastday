@@ -2,11 +2,11 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "hash.h"
-#include "hash_ctxt.h"
-
 #include <base/system/mem.h>
 #include <base/system/string.h>
+
+#include "hash.h"
+#include "hash_ctxt.h"
 
 static void digest_str(const unsigned char *digest, size_t digest_len, char *str, size_t max_len)
 {

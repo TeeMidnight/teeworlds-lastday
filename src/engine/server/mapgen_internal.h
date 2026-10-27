@@ -8,18 +8,14 @@
 #ifndef ENGINE_SERVER_MAPGEN_INTERNAL_H
 #define ENGINE_SERVER_MAPGEN_INTERNAL_H
 
+#include <base/math.h>
 #include <base/system.h>
 #include <base/tl/stream.h>
-
-#include <base/math.h>
 #include <base/vmath.h>
-#include <climits>
-
 #include <engine/map/mapcreator.h>
 #include <engine/shared/datafile.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
-
 #include <game/gamecore.h>
 #include <game/mapitems.h>
 
@@ -27,6 +23,8 @@
 #include "mapgen.h"
 #include "noise.h"
 #include "worldgen.h"
+
+#include <climits>
 
 // ---------------------------------------------------------------------------
 // config parsing helpers

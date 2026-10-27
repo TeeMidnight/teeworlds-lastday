@@ -6,7 +6,6 @@
 
 #include <base/tl/array.h>
 #include <base/uuid.h>
-
 #include <game/item_id.h>
 
 class CGameContext;

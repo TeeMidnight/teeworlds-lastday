@@ -5,7 +5,6 @@
 #include <base/math.h>
 #include <base/system.h>
 #include <base/uuid.h>
-
 #include <engine/console.h>
 #include <engine/storage.h>
 

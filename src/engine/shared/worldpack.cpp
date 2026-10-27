@@ -1,24 +1,23 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "worldpack.h"
-
 #include <base/hash.h>
 #include <base/tl/stream.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/shared/jsonwriter.h>
+
+#include "worldpack.h"
+
 #include <zlib.h>
 
-namespace {
-
-int Align4(int Size)
+static int Align4(int Size)
 {
 	return (Size + 3) & ~3;
 }
 
 // A pack carries v4 map files. Accepting anything else here would defer the
 // failure to the moment a client loads the extracted file.
-bool LooksLikeMap(const void *pData, int Size)
+static bool LooksLikeMap(const void *pData, int Size)
 {
 	// the v4 header is 36 bytes: 4 signature bytes and eight 32 bit fields
 	if(!pData || Size < 36)
@@ -26,8 +25,6 @@ bool LooksLikeMap(const void *pData, int Size)
 	const unsigned char *p = (const unsigned char *) pData;
 	return p[0] == 'D' && p[1] == 'A' && p[2] == 'T' && p[3] == 'A';
 }
-
-} // namespace
 
 // ---------------------------------------------------------------------------
 // writer

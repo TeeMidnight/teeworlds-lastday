@@ -14,9 +14,7 @@
 #include "monsterentity.h"
 #include "projectile.h"
 
-namespace
-{
-const int s_aDialogueCooldown[NUM_MOBDIALOGUE_EVENTS] = {
+static const int s_aDialogueCooldown[NUM_MOBDIALOGUE_EVENTS] = {
 	0, // spawn, one shot by construction
 	600, // sight, 12s at 50Hz: a companion should not narrate every second
 	250, // combat, 5s
@@ -27,7 +25,7 @@ const int s_aDialogueCooldown[NUM_MOBDIALOGUE_EVENTS] = {
 	300, // low health
 };
 
-void ReplacePlayerToken(char *pBuf, int Size, const char *pPlayerName)
+static void ReplacePlayerToken(char *pBuf, int Size, const char *pPlayerName)
 {
 	if(!pPlayerName || !pPlayerName[0])
 		return;
@@ -52,12 +50,12 @@ void ReplacePlayerToken(char *pBuf, int Size, const char *pPlayerName)
 	str_copy(pBuf, aOut, Size);
 }
 
-int FactionTeam(int Faction)
+static int FactionTeam(int Faction)
 {
 	return Faction == BOTFACTION_FRIENDLY ? TEAM_BLUE : TEAM_RED;
 }
 
-const char *FactionClan(int Faction)
+static const char *FactionClan(int Faction)
 {
 	switch(Faction)
 	{
@@ -67,7 +65,6 @@ const char *FactionClan(int Faction)
 	}
 	return "";
 }
-} // namespace
 
 CMonsterEntity::CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const SMobDef *pDef, const char *pName, bool Natural) :
 	CBotEntity(pWorld, Pos, BotID, CBotTeeInfo(), FactionTeam(pDef ? pDef->m_Faction : BOTFACTION_HOSTILE), pDef ? pDef->m_Faction : BOTFACTION_HOSTILE)

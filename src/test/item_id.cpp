@@ -1,9 +1,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <gtest/gtest.h>
-
 #include <game/item_id.h>
+
+#include <gtest/gtest.h>
 
 // A namespaced name maps to a stable uuid that is written into inventories and
 // save files, so the mapping is part of the on-disk contract and must not

@@ -11,12 +11,9 @@
 #include "dropped_pickup.h"
 #include "wormentity.h"
 
-namespace
-{
-const float WORM_SEGMENT_SPACING = 28.0f;
-const int WORM_PATH_LENGTH = 1024;
-const int WORM_BITE_COOLDOWN = 30;
-} // namespace
+static const float WORM_SEGMENT_SPACING = 28.0f;
+static const int WORM_PATH_LENGTH = 1024;
+static const int WORM_BITE_COOLDOWN = 30;
 
 //////////////////////////////////////////////////
 // body segment

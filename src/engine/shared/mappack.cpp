@@ -1,21 +1,20 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "mappack.h"
-
 #include <base/hash.h>
 #include <engine/shared/worldpack.h>
+
+#include "mappack.h"
+
 #include <zlib.h>
 #include <zstd.h>
 
-namespace {
-
-int Align4(int Size)
+static int Align4(int Size)
 {
 	return (Size + 3) & ~3;
 }
 
-void PutU32(char *p, unsigned Value)
+static void PutU32(char *p, unsigned Value)
 {
 	p[0] = (char) (Value & 0xff);
 	p[1] = (char) ((Value >> 8) & 0xff);
@@ -23,7 +22,7 @@ void PutU32(char *p, unsigned Value)
 	p[3] = (char) ((Value >> 24) & 0xff);
 }
 
-unsigned GetU32(const char *p)
+static unsigned GetU32(const char *p)
 {
 	return (unsigned) (unsigned char) p[0] |
 		((unsigned) (unsigned char) p[1] << 8) |
@@ -31,12 +30,12 @@ unsigned GetU32(const char *p)
 		((unsigned) (unsigned char) p[3] << 24);
 }
 
-bool HasId(const char *p, const char *pId)
+static bool HasId(const char *p, const char *pId)
 {
 	return p[0] == pId[0] && p[1] == pId[1] && p[2] == pId[2] && p[3] == pId[3];
 }
 
-void WriteHeader(char *p)
+static void WriteHeader(char *p)
 {
 	mem_copy(p, "MPK2", 4);
 	PutU32(p + 4, MAPPACK_VERSION);
@@ -45,15 +44,13 @@ void WriteHeader(char *p)
 }
 
 // Same acceptance rule as a world pack: a payload must be a v4 map file.
-bool LooksLikeMap(const void *pData, int Size)
+static bool LooksLikeMap(const void *pData, int Size)
 {
 	if(!pData || Size < 36)
 		return false;
 	const unsigned char *p = (const unsigned char *) pData;
 	return p[0] == 'D' && p[1] == 'A' && p[2] == 'T' && p[3] == 'A';
 }
-
-} // namespace
 
 // ---------------------------------------------------------------------------
 // writer

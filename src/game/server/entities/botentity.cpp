@@ -3,7 +3,6 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* Bot layer ported from teeworlds-carbon (c) TeeMidnight, zlib license.                     */
 #include <engine/shared/config.h>
-
 #include <game/server/botmanager.h>
 #include <game/server/entities/character.h>
 #include <game/server/gamecontext.h>
@@ -12,7 +11,6 @@
 #include <game/server/scripting/scripted_bot_ai.h>
 #include <game/server/weapon.h>
 #include <game/server/weaponmanager.h>
-
 #include <generated/server_data.h>
 
 #include "botentity.h"

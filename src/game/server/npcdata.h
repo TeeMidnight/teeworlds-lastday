@@ -7,7 +7,6 @@
 #include <base/tl/array.h>
 #include <base/uuid.h>
 #include <base/vmath.h>
-
 #include <game/item_id.h>
 #include <game/npc_id.h>
 #include <game/server/bot.h> // CBotSkin

@@ -9,7 +9,6 @@
 #include <base/tl/hashtable.h>
 #include <base/uuid.h>
 #include <base/vmath.h>
-
 #include <game/item_id.h>
 #include <game/server/bot.h>
 

@@ -5,13 +5,11 @@
 #ifndef GAME_SERVER_ENTITIES_CHARACTER_H
 #define GAME_SERVER_ENTITIES_CHARACTER_H
 
-#include <generated/protocol.h>
-
 #include <base/tl/array.h>
-
 #include <game/gamecore.h>
 #include <game/server/entity.h>
 #include <game/server/player.h>
+#include <generated/protocol.h>
 
 class CWeaponNinja;
 

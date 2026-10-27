@@ -4,9 +4,9 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #if !defined(CONF_OPENSSL)
 
-#include "hash_ctxt.h"
-
 #include <engine/external/md5/md5.h>
+
+#include "hash_ctxt.h"
 
 void md5_update(MD5_CTX *ctxt, const void *data, size_t data_len)
 {

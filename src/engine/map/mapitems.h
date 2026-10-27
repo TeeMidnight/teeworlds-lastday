@@ -7,7 +7,6 @@
 #include <base/color.h>
 #include <base/tl/array.h>
 #include <base/tl/string.h>
-
 #include <game/mapitems.h>
 
 enum class EMapType

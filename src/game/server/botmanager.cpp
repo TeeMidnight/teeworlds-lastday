@@ -2,8 +2,8 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* Bot layer ported from teeworlds-carbon (c) TeeMidnight, zlib license.                     */
+#include <base/tl/algorithm.h>
 #include <engine/shared/config.h>
-
 #include <game/server/entities/botentity.h>
 #include <game/server/entities/character.h>
 #include <game/server/entities/monsterentity.h>
@@ -17,8 +17,6 @@
 #include "gamecontroller.h"
 #include "gameworld.h"
 #include "player.h"
-
-#include <base/tl/algorithm.h>
 
 CConfig *CBotManager::Config() const { return m_pGameServer->Config(); }
 CGameController *CBotManager::GameController() const { return m_pGameServer->m_pController; }

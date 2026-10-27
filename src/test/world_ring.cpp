@@ -7,24 +7,20 @@
 //
 // These cover the coordinate mapping and the tile/resource continuity the
 // boundary transfer relies on.
-#include <gtest/gtest.h>
-
+#include <base/tl/array.h>
 #include <engine/server/mapgen.h>
 #include <engine/server/worldgen.h>
-
-#include <base/tl/array.h>
-
 #include <game/collision.h>
 #include <game/gamecore.h>
 
-namespace {
+#include <gtest/gtest.h>
 
-const int W = 300; // instance width
-const int H = 80;  // instance height
-const int M = 75;  // shared margin
-const int S = W - M; // stride between neighbouring instances
+static const int W = 300; // instance width
+static const int H = 80;  // instance height
+static const int M = 75;  // shared margin
+static const int S = W - M; // stride between neighbouring instances
 
-void MakeInstruction(CInstruction &Inst, bool Ring)
+static void MakeInstruction(CInstruction &Inst, bool Ring)
 {
 	Inst.m_Kind = WORLDKIND_EUCLID;
 	str_copy(Inst.m_aFloorName, "RingTest", sizeof(Inst.m_aFloorName));
@@ -84,14 +80,14 @@ void MakeInstruction(CInstruction &Inst, bool Ring)
 // buffer have no real neighbour (a ring instance does not carry the next
 // instance's cave field). The generator confines the difference to those
 // columns, which the transfer region keeps players away from.
-const int EDGE = 2;
+static const int EDGE = 2;
 
 struct SRes
 {
 	int m_X, m_Y, m_Hardness, m_RespawnTime;
 };
 
-void CollectResources(const CGeneratedWorld *pWorld, int X0, int X1, array<SRes> &lOut)
+static void CollectResources(const CGeneratedWorld *pWorld, int X0, int X1, array<SRes> &lOut)
 {
 	for(int i = 0; i < pWorld->m_lResources.size(); i++)
 	{
@@ -102,8 +98,6 @@ void CollectResources(const CGeneratedWorld *pWorld, int X0, int X1, array<SRes>
 		lOut.add(Out);
 	}
 }
-
-} // namespace
 
 TEST(WorldRing, MapsInstanceOntoTheSharedField)
 {

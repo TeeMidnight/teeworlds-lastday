@@ -1,11 +1,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/npc_id.h>
-
 #include <base/system.h>
-
 #include <base/tl/hashtable.h>
+#include <game/npc_id.h>
 
 #include <string>
 
@@ -15,20 +13,19 @@
 // Unlike items, an NPC name is content and is never localized: the registry
 // simply maps the deterministic UUID back to the name authored in the npc json.
 // ---------------------------------------------------------------------------
-namespace {
 struct SNpcIdName
 {
 	std::string m_Source;
 	std::string m_Display;
 };
 
-hash_table<Uuid, SNpcIdName, 64, uuid_table_function> &NameRegistry()
+static hash_table<Uuid, SNpcIdName, 64, uuid_table_function> &NameRegistry()
 {
 	static hash_table<Uuid, SNpcIdName, 64, uuid_table_function> s_Registry;
 	return s_Registry;
 }
 
-SNpcIdName &NameSlot(const Uuid &Id)
+static SNpcIdName &NameSlot(const Uuid &Id)
 {
 	SNpcIdName *pName = NameRegistry().get(Id);
 	if(!pName)
@@ -39,18 +36,17 @@ SNpcIdName &NameSlot(const Uuid &Id)
 	return *pName;
 }
 
-const SNpcIdName *FindName(const Uuid &Id)
+static const SNpcIdName *FindName(const Uuid &Id)
 {
 	return NameRegistry().get(Id);
 }
 
-void RememberSource(const CNpcID &Id, const char *pSourceName)
+static void RememberSource(const CNpcID &Id, const char *pSourceName)
 {
 	if(Id.IsZero() || !pSourceName || !pSourceName[0])
 		return;
 	NameSlot(Id.Value()).m_Source = pSourceName;
 }
-} // namespace
 
 // ---------------------------------------------------------------------------
 // CNpcID

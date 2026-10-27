@@ -3,14 +3,14 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
-#include <stdlib.h>
-
-#include <base/system/base.h>
 #include <base/system/aio.h>
+#include <base/system/base.h>
 #include <base/system/lock.h>
 #include <base/system/mem.h>
 #include <base/system/semaphore.h>
 #include <base/system/thread.h>
+
+#include <stdlib.h>
 
 #define ASYNC_BUFSIZE 8 * 1024
 #define ASYNC_LOCAL_BUFSIZE 64 * 1024

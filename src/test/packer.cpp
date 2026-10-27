@@ -2,11 +2,12 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "test.h"
-#include <gtest/gtest.h>
-
 #include <base/system.h>
 #include <engine/message.h>
+
+#include "test.h"
+
+#include <gtest/gtest.h>
 
 // pExpected is NULL if an error is expected
 static void ExpectAddString5(const char *pString, int Limit, const char *pExpected)

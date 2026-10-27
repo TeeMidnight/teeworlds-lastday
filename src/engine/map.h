@@ -6,6 +6,7 @@
 #define ENGINE_MAP_H
 
 #include <base/hash.h>
+
 #include "kernel.h"
 
 class IMap : public IInterface

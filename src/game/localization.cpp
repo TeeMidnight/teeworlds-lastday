@@ -5,18 +5,15 @@
 
 #include <base/system.h>
 #include <base/tl/algorithm.h>
-
 #include <engine/console.h>
-#include <engine/storage.h>
-
 #include <engine/shared/jsonparser.h>
+#include <engine/storage.h>
 
 #include "localization.h"
 
 #include <string>
 
-namespace {
-void LanguageCodeFromFilename(const char *pFilename, char *pOut, int OutSize)
+static void LanguageCodeFromFilename(const char *pFilename, char *pOut, int OutSize)
 {
 	pOut[0] = '\0';
 	if(!pFilename)
@@ -38,7 +35,7 @@ struct SListLanguagesContext
 	array<std::string> *m_pFiles;
 };
 
-int ListLanguageFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
+static int ListLanguageFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
 {
 	(void)StorageType;
 	if(IsDir || !pFilename)
@@ -52,7 +49,6 @@ int ListLanguageFilesCallback(const char *pFilename, int IsDir, int StorageType,
 	pContext->m_pFiles->add(pFilename);
 	return 0;
 }
-} // namespace
 
 CLocalizationDatabase::CLocalizationDatabase()
 {

@@ -2,15 +2,12 @@
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <game/localization_format.h>
-
 #include <game/server/gamecontext.h>
 #include <game/server/gamemenu.h>
 #include <game/server/player.h>
 #include <game/server/team.h>
 
-namespace
-{
-const char *OnlineName(CGameContext *pGame, const Uuid &Account)
+static const char *OnlineName(CGameContext *pGame, const Uuid &Account)
 {
 	if(!pGame)
 		return "";
@@ -23,7 +20,7 @@ const char *OnlineName(CGameContext *pGame, const Uuid &Account)
 	return "";
 }
 
-void SendTeamStatus(CGameContext *pGame, int ClientID, const char *pText, const char *pError)
+static void SendTeamStatus(CGameContext *pGame, int ClientID, const char *pText, const char *pError)
 {
 	CLanguageScope LanguageScope(pGame->LanguageOf(ClientID));
 	char aBuf[256];
@@ -33,7 +30,6 @@ void SendTeamStatus(CGameContext *pGame, int ClientID, const char *pText, const 
 		str_copy(aBuf, Localize(pText, "Team"), sizeof(aBuf));
 	pGame->SendChat(-1, CHAT_ALL, ClientID, aBuf);
 }
-} // namespace
 
 bool CGameMenu::MenuTeam(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
 {

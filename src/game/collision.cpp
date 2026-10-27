@@ -5,15 +5,15 @@
 #include <base/math.h>
 #include <base/system.h>
 #include <base/vmath.h>
-
 #include <engine/kernel.h>
 #include <engine/map.h>
-#include <math.h>
-
 #include <game/collision.h>
 #include <game/layers.h>
 #include <game/mapitems.h>
+
 #include "collision.h"
+
+#include <math.h>
 
 CCollision::CCollision()
 {

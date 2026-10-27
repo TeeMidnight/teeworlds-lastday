@@ -6,12 +6,10 @@
 #define GAME_SERVER_ENTITIES_BOTENTITY_H
 
 #include <base/uuid.h>
-
-#include <generated/protocol.h>
-
 #include <game/gamecore.h>
 #include <game/server/bot.h>
 #include <game/server/entity.h>
+#include <generated/protocol.h>
 
 class CBotManager;
 class IBotAI;

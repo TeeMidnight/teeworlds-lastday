@@ -3,13 +3,11 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system/misc.h>
 #include <base/system/string.h>
-
 #include <engine/shared/packer.h>
+#include <engine/uuid.h>
 
 #include "protocol_ex.h"
 #include "uuid_manager.h"
-
-#include <engine/uuid.h>
 
 static CUuidManager CreateGlobalUuidManager()
 {

@@ -9,18 +9,16 @@
 #include <base/tl/hashtable.h>
 #include <base/tl/sorted_array.h>
 #include <base/uuid.h>
-
 #include <engine/console.h>
 #include <engine/server.h>
-
 #include <game/commands.h>
 #include <game/voting.h>
-
-#include <string>
 
 #include "building.h"
 #include "gamemenu.h"
 #include "gameworld.h"
+
+#include <string>
 
 class CBotManager;
 class CDatabase;

@@ -3,7 +3,9 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system.h>
+
 #include "huffman.h"
+
 #include <algorithm>
 
 const unsigned CHuffman::ms_aFreqTable[HUFFMAN_MAX_SYMBOLS] = {

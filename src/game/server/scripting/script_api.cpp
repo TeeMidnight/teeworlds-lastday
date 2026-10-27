@@ -1,14 +1,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/scripting/script_runtime.h>
-
 #include <base/system.h>
-
 #include <engine/server.h>
-
 #include <game/localization.h>
-
 #include <game/server/entities/character.h>
 #include <game/server/entities/drill.h>
 #include <game/server/entities/laser.h>
@@ -18,20 +13,19 @@
 #include <game/server/item.h>
 #include <game/server/player.h>
 #include <game/server/scripting/buff_system.h>
+#include <game/server/scripting/script_runtime.h>
 
 #include <pybind11/embed.h>
 
 namespace py = pybind11;
 
-namespace
-{
-CGameContext *Game()
+static CGameContext *Game()
 {
 	CScriptRuntime *pRuntime = CScriptRuntime::Get();
 	return pRuntime ? pRuntime->GameServer() : nullptr;
 }
 
-CPlayer *Player(int ClientID)
+static CPlayer *Player(int ClientID)
 {
 	CGameContext *pGame = Game();
 	if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS)
@@ -39,25 +33,25 @@ CPlayer *Player(int ClientID)
 	return pGame->m_apPlayers[ClientID];
 }
 
-CCharacter *Character(int ClientID)
+static CCharacter *Character(int ClientID)
 {
 	CGameContext *pGame = Game();
 	return pGame ? pGame->GetPlayerChar(ClientID) : nullptr;
 }
 
 // World of the callback that is currently running (or the main world).
-CGameWorld *ActiveWorld()
+static CGameWorld *ActiveWorld()
 {
 	CScriptRuntime *pRuntime = CScriptRuntime::Get();
 	return pRuntime ? pRuntime->ActiveWorld() : nullptr;
 }
 
-bool ValidPos(float x, float y)
+static bool ValidPos(float x, float y)
 {
 	return absolute(x) < 1.0e7f && absolute(y) < 1.0e7f;
 }
 
-py::tuple Vec2Tuple(float x, float y)
+static py::tuple Vec2Tuple(float x, float y)
 {
 	py::tuple Result(2);
 	Result[0] = py::cast(x);
@@ -65,7 +59,7 @@ py::tuple Vec2Tuple(float x, float y)
 	return Result;
 }
 
-int CreateProjectileScript(int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon)
+static int CreateProjectileScript(int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon)
 {
 	CCharacter *pChr = Character(Owner);
 	if(!pChr || !ValidPos(x, y))
@@ -75,7 +69,7 @@ int CreateProjectileScript(int Owner, float x, float y, float vx, float vy, int 
 	return pProjectile->GetID();
 }
 
-int CreateLaserScript(int Owner, float x, float y, float dx, float dy, float Reach, int Damage)
+static int CreateLaserScript(int Owner, float x, float y, float dx, float dy, float Reach, int Damage)
 {
 	CCharacter *pChr = Character(Owner);
 	if(!pChr || !ValidPos(x, y))
@@ -86,7 +80,6 @@ int CreateLaserScript(int Owner, float x, float y, float dx, float dy, float Rea
 	CLaser *pLaser = new CLaser(pChr->GameWorld(), vec2(x, y), normalize(Direction), Reach, Owner, Damage);
 	return pLaser->GetID();
 }
-} // namespace
 
 PYBIND11_EMBEDDED_MODULE(lastday, m)
 {

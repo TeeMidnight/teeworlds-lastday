@@ -3,19 +3,21 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
-#include <stdio.h>
-#include <stdlib.h>
-
 #include <base/system/base.h>
-#include <base/system/io.h>
 #include <base/system/debug.h>
+#include <base/system/io.h>
 #include <base/system/mem.h>
 #include <base/system/string.h>
+
+#include <stdio.h>
+#include <stdlib.h>
 #if defined(CONF_FAMILY_WINDOWS)
 #define WIN32_LEAN_AND_MEAN
+// clang-format off
 #include <windows.h>
 
 #include <share.h>
+// clang-format on
 #endif
 
 

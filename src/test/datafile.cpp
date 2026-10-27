@@ -2,14 +2,13 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
+#include <base/tl/array.h>
+#include <engine/shared/datafile.h>
+#include <engine/storage.h>
+
 #include "test.h"
 
 #include <gtest/gtest.h>
-
-#include <base/tl/array.h>
-
-#include <engine/shared/datafile.h>
-#include <engine/storage.h>
 
 TEST(Datafile, RoundtripItemDataAndSize)
 {

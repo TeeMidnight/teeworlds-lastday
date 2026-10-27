@@ -5,9 +5,9 @@
 #ifndef BASE_VMATH_H
 #define BASE_VMATH_H
 
-#include <math.h>
-
 #include "math.h" // mix
+
+#include <math.h>
 
 // ------------------------------------
 

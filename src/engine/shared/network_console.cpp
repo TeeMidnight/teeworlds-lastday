@@ -3,7 +3,6 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system.h>
-
 #include <engine/console.h>
 
 #include "netban.h"

@@ -1,12 +1,10 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/weapon.h>
-
 #include <engine/server.h>
-
 #include <game/server/entities/character.h>
 #include <game/server/gameworld.h>
+#include <game/server/weapon.h>
 #include <generated/server_data.h>
 
 // Ninja: a permanent weapon (obtained as an item, e.g. through crafting) that

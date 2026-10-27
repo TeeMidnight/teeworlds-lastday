@@ -1,13 +1,13 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
+#include <game/server/database/database.h>
+#include <game/server/database/database_util.h>
+
 #include "entities/character.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "player.h"
-
-#include <game/server/database/database.h>
-#include <game/server/database/database_util.h>
 
 void CPlayer::CaptureStatus(CDbJob &Job)
 {

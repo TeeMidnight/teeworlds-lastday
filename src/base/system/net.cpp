@@ -4,16 +4,16 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
 #define _DEFAULT_SOURCE
-#include <stdlib.h>
-#include <string.h>
-
 #include <base/system/base.h>
-#include <base/system/net.h>
-#include <base/system/misc.h>
-#include <base/system/net_internal.h>
 #include <base/system/debug.h>
 #include <base/system/mem.h>
+#include <base/system/misc.h>
+#include <base/system/net.h>
+#include <base/system/net_internal.h>
 #include <base/system/string.h>
+
+#include <stdlib.h>
+#include <string.h>
 #if defined(CONF_FAMILY_UNIX)
 
 /* unix net includes */
@@ -27,9 +27,11 @@
 
 #elif defined(CONF_FAMILY_WINDOWS)
 #define WIN32_LEAN_AND_MEAN
+// clang-format off
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+// clang-format on
 #else
 #error NOT IMPLEMENTED
 #endif

@@ -2,17 +2,15 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <stdio.h> // sscanf
-
 #include <base/system.h>
-
 #include <engine/engine.h>
 #include <engine/masterserver.h>
 #include <engine/storage.h>
 
-#include <mastersrv/mastersrv.h>
-
 #include "linereader.h"
+
+#include <mastersrv/mastersrv.h>
+#include <stdio.h> // sscanf
 
 class CMasterServer : public IEngineMasterServer
 {

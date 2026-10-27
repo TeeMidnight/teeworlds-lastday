@@ -1,13 +1,12 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/trade.h>
-
 #include <game/localization_format.h>
 #include <game/server/database/database.h>
 #include <game/server/gamecontext.h>
 #include <game/server/item.h>
 #include <game/server/player.h>
+#include <game/server/trade.h>
 
 CTradeSystem::CTradeSystem() :
 	m_pGameServer(nullptr),

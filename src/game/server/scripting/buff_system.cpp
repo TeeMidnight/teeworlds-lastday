@@ -1,27 +1,22 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds Last Day - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/scripting/buff_system.h>
-
 #include <base/system.h>
-
 #include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
-
 #include <game/server/entities/character.h>
 #include <game/server/gamecontext.h>
 #include <game/server/player.h>
+#include <game/server/scripting/buff_system.h>
 #include <game/server/scripting/script_runtime.h>
 
-namespace
-{
 struct CBuffListData
 {
 	CBuffSystem *m_pSelf;
 	char m_aPath[IO_MAX_PATH_LENGTH];
 };
 
-bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
+static bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
 {
 	const int Len = str_length(pFilename);
 	if(Len < 6 || str_comp(pFilename + Len - 5, ".json") != 0)
@@ -33,20 +28,19 @@ bool JsonIdFromFilename(const char *pFilename, char *pId, int Size)
 	return true;
 }
 
-int ReadInt(const json_value &Value, int Default)
+static int ReadInt(const json_value &Value, int Default)
 {
 	if(Value.type == json_integer || Value.type == json_double)
 		return (int) (json_int_t) Value;
 	return Default;
 }
 
-float ReadFloat(const json_value &Value, float Default)
+static float ReadFloat(const json_value &Value, float Default)
 {
 	if(Value.type == json_integer || Value.type == json_double)
 		return (float) (double) Value;
 	return Default;
 }
-} // namespace
 
 void CBuffSystem::Init(CGameContext *pGameServer, IStorage *pStorage)
 {

@@ -4,8 +4,8 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
 #include <base/system/base.h>
-#include <base/system/thread.h>
 #include <base/system/mem.h>
+#include <base/system/thread.h>
 
 #include <atomic>
 #include <chrono>

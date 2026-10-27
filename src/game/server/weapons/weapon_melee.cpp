@@ -1,13 +1,12 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/server/weapons/weapon_melee.h>
-
 #include <game/server/entities/character.h>
 #include <game/server/entities/resource.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gameworld.h>
 #include <game/server/player.h>
+#include <game/server/weapons/weapon_melee.h>
 
 // Shared melee swing used by every melee weapon (hammer, hand, sword, ...):
 // hit every hittable entity in front of the character once and, when

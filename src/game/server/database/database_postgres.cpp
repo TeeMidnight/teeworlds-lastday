@@ -2,16 +2,14 @@
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* PostgreSQL (libpq) backend for the database. */
-#include <game/server/database/database_postgres.h>
-
 #include <base/system.h>
+#include <game/server/database/database_postgres.h>
 
 #include <libpq-fe.h>
 
-namespace {
 // convert a dot-notation json path ("inventory.0.count") into a PostgreSQL
 // jsonb text[] path ("{inventory,0,count}")
-bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
+static bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
 {
 	int Offset = 0;
 	if(Offset + 1 >= Size)
@@ -40,7 +38,6 @@ bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
 	pOut[Offset] = '\0';
 	return true;
 }
-} // anonymous namespace
 
 CDatabasePostgres::CDatabasePostgres(const SConfig &Config)
 {

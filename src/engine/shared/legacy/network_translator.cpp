@@ -2,19 +2,16 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include "network_translator.h"
-
 #include <base/system.h>
-
 #include <engine/message.h>
 #include <engine/shared/compression.h>
 #include <engine/shared/packer.h>
 #include <engine/shared/protocol.h>
-
 #include <generated/protocol.h>
 #include <generated/protocol7.h>
 
 #include "network7.h"
+#include "network_translator.h"
 
 namespace legacy
 {

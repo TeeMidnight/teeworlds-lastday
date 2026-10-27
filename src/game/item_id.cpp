@@ -1,13 +1,10 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#include <game/item_id.h>
-
 #include <base/system.h>
-
-#include <game/localization_format.h>
-
 #include <base/tl/hashtable.h>
+#include <game/item_id.h>
+#include <game/localization_format.h>
 
 #include <string>
 
@@ -19,20 +16,19 @@
 // the namespaced source name recorded when the id was parsed, and finally to
 // the raw UUID.
 // ---------------------------------------------------------------------------
-namespace {
 struct SItemIdName
 {
 	std::string m_Source;
 	std::string m_Display;
 };
 
-hash_table<Uuid, SItemIdName, 64, uuid_table_function> &NameRegistry()
+static hash_table<Uuid, SItemIdName, 64, uuid_table_function> &NameRegistry()
 {
 	static hash_table<Uuid, SItemIdName, 64, uuid_table_function> s_Registry;
 	return s_Registry;
 }
 
-SItemIdName &NameSlot(const Uuid &Id)
+static SItemIdName &NameSlot(const Uuid &Id)
 {
 	SItemIdName *pName = NameRegistry().get(Id);
 	if(!pName)
@@ -43,20 +39,19 @@ SItemIdName &NameSlot(const Uuid &Id)
 	return *pName;
 }
 
-const SItemIdName *FindName(const Uuid &Id)
+static const SItemIdName *FindName(const Uuid &Id)
 {
 	return NameRegistry().get(Id);
 }
 
 // The name a non-parsed but known item keeps: the registry may already hold the
 // display name even for an id that was created from a UUID alone.
-void RememberSource(const CItemID &Id, const char *pSourceName)
+static void RememberSource(const CItemID &Id, const char *pSourceName)
 {
 	if(Id.IsZero() || !pSourceName || !pSourceName[0])
 		return;
 	NameSlot(Id.Value()).m_Source = pSourceName;
 }
-} // namespace
 
 // ---------------------------------------------------------------------------
 // CItemID

@@ -6,9 +6,7 @@
 
 #include <base/system.h>
 #include <base/tl/hashtable.h>
-
 #include <engine/shared/protocol.h>
-
 #include <game/item_id.h>
 #include <game/server/ammo.h>
 
