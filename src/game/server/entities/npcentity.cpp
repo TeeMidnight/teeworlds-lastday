@@ -207,6 +207,11 @@ int CNpcEntity::FindHatedPlayer()
 		if(!pChr || !pChr->IsAlive())
 			continue;
 
+		// stale ledger aggro must not turn a neutral NPC into a guard that
+		// attacks every visitor; only a recent hit justifies retaliation
+		if(Server()->Tick() - m_aLastPlayerHitTick[i] > Server()->TickSpeed() * 30)
+			continue;
+
 		// only a player the NPC could actually reach is a target
 		const float Dist = distance(pChr->GetPos(), m_SpawnPos);
 		if(Dist > BestDist)
@@ -316,6 +321,7 @@ bool CNpcEntity::OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, 
 	const int ClientID = HitClientID(pFrom);
 	if(ClientID >= 0)
 	{
+		m_aLastPlayerHitTick[ClientID] = Server()->Tick();
 		ShowHealth(ClientID);
 		if(m_pDef && m_pDef->m_Faction == BOTFACTION_NEUTRAL)
 			AddAggro(ClientID, m_pDef->m_Aggro.m_PerHit);
@@ -560,7 +566,7 @@ void CNpcEntity::SayEvent(int Event, bool Force)
 		return;
 
 	const int Now = Server()->Tick();
-	static const int s_aCooldown[NUM_MOBDIALOGUE_EVENTS] = {0, 50, 100, 60, 80, 0, 600, 300};
+	static const int s_aCooldown[NUM_MOBDIALOGUE_EVENTS] = {0, 600, 250, 120, 200, 0, 1200, 300};
 	if(!Force)
 	{
 		if(s_aCooldown[Event] > 0 && Now - m_aLastEventTick[Event] < s_aCooldown[Event])

@@ -18,12 +18,12 @@ namespace
 {
 const int s_aDialogueCooldown[NUM_MOBDIALOGUE_EVENTS] = {
 	0, // spawn, one shot by construction
-	50, // sight, 1s
-	100, // combat, 2s
-	60, // hurt
-	80, // kill
+	600, // sight, 12s at 50Hz: a companion should not narrate every second
+	250, // combat, 5s
+	120, // hurt
+	200, // kill
 	0, // death
-	600, // idle, 12s at 50Hz
+	1200, // idle, 24s
 	300, // low health
 };
 

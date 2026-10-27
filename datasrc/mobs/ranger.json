@@ -25,12 +25,9 @@
         "heal_aura": {"enabled": true, "radius": 140, "amount": 1, "interval": 120}
     },
     "dialogue": {
-        "spawn": ["I'll keep watch."],
-        "sight": ["Stay close, {player}.", "I have your back."],
         "combat": ["Hostile! Left flank!"],
         "hurt": ["I can still fight."],
-        "death": ["Hold the line..."],
-        "idle": ["All quiet."]
+        "death": ["Hold the line..."]
     },
     "drops": []
 }

@@ -103,6 +103,9 @@ private:
 	array<SNpcAggroEntry> m_lAggro;
 	// guests have no account ledger; their aggro lives for this session only
 	int m_aSessionAggro[MAX_CLIENTS] = {};
+	// A neutral NPC only retaliates against a player who hit it recently, so an
+	// old ledger value cannot make it attack someone on approach.
+	int m_aLastPlayerHitTick[MAX_CLIENTS] = {};
 
 	// who was inside the trading range last tick, so the unlock notice fires
 	// once per entry instead of every frame

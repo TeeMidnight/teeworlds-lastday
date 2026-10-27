@@ -377,57 +377,55 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
 		pMenu->AddOption(Localize("Team", "Menu Main"), "PAGE TEAM", "★");
-
-		CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
-		// Travel is deliberately not a submenu: when the player stands on a
-		// platform, every destination is one click away on the main page.
-		if(pPlayer && pMenu->GameServer()->IsOnTrainEntrance(pPlayer))
-		{
-			if(pMenu->GameServer()->Server()->GetTrainDestinationCount() > 0)
-			{
-				pMenu->AddOption(Localize("Train destinations:", "Menu Main"), "DISPLAY", "-");
-				for(int i = 0; i < pMenu->GameServer()->Server()->GetTrainDestinationCount(); i++)
-				{
-					const char *pName = nullptr;
-					if(!pMenu->GameServer()->Server()->GetTrainDestination(i, &pName, nullptr) || !pName || !pName[0])
-						continue;
-					char aCommand[VOTE_CMD_LENGTH];
-					str_format(aCommand, sizeof(aCommand), "TRAIN %s", pName);
-					pMenu->AddOption(LocalizeFormat("Menu Main", "Travel: {}", Localize(pName, "World Name")).c_str(), aCommand, "★");
-				}
-			}
-			else
-				pMenu->AddOption(Localize("No train destinations are available.", "Menu Main"), "DISPLAY", "-");
-		}
-		else
-			pMenu->AddOption(Localize("Travel (stand on a train entrance)", "Menu Main"), "DISPLAY", "-");
-
-		// A building the player is aiming at while close enough gets its lock
-		// controls right here. Only the owner sees the three change actions.
-		if(pPlayer)
-		{
-			CEntity *pBuildable = pMenu->GameServer()->AimedBuildable(ClientID);
-			CBuildAccess Access;
-			if(pBuildable && pMenu->GameServer()->BuildableAccess(pBuildable, &Access))
-			{
-				char aName[64];
-				pMenu->GameServer()->BuildableName(pBuildable, aName, sizeof(aName));
-				pMenu->AddHorizontalRule();
-				pMenu->AddOption(LocalizeFormat("Menu Main", "Building: {}", aName).c_str(), "DISPLAY", "-");
-				const char *pLock = Access.m_LockMode == BUILD_LOCK_PUBLIC ? Localize("everyone", "Menu Main") :
-					(Access.m_LockMode == BUILD_LOCK_TEAM ? Localize("team only", "Menu Main") : Localize("owner only", "Menu Main"));
-				pMenu->AddOption(LocalizeFormat("Menu Main", "Lock: {}", pLock).c_str(), "DISPLAY", "-");
-				if(Access.m_Owner == pPlayer->m_AccountUuid && Access.m_Owner != UUID_ZEROED)
-				{
-					pMenu->AddOption(Localize("Lock: owner only", "Menu Main"), "LOCK self", "★");
-					pMenu->AddOption(Localize("Lock: team only", "Menu Main"), "LOCK team", "★");
-					pMenu->AddOption(Localize("Lock: everyone", "Menu Main"), "LOCK public", "★");
-				}
-			}
-		}
-
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
 		pMenu->AddOption(Localize("Language", "Menu Main"), "PAGE LANG", "★");
+	}
+
+	// Travel and the nearby building lock are contextual actions, not pages.
+	// They live in their own block below every regular option so the main
+	// page keeps its stable option order.
+	pMenu->AddHorizontalRule();
+	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
+	if(pPlayer && pMenu->GameServer()->IsOnTrainEntrance(pPlayer))
+	{
+		if(pMenu->GameServer()->Server()->GetTrainDestinationCount() > 0)
+		{
+			pMenu->AddOption(Localize("Train destinations:", "Menu Main"), "DISPLAY", "-");
+			for(int i = 0; i < pMenu->GameServer()->Server()->GetTrainDestinationCount(); i++)
+			{
+				const char *pName = nullptr;
+				if(!pMenu->GameServer()->Server()->GetTrainDestination(i, &pName, nullptr) || !pName || !pName[0])
+					continue;
+				char aCommand[VOTE_CMD_LENGTH];
+				str_format(aCommand, sizeof(aCommand), "TRAIN %s", pName);
+				pMenu->AddOption(LocalizeFormat("Menu Main", "Travel: {}", Localize(pName, "World Name")).c_str(), aCommand, "★");
+			}
+		}
+		else
+			pMenu->AddOption(Localize("No train destinations are available.", "Menu Main"), "DISPLAY", "-");
+	}
+	else
+		pMenu->AddOption(Localize("Travel (stand on a train entrance)", "Menu Main"), "DISPLAY", "-");
+
+	if(pPlayer)
+	{
+		CEntity *pBuildable = pMenu->GameServer()->AimedBuildable(ClientID);
+		CBuildAccess Access;
+		if(pBuildable && pMenu->GameServer()->BuildableAccess(pBuildable, &Access))
+		{
+			char aName[64];
+			pMenu->GameServer()->BuildableName(pBuildable, aName, sizeof(aName));
+			pMenu->AddOption(LocalizeFormat("Menu Main", "Building: {}", aName).c_str(), "DISPLAY", "-");
+			const char *pLock = Access.m_LockMode == BUILD_LOCK_PUBLIC ? Localize("everyone", "Menu Main") :
+				(Access.m_LockMode == BUILD_LOCK_TEAM ? Localize("team only", "Menu Main") : Localize("owner only", "Menu Main"));
+			pMenu->AddOption(LocalizeFormat("Menu Main", "Lock: {}", pLock).c_str(), "DISPLAY", "-");
+			if(Access.m_Owner == pPlayer->m_AccountUuid && Access.m_Owner != UUID_ZEROED)
+			{
+				pMenu->AddOption(Localize("Lock: owner only", "Menu Main"), "LOCK self", "★");
+				pMenu->AddOption(Localize("Lock: team only", "Menu Main"), "LOCK team", "★");
+				pMenu->AddOption(Localize("Lock: everyone", "Menu Main"), "LOCK public", "★");
+			}
+		}
 	}
 
 	return true;
