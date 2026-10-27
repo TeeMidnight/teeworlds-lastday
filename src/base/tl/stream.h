@@ -19,11 +19,14 @@
 // Reading is positional: read() advances the position, seek()/tell()/size()
 // make random access possible, which is what a datafile needs. A reader must
 // treat a short read (fewer bytes than asked for) as the end of the stream.
+// Avoid "CUR" and "END": Windows' objidlbase.h declares STREAM_SEEK_CUR and
+// STREAM_SEEK_END in the global namespace, which collides with this enum when
+// a Windows header is pulled in after stream.h (for example via curl).
 enum EStreamSeek
 {
 	STREAM_SEEK_START = 0,
-	STREAM_SEEK_CUR = 1,
-	STREAM_SEEK_END = 2,
+	STREAM_SEEK_CURRENT = 1,
+	STREAM_SEEK_FROM_END = 2,
 };
 
 class stream
@@ -88,7 +91,7 @@ public:
 	{
 		if(!file)
 			return false;
-		const int OriginInt = Origin == STREAM_SEEK_END ? IOSEEK_END : (Origin == STREAM_SEEK_CUR ? IOSEEK_CUR : IOSEEK_START);
+		const int OriginInt = Origin == STREAM_SEEK_FROM_END ? IOSEEK_END : (Origin == STREAM_SEEK_CURRENT ? IOSEEK_CUR : IOSEEK_START);
 		return io_seek(file, Offset, OriginInt) == 0;
 	}
 
@@ -164,9 +167,9 @@ public:
 	virtual bool seek(int Offset, EStreamSeek Origin = STREAM_SEEK_START) override
 	{
 		long long Target = Offset;
-		if(Origin == STREAM_SEEK_CUR)
+		if(Origin == STREAM_SEEK_CURRENT)
 			Target += (long long) m_Pos;
-		else if(Origin == STREAM_SEEK_END)
+		else if(Origin == STREAM_SEEK_FROM_END)
 			Target += (long long) m_Size;
 		if(Target < 0 || Target > (long long) m_Size)
 			return false;
