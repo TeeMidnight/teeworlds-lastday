@@ -86,6 +86,8 @@ protected:
 	int m_SpawnWorldID;
 
 	int m_LastSpeakTick;
+	// > 0 while the spawn line waits for the bot's per-client tee id
+	int m_SpawnAnnounceTick;
 	int m_aLastEventTick[NUM_MOBDIALOGUE_EVENTS];
 	bool m_SaidSight;
 	bool m_SaidLowHealth;

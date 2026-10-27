@@ -215,7 +215,14 @@ void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *p
 	else
 		pModeStr = "chat";
 
-	if(pModeStr)
+	// Only a message that actually reaches every player belongs in the server
+	// log. A targeted system message (To != -1), a whisper and a team message
+	// are all private, so they stay out of the console and the log file.
+	const bool BroadcastToAll = Mode == CHAT_ALL &&
+				    ((ChatterClientID >= 0 && ChatterClientID < MAX_CLIENTS) ||
+					    (ChatterClientID == -1 && To == -1));
+
+	if(pModeStr && BroadcastToAll)
 	{
 		Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, pModeStr, aBuf);
 	}
@@ -258,6 +265,27 @@ void CGameContext::SendChat(int ChatterClientID, int Mode, int To, const char *p
 			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ChatterClientID);
 		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, To);
 	}
+}
+
+void CGameContext::SendBotChat(IBotEntity *pBot, int To, const char *pText)
+{
+	if(!pBot || !pText || !pText[0] || To < 0 || To >= MAX_CLIENTS || !m_apPlayers[To] || !m_pBotManager)
+		return;
+
+	// The client only knows a bot by the tee id this server assigned to it, and
+	// that id differs per receiver (protocol range plus nearest-bot slot).
+	const int TeeID = m_pBotManager->FindClientID(To, pBot->GetBotID());
+	if(TeeID < 0)
+		return;
+
+	// bot dialogue is ambient presentation, not a server event: keep it out
+	// of the console log (and therefore out of the server log file)
+	CNetMsg_Sv_Chat Msg;
+	Msg.m_Mode = CHAT_ALL;
+	Msg.m_ClientID = TeeID;
+	Msg.m_TargetID = -1;
+	Msg.m_pMessage = pText;
+	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, To);
 }
 
 void CGameContext::ResetBroadcastState(int ClientID)

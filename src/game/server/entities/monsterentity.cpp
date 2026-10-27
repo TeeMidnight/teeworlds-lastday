@@ -15,40 +15,15 @@
 #include "projectile.h"
 
 static const int s_aDialogueCooldown[NUM_MOBDIALOGUE_EVENTS] = {
-	0, // spawn, one shot by construction
-	600, // sight, 12s at 50Hz: a companion should not narrate every second
-	250, // combat, 5s
-	120, // hurt
-	200, // kill
+	0, // spawn, one shot by the spawn handshake
+	1800, // sight, 36s at 50Hz
+	900, // combat, 18s
+	600, // hurt, 12s
+	1200, // kill, 24s
 	0, // death
-	1200, // idle, 24s
-	300, // low health
+	6000, // idle, 120s: ambient chatter, not a running commentary
+	0, // low health, one shot by the health gate
 };
-
-static void ReplacePlayerToken(char *pBuf, int Size, const char *pPlayerName)
-{
-	if(!pPlayerName || !pPlayerName[0])
-		return;
-	char aOut[256];
-	const char *pSrc = pBuf;
-	char *pDst = aOut;
-	const int OutSize = (int) sizeof(aOut) - 1;
-	int Written = 0;
-	while(*pSrc && Written < OutSize)
-	{
-		if(pSrc[0] == '{' && str_comp_num(pSrc, "{player}", 8) == 0)
-		{
-			const int Len = str_length(pPlayerName);
-			for(int i = 0; i < Len && Written < OutSize; i++)
-				pDst[Written++] = pPlayerName[i];
-			pSrc += 8;
-		}
-		else
-			pDst[Written++] = *pSrc++;
-	}
-	pDst[Written] = '\0';
-	str_copy(pBuf, aOut, Size);
-}
 
 static int FactionTeam(int Faction)
 {
@@ -74,6 +49,7 @@ CMonsterEntity::CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const S
 	m_SpawnPos = Pos;
 	m_SpawnWorldID = pWorld ? pWorld->WorldID() : 0;
 	m_LastSpeakTick = -1000;
+	m_SpawnAnnounceTick = -1;
 	for(int i = 0; i < NUM_MOBDIALOGUE_EVENTS; i++)
 		m_aLastEventTick[i] = -1000;
 	m_SaidSight = false;
@@ -118,7 +94,10 @@ CMonsterEntity::CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const S
 	// would only add a second, conflicting input pass
 	SetAI(nullptr);
 
-	SayEvent(MOBDIALOGUE_SPAWN, true);
+	// The spawn line is a chat from the bot's own tee id, and that id only
+	// exists after the manager has assigned it and a snapshot has told the
+	// client the name. Announce a couple of ticks later for that handshake.
+	m_SpawnAnnounceTick = Server()->Tick() + 2;
 }
 
 bool CMonsterEntity::IsHostileBot(const IBotEntity *pBot) const
@@ -285,6 +264,11 @@ CCharacter *CMonsterEntity::NearestPlayer(float Radius)
 
 void CMonsterEntity::OnBotTick()
 {
+	if(m_SpawnAnnounceTick >= 0 && Server()->Tick() >= m_SpawnAnnounceTick)
+	{
+		SayEvent(MOBDIALOGUE_SPAWN, true);
+		m_SpawnAnnounceTick = -1;
+	}
 	CBotEntity::OnBotTick();
 }
 
@@ -531,9 +515,12 @@ bool CMonsterEntity::FireRanged(vec2 Target)
 
 	const int Owner = m_pDef->m_Faction == BOTFACTION_FRIENDLY ? PLAYER_TEAM_FRIENDLY : PLAYER_TEAM_HOSTILE;
 	const vec2 Start = m_Pos + Dir * GetProximityRadius() * 0.75f;
-	new CProjectile(GameWorld(), m_pDef->m_Ranged.m_Weapon, Owner, Start, Dir,
+	CProjectile *pProjectile = new CProjectile(GameWorld(), m_pDef->m_Ranged.m_Weapon, Owner, Start, Dir,
 		m_pDef->m_Ranged.m_Span, m_pDef->m_Ranged.m_Damage, false,
 		(float) m_pDef->m_Ranged.m_Force, m_pDef->m_Ranged.m_Sound, m_pDef->m_Ranged.m_Weapon);
+	// A bot has no client owner for the projectile to resolve, so without this
+	// the shot can collide with the monster that fired it on the very next tick.
+	pProjectile->SetIgnoreEntity(GetID());
 
 	GameWorld()->CreateSound(m_Pos, m_pDef->m_Ranged.m_Sound);
 	m_AttackTick = Server()->Tick();
@@ -660,23 +647,18 @@ void CMonsterEntity::SayEvent(int Event, bool Force)
 	{
 		if(Cooldown > 0 && Now - m_aLastEventTick[Event] < Cooldown)
 			return;
-		if(Now - m_LastSpeakTick < 25)
+		// at most one line per 8s even across events, so a fight does not turn
+		// into a stream of quips
+		if(Now - m_LastSpeakTick < 400)
 			return;
 	}
 
 	const char *pLine = Set.m_aaLines[random_int() % Set.m_NumLines];
-	CCharacter *pNear = NearestPlayer(600.0f);
 
-	char aLine[MAX_MOB_DIALOGUE_LENGTH];
-	str_copy(aLine, pLine, sizeof(aLine));
-	if(pNear)
-		ReplacePlayerToken(aLine, sizeof(aLine), Server()->ClientName(pNear->GetCID()));
-
-	char aBuf[320];
-	str_format(aBuf, sizeof(aBuf), "%s: %s", m_aName, aLine);
-
-	// the line is localized per receiver, so each client reads it in its own
-	// language; a content pack only has to provide the source text
+	// The line is localized per receiver, so each client reads it in its own
+	// language; a content pack only has to provide the source text. The
+	// {player} token is expanded after localization: the translation table is
+	// keyed by the source line, which is the form that still carries it.
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
@@ -687,9 +669,10 @@ void CMonsterEntity::SayEvent(int Event, bool Force)
 		if(distance(pPlayer->m_ViewPos, m_Pos) > 900.0f)
 			continue;
 		CLanguageScope Scope(pPlayer->Language());
-		char aMsg[384];
-		str_format(aMsg, sizeof(aMsg), "%s: %s", m_aName, Localize(aLine, "Mob Dialogue"));
-		GameServer()->SendChat(-1, CHAT_ALL, i, aMsg);
+		char aMsg[MAX_MOB_DIALOGUE_LENGTH * 2];
+		str_copy(aMsg, Localize(pLine, "Mob Dialogue"), sizeof(aMsg));
+		ReplaceDialoguePlayerToken(aMsg, sizeof(aMsg), Server()->ClientName(i));
+		GameServer()->SendBotChat(this, i, aMsg);
 	}
 
 	m_LastSpeakTick = Now;
@@ -765,7 +748,7 @@ int CMonsterEntity::GetHitAttacker()
 void CMonsterEntity::OnBotHit(CEntity *pTarget, bool Killed)
 {
 	if(Killed && pTarget && pTarget->ObjType() == CGameWorld::ENTTYPE_CHARACTER)
-		SayEvent(MOBDIALOGUE_KILL, true);
+		SayEvent(MOBDIALOGUE_KILL);
 }
 
 void CMonsterEntity::DropLoot(CEntity *pKiller)

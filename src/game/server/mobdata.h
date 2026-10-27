@@ -53,6 +53,11 @@ struct SMobDialogue
 	SDialogueSet m_aEvents[NUM_MOBDIALOGUE_EVENTS];
 };
 
+// Substitutes every {player} placeholder in an already localized dialogue
+// line. Localize first: the translation table is keyed by the source text,
+// which is the form that still carries the placeholder.
+void ReplaceDialoguePlayerToken(char *pBuf, int Size, const char *pPlayerName);
+
 struct SMobDrop
 {
 	CItemID m_Id;

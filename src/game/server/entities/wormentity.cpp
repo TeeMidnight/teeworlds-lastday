@@ -379,6 +379,11 @@ void CWormEntity::Speak(int Event)
 	const SDialogueSet &Set = m_pDef->m_Dialogue.m_aEvents[Event];
 	if(Set.m_NumLines <= 0)
 		return;
+	// the worm itself has no tee; the head segment is the visible identity
+	IBotEntity *pHead = HeadSegment();
+	if(!pHead)
+		return;
+
 	const char *pLine = Set.m_aaLines[random_int() % Set.m_NumLines];
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
@@ -388,9 +393,11 @@ void CWormEntity::Speak(int Event)
 		if(distance(pPlayer->m_ViewPos, m_Pos) > 800.0f)
 			continue;
 		CLanguageScope Scope(pPlayer->Language());
-		char aBuf[384];
-		str_format(aBuf, sizeof(aBuf), "%s: %s", m_aName, Localize(pLine, "Mob Dialogue"));
-		GameServer()->SendChat(-1, CHAT_ALL, i, aBuf);
+		// Translate first: the translation key still carries {player}.
+		char aMsg[MAX_MOB_DIALOGUE_LENGTH * 2];
+		str_copy(aMsg, Localize(pLine, "Mob Dialogue"), sizeof(aMsg));
+		ReplaceDialoguePlayerToken(aMsg, sizeof(aMsg), Server()->ClientName(i));
+		GameServer()->SendBotChat(pHead, i, aMsg);
 	}
 }
 

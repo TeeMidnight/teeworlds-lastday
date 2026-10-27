@@ -32,6 +32,7 @@ public:
 	const char *BotTypeName() const override { return "npc"; }
 
 	// --- CBotEntity ---
+	void OnBotTick() override;
 	void Tick() override;
 
 	// --- CHitableEntity / CBotEntity ---
@@ -142,6 +143,8 @@ private:
 	int m_HealTimer = 0;
 	int m_ArmorTimer = 0;
 	int m_LastSpeakTick = -1000;
+	// > 0 while the spawn line waits for the bot's per-client tee id
+	int m_SpawnAnnounceTick = -1;
 	int m_aLastEventTick[NUM_MOBDIALOGUE_EVENTS] = {};
 	Uuid m_LastAttackerBot = UUID_ZEROED;
 	int m_RetaliateUntil = 0;

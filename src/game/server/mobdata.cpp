@@ -61,6 +61,32 @@ static void CopyLine(SDialogueSet *pSet, const char *pText)
 	pSet->m_NumLines++;
 }
 
+void ReplaceDialoguePlayerToken(char *pBuf, int Size, const char *pPlayerName)
+{
+	if(!pBuf || Size <= 1)
+		return;
+
+	const char *pName = pPlayerName ? pPlayerName : "";
+	const int NameLength = str_length(pName);
+	char aOut[MAX_MOB_DIALOGUE_LENGTH * 2];
+	const int OutSize = (int) sizeof(aOut) - 1;
+	const char *pSrc = pBuf;
+	int Written = 0;
+	while(*pSrc && Written < OutSize)
+	{
+		if(pSrc[0] == '{' && str_comp_num(pSrc, "{player}", 8) == 0)
+		{
+			for(int i = 0; i < NameLength && Written < OutSize; i++)
+				aOut[Written++] = pName[i];
+			pSrc += 8;
+		}
+		else
+			aOut[Written++] = *pSrc++;
+	}
+	aOut[Written] = '\0';
+	str_copy(pBuf, aOut, Size);
+}
+
 static int DialogueEventFromName(const char *pName)
 {
 	if(!pName || !pName[0])

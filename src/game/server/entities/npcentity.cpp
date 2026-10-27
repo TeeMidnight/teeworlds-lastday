@@ -78,6 +78,21 @@ CNpcEntity::CNpcEntity(CGameWorld *pWorld, const SNpcDef *pDef, int Team) :
 	m_WanderDir = random_int() % 2 ? 1 : -1;
 	m_CursorTarget = vec2(100.0f * m_WanderDir, 0.0f);
 	m_Input.m_Direction = m_WanderDir;
+
+	// The spawn line is a chat from the bot's own tee id, and that id only
+	// exists after the manager has assigned it and a snapshot has told the
+	// client the name. Announce a couple of ticks later for that handshake.
+	m_SpawnAnnounceTick = Server()->Tick() + 2;
+}
+
+void CNpcEntity::OnBotTick()
+{
+	if(m_SpawnAnnounceTick >= 0 && Server()->Tick() >= m_SpawnAnnounceTick)
+	{
+		SayEvent(MOBDIALOGUE_SPAWN, true);
+		m_SpawnAnnounceTick = -1;
+	}
+	CBotEntity::OnBotTick();
 }
 
 void CNpcEntity::Tick()
@@ -336,7 +351,7 @@ bool CNpcEntity::OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, 
 void CNpcEntity::OnBotHit(CEntity *pTarget, bool Killed)
 {
 	if(Killed)
-		SayEvent(MOBDIALOGUE_KILL, true);
+		SayEvent(MOBDIALOGUE_KILL);
 
 	// the NPC killing a player decays the aggro it holds for that player
 	if(!Killed || !m_pDef || !pTarget || pTarget->ObjType() != CGameWorld::ENTTYPE_CHARACTER)
@@ -479,6 +494,9 @@ void CNpcEntity::TickInteract()
 {
 	if(!m_pDef)
 		return;
+
+	bool AnyoneWasInRange = false;
+	bool AnyoneInRange = false;
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
@@ -492,10 +510,17 @@ void CNpcEntity::TickInteract()
 			CLanguageScope LanguageScope(GameServer()->LanguageOf(i));
 			const std::string Msg = LocalizeFormat("NPC", "You unlocked the shop of {}.", NpcIDDisplayName(m_pDef->m_Id));
 			GameServer()->SendChat(-1, CHAT_WHISPER, i, Msg.c_str());
-			SayEvent(MOBDIALOGUE_SIGHT);
 		}
+		AnyoneWasInRange = AnyoneWasInRange || m_aClientInRange[i];
+		AnyoneInRange = AnyoneInRange || InRange;
 		m_aClientInRange[i] = InRange;
 	}
+
+	// Greet the first visitor after the shop was empty, not every player who
+	// walks up while someone is already standing there. The dialogue cooldown
+	// keeps even that greeting occasional.
+	if(!AnyoneWasInRange && AnyoneInRange)
+		SayEvent(MOBDIALOGUE_SIGHT);
 }
 
 void CNpcEntity::TickAggroDecay()
@@ -585,17 +610,28 @@ void CNpcEntity::SayEvent(int Event, bool Force)
 		return;
 
 	const int Now = Server()->Tick();
-	static const int s_aCooldown[NUM_MOBDIALOGUE_EVENTS] = {0, 600, 250, 120, 200, 0, 1200, 300};
+	// Town NPCs are ambient, not narrators. They stay much quieter than a
+	// monster's combat callouts: one greeting per 45s and at most one line per
+	// 8s even across events.
+	static const int s_aCooldown[NUM_MOBDIALOGUE_EVENTS] = {
+		0, // spawn
+		2250, // sight, 45s at 50Hz
+		600, // combat, 12s
+		600, // hurt, 12s
+		900, // kill, 18s
+		0, // death
+		2400, // idle, 48s
+		1200, // low health, 24s
+	};
 	if(!Force)
 	{
 		if(s_aCooldown[Event] > 0 && Now - m_aLastEventTick[Event] < s_aCooldown[Event])
 			return;
-		if(Now - m_LastSpeakTick < 25)
+		if(Now - m_LastSpeakTick < 400)
 			return;
 	}
 
 	const char *pLine = Set.m_aaLines[random_int() % Set.m_NumLines];
-	const char *pName = NpcIDDisplayName(m_pDef->m_Id);
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
@@ -604,9 +640,13 @@ void CNpcEntity::SayEvent(int Event, bool Force)
 		if(distance(pPlayer->m_ViewPos, m_Pos) > 700.0f)
 			continue;
 		CLanguageScope LanguageScope(pPlayer->Language());
-		char aBuf[384];
-		str_format(aBuf, sizeof(aBuf), "%s: %s", pName, Localize(pLine, "Mob Dialogue"));
-		GameServer()->SendChat(-1, CHAT_ALL, i, aBuf);
+		// Translate before substituting: the translation table is keyed by the
+		// source line, which still carries {player}. The chat is sent as the
+		// NPC's own tee id so the client shows its name and skin.
+		char aMsg[MAX_MOB_DIALOGUE_LENGTH * 2];
+		str_copy(aMsg, Localize(pLine, "Mob Dialogue"), sizeof(aMsg));
+		ReplaceDialoguePlayerToken(aMsg, sizeof(aMsg), Server()->ClientName(i));
+		GameServer()->SendBotChat(this, i, aMsg);
 	}
 
 	m_LastSpeakTick = Now;

@@ -21,6 +21,7 @@
 #include <string>
 
 class CBotManager;
+class IBotEntity;
 class CDatabase;
 class CItemSystem;
 class CContainerSystem;
@@ -289,6 +290,11 @@ public:
 
 	// ----- send functions -----
 	void SendChat(int ChatterClientID, int Mode, int To, const char *pText);
+	// Sends one line as a bot. A bot's tee id is per receiving client, so the
+	// caller sends once per recipient; this resolves that recipient's id and
+	// does nothing when the bot is not visible to it. CNetMsg_Sv_Chat then
+	// shows the bot's own name instead of a "***" server line.
+	void SendBotChat(IBotEntity *pBot, int To, const char *pText);
 	// ClientID == -1 sends to every player. A timed message (LifeSpan > 0)
 	// expires on its own; a realtime message (LifeSpan == 0) lasts until it is
 	// replaced, so it must be submitted again when it should stay on screen.
