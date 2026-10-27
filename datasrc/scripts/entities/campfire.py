@@ -26,7 +26,7 @@ PLAYER_TEAM_FRIENDLY = -4
 DEFAULT_EMIT_TICKS = 3
 DEFAULT_RANGE = 96
 DEFAULT_DAMAGE = 1
-PUFFS_PER_EMIT = 10
+PUFFS_PER_EMIT = 7
 
 # Bottom of the entity in world units; the floor is 24 units below the centre.
 # 16 keeps the swept line check clear of the floor (radius 3 -> 5 units margin).
