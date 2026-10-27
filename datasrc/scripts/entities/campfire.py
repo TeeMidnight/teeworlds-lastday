@@ -15,6 +15,8 @@
 # campfire itself as its ignore target so the flame can pass through the prop's
 # own hitbox without being absorbed at the base.
 
+import math
+
 import lastday
 
 
@@ -34,12 +36,18 @@ SNAP_ID_KEY = "_snap_ids"
 BASE_SEGMENT_COUNT = 8
 
 # Rising wave. The flame starts wide at the base (phase 0) and tapers to the
-# tip as the phase advances to SPREAD_PHASES - 1, like a real flame. It is one
-# central cone instead of two side jets.
+# tip as the phase advances to SPREAD_PHASES - 1. The taper is curved and the
+# whole flame is slightly asymmetric: every emission picks its own reach, lean
+# and mid-height bend, so the tip wanders instead of ending at one fixed point.
 SPREAD_PHASES = 5
 FLAME_RISE = 86.0
+FLAME_HEIGHT_MIN = 0.80
+FLAME_HEIGHT_MAX = 1.10
 FLAME_BASE_WIDTH = 38.0
 FLAME_TIP_WIDTH = 3.0
+FLAME_BULGE = 0.15
+FLAME_LEAN = 11.0
+FLAME_CURVE = 7.0
 
 PUFF_SPAN_MIN = 12
 PUFF_SPAN_MAX = 18
@@ -107,7 +115,7 @@ def _draw_base(ctx):
     })
 
 
-def _spawn_puff(ctx, state, t):
+def _spawn_puff(ctx, state, t, wave):
     pos = ctx.entity.pos
     base_x = pos.x
     base_y = pos.y + BASE_Y
@@ -117,12 +125,19 @@ def _spawn_puff(ctx, state, t):
     t = t + (_random01() - 0.5) * 0.22
     t = max(0.0, min(1.0, t))
 
-    rise = 6.0 + (FLAME_RISE - 6.0) * t
-    # A real flame is widest at the base and narrows to the tip. The campfire is
-    # the projectile's ignore target, so the flame may cross the prop's own
-    # hitbox without being absorbed at the base.
-    width = FLAME_TIP_WIDTH + (FLAME_BASE_WIDTH - FLAME_TIP_WIDTH) * (1.0 - t)
-    lateral = width * (_random01() * 2.0 - 1.0)
+    rise = 6.0 + (wave["height"] - 6.0) * t
+    # A real flame is widest near the base, has a soft bulge above it and
+    # narrows to a tip. The exponent curves the taper; the sine adds the bulge.
+    profile = (1.0 - t) ** 0.65
+    width = FLAME_TIP_WIDTH + (FLAME_BASE_WIDTH - FLAME_TIP_WIDTH) * profile
+    width *= 1.0 + FLAME_BULGE * math.sin(math.pi * t)
+
+    # The centre line bends: a quadratic lean moves the tip, a sine bend makes
+    # the body curve. Both change with every emission, so the top is not fixed.
+    centre = wave["lean"] * t * t
+    centre += wave["curve"] * math.sin(math.pi * t) * (1.0 - t)
+
+    lateral = centre + width * (_random01() * 2.0 - 1.0)
     x = base_x + lateral
     y = base_y - rise - _random01() * 4.0
 
@@ -186,6 +201,17 @@ def on_tick(ctx):
 
     phase = int(state["phase"]) % SPREAD_PHASES
     t = float(phase) / float(SPREAD_PHASES - 1)
+
+    # Each emission has its own silhouette: a different reach, a different lean
+    # and a different mid-height bend. The living puffs from earlier emissions
+    # fade underneath, so the flame tip wanders instead of standing still.
+    wave = {
+        "height": FLAME_RISE * (
+            FLAME_HEIGHT_MIN + (FLAME_HEIGHT_MAX - FLAME_HEIGHT_MIN) * _random01()
+        ),
+        "lean": (_random01() * 2.0 - 1.0) * FLAME_LEAN,
+        "curve": (_random01() * 2.0 - 1.0) * FLAME_CURVE,
+    }
     for _ in range(PUFFS_PER_EMIT):
-        _spawn_puff(ctx, state, t)
+        _spawn_puff(ctx, state, t, wave)
     state["phase"] = (phase + 1) % SPREAD_PHASES
