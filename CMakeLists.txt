@@ -292,6 +292,29 @@ find_package(GTest)
 find_package(SPNG)
 find_package(Threads)
 find_package(SQLite3)
+# CMake < 4.3 names the imported target SQLite::SQLite3; 4.3+ added
+# SQLite3::SQLite3 and kept the old name as a deprecated alias. Normalize the
+# name so the link line works on both.
+if(NOT TARGET SQLite3::SQLite3)
+  if(TARGET SQLite::SQLite3)
+    add_library(SQLite3::SQLite3 ALIAS SQLite::SQLite3)
+  elseif(SQLite3_FOUND)
+    set(_sqlite_includes ${SQLite3_INCLUDE_DIRS})
+    if(NOT _sqlite_includes AND SQLite3_INCLUDE_DIR)
+      set(_sqlite_includes ${SQLite3_INCLUDE_DIR})
+    endif()
+    set(_sqlite_libraries ${SQLite3_LIBRARIES})
+    if(NOT _sqlite_libraries AND SQLite3_LIBRARY)
+      set(_sqlite_libraries ${SQLite3_LIBRARY})
+    endif()
+    if(_sqlite_libraries AND _sqlite_includes)
+      add_library(SQLite3::SQLite3 INTERFACE IMPORTED)
+      set_target_properties(SQLite3::SQLite3 PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${_sqlite_includes}"
+        INTERFACE_LINK_LIBRARIES "${_sqlite_libraries}")
+    endif()
+  endif()
+endif()
 find_package(PostgreSQL)
 
 
