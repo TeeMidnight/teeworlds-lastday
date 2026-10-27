@@ -1,8 +1,8 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-#ifndef GAME_SERVER_ITEM_MENU_H
-#define GAME_SERVER_ITEM_MENU_H
+#ifndef GAME_SERVER_MENUS_ITEM_MENU_H
+#define GAME_SERVER_MENUS_ITEM_MENU_H
 
 #include <game/item_id.h>
 
