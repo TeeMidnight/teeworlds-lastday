@@ -72,7 +72,7 @@ static py::tuple Vec2Tuple(float x, float y)
 	return Result;
 }
 
-static int CreateProjectileScript(int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon)
+static CProjectile *CreateProjectileScriptPtr(int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon, int IgnoreEntityID)
 {
 	// A real client spawns the projectile into that client's world. A negative
 	// owner must be one of the PLAYER_TEAM_* damage sentinels: a scripted prop
@@ -84,21 +84,31 @@ static int CreateProjectileScript(int Owner, float x, float y, float vx, float v
 	{
 		CCharacter *pChr = Character(Owner);
 		if(!pChr)
-			return -1;
+			return nullptr;
 		pWorld = pChr->GameWorld();
 	}
 	else
 	{
 		if(Owner != PLAYER_TEAM_HOSTILE && Owner != PLAYER_TEAM_FRIENDLY &&
 			Owner != PLAYER_TEAM_RED && Owner != PLAYER_TEAM_BLUE)
-			return -1;
+			return nullptr;
 		pWorld = ActiveWorld();
 	}
 	if(!pWorld || !ValidPos(x, y))
-		return -1;
+		return nullptr;
 	CProjectile *pProjectile = new CProjectile(pWorld, Weapon, Owner, vec2(x, y), vec2(vx, vy),
 		Span, Damage, Explosive, 0.0f, SoundImpact, Weapon);
-	return pProjectile->GetID();
+	// The ignore target is resolved in the projectile's own world every tick.
+	// Only accept an id that names a live entity of that world now.
+	if(IgnoreEntityID >= 0 && pWorld->FindEntityByID(IgnoreEntityID))
+		pProjectile->SetIgnoreEntity(IgnoreEntityID);
+	return pProjectile;
+}
+
+static int CreateProjectileScript(int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon)
+{
+	CProjectile *pProjectile = CreateProjectileScriptPtr(Owner, x, y, vx, vy, Span, Damage, Explosive, SoundImpact, Weapon, -1);
+	return pProjectile ? pProjectile->GetID() : -1;
 }
 
 static int CreateLaserScript(int Owner, float x, float y, float dx, float dy, float Reach, int Damage)
@@ -371,6 +381,15 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 	m.def("projectile_spawn", [](int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon)
 	{
 		return CreateProjectileScript(Owner, x, y, vx, vy, Span, Damage, Explosive, SoundImpact, Weapon);
+	});
+
+	// Like create_projectile, but the projectile never hits IgnoreEntityID.
+	// A campfire uses its own entity id so the central flame can pass through
+	// the prop's own hitbox instead of being absorbed at the base.
+	m.def("create_projectile_ignoring", [](int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon, int IgnoreEntityID)
+	{
+		CProjectile *pProjectile = CreateProjectileScriptPtr(Owner, x, y, vx, vy, Span, Damage, Explosive, SoundImpact, Weapon, IgnoreEntityID);
+		return pProjectile ? pProjectile->GetID() : -1;
 	});
 
 	m.def("create_laser", [](int Owner, float x, float y, float dx, float dy, float Reach, int Damage)

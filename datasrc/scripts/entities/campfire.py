@@ -3,16 +3,17 @@
 # The base is drawn with snapshot lasers: a small hexagon of stones and two
 # crossed sticks. The flames are intentionally made of WEAPON_HAMMER
 # projectiles: the stock client draws no projectile sprite for that type but
-# still emits its bullet trail particle for every live projectile, so a few
-# short-lived stationary puffs read as embers. They are spawned with
+# still emits its bullet trail particle for every live projectile, so a stream
+# of short-lived stationary puffs reads as embers. They are spawned with
 # PLAYER_TEAM_FRIENDLY as the owner, which is the engine sentinel that hurts
 # hostile bots but never players, friendly units or neutral units: a base
 # campfire should not cook its own owner.
 #
 # The puffs are emitted as a rising wave: each emission advances one phase from
-# the base outward, so the flames visibly grow from the bottom of the fire.
-
-import math
+# the base outward, so the flames visibly grow from the bottom of the fire. The
+# wave is a single central cone, not two side jets; each projectile names the
+# campfire itself as its ignore target so the flame can pass through the prop's
+# own hitbox without being absorbed at the base.
 
 import lastday
 
@@ -23,7 +24,7 @@ PLAYER_TEAM_FRIENDLY = -4
 DEFAULT_EMIT_TICKS = 3
 DEFAULT_RANGE = 96
 DEFAULT_DAMAGE = 1
-PUFFS_PER_EMIT = 8
+PUFFS_PER_EMIT = 10
 
 # Bottom of the entity in world units; the floor is 24 units below the centre.
 # 16 keeps the swept line check clear of the floor (radius 3 -> 5 units margin).
@@ -32,18 +33,15 @@ LINE_RADIUS = 3.0
 SNAP_ID_KEY = "_snap_ids"
 BASE_SEGMENT_COUNT = 8
 
-# Rising wave. The flame starts at the base (phase 0) and fans outward as the
-# phase advances to SPREAD_PHASES - 1.
+# Rising wave. The flame starts at the base (phase 0) and widens as the phase
+# advances to SPREAD_PHASES - 1. The cone is centred on the fire, so it reads
+# as one tall flame instead of two side jets.
 SPREAD_PHASES = 5
-FLAME_RISE = 42.0
-FLAME_SIDE = 36.0
-# Smallest safe distance from the entity centre for an ember. The entity's
-# hitbox is radius 8 and a hammer projectile checks 6 units around its point,
-# so anything closer than 14 would hit (and be absorbed by) the campfire.
-SAFE_RADIUS = 15.0
+FLAME_RISE = 86.0
+FLAME_SIDE = 38.0
 
-PUFF_SPAN_MIN = 10
-PUFF_SPAN_MAX = 14
+PUFF_SPAN_MIN = 12
+PUFF_SPAN_MAX = 18
 
 
 def _random01():
@@ -118,37 +116,32 @@ def _spawn_puff(ctx, state, t):
     t = t + (_random01() - 0.5) * 0.22
     t = max(0.0, min(1.0, t))
 
-    rise = 4.0 + (FLAME_RISE - 4.0) * t
-
-    # Keep the ember outside the prop's hitbox: at the heights where a purely
-    # vertical flame would pass through the centre, push it sideways by at
-    # least the remaining safe distance.
-    vertical = abs(BASE_Y - rise)
-    if vertical < SAFE_RADIUS:
-        min_lateral = math.sqrt(SAFE_RADIUS * SAFE_RADIUS - vertical * vertical)
-    else:
-        min_lateral = 0.0
-
-    spread = 2.0 + (FLAME_SIDE - 2.0) * t
-    lateral = min_lateral + 4.0 + spread * _random01()
-    side = 1.0 if (lastday.random_int() & 1) else -1.0
-    x = base_x + side * lateral
-    y = base_y - rise
+    rise = 6.0 + (FLAME_RISE - 6.0) * t
+    # One central cone: the horizontal offset is symmetric around the fire and
+    # grows with height. The campfire is the projectile's ignore target, so the
+    # flame may cross the prop's own hitbox.
+    spread = 3.0 + FLAME_SIDE * t
+    lateral = spread * (_random01() * 2.0 - 1.0)
+    x = base_x + lateral
+    y = base_y - rise - _random01() * 4.0
 
     # Do not burn through a wall next to the fire.
     if lastday.world_test_line(base_x, base_y, x, y, LINE_RADIUS):
         return
 
     span = PUFF_SPAN_MIN + (lastday.random_int() % (PUFF_SPAN_MAX - PUFF_SPAN_MIN + 1))
-    ctx.Projectile(
+    lastday.create_projectile_ignoring(
         PLAYER_TEAM_FRIENDLY,
-        ctx.Vec2(x, y),
-        ctx.Vec2(0.0, 0.0),
+        x,
+        y,
+        0.0,
+        0.0,
         span,
         max(1, int(state["damage"])),
         False,
         -1,
         WEAPON_HAMMER,
+        int(ctx.entity.id),
     )
 
 

@@ -19,6 +19,11 @@ public:
 	vec2 GetPos(float Time);
 	void FillInfo(CNetObj_Projectile *pProj);
 
+	// A prop-owned projectile can name the entity it must never hit (the
+	// campfire's own hitbox, for example). The id is resolved every tick so a
+	// destroyed ignore target does not leave a dangling pointer.
+	void SetIgnoreEntity(int EntityID) { m_IgnoreEntityID = EntityID; }
+
 	void LoseOwner();
 
 	virtual void Reset();
@@ -42,6 +47,7 @@ private:
 	int m_Weapon;
 	float m_Force;
 	int m_StartTick;
+	int m_IgnoreEntityID;
 	bool m_Explosive;
 };
 

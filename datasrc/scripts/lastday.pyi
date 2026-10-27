@@ -78,6 +78,19 @@ def projectile_spawn(
     sound_impact: int,
     weapon: int,
 ) -> int: ...
+def create_projectile_ignoring(
+    owner: int,
+    x: float,
+    y: float,
+    vx: float,
+    vy: float,
+    span: int,
+    damage: int,
+    explosive: bool,
+    sound_impact: int,
+    weapon: int,
+    ignore_entity_id: int,
+) -> int: ...
 def create_laser(
     owner: int,
     x: float,

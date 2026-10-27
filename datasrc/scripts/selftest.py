@@ -38,6 +38,10 @@ def on_selftest(ctx):
     ctx.result["jar_size"] = lastday_entity.health_jar_size()
     ctx.result["floor"] = lastday.world_floor_y(0.0, 0.0, 128.0)
     ctx.result["line"] = lastday.world_test_line(0.0, 0.0, 32.0, 0.0, 4.0)
+    # no world in the console test: this must fail cleanly with -1
+    ctx.result["ignoring"] = lastday.create_projectile_ignoring(
+        None, 0.0, 0.0, 0.0, 0.0, 1, 1, False, -1, 0, -1
+    )
     ctx.result["drill_near"] = lastday.drill_near(0.0, 0.0, 40.0)
     ctx.result["kind_near"] = lastday_entity.kind_near("campfire", 0.0, 0.0, 64.0)
     # no world in the console test: this must fail cleanly with -1

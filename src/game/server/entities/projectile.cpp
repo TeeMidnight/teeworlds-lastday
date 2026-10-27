@@ -28,6 +28,7 @@ CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, 
 	m_SoundImpact = SoundImpact;
 	m_Weapon = Weapon;
 	m_StartTick = Server()->Tick();
+	m_IgnoreEntityID = -1;
 	m_Explosive = Explosive;
 
 	GameWorld()->InsertEntity(this);
@@ -80,7 +81,8 @@ void CProjectile::Tick()
 	vec2 CurPos = GetPos(Ct);
 	int Collide = GameWorld()->Collision()->IntersectLine(PrevPos, CurPos, &CurPos, 0);
 	CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
-	CHitableEntity *pTargetEnt = (CHitableEntity *) GameWorld()->IntersectFlagEntity(PrevPos, CurPos, 6.0f, CurPos, CGameWorld::ENTFLAG_HITABLE, pOwnerChar);
+	CEntity *pIgnore = m_IgnoreEntityID >= 0 ? GameWorld()->FindEntityByID(m_IgnoreEntityID) : nullptr;
+	CHitableEntity *pTargetEnt = (CHitableEntity *) GameWorld()->IntersectFlagEntity(PrevPos, CurPos, 6.0f, CurPos, CGameWorld::ENTFLAG_HITABLE, pOwnerChar, pIgnore);
 
 	m_LifeSpan--;
 

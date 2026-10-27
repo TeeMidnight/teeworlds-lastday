@@ -1100,7 +1100,7 @@ CEntity *CGameWorld::IntersectEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &N
 	return pClosest;
 }
 
-CEntity *CGameWorld::IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Flag, CEntity *pNotThis)
+CEntity *CGameWorld::IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Flag, CEntity *pNotThis, CEntity *pNotThis2)
 {
 	CFlagCheck Check(Flag);
 	// Find other entities
@@ -1109,7 +1109,7 @@ CEntity *CGameWorld::IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec
 
 	for(auto &pEnt : m_lpFlagEntityList)
 	{
-		if(pEnt == pNotThis || !Check(pEnt))
+		if(pEnt == pNotThis || pEnt == pNotThis2 || !Check(pEnt))
 			continue;
 
 		vec2 IntersectPos = closest_point_on_line(Pos0, Pos1, pEnt->m_Pos);
@@ -1133,7 +1133,7 @@ CEntity *CGameWorld::IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec
 		const vec2 Offset = aNeighbours[n].m_Offset;
 		for(auto &pEnt : aNeighbours[n].m_pWorld->m_lpFlagEntityList)
 		{
-			if(pEnt == pNotThis || !Check(pEnt))
+			if(pEnt == pNotThis || pEnt == pNotThis2 || !Check(pEnt))
 				continue;
 			const vec2 EntityPos = pEnt->m_Pos + Offset;
 			vec2 IntersectPos = closest_point_on_line(Pos0, Pos1, EntityPos);

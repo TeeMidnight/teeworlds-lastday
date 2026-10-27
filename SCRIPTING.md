@@ -88,6 +88,10 @@ same sentinel rules as a bot's hits: a friendly projectile (used by the
 campfire) damages hostile bots but never players, friendly units or neutral
 units, while a hostile one hurts everyone. The projectile still uses the normal
 projectile type, so `WEAPON_HAMMER` (0) is the stationary ember particle.
+A scripted prop that emits flames can pass its own entity id to
+`create_projectile_ignoring(...)`: the projectile then never hits that prop,
+so a central flame can pass through the fire's own hitbox instead of being
+absorbed at the base.
 
 `ctx["player"]` etc. still work as a compatibility shim for older scripts and
 return the primitive id/name; new scripts should use the class attributes.
@@ -105,8 +109,9 @@ return the primitive id/name; new scripts should use the class attributes.
   `chat_localized`.
 - items / buffs: `item_count`, `item_give`, `item_take`, `item_drill`,
   `item_health_jar`, `buff_add`, `buff_remove`, `buff_stacks`.
-- entities: `create_projectile`, `create_laser`, `sound`, `hammer_hit`,
-  `tuning`, `random_int`, `random_int_range`, `log`.
+- entities: `create_projectile`, `create_projectile_ignoring`,
+  `create_laser`, `sound`, `hammer_hit`, `tuning`,
+  `random_int`, `random_int_range`, `log`.
 - server / worlds: `tick`, `tick_speed`, `active_world`, `world_name`,
   `floor_name`, `world_kind`, `world_test_box`, `world_test_line`,
   `world_floor_y`, `drill_near`, `drill_spawn`. `world_test_line` is a

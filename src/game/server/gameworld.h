@@ -288,7 +288,7 @@ public:
 			Returns a pointer to the closest hit or NULL of there is no intersection.
 	*/
 	CEntity *IntersectEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Type, CEntity *pNotThis = 0);
-	CEntity *IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Flag, CEntity *pNotThis = 0);
+	CEntity *IntersectFlagEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int Flag, CEntity *pNotThis = 0, CEntity *pNotThis2 = 0);
 
 	// The position of an entity as seen in this world's frame: an entity of a
 	// live ring neighbour is shifted by the boundary offset, everything else is
