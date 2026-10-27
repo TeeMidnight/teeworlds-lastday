@@ -86,8 +86,7 @@ struct SMobRanged
 	float m_MinRange;
 
 	SMobRanged() :
-		m_Enabled(false), m_Weapon(WEAPON_GUN), m_Damage(2), m_Cooldown(60),
-		m_Force(1), m_Span(600), m_Sound(SOUND_GUN_FIRE), m_Range(360.0f), m_MinRange(96.0f) {}
+		m_Enabled(false), m_Weapon(WEAPON_GUN), m_Damage(2), m_Cooldown(60), m_Force(1), m_Span(600), m_Sound(SOUND_GUN_FIRE), m_Range(360.0f), m_MinRange(96.0f) {}
 };
 
 struct SMobLeap
@@ -141,8 +140,7 @@ struct SMobWorm
 	float m_ChaseRadius;
 
 	SMobWorm() :
-		m_Segments(6), m_Speed(2.6f), m_BurrowTicks(90), m_SurfaceTicks(70),
-		m_Damage(2), m_BiteRadius(48.0f), m_ChaseRadius(520.0f) {}
+		m_Segments(6), m_Speed(2.6f), m_BurrowTicks(90), m_SurfaceTicks(70), m_Damage(2), m_BiteRadius(48.0f), m_ChaseRadius(520.0f) {}
 };
 
 struct SMobSummon
@@ -185,9 +183,7 @@ struct SMobDef
 	array<SMobDrop> m_lDrops;
 
 	SMobDef() :
-		m_Faction(BOTFACTION_HOSTILE), m_Health(10), m_Armor(0), m_SpeedScale(1.0f),
-		m_AggroRadius(360.0f), m_AttackRange(48.0f), m_KeepDistance(0.0f),
-		m_JumpChance(12), m_FightHostileGroups(true), m_HasSkin(false), m_IsWorm(false), m_IsBoss(false)
+		m_Faction(BOTFACTION_HOSTILE), m_Health(10), m_Armor(0), m_SpeedScale(1.0f), m_AggroRadius(360.0f), m_AttackRange(48.0f), m_KeepDistance(0.0f), m_JumpChance(12), m_FightHostileGroups(true), m_HasSkin(false), m_IsWorm(false), m_IsBoss(false)
 	{
 		m_aId[0] = '\0';
 		m_aName[0] = '\0';
@@ -252,7 +248,6 @@ private:
 	void LoadDef(const char *pDefaultId, const char *pFilePath);
 	void LoadPool(const char *pFilePath);
 	void LoadSpawns(const char *pFilePath);
-
 };
 
 #endif // GAME_SERVER_MOBDATA_H

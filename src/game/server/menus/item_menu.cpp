@@ -434,7 +434,8 @@ bool CGameMenu::MenuCraft(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 	// in a fixed order and sorting the recipes inside each group by id
 	array<CItemSystem::SCraftDef *> Crafts;
 	pItem->ForEachCraft(CollectCraftCallback, &Crafts);
-	sort(Crafts.all(), [](const CItemSystem::SCraftDef *pA, const CItemSystem::SCraftDef *pB) {
+	sort(Crafts.all(), [](const CItemSystem::SCraftDef *pA, const CItemSystem::SCraftDef *pB)
+	{
 		const int RankA = CraftCategoryRank(pA->m_aCategory);
 		const int RankB = CraftCategoryRank(pB->m_aCategory);
 		if(RankA != RankB)

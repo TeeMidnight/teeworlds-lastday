@@ -21,7 +21,11 @@ struct SGameTeam
 	bool m_FriendlyFire;
 	array<Uuid> m_lMembers;
 
-	SGameTeam() : m_Id(0), m_FriendlyFire(false) { m_aName[0] = '\0'; m_Leader = UUID_ZEROED; }
+	SGameTeam() : m_Id(0), m_FriendlyFire(false)
+	{
+		m_aName[0] = '\0';
+		m_Leader = UUID_ZEROED;
+	}
 };
 
 class CTeamSystem

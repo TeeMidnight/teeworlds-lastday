@@ -25,9 +25,9 @@ static void PutU32(char *p, unsigned Value)
 static unsigned GetU32(const char *p)
 {
 	return (unsigned) (unsigned char) p[0] |
-		((unsigned) (unsigned char) p[1] << 8) |
-		((unsigned) (unsigned char) p[2] << 16) |
-		((unsigned) (unsigned char) p[3] << 24);
+	       ((unsigned) (unsigned char) p[1] << 8) |
+	       ((unsigned) (unsigned char) p[2] << 16) |
+	       ((unsigned) (unsigned char) p[3] << 24);
 }
 
 static bool HasId(const char *p, const char *pId)

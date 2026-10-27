@@ -46,7 +46,6 @@ static inline time_t filetime_to_unixtime(LPFILETIME filetime)
 }
 #endif
 
-
 void fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user)
 {
 #if defined(CONF_FAMILY_WINDOWS)

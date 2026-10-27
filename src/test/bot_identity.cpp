@@ -29,11 +29,13 @@ static Uuid MakeBot(int Index)
 TEST(BotIdentity, SameBotKeepsItsTeeID)
 {
 	const Uuid Bot = MakeBot(42);
-	const int TeeID = PickBotTeeID(Bot, [](int) { return false; });
+	const int TeeID = PickBotTeeID(Bot, [](int)
+	{ return false; });
 	EXPECT_GE(TeeID, BOT_TEEID_07_MIN);
 	EXPECT_LE(TeeID, BOT_TEEID_08_MAX);
 	// respawn: the same BotID resolves to the same private id when it is free
-	EXPECT_EQ(TeeID, PickBotTeeID(Bot, [](int) { return false; }));
+	EXPECT_EQ(TeeID, PickBotTeeID(Bot, [](int)
+	{ return false; }));
 }
 
 TEST(BotIdentity, AllocationsStayDistinctWhileTheRangeHasRoom)
@@ -41,7 +43,8 @@ TEST(BotIdentity, AllocationsStayDistinctWhileTheRangeHasRoom)
 	array<int> Used;
 	for(int i = 0; i < 1024; i++)
 	{
-		const int TeeID = PickBotTeeID(MakeBot(i), [&Used](int Id) { return UsedContains(Used, Id); });
+		const int TeeID = PickBotTeeID(MakeBot(i), [&Used](int Id)
+		{ return UsedContains(Used, Id); });
 		ASSERT_GE(TeeID, BOT_TEEID_07_MIN);
 		ASSERT_LE(TeeID, BOT_TEEID_08_MAX);
 		EXPECT_FALSE(UsedContains(Used, TeeID)) << "id " << TeeID << " handed out twice";
@@ -59,9 +62,13 @@ TEST(BotIdentity, ProbesPastUsedIDsAndGivesUpWhenFull)
 			Used.add(Id);
 
 	const Uuid Bot = MakeBot(7);
-	EXPECT_EQ(PickBotTeeID(Bot, [&Used](int Id) { return UsedContains(Used, Id); }), Kept);
+	EXPECT_EQ(PickBotTeeID(Bot, [&Used](int Id)
+	{ return UsedContains(Used, Id); }),
+		Kept);
 
 	// a fully used range has no answer
 	Used.add(Kept);
-	EXPECT_EQ(PickBotTeeID(Bot, [&Used](int Id) { return UsedContains(Used, Id); }), -1);
+	EXPECT_EQ(PickBotTeeID(Bot, [&Used](int Id)
+	{ return UsedContains(Used, Id); }),
+		-1);
 }

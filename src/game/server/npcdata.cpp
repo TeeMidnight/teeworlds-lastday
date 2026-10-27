@@ -167,7 +167,8 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 				const bool Custom = rCustom.type == json_boolean ? (bool) rCustom : false;
 				pDef->m_Skin.m_aUseCustomColors[i] = Custom ? 1 : 0;
 				pDef->m_Skin.m_aSkinPartColors[i] = Custom ?
-					PackHsla(ReadInt(rPart["hue"], 0), ReadInt(rPart["sat"], 0), ReadInt(rPart["lgt"], 0), ReadInt(rPart["alp"], 255)) : 0;
+									    PackHsla(ReadInt(rPart["hue"], 0), ReadInt(rPart["sat"], 0), ReadInt(rPart["lgt"], 0), ReadInt(rPart["alp"], 255)) :
+									    0;
 			}
 		}
 	}

@@ -83,11 +83,13 @@ static int CreateLaserScript(int Owner, float x, float y, float dx, float dy, fl
 
 PYBIND11_EMBEDDED_MODULE(lastday, m)
 {
-	m.def("log", [](const std::string &Message) {
+	m.def("log", [](const std::string &Message)
+	{
 		dbg_msg("script", "%s", Message.c_str());
 	});
 
-	m.def("chat", [](int ClientID, const std::string &Message) {
+	m.def("chat", [](int ClientID, const std::string &Message)
+	{
 		CGameContext *pGame = Game();
 		if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS)
 			return false;
@@ -97,7 +99,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 
 	// Same as chat(), but the message is looked up in the recipient's language
 	// using Context. Scripts should use this for player-visible text.
-	m.def("chat_localized", [](int ClientID, const std::string &Message, const std::string &Context) {
+	m.def("chat_localized", [](int ClientID, const std::string &Message, const std::string &Context)
+	{
 		CGameContext *pGame = Game();
 		if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS)
 			return false;
@@ -106,7 +109,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return true;
 	});
 
-	m.def("player_heal", [](int ClientID, int Amount) {
+	m.def("player_heal", [](int ClientID, int Amount)
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr || Amount <= 0)
 			return 0;
@@ -115,7 +119,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return pChr->Health() - Before;
 	});
 
-	m.def("player_armor", [](int ClientID, int Amount) {
+	m.def("player_armor", [](int ClientID, int Amount)
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr || Amount <= 0)
 			return 0;
@@ -124,17 +129,20 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return pChr->Armor() - Before;
 	});
 
-	m.def("player_health", [](int ClientID) {
+	m.def("player_health", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		return pChr ? pChr->Health() : 0;
 	});
 
-	m.def("player_armor_value", [](int ClientID) {
+	m.def("player_armor_value", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		return pChr ? pChr->Armor() : 0;
 	});
 
-	m.def("player_forget", [](int ClientID, int Delta) {
+	m.def("player_forget", [](int ClientID, int Delta)
+	{
 		CPlayer *pPlayer = Player(ClientID);
 		if(!pPlayer)
 			return 0;
@@ -144,46 +152,54 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return Applied;
 	});
 
-	m.def("player_damage", [](int ClientID, int Amount, int FromClientID, int Weapon) {
+	m.def("player_damage", [](int ClientID, int Amount, int FromClientID, int Weapon)
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr || Amount <= 0)
 			return false;
 		return pChr->TakeDamage(vec2(0.0f, -1.0f), pChr->GetPos(), Amount, FromClientID, Weapon);
 	});
 
-	m.def("player_pos", [](int ClientID) {
+	m.def("player_pos", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr)
 			return Vec2Tuple(0.0f, 0.0f);
 		return Vec2Tuple(pChr->GetPos().x, pChr->GetPos().y);
 	});
 
-	m.def("player_alive", [](int ClientID) {
+	m.def("player_alive", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		return pChr && pChr->IsAlive();
 	});
 
-	m.def("player_max_health", [](int ClientID) {
+	m.def("player_max_health", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		return pChr ? pChr->MaxHealth() : 0;
 	});
 
-	m.def("player_range_scale", [](int ClientID) {
+	m.def("player_range_scale", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		return pChr ? pChr->RangeScale() : 1.0f;
 	});
 
-	m.def("player_speed_scale", [](int ClientID) {
+	m.def("player_speed_scale", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		return pChr ? pChr->SpeedScale() : 1.0f;
 	});
 
-	m.def("player_team", [](int ClientID) {
+	m.def("player_team", [](int ClientID)
+	{
 		CPlayer *pPlayer = Player(ClientID);
 		return pPlayer ? pPlayer->GetTeam() : TEAM_SPECTATORS;
 	});
 
-	m.def("player_name", [](int ClientID) -> std::string {
+	m.def("player_name", [](int ClientID) -> std::string
+	{
 		CGameContext *pGame = Game();
 		if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS || !pGame->m_apPlayers[ClientID])
 			return "";
@@ -191,7 +207,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return pName ? pName : "";
 	});
 
-	m.def("player_velocity", [](int ClientID) {
+	m.def("player_velocity", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr)
 			return Vec2Tuple(0.0f, 0.0f);
@@ -199,12 +216,14 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return Vec2Tuple(Vel.x, Vel.y);
 	});
 
-	m.def("player_grounded", [](int ClientID) {
+	m.def("player_grounded", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		return pChr && pChr->IsGrounded();
 	});
 
-	m.def("player_aim_direction", [](int ClientID) {
+	m.def("player_aim_direction", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr)
 			return Vec2Tuple(0.0f, 0.0f);
@@ -212,7 +231,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return Vec2Tuple(Dir.x, Dir.y);
 	});
 
-	m.def("player_teleport", [](int ClientID, float x, float y) {
+	m.def("player_teleport", [](int ClientID, float x, float y)
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr || !ValidPos(x, y))
 			return false;
@@ -221,7 +241,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 	});
 
 	// the item id in the active weapon slot ("" when the slot is empty)
-	m.def("player_weapon", [](int ClientID) -> std::string {
+	m.def("player_weapon", [](int ClientID) -> std::string
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr)
 			return "";
@@ -231,12 +252,14 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 	});
 
 	// the usable weapon id (a weapon manager id, matching context weapon params)
-	m.def("player_weapon_id", [](int ClientID) {
+	m.def("player_weapon_id", [](int ClientID)
+	{
 		CCharacter *pChr = Character(ClientID);
 		return pChr ? (int) pChr->GetUsableWeapon() : -1;
 	});
 
-	m.def("player_set_weapon", [](int ClientID, int Slot) {
+	m.def("player_set_weapon", [](int ClientID, int Slot)
+	{
 		CCharacter *pChr = Character(ClientID);
 		if(!pChr || Slot < 0 || Slot >= NUM_WEAPONS)
 			return false;
@@ -244,26 +267,30 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return true;
 	});
 
-	m.def("item_count", [](int ClientID, const std::string &ItemId) {
+	m.def("item_count", [](int ClientID, const std::string &ItemId)
+	{
 		CGameContext *pGame = Game();
 		if(!pGame)
 			return 0;
 		return pGame->Item()->GetItemCount(ClientID, CItemID::FromName(ItemId.c_str()));
 	});
 
-	m.def("item_give", [](int ClientID, const std::string &ItemId, int Count) {
+	m.def("item_give", [](int ClientID, const std::string &ItemId, int Count)
+	{
 		CGameContext *pGame = Game();
 		return pGame && pGame->Item()->AddItem(ClientID, ItemId.c_str(), Count, true);
 	});
 
-	m.def("item_take", [](int ClientID, const std::string &ItemId, int Count) {
+	m.def("item_take", [](int ClientID, const std::string &ItemId, int Count)
+	{
 		CGameContext *pGame = Game();
 		return pGame && pGame->Item()->RemoveItem(ClientID, CItemID::FromName(ItemId.c_str()), Count);
 	});
 
 	// Placement metadata. Returns (has_data, ...); item scripts use the values
 	// from the item definition instead of hard-coding them.
-	m.def("item_drill", [](const std::string &ItemId) {
+	m.def("item_drill", [](const std::string &ItemId)
+	{
 		py::tuple Result(3);
 		CGameContext *pGame = Game();
 		CItemID Id;
@@ -281,7 +308,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return Result;
 	});
 
-	m.def("item_health_jar", [](const std::string &ItemId) {
+	m.def("item_health_jar", [](const std::string &ItemId)
+	{
 		py::tuple Result(4);
 		CGameContext *pGame = Game();
 		CItemID Id;
@@ -304,21 +332,26 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 	// Constructor-style host surface. The Python Projectile/Laser classes in
 	// _context.py call these; the old procedural names are kept for scripts that
 	// predate the class wrappers.
-	m.def("create_projectile", [](int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon) {
+	m.def("create_projectile", [](int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon)
+	{
 		return CreateProjectileScript(Owner, x, y, vx, vy, Span, Damage, Explosive, SoundImpact, Weapon);
 	});
-	m.def("projectile_spawn", [](int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon) {
+	m.def("projectile_spawn", [](int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon)
+	{
 		return CreateProjectileScript(Owner, x, y, vx, vy, Span, Damage, Explosive, SoundImpact, Weapon);
 	});
 
-	m.def("create_laser", [](int Owner, float x, float y, float dx, float dy, float Reach, int Damage) {
+	m.def("create_laser", [](int Owner, float x, float y, float dx, float dy, float Reach, int Damage)
+	{
 		return CreateLaserScript(Owner, x, y, dx, dy, Reach, Damage);
 	});
-	m.def("laser_spawn", [](int Owner, float x, float y, float dx, float dy, float Reach, int Damage) {
+	m.def("laser_spawn", [](int Owner, float x, float y, float dx, float dy, float Reach, int Damage)
+	{
 		return CreateLaserScript(Owner, x, y, dx, dy, Reach, Damage);
 	});
 
-	m.def("sound", [](float x, float y, int Sound) {
+	m.def("sound", [](float x, float y, int Sound)
+	{
 		CGameContext *pGame = Game();
 		if(!pGame || !pGame->m_apPlayers[0])
 			return false;
@@ -329,7 +362,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return true;
 	});
 
-	m.def("hammer_hit", [](float x, float y) {
+	m.def("hammer_hit", [](float x, float y)
+	{
 		CGameContext *pGame = Game();
 		if(!pGame || !pGame->m_apPlayers[0])
 			return false;
@@ -340,53 +374,62 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return true;
 	});
 
-	m.def("random_int", []() { return random_int(); });
+	m.def("random_int", []()
+	{ return random_int(); });
 
-	m.def("random_int_range", [](int Min, int Max) {
+	m.def("random_int_range", [](int Min, int Max)
+	{
 		if(Max <= Min)
 			return Min;
 		return Min + (int) (random_int() % (unsigned) (Max - Min + 1));
 	});
 
 	// ---- server clock, worlds and snapshot ids ----------------------------
-	m.def("tick", []() {
+	m.def("tick", []()
+	{
 		CGameContext *pGame = Game();
 		return pGame ? pGame->Server()->Tick() : 0;
 	});
 
-	m.def("tick_speed", []() {
+	m.def("tick_speed", []()
+	{
 		CGameContext *pGame = Game();
 		return pGame ? pGame->Server()->TickSpeed() : 0;
 	});
 
 	// The world the current callback runs in (0 outside a callback when no
 	// world is loaded yet).
-	m.def("active_world", []() -> unsigned {
+	m.def("active_world", []() -> unsigned
+	{
 		CScriptRuntime *pRuntime = CScriptRuntime::Get();
 		CGameWorld *pWorld = pRuntime ? pRuntime->ActiveWorld() : nullptr;
 		return pWorld ? pWorld->WorldID() : 0;
 	});
 
-	m.def("world_name", [](unsigned WorldID) -> std::string {
+	m.def("world_name", [](unsigned WorldID) -> std::string
+	{
 		CGameContext *pGame = Game();
 		const char *pName = pGame ? pGame->Server()->GetMapName(WorldID) : "";
 		return pName ? pName : "";
 	});
 
 	// "Depths" for every Depths_<seed> instance, the map name otherwise.
-	m.def("floor_name", [](unsigned WorldID) -> std::string {
+	m.def("floor_name", [](unsigned WorldID) -> std::string
+	{
 		CGameContext *pGame = Game();
 		const char *pName = pGame ? pGame->Server()->GetMapFloorName(WorldID) : "";
 		return pName ? pName : "";
 	});
 
-	m.def("world_kind", [](unsigned WorldID) {
+	m.def("world_kind", [](unsigned WorldID)
+	{
 		CGameContext *pGame = Game();
 		return pGame ? pGame->Server()->GetMapWorldKind(WorldID) : -1;
 	});
 
 	// ---- placement primitives -------------------------------------------
-	m.def("world_test_box", [](float X, float Y, float Width, float Height) -> bool {
+	m.def("world_test_box", [](float X, float Y, float Width, float Height) -> bool
+	{
 		CGameWorld *pWorld = ActiveWorld();
 		if(!pWorld || Width <= 0.0f || Height <= 0.0f)
 			return false;
@@ -395,7 +438,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 
 	// (found, floor_y): the first solid surface below (X, Y), snapped to a tile
 	// boundary. found is false when there is no floor within MaxDrop.
-	m.def("world_floor_y", [](float X, float Y, float MaxDrop) {
+	m.def("world_floor_y", [](float X, float Y, float MaxDrop)
+	{
 		py::tuple Result(2);
 		CGameWorld *pWorld = ActiveWorld();
 		vec2 Hit;
@@ -411,7 +455,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return Result;
 	});
 
-	m.def("drill_near", [](float X, float Y, float Radius) -> bool {
+	m.def("drill_near", [](float X, float Y, float Radius) -> bool
+	{
 		CGameWorld *pWorld = ActiveWorld();
 		if(!pWorld)
 			return false;
@@ -422,7 +467,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return false;
 	});
 
-	m.def("drill_spawn", [](const std::string &ItemId, float X, float Y, int MaxLength, int Power, int Owner) -> int {
+	m.def("drill_spawn", [](const std::string &ItemId, float X, float Y, int MaxLength, int Power, int Owner) -> int
+	{
 		CGameWorld *pWorld = ActiveWorld();
 		CGameContext *pGame = Game();
 		if(!pWorld || !pGame || !ValidPos(X, Y))
@@ -441,7 +487,8 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 	// callback's world; the _for variants are for console or delayed code that
 	// names the world explicitly. Freeing takes the world because the same
 	// numeric id may be live on two different floors.
-	m.def("snap_new_id", []() -> int {
+	m.def("snap_new_id", []() -> int
+	{
 		CScriptRuntime *pRuntime = CScriptRuntime::Get();
 		CGameWorld *pWorld = pRuntime ? pRuntime->ActiveWorld() : nullptr;
 		if(!pWorld)
@@ -449,14 +496,16 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return pWorld->Server()->SnapNewID(pWorld->WorldID());
 	});
 
-	m.def("snap_new_id_for", [](unsigned WorldID) -> int {
+	m.def("snap_new_id_for", [](unsigned WorldID) -> int
+	{
 		CGameContext *pGame = Game();
 		if(!pGame || !pGame->WorldByID(WorldID))
 			return -1;
 		return pGame->Server()->SnapNewID(WorldID);
 	});
 
-	m.def("snap_free_id", [](int ID) -> bool {
+	m.def("snap_free_id", [](int ID) -> bool
+	{
 		CScriptRuntime *pRuntime = CScriptRuntime::Get();
 		CGameWorld *pWorld = pRuntime ? pRuntime->ActiveWorld() : nullptr;
 		if(!pWorld)
@@ -464,14 +513,16 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return pWorld->Server()->SnapFreeID(ID, pWorld->WorldID());
 	});
 
-	m.def("snap_free_id_for", [](int ID, unsigned WorldID) -> bool {
+	m.def("snap_free_id_for", [](int ID, unsigned WorldID) -> bool
+	{
 		CGameContext *pGame = Game();
 		if(!pGame)
 			return false;
 		return pGame->Server()->SnapFreeID(ID, WorldID);
 	});
 
-	m.def("tuning", [](const std::string &Name) -> float {
+	m.def("tuning", [](const std::string &Name) -> float
+	{
 		CGameContext *pGame = Game();
 		if(!pGame)
 			return 0.0f;
@@ -488,17 +539,20 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		return 0.0f;
 	});
 
-	m.def("buff_add", [](int ClientID, const std::string &BuffId, int DurationTicks, int Stacks, int Source) {
+	m.def("buff_add", [](int ClientID, const std::string &BuffId, int DurationTicks, int Stacks, int Source)
+	{
 		CGameContext *pGame = Game();
 		return pGame && pGame->Buffs() && pGame->Buffs()->Add(ClientID, BuffId.c_str(), DurationTicks, Stacks, Source);
 	});
 
-	m.def("buff_remove", [](int ClientID, const std::string &BuffId) {
+	m.def("buff_remove", [](int ClientID, const std::string &BuffId)
+	{
 		CGameContext *pGame = Game();
 		return pGame && pGame->Buffs() && pGame->Buffs()->Remove(ClientID, BuffId.c_str());
 	});
 
-	m.def("buff_stacks", [](int ClientID, const std::string &BuffId) {
+	m.def("buff_stacks", [](int ClientID, const std::string &BuffId)
+	{
 		CGameContext *pGame = Game();
 		return pGame && pGame->Buffs() ? pGame->Buffs()->Stacks(ClientID, BuffId.c_str()) : 0;
 	});

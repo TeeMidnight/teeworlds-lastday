@@ -16,8 +16,8 @@
 #include <gtest/gtest.h>
 
 static const int W = 300; // instance width
-static const int H = 80;  // instance height
-static const int M = 75;  // shared margin
+static const int H = 80; // instance height
+static const int M = 75; // shared margin
 static const int S = W - M; // stride between neighbouring instances
 
 static void MakeInstruction(CInstruction &Inst, bool Ring)
@@ -187,7 +187,8 @@ TEST(WorldRing, BackgroundAnchorsToTheWholeRing)
 	ASSERT_NE(pA, nullptr);
 	ASSERT_NE(pB, nullptr);
 
-	const auto HighestGround = [](const CGeneratedWorld *pWorld) {
+	const auto HighestGround = [](const CGeneratedWorld *pWorld)
+	{
 		int Y = pWorld->m_Surface[0];
 		for(int i = 1; i < pWorld->m_Surface.size(); i++)
 			Y = minimum(Y, pWorld->m_Surface[i]);

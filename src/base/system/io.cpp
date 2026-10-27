@@ -20,12 +20,9 @@
 // clang-format on
 #endif
 
-
 IOHANDLE io_stdin() { return (IOHANDLE) stdin; }
 IOHANDLE io_stdout() { return (IOHANDLE) stdout; }
 IOHANDLE io_stderr() { return (IOHANDLE) stderr; }
-
-
 
 static IOHANDLE io_open_impl(const char *filename, int flags)
 {

@@ -58,7 +58,8 @@ static CScriptedEntity *FindScriptedEntity(int EntityID)
 		int m_ID;
 		CScriptedEntity *m_pFound;
 	} Find = {EntityID, nullptr};
-	pGame->m_pWorlds.for_each([](CGameWorld *&pEntry, void *pUser) -> void {
+	pGame->m_pWorlds.for_each([](CGameWorld *&pEntry, void *pUser) -> void
+	{
 		SFind *pFind = static_cast<SFind *>(pUser);
 		if(pFind->m_pFound || !pEntry)
 			return;
@@ -137,38 +138,38 @@ static void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
 {
 	switch(Value.type)
 	{
-	case json_object:
-		Writer.BeginObject();
-		for(unsigned i = 0; i < Value.u.object.length; i++)
-		{
-			Writer.WriteAttribute(Value.u.object.values[i].name);
-			WriteJsonValue(Writer, *Value.u.object.values[i].value);
-		}
-		Writer.EndObject();
-		break;
-	case json_array:
-		Writer.BeginArray();
-		for(unsigned i = 0; i < Value.u.array.length; i++)
-			WriteJsonValue(Writer, *Value.u.array.values[i]);
-		Writer.EndArray();
-		break;
-	case json_integer:
-		Writer.WriteInt64Value(Value.u.integer);
-		break;
-	case json_double:
-		Writer.WriteDoubleValue(Value.u.dbl);
-		break;
-	case json_string:
-		Writer.WriteStrValue(Value.u.string.ptr);
-		break;
-	case json_boolean:
-		Writer.WriteBoolValue(Value.u.boolean != 0);
-		break;
-	case json_none:
-	case json_null:
-	default:
-		Writer.WriteNullValue();
-		break;
+		case json_object:
+			Writer.BeginObject();
+			for(unsigned i = 0; i < Value.u.object.length; i++)
+			{
+				Writer.WriteAttribute(Value.u.object.values[i].name);
+				WriteJsonValue(Writer, *Value.u.object.values[i].value);
+			}
+			Writer.EndObject();
+			break;
+		case json_array:
+			Writer.BeginArray();
+			for(unsigned i = 0; i < Value.u.array.length; i++)
+				WriteJsonValue(Writer, *Value.u.array.values[i]);
+			Writer.EndArray();
+			break;
+		case json_integer:
+			Writer.WriteInt64Value(Value.u.integer);
+			break;
+		case json_double:
+			Writer.WriteDoubleValue(Value.u.dbl);
+			break;
+		case json_string:
+			Writer.WriteStrValue(Value.u.string.ptr);
+			break;
+		case json_boolean:
+			Writer.WriteBoolValue(Value.u.boolean != 0);
+			break;
+		case json_none:
+		case json_null:
+		default:
+			Writer.WriteNullValue();
+			break;
 	}
 }
 
@@ -857,7 +858,8 @@ CScriptedEntity *CScriptedEntitySystem::SpawnHealthJar(CGameWorld *pWorld, vec2 
 //////////////////////////////////////////////////
 PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 {
-	m.def("spawn", [](const std::string &Kind, float X, float Y, py::object Params) -> int {
+	m.def("spawn", [](const std::string &Kind, float X, float Y, py::object Params) -> int
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		CGameContext *pGame = Game();
 		if(!pWorld || !pGame || !pGame->ScriptedEntities() || !ValidPos(X, Y))
@@ -867,7 +869,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return pEntity ? pEntity->GetID() : -1;
 	});
 
-	m.def("destroy", [](int EntityID) -> bool {
+	m.def("destroy", [](int EntityID) -> bool
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity)
 			return false;
@@ -875,24 +878,28 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return true;
 	});
 
-	m.def("pos", [](int EntityID) {
+	m.def("pos", [](int EntityID)
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity)
 			return Vec2Tuple(0.0f, 0.0f);
 		return Vec2Tuple(pEntity->GetPos().x, pEntity->GetPos().y);
 	});
 
-	m.def("health", [](int EntityID) -> int {
+	m.def("health", [](int EntityID) -> int
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		return pEntity ? pEntity->Health() : 0;
 	});
 
-	m.def("damage", [](int EntityID, int Amount, int FromClient, int Weapon) -> bool {
+	m.def("damage", [](int EntityID, int Amount, int FromClient, int Weapon) -> bool
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		return pEntity && pEntity->Damage(Amount, FromClient, Weapon, nullptr);
 	});
 
-	m.def("set_visual", [](int EntityID, py::object Visual) -> bool {
+	m.def("set_visual", [](int EntityID, py::object Visual) -> bool
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity)
 			return false;
@@ -901,7 +908,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return true;
 	});
 
-	m.def("update_visual", [](int EntityID, py::object Visual) -> bool {
+	m.def("update_visual", [](int EntityID, py::object Visual) -> bool
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity)
 			return false;
@@ -910,7 +918,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return true;
 	});
 
-	m.def("set_health", [](int EntityID, int Health) -> bool {
+	m.def("set_health", [](int EntityID, int Health) -> bool
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity)
 			return false;
@@ -918,7 +927,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return true;
 	});
 
-	m.def("release_visual", [](int EntityID) -> bool {
+	m.def("release_visual", [](int EntityID) -> bool
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity)
 			return false;
@@ -926,7 +936,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return true;
 	});
 
-	m.def("set_persistent", [](int EntityID, bool Persistent) -> bool {
+	m.def("set_persistent", [](int EntityID, bool Persistent) -> bool
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity)
 			return false;
@@ -937,7 +948,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 	// Constructor-style entity factories: the Python HealthDrop/DroppedPickup
 	// classes in _context.py call these, so scripts write HealthDrop(...)
 	// instead of a procedural spawn call. C++ still owns the entity lifetime.
-	m.def("create_health_drop", [](float X, float Y, float VX, float VY) -> int {
+	m.def("create_health_drop", [](float X, float Y, float VX, float VY) -> int
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		if(!pWorld || !ValidPos(X, Y))
 			return -1;
@@ -945,7 +957,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return pDrop->GetID();
 	});
 
-	m.def("health_drop_near", [](float X, float Y, float Radius) -> bool {
+	m.def("health_drop_near", [](float X, float Y, float Radius) -> bool
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		if(!pWorld || !ValidPos(X, Y))
 			return false;
@@ -961,7 +974,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return false;
 	});
 
-	m.def("create_dropped_pickup", [](float X, float Y, float DX, float DY, const std::string &ItemId, int Count) -> int {
+	m.def("create_dropped_pickup", [](float X, float Y, float DX, float DY, const std::string &ItemId, int Count) -> int
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		if(!pWorld || !ValidPos(X, Y) || Count <= 0)
 			return -1;
@@ -975,7 +989,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 	});
 
 	// Compatibility names kept for scripts that predate the class wrappers.
-	m.def("drop_health", [](float X, float Y) -> int {
+	m.def("drop_health", [](float X, float Y) -> int
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		if(!pWorld || !ValidPos(X, Y))
 			return -1;
@@ -992,7 +1007,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return pDrop->GetID();
 	});
 
-	m.def("drop_item", [](float X, float Y, const std::string &ItemId, int Count) -> bool {
+	m.def("drop_item", [](float X, float Y, const std::string &ItemId, int Count) -> bool
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		if(!pWorld || !ValidPos(X, Y) || Count <= 0)
 			return false;
@@ -1003,27 +1019,32 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return true;
 	});
 
-	m.def("owner_near", [](int EntityID) -> int {
+	m.def("owner_near", [](int EntityID) -> int
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		return pEntity ? pEntity->OwnerNear() : -1;
 	});
 
-	m.def("allowed_player_near", [](int EntityID) -> int {
+	m.def("allowed_player_near", [](int EntityID) -> int
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		return pEntity ? pEntity->AllowedPlayerNear() : -1;
 	});
 
-	m.def("can_use", [](int EntityID, int PlayerID) -> bool {
+	m.def("can_use", [](int EntityID, int PlayerID) -> bool
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		return pEntity && pEntity->CanUseClient(PlayerID);
 	});
 
-	m.def("lock_mode", [](int EntityID) -> int {
+	m.def("lock_mode", [](int EntityID) -> int
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		return pEntity ? pEntity->Access().m_LockMode : BUILD_LOCK_SELF;
 	});
 
-	m.def("player_near", [](int EntityID, float Radius) -> int {
+	m.def("player_near", [](int EntityID, float Radius) -> int
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		if(!pEntity || Radius <= 0.0f)
 			return -1;
@@ -1034,14 +1055,16 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 
 	// size of the built-in jar visual; the item placement script uses the same
 	// footprint the C++ placement code used to hard-code.
-	m.def("health_jar_size", []() {
+	m.def("health_jar_size", []()
+	{
 		py::tuple Result(2);
 		Result[0] = py::cast((float) SCRIPTED_JAR_WIDTH);
 		Result[1] = py::cast((float) SCRIPTED_JAR_HEIGHT);
 		return Result;
 	});
 
-	m.def("health_jar_near", [](float X, float Y, float Radius) -> bool {
+	m.def("health_jar_near", [](float X, float Y, float Radius) -> bool
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		if(!pWorld)
 			return false;
@@ -1055,7 +1078,8 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return false;
 	});
 
-	m.def("spawn_health_jar", [](const std::string &ItemId, float X, float Y, int Cooldown, int Range, int Health, int OwnerClient) -> int {
+	m.def("spawn_health_jar", [](const std::string &ItemId, float X, float Y, int Cooldown, int Range, int Health, int OwnerClient) -> int
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		CGameContext *pGame = Game();
 		if(!pWorld || !pGame || !pGame->ScriptedEntities() || !ValidPos(X, Y))
@@ -1075,25 +1099,29 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return pJar ? pJar->GetID() : -1;
 	});
 
-	m.def("exists", [](int EntityID) -> bool {
+	m.def("exists", [](int EntityID) -> bool
+	{
 		return FindScriptedEntity(EntityID) != nullptr;
 	});
 
-	m.def("world_id", [](int EntityID) -> unsigned {
+	m.def("world_id", [](int EntityID) -> unsigned
+	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);
 		return pEntity ? pEntity->GameWorld()->WorldID() : 0;
 	});
 
 	// Snapshot ids of the world the callback runs in. The pool is per floor, so
 	// every instance of one floor can safely share it.
-	m.def("snap_new_id", []() -> int {
+	m.def("snap_new_id", []() -> int
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		if(!pWorld)
 			return -1;
 		return pWorld->Server()->SnapNewID(pWorld->WorldID());
 	});
 
-	m.def("snap_free_id", [](int ID) -> bool {
+	m.def("snap_free_id", [](int ID) -> bool
+	{
 		CGameWorld *pWorld = ActiveWorldOrMain();
 		if(!pWorld)
 			return false;

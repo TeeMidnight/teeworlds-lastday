@@ -8,8 +8,7 @@
 
 #include <math.h>
 
-namespace noise
-{
+namespace noise {
 
 // the permutation table is built once per seed; N is a power of two so the
 // wrap around is a cheap mask instead of a modulo
@@ -308,7 +307,8 @@ float Fractal2DPeriodic(unsigned Seed, const CFractalParams &rParams, float X, f
 		// every one still closes the loop over Period
 		const SCircle Circle = CircleAt(X, Frequency, Period, PeriodOffset);
 		Sum += Perlin2D(Seed + (unsigned) i * 0x9E3779B1u,
-			Circle.m_X, Circle.m_Y) * Amplitude;
+			       Circle.m_X, Circle.m_Y) *
+		       Amplitude;
 		Frequency *= rParams.m_Lacunarity;
 		Amplitude *= rParams.m_Persistence;
 	}
@@ -332,7 +332,8 @@ float Fractal3DPeriodic(unsigned Seed, const CFractalParams &rParams, float X, f
 		// axis while Y stays vertical
 		const SCircle Circle = CircleAt(X, Frequency, Period, PeriodOffset);
 		Sum += Perlin3D(Seed + (unsigned) i * 0x9E3779B1u,
-			Circle.m_X, Y * Frequency, Circle.m_Y) * Amplitude;
+			       Circle.m_X, Y * Frequency, Circle.m_Y) *
+		       Amplitude;
 		Frequency *= rParams.m_Lacunarity;
 		Amplitude *= rParams.m_Persistence;
 	}

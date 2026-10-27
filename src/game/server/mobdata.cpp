@@ -191,7 +191,8 @@ void CMobSystem::LoadSkin(const json_value &rValue, CBotSkin *pSkin)
 		const bool Custom = ReadBool(rPart["custom_color"], false);
 		pSkin->m_aUseCustomColors[i] = Custom ? 1 : 0;
 		pSkin->m_aSkinPartColors[i] = Custom ?
-			PackHsla(ReadInt(rPart["hue"], 0), ReadInt(rPart["sat"], 0), ReadInt(rPart["lgt"], 0), ReadInt(rPart["alp"], 255)) : 0;
+						      PackHsla(ReadInt(rPart["hue"], 0), ReadInt(rPart["sat"], 0), ReadInt(rPart["lgt"], 0), ReadInt(rPart["alp"], 255)) :
+						      0;
 	}
 }
 

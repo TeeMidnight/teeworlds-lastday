@@ -59,9 +59,9 @@ static const char *FactionClan(int Faction)
 {
 	switch(Faction)
 	{
-	case BOTFACTION_HOSTILE: return "Hostile";
-	case BOTFACTION_NEUTRAL: return "Neutral";
-	case BOTFACTION_FRIENDLY: return "Friendly";
+		case BOTFACTION_HOSTILE: return "Hostile";
+		case BOTFACTION_NEUTRAL: return "Neutral";
+		case BOTFACTION_FRIENDLY: return "Friendly";
 	}
 	return "";
 }

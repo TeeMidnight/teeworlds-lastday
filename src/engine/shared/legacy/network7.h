@@ -32,46 +32,45 @@
 
 class CSnapshotDelta;
 
-namespace legacy
+namespace legacy {
+enum
 {
-	enum
-	{
-		// Packet payload codec as negotiated during the 0.7 handshake.
-		NET7_COMPRESSION_HUFFMAN = 0,
-		NET7_COMPRESSION_ZSTD = 1,
+	// Packet payload codec as negotiated during the 0.7 handshake.
+	NET7_COMPRESSION_HUFFMAN = 0,
+	NET7_COMPRESSION_ZSTD = 1,
 
-		// The only capability bit 0.7 knows about.
-		NET7_CTRLFLAG_ZSTD_DICT = 1,
+	// The only capability bit 0.7 knows about.
+	NET7_CTRLFLAG_ZSTD_DICT = 1,
 
-		// Where the capability byte sits. Chunk data starts with the control
-		// byte, so the extended CONNECT token request buffer (which begins
-		// with the 4 byte token) is shifted by one.
-		NET7_CTRL_REQUEST_CAPABILITY_OFFSET = 4, // inside the token request buffer
-		NET7_CTRL_CONNECT_CAPABILITY_OFFSET = NET7_CTRL_REQUEST_CAPABILITY_OFFSET + 1, // inside chunk data
-		NET7_CTRL_ACCEPT_CAPABILITY_OFFSET = 1, // inside chunk data
-	};
+	// Where the capability byte sits. Chunk data starts with the control
+	// byte, so the extended CONNECT token request buffer (which begins
+	// with the 4 byte token) is shifted by one.
+	NET7_CTRL_REQUEST_CAPABILITY_OFFSET = 4, // inside the token request buffer
+	NET7_CTRL_CONNECT_CAPABILITY_OFFSET = NET7_CTRL_REQUEST_CAPABILITY_OFFSET + 1, // inside chunk data
+	NET7_CTRL_ACCEPT_CAPABILITY_OFFSET = 1, // inside chunk data
+};
 
-	// Build the capability byte a client advertises in NET_CTRLMSG_CONNECT.
-	unsigned char Net7BuildClientCapabilities(bool SupportZstdDict);
+// Build the capability byte a client advertises in NET_CTRLMSG_CONNECT.
+unsigned char Net7BuildClientCapabilities(bool SupportZstdDict);
 
-	// Build the capability byte a server answers with in NET_CTRLMSG_ACCEPT.
-	unsigned char Net7BuildAcceptCapabilities(bool UseZstdDict);
+// Build the capability byte a server answers with in NET_CTRLMSG_ACCEPT.
+unsigned char Net7BuildAcceptCapabilities(bool UseZstdDict);
 
-	// Server side: pick the codec from the capability byte the client sent.
-	int Net7SelectCompression(unsigned char ClientCapabilities);
+// Server side: pick the codec from the capability byte the client sent.
+int Net7SelectCompression(unsigned char ClientCapabilities);
 
-	// Read the capability byte out of a CONNECT chunk data buffer. Returns 0
-	// (Huffman) when the peer did not send an extension byte at all.
-	unsigned char Net7ReadConnectCapabilities(const unsigned char *pChunkData, int ChunkDataSize);
+// Read the capability byte out of a CONNECT chunk data buffer. Returns 0
+// (Huffman) when the peer did not send an extension byte at all.
+unsigned char Net7ReadConnectCapabilities(const unsigned char *pChunkData, int ChunkDataSize);
 
-	// Read the capability byte out of an ACCEPT chunk data buffer. Returns 0
-	// (Huffman) when the server did not send an extension byte at all.
-	unsigned char Net7ReadAcceptCapabilities(const unsigned char *pChunkData, int ChunkDataSize);
+// Read the capability byte out of an ACCEPT chunk data buffer. Returns 0
+// (Huffman) when the server did not send an extension byte at all.
+unsigned char Net7ReadAcceptCapabilities(const unsigned char *pChunkData, int ChunkDataSize);
 
-	// Configure a snapshot delta codec with the frozen 0.7 static item sizes.
-	// Needed everywhere 0.7 wire deltas are decoded (the network translator,
-	// 0.7 demo playback); the live tables use the 0.8 sizes instead.
-	void Net7ConfigureSnapshotDelta(CSnapshotDelta *pDelta);
+// Configure a snapshot delta codec with the frozen 0.7 static item sizes.
+// Needed everywhere 0.7 wire deltas are decoded (the network translator,
+// 0.7 demo playback); the live tables use the 0.8 sizes instead.
+void Net7ConfigureSnapshotDelta(CSnapshotDelta *pDelta);
 } // namespace legacy
 
 #endif // ENGINE_SHARED_LEGACY_NETWORK7_H

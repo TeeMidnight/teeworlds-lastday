@@ -40,11 +40,9 @@
 #include <sys/filio.h>
 #endif
 
-
 static NETSTATS network_stats = {0};
 
 static NETSOCKET invalid_socket = {NETTYPE_INVALID, -1, -1};
-
 
 /* -----  network ----- */
 static void netaddr_to_sockaddr_in(const NETADDR *src, struct sockaddr_in *dest)
@@ -848,7 +846,6 @@ int net_init()
 	return 0;
 }
 
-
 void swap_endian(void *data, unsigned elem_size, unsigned num)
 {
 	char *src = (char *) data;
@@ -874,7 +871,6 @@ void swap_endian(void *data, unsigned elem_size, unsigned num)
 		num--;
 	}
 }
-
 
 NETSTATS network_stats_get()
 {

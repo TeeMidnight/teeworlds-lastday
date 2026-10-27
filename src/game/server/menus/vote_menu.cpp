@@ -494,7 +494,7 @@ bool CGameMenu::MenuVote(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		{
 			int64 Now = pMenu->Server()->Tick();
 			if((pMenu->Config()->m_SvSpamprotection && ((pPlayer->m_LastVoteTryTick && pPlayer->m_LastVoteTryTick + pMenu->Server()->TickSpeed() * 3 > Now) ||
-								   (pPlayer->m_LastVoteCallTick && pPlayer->m_LastVoteCallTick + pMenu->Server()->TickSpeed() * VOTE_COOLDOWN > Now))) ||
+									   (pPlayer->m_LastVoteCallTick && pPlayer->m_LastVoteCallTick + pMenu->Server()->TickSpeed() * VOTE_COOLDOWN > Now))) ||
 				pPlayer->GetTeam() == TEAM_SPECTATORS || pMenu->m_VoteCloseTime)
 				return false;
 

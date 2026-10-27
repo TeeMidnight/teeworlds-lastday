@@ -40,9 +40,9 @@ inline const char *BotFactionName(int Faction)
 {
 	switch(Faction)
 	{
-	case BOTFACTION_HOSTILE: return "hostile";
-	case BOTFACTION_NEUTRAL: return "neutral";
-	case BOTFACTION_FRIENDLY: return "friendly";
+		case BOTFACTION_HOSTILE: return "hostile";
+		case BOTFACTION_NEUTRAL: return "neutral";
+		case BOTFACTION_FRIENDLY: return "friendly";
 	}
 	return "unknown";
 }

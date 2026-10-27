@@ -115,7 +115,7 @@ public:
 	virtual bool FindTeamForMember(const Uuid &Account, STeamData &out) = 0;
 	virtual bool ListTeams(array<STeamData> &out) = 0;
 	virtual bool LoadTeamMembers(int TeamId, array<Uuid> &out) = 0;
-        // Moves the account into this team (one account, one team).
+	// Moves the account into this team (one account, one team).
 	virtual bool AddTeamMember(int TeamId, const Uuid &Account) = 0;
 	virtual bool RemoveTeamMember(int TeamId, const Uuid &Account) = 0;
 	virtual bool DeleteTeam(int TeamId) = 0;

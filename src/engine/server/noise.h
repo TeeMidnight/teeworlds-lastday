@@ -7,8 +7,7 @@
 // Deterministic Perlin noise for the world generator. Every function is pure in
 // (seed, coordinates), so the same seed always yields the same tiles; the
 // permutation table is shuffled from the seed rather than from global state.
-namespace noise
-{
+namespace noise {
 
 // the reference implementation's fade curve: 6t^5 - 15t^4 + 10t^3
 float Fade(float t);

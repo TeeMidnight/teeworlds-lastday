@@ -39,7 +39,7 @@ class CLocalizationDatabase
 	class CStringHashFunction : public CString
 	{
 	public:
-		static unsigned hash(CString Key) { return Key.m_Hash ^ ((unsigned)Key.m_Language * 2654435761u); }
+		static unsigned hash(CString Key) { return Key.m_Hash ^ ((unsigned) Key.m_Language * 2654435761u); }
 		static bool equal(CString Key1, CString Key2) { return Key1 == Key2; }
 	};
 

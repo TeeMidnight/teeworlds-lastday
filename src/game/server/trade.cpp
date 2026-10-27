@@ -251,4 +251,3 @@ void CTradeSystem::DetachSeller(int ClientID)
 		if(m_lListings[i].m_Seller == ClientID)
 			m_lListings[i].m_Seller = -1;
 }
-

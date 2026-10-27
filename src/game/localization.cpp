@@ -37,7 +37,7 @@ struct SListLanguagesContext
 
 static int ListLanguageFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser)
 {
-	(void)StorageType;
+	(void) StorageType;
 	if(IsDir || !pFilename)
 		return 0;
 	const int Len = str_length(pFilename);
@@ -159,7 +159,7 @@ bool CLocalizationDatabase::LoadLanguage(int Language, const char *pFilename, IS
 	// an optional display name (the menu shows it instead of the file code)
 	const json_value &rName = (*pJsonData)["name"];
 	if(rName.type == json_string)
-		str_copy(m_aLanguages[Language].m_aName, (const char *)rName, sizeof(m_aLanguages[Language].m_aName));
+		str_copy(m_aLanguages[Language].m_aName, (const char *) rName, sizeof(m_aLanguages[Language].m_aName));
 
 	char aBuf[256];
 	str_format(aBuf, sizeof(aBuf), "loaded '%s' as '%s'", pFilename, m_aLanguages[Language].m_aCode);

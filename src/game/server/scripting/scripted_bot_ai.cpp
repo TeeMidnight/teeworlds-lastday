@@ -148,7 +148,8 @@ static CEntity *FindEntityByID(int ID)
 		return nullptr;
 
 	SEntityLookup Data = {ID, nullptr};
-	pGame->m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void {
+	pGame->m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
 		SEntityLookup *pData = static_cast<SEntityLookup *>(pUser);
 		if(pData->m_pEntity || !pWorld)
 			return;
@@ -611,12 +612,18 @@ void CScriptedBotAI::OnHit(CBotEntity *pBot, CEntity *pTarget, bool Killed)
 
 PYBIND11_EMBEDDED_MODULE(lastday_bot, m)
 {
-	m.def("set_input", [](int Entity, int Direction, bool Jump, bool Fire, float TargetX, float TargetY) {
+	m.def("set_input", [](int Entity, int Direction, bool Jump, bool Fire, float TargetX, float TargetY)
+	{
 		return BotSetInput(Entity, Direction, Jump, Fire, TargetX, TargetY);
 	});
-	m.def("get_pos", [](int Entity) { return BotGetPos(Entity); });
-	m.def("find_target", [](int Entity, float Radius) { return BotFindTarget(Entity, Radius); });
-	m.def("has_line_of_sight", [](int Entity, int TargetEntity) { return BotHasLineOfSight(Entity, TargetEntity); });
-	m.def("set_ai", [](int Entity, const std::string &Name) { return BotSetAI(Entity, Name); });
-	m.def("log", [](const std::string &Message) { BotLog(Message); });
+	m.def("get_pos", [](int Entity)
+	{ return BotGetPos(Entity); });
+	m.def("find_target", [](int Entity, float Radius)
+	{ return BotFindTarget(Entity, Radius); });
+	m.def("has_line_of_sight", [](int Entity, int TargetEntity)
+	{ return BotHasLineOfSight(Entity, TargetEntity); });
+	m.def("set_ai", [](int Entity, const std::string &Name)
+	{ return BotSetAI(Entity, Name); });
+	m.def("log", [](const std::string &Message)
+	{ BotLog(Message); });
 }

@@ -415,7 +415,7 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->GameServer()->BuildableName(pBuildable, aName, sizeof(aName));
 			pMenu->AddOption(LocalizeFormat("Menu Main", "Building: {}", aName).c_str(), "DISPLAY", "-");
 			const char *pLock = Access.m_LockMode == BUILD_LOCK_PUBLIC ? Localize("everyone", "Menu Main") :
-				(Access.m_LockMode == BUILD_LOCK_TEAM ? Localize("team only", "Menu Main") : Localize("owner only", "Menu Main"));
+										     (Access.m_LockMode == BUILD_LOCK_TEAM ? Localize("team only", "Menu Main") : Localize("owner only", "Menu Main"));
 			pMenu->AddOption(LocalizeFormat("Menu Main", "Lock: {}", pLock).c_str(), "DISPLAY", "-");
 			if(Access.m_Owner == pPlayer->m_AccountUuid && Access.m_Owner != UUID_ZEROED)
 			{

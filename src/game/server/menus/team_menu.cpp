@@ -152,7 +152,9 @@ bool CGameMenu::MenuTeam(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			continue;
 		AnyTeam = true;
 		pMenu->AddOption(LocalizeFormat("Menu Team", "{}  ({} online / {} members)", pOther->m_aName,
-			pTeams->OnlineMemberCount(pOther), (int) pOther->m_lMembers.size()).c_str(), "DISPLAY", "-");
+					 pTeams->OnlineMemberCount(pOther), (int) pOther->m_lMembers.size())
+					 .c_str(),
+			"DISPLAY", "-");
 		if(!pTeam)
 		{
 			char aCmd[64];

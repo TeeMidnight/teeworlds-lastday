@@ -171,7 +171,9 @@ bool CGameMenu::MenuContainer(int ClientID, CCallVoteStatus &VoteStatus, class C
 
 	const char *pKindName = Localize(pContainer->Name(), "Container Name");
 	pMenu->AddOption(LocalizeFormat("Menu Container", "{}: {} of {} slots used",
-		pKindName, pContainer->UsedSlots(), pContainer->Capacity()).c_str(), "DISPLAY", "=");
+				 pKindName, pContainer->UsedSlots(), pContainer->Capacity())
+				 .c_str(),
+		"DISPLAY", "=");
 	pMenu->AddHorizontalRule();
 
 	for(int i = 0; i < pContainer->Capacity(); i++)
@@ -185,7 +187,9 @@ bool CGameMenu::MenuContainer(int ClientID, CCallVoteStatus &VoteStatus, class C
 		char aCmd[32];
 		str_format(aCmd, sizeof(aCmd), "CTAKE %d", i);
 		pMenu->AddOption(LocalizeFormat("Menu Container", "{}. {} x{}",
-			i + 1, pItems->GetName(Slot.m_Id), Slot.m_Count).c_str(), aCmd, "-");
+					 i + 1, pItems->GetName(Slot.m_Id), Slot.m_Count)
+					 .c_str(),
+			aCmd, "-");
 	}
 	pMenu->AddOption(Localize("Take everything", "Menu Container"), "CTAKEALL", "★");
 	pMenu->AddOption(Localize("Click a container slot to take its stack back.", "Menu Container"), "DISPLAY", "-");
@@ -205,7 +209,9 @@ bool CGameMenu::MenuContainer(int ClientID, CCallVoteStatus &VoteStatus, class C
 		char aCmd[VOTE_CMD_LENGTH];
 		str_format(aCmd, sizeof(aCmd), "CSTORE %s", aId);
 		pMenu->AddOption(LocalizeFormat("Menu Container", "   {} x{}",
-			pItems->GetName(Id), Inventory.m_aItems[i].m_Count).c_str(), aCmd, "-");
+					 pItems->GetName(Id), Inventory.m_aItems[i].m_Count)
+					 .c_str(),
+			aCmd, "-");
 	}
 	if(!HasItems)
 		pMenu->AddOption(Localize("Your inventory is empty.", "Menu Container"), "DISPLAY", "-");

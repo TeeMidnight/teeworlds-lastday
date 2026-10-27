@@ -810,5 +810,4 @@ static inline int DeriveTargetSeed(int Seed, const char *pTarget)
 	return 1 + (int) (h % 1024);
 }
 
-
 #endif // ENGINE_SERVER_MAPGEN_INTERNAL_H

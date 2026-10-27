@@ -28,9 +28,9 @@ inline const char *BuildLockName(int Mode)
 {
 	switch(Mode)
 	{
-	case BUILD_LOCK_PUBLIC: return "public";
-	case BUILD_LOCK_SELF: return "self";
-	case BUILD_LOCK_TEAM: return "team";
+		case BUILD_LOCK_PUBLIC: return "public";
+		case BUILD_LOCK_SELF: return "self";
+		case BUILD_LOCK_TEAM: return "team";
 	}
 	return "self";
 }

@@ -171,9 +171,7 @@ bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class 
 	// keep the two prompts as literal Localize calls: the localization
 	// extractor reads them from the source, so it can maintain their
 	// translations
-	pMenu->AddOption(IsAccessory
-		? Localize("Select an accessory to wear on this slot.", "Menu Loadout")
-		: Localize("Select an item to place on this slot.", "Menu Loadout"), "DISPLAY", "-");
+	pMenu->AddOption(IsAccessory ? Localize("Select an accessory to wear on this slot.", "Menu Loadout") : Localize("Select an item to place on this slot.", "Menu Loadout"), "DISPLAY", "-");
 	pMenu->AddHorizontalRule();
 	pMenu->AddOption(Localize("Clear this slot", "Menu Loadout"), "CLEAR", "-");
 	pMenu->AddHorizontalRule();

@@ -20,7 +20,6 @@
 // clang-format on
 #endif
 
-
 typedef struct
 {
 	DBG_LOGGER logger;
@@ -30,8 +29,6 @@ typedef struct
 
 static DBG_LOGGER_DATA loggers[16];
 static int num_loggers = 0;
-
-
 
 static void dbg_logger_finish(void)
 {
@@ -204,7 +201,7 @@ static void logger_win_console(const char *line, [[maybe_unused]] void *user)
 
 static void logger_stdout(const char *line, void *user)
 {
-	(void)user;
+	(void) user;
 	printf("%s\n", line);
 	fflush(stdout);
 }

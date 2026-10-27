@@ -309,7 +309,7 @@ struct CInstruction
 		// The warm band drawn at sunrise and sunset.
 		int m_DawnColor[4];
 		char m_aMoonImage[64];
-		int m_SunSize;  // sprite edge in screen pixels
+		int m_SunSize; // sprite edge in screen pixels
 		int m_MoonSize;
 	};
 
@@ -322,7 +322,7 @@ struct CInstruction
 	{
 		bool m_DriftEnabled;
 		int m_DriftSeconds; // time for the clouds to cross one full world width
-		int m_Direction;    // +1 drifts right, -1 drifts left
+		int m_Direction; // +1 drifts right, -1 drifts left
 	};
 
 	struct CGeneration
@@ -398,9 +398,9 @@ struct CInstruction
 		struct CRingConfig
 		{
 			bool m_Enabled;
-			int m_Size;         // how many instances form the ring (1024)
+			int m_Size; // how many instances form the ring (1024)
 			int m_SharedMargin; // tiles an instance shares with each neighbour (75)
-			int m_BaseSeed;     // the single noise seed of the whole ring
+			int m_BaseSeed; // the single noise seed of the whole ring
 		};
 		CRingConfig m_Ring;
 
@@ -500,7 +500,6 @@ public:
 	static void FreeInstance(SMapInstance *pInstance);
 
 private:
-
 	class IStorage *m_pStorage;
 	class IConsole *m_pConsole;
 
@@ -540,7 +539,7 @@ private:
 	// -----------------------------------------------------------------
 	struct STrainChunk
 	{
-		int m_ReadySeed;   // fully generated, reserved for the next click
+		int m_ReadySeed; // fully generated, reserved for the next click
 		int m_PendingSeed; // being generated; 0 when idle
 	};
 
@@ -646,7 +645,7 @@ private:
 	// one generated instance, entirely in memory
 	struct SGeneratedMap
 	{
-		array<char> m_Map;  // complete v4 datafile
+		array<char> m_Map; // complete v4 datafile
 		array<char> m_Meta; // world metadata sidecar json
 	};
 

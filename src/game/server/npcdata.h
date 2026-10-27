@@ -40,8 +40,8 @@ struct SNpcSell
 struct SNpcAggroDef
 {
 	int m_Threshold; // above this the NPC chases and attacks the player
-	int m_PerKill;   // added when that player kills the NPC
-	int m_PerHit;    // added when that player hits the NPC
+	int m_PerKill; // added when that player kills the NPC
+	int m_PerHit; // added when that player hits the NPC
 	int m_KillDecay; // removed when the NPC kills that player
 	// passive decay: every m_DecaySeconds the NPC removes m_DecayAmount from
 	// each online player's ledger, so old hostility fades instead of lasting
@@ -54,12 +54,12 @@ struct SNpcAggroDef
 // describes exactly one spawn: it may not be reused for a second one.
 struct SNpcDef
 {
-	CNpcID m_Id;        // deterministic identity and name source
+	CNpcID m_Id; // deterministic identity and name source
 	char m_aWorld[64]; // map name the NPC is spawned in
-	vec2 m_Pos;        // world position (tiles converted by the loader)
+	vec2 m_Pos; // world position (tiles converted by the loader)
 	int m_Health;
 	int m_HealthRegen; // hit points per second
-	int m_Faction;     // BOTFACTION_*; friendly NPCs never gain aggro
+	int m_Faction; // BOTFACTION_*; friendly NPCs never gain aggro
 	CBotSkin m_Skin;
 	SNpcAggroDef m_Aggro;
 	array<SNpcSell> m_lSells;

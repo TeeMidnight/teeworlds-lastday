@@ -331,9 +331,7 @@ bool CAutoMapper::Proceed(const char *pRuleSetName, CTile *pTiles, int Width, in
 					// outside the map reads the border tile; a cylindrical world
 					// wraps the horizontal axis instead
 					const int CheckY = clamp(y + Condition.m_Y, 0, Height - 1);
-					const int CheckX = WrapX
-						? ResolveSampleX(x, x + Condition.m_X, Width, MarginX)
-						: clamp(x + Condition.m_X, 0, Width - 1);
+					const int CheckX = WrapX ? ResolveSampleX(x, x + Condition.m_X, Width, MarginX) : clamp(x + Condition.m_X, 0, Width - 1);
 					const int CheckIndex = CheckY * Width + CheckX;
 
 					if(CheckIndex < 0 || CheckIndex >= MaxIndex)

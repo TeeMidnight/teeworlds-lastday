@@ -66,7 +66,7 @@ static void ConBuff(IConsole::IResult *pResult, void *pUserData)
 	const int Seconds = pResult->NumArguments() > 2 ? pResult->GetInteger(2) : -1;
 	const int Stacks = pResult->NumArguments() > 3 ? pResult->GetInteger(3) : 1;
 	if(!pGameServer->Buffs() || !pGameServer->Buffs()->Add(ClientID, pBuffId,
-		   Seconds < 0 ? -1 : Seconds * pGameServer->Server()->TickSpeed(), Stacks, ClientID))
+					    Seconds < 0 ? -1 : Seconds * pGameServer->Server()->TickSpeed(), Stacks, ClientID))
 	{
 		pGameServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "script", "could not apply buff");
 		return;

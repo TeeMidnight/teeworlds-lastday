@@ -181,7 +181,8 @@ void CScriptedWeapon::OnWeaponSwitch(CCharacter *pChr)
 PYBIND11_EMBEDDED_MODULE(lastday_weapon, m)
 {
 	m.def("melee_attack", [](int OwnerClientID, float x, float y, float dx, float dy,
-								 int Damage, float RangeScale, bool CanHarvest, int HitStyle, bool SwingEffect) {
+				      int Damage, float RangeScale, bool CanHarvest, int HitStyle, bool SwingEffect)
+	{
 		CCharacter *pChr = ScriptCharacter(OwnerClientID);
 		if(!pChr)
 			return 0;

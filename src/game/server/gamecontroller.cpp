@@ -290,9 +290,7 @@ void CGameController::OnPlayerReadyChange(CPlayer *pPlayer)
 	// change players ready state
 	pPlayer->m_IsReadyToPlay ^= 1;
 	CLanguageScope LanguageScope(pPlayer->Language());
-	SendSystemChat(pPlayer->GetCID(), pPlayer->m_IsReadyToPlay
-		? Localize("Action state: running", "Action")
-		: Localize("Action state: silent", "Action"));
+	SendSystemChat(pPlayer->GetCID(), pPlayer->m_IsReadyToPlay ? Localize("Action state: running", "Action") : Localize("Action state: silent", "Action"));
 }
 
 // general

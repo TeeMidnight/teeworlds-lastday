@@ -134,8 +134,8 @@ struct CWorldRing
 {
 	bool m_Enabled;
 	int m_OffsetX; // global x of this instance's local x = 0
-	int m_Period;  // circumference of the whole ring, in tiles
-	int m_Stride;  // distance between two neighbouring instances
+	int m_Period; // circumference of the whole ring, in tiles
+	int m_Stride; // distance between two neighbouring instances
 	unsigned m_NoiseSeed;
 };
 CWorldRing WorldRing(const CInstruction *pInstruction, int Seed);

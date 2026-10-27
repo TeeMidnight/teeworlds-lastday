@@ -39,21 +39,24 @@ void BuildGeneratedWorldMeta(const char *pEntrances, int EntrancesSize,
 	Out.clear();
 	memory_stream<char> Stream(&Out);
 
-	auto WritePart = [&](const char *pData, int Size) {
+	auto WritePart = [&](const char *pData, int Size)
+	{
 		if(Size <= 0)
 			return;
 		Stream.write((const unsigned char *) pData, (unsigned) Size);
 	};
 	// the blobs are null terminated (and may carry more than one trailing
 	// terminator); write only the JSON itself
-	auto TrimSize = [](const char *pData, int Size) {
+	auto TrimSize = [](const char *pData, int Size)
+	{
 		if(!pData)
 			return 0;
 		while(Size > 0 && (pData[Size - 1] == '\0' || pData[Size - 1] == '\n' || pData[Size - 1] == '\r'))
 			Size--;
 		return Size;
 	};
-	auto WriteBlob = [&](const char *pData, int Size) {
+	auto WriteBlob = [&](const char *pData, int Size)
+	{
 		const int Len = TrimSize(pData, Size);
 		if(Len > 0)
 			WritePart(pData, Len);
@@ -156,7 +159,6 @@ EWorldKind WorldKindFromString(const char *pName, bool *pValid)
 	return WORLDKIND_EUCLID;
 }
 
-
 #include "mapgen_internal.h"
 void CMapGen::WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEntrances, int Seed, const array<CStructEntrance> &lStructEntrances)
 {
@@ -228,7 +230,6 @@ void CMapGen::WriteEntrancesWithSeed(CJsonWriter *pWriter, const json_value &rEn
 	}
 	pWriter->EndArray();
 }
-
 
 // ---------------------------------------------------------------------------
 // structure definitions
@@ -691,7 +692,8 @@ void CMapGen::RebuildFloorLists()
 	m_lTrainFloors.clear();
 	m_lNonEuclidFloors.clear();
 
-	m_lInstructions.for_each([](CInstruction *&pInstruction, void *pUser) {
+	m_lInstructions.for_each([](CInstruction *&pInstruction, void *pUser)
+	{
 		CMapGen *pSelf = static_cast<CMapGen *>(pUser);
 		if(!pInstruction)
 			return;
@@ -701,7 +703,8 @@ void CMapGen::RebuildFloorLists()
 			pSelf->m_lNonEuclidFloors.add(pInstruction);
 	}, this);
 
-	const auto CompareName = [](const CInstruction *pA, const CInstruction *pB) {
+	const auto CompareName = [](const CInstruction *pA, const CInstruction *pB)
+	{
 		return str_comp(pA->m_aFloorName, pB->m_aFloorName) < 0;
 	};
 	sort(m_lTrainFloors.all(), CompareName);

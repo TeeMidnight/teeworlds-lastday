@@ -73,7 +73,7 @@ static CWorldRing RingFromGeneration(const CInstruction::CGeneration &rGen, int 
 {
 	CWorldRing Ring;
 	Ring.m_Enabled = rGen.m_Ring.m_Enabled && rGen.m_Ring.m_SharedMargin > 0 &&
-		rGen.m_Ring.m_Size > 1 && rGen.m_Width > rGen.m_Ring.m_SharedMargin;
+			 rGen.m_Ring.m_Size > 1 && rGen.m_Width > rGen.m_Ring.m_SharedMargin;
 	if(!Ring.m_Enabled)
 	{
 		Ring.m_OffsetX = 0;
@@ -266,7 +266,6 @@ static int RingBackgroundGroundY(const CInstruction::CGeneration &rGen, const CW
 // Biomes used to pick a tileset per column here. The automapper does that now
 // via "main_ruleset", which is closer to the original editor and lets a floor
 // mix tilesets through rules instead of a hardcoded table.
-
 
 static void FillTerrain(const CInstruction::CGeneration &rGen, int Seed, CGeneratedWorld *pWorld)
 {

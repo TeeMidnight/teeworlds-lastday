@@ -526,7 +526,6 @@ void CServer::InitRconPasswordIfUnset()
 
 int CServer::SendMsg(CMsgPacker *pMsg, int Flags, int ClientID)
 {
-
 	CNetChunk Packet;
 	if(!pMsg)
 		return -1;
@@ -570,7 +569,6 @@ int CServer::SendMsg(CMsgPacker *pMsg, int Flags, int ClientID)
 	}
 	return 0;
 }
-
 
 void CServer::SendTranslated(CNetChunk *pPacket, int ClientID)
 {
@@ -1788,7 +1786,8 @@ int CServer::LoadMap(CMapInfo *pInfo)
 	pInfo->m_Ring = false;
 	pInfo->m_RingOffsetX = 0;
 	pInfo->m_RingPeriod = 0;
-	auto ApplyWorld = [&](const json_value &rWorld) {
+	auto ApplyWorld = [&](const json_value &rWorld)
+	{
 		if(rWorld.type != json_object)
 			return;
 		const json_value &rRing = rWorld["ring"];
@@ -2382,11 +2381,11 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 	// An acknowledged snapshot proves the client reached STATE_ONLINE; before
 	// that it is still in its loading state and cannot apply an in-place switch.
 	const bool Silent = m_aClients[ClientID].m_Version >= 0x0800 &&
-		m_aClients[ClientID].SupportsSilentMapStatus() &&
-		m_aClients[ClientID].m_State == CClient::STATE_INGAME &&
-		m_aClients[ClientID].m_LastAckedSnapshot >= 0 &&
-		!m_aClients[ClientID].m_SilentMapSwitch &&
-		!m_NetServer.ClientIsLegacy(ClientID);
+			    m_aClients[ClientID].SupportsSilentMapStatus() &&
+			    m_aClients[ClientID].m_State == CClient::STATE_INGAME &&
+			    m_aClients[ClientID].m_LastAckedSnapshot >= 0 &&
+			    !m_aClients[ClientID].m_SilentMapSwitch &&
+			    !m_NetServer.ClientIsLegacy(ClientID);
 
 	// Only a switch between two ring instances is exempt from the fade.
 	// Entering a ring from the hub or any other non-ring map is a real map
@@ -2397,7 +2396,7 @@ bool CServer::SwitchClientMap(int ClientID, unsigned MapID, bool *pSilent)
 	// ring floor (an entrance, for example) is still a real world change and
 	// must fade like any other map change.
 	const bool SameRing = pOldInfo && pOldInfo->m_Ring && pInfo->m_Ring &&
-		SameRingFloor(pOldInfo, pInfo);
+			      SameRingFloor(pOldInfo, pInfo);
 	const bool NoFade = SameRing;
 
 	// The two maps share an axis only when they are instances of the same ring

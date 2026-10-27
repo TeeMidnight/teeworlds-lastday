@@ -31,15 +31,15 @@ static bool WallAhead(CGameWorld *pWorld, vec2 Pos, int Dir, float HalfSize)
 		return false;
 	const float X = Pos.x + Dir * (HalfSize + 4.0f);
 	return pWorld->Collision()->CheckPoint(X, Pos.y) ||
-		pWorld->Collision()->CheckPoint(X, Pos.y - HalfSize * 0.5f) ||
-		pWorld->Collision()->CheckPoint(X, Pos.y + HalfSize * 0.5f);
+	       pWorld->Collision()->CheckPoint(X, Pos.y - HalfSize * 0.5f) ||
+	       pWorld->Collision()->CheckPoint(X, Pos.y + HalfSize * 0.5f);
 }
 
 // Whether the NPC is standing on solid ground.
 static bool OnGround(CGameWorld *pWorld, vec2 Pos, float HalfSize)
 {
 	return pWorld->Collision()->CheckPoint(Pos.x, Pos.y + HalfSize + 2.0f) ||
-		pWorld->Collision()->CheckPoint(Pos.x, Pos.y + HalfSize + 6.0f);
+	       pWorld->Collision()->CheckPoint(Pos.x, Pos.y + HalfSize + 6.0f);
 }
 
 // The identity the client is shown, taken straight from the definition.
@@ -402,7 +402,6 @@ CEntity *CNpcEntity::ClosestPlayer()
 	return pClosest;
 }
 
-
 void CNpcEntity::StartRespawn()
 {
 	// the NPC is not gone: it keeps its identity, gets its health back and is
@@ -476,8 +475,6 @@ void CNpcEntity::TickRespawn()
 	}
 }
 
-
-
 void CNpcEntity::TickInteract()
 {
 	if(!m_pDef)
@@ -487,7 +484,7 @@ void CNpcEntity::TickInteract()
 		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
 		CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
 		const bool InRange = pPlayer && pPlayer->GameWorld() == GameWorld() &&
-			pChr && pChr->IsAlive() && distance(pChr->GetPos(), m_Pos) <= NPC_INTERACT_RADIUS;
+				     pChr && pChr->IsAlive() && distance(pChr->GetPos(), m_Pos) <= NPC_INTERACT_RADIUS;
 
 		// tell the player once, when they first step into range
 		if(InRange && !m_aClientInRange[i])

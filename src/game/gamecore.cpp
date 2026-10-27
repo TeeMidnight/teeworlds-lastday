@@ -116,7 +116,7 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 	float MaxSpeed = (Grounded ? m_pWorld->m_Tuning.m_GroundControlSpeed : m_pWorld->m_Tuning.m_AirControlSpeed) * SilentStepScale * m_SpeedScale * (InWater ? WaterFrictionX : 1.0f);
 	float Accel = (Grounded ? m_pWorld->m_Tuning.m_GroundControlAccel : m_pWorld->m_Tuning.m_AirControlAccel) * SilentStepScale * (InWater ? WaterFrictionX : 1.0f);
 	float Friction = (Grounded ? m_pWorld->m_Tuning.m_GroundFriction : m_pWorld->m_Tuning.m_AirFriction) * (InWater ? WaterFrictionX : 1.0f);
-	
+
 	// handle input
 	if(UseInput)
 	{
@@ -188,7 +188,7 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 	// past the bound. releasing the jump lets the player sink again
 	if(InWater)
 	{
-	 	if(UseInput && m_Input.m_Jump)
+		if(UseInput && m_Input.m_Jump)
 			m_Vel.y = SaturatedAdd(-m_pWorld->m_Tuning.m_Gravity * 7.0f, m_pWorld->m_Tuning.m_Gravity * 5.0f, m_Vel.y, -m_pWorld->m_Tuning.m_Gravity * 1.5f);
 		else
 			m_Vel.y *= WaterFrictionY;

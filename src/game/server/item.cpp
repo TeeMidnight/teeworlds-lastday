@@ -210,13 +210,15 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath, const 
 
 	// ammo effect: different ammo items for the same weapon can behave
 	// differently (damage, projectile count, speed, lifetime, effect tag)
-	auto ReadInt = [&](const char *pKey, int Default) -> int {
+	auto ReadInt = [&](const char *pKey, int Default) -> int
+	{
 		const json_value &Value = (*pJson)[pKey];
 		if(Value.type == json_integer || Value.type == json_double)
 			return (int) (json_int_t) Value;
 		return Default;
 	};
-	auto ReadFloat = [&](const char *pKey, float Default) -> float {
+	auto ReadFloat = [&](const char *pKey, float Default) -> float
+	{
 		const json_value &Value = (*pJson)[pKey];
 		if(Value.type == json_integer || Value.type == json_double)
 			return (float) (double) Value;
@@ -265,7 +267,8 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath, const 
 	const json_value &Accessory = (*pJson)["accessory"];
 	if(Accessory.type == json_object)
 	{
-		auto ReadAccessoryFloat = [&](const char *pKey, float Default) -> float {
+		auto ReadAccessoryFloat = [&](const char *pKey, float Default) -> float
+		{
 			const json_value &Value = Accessory[pKey];
 			if(Value.type == json_integer || Value.type == json_double)
 				return (float) (double) Value;
@@ -738,7 +741,8 @@ void CItemSystem::LoadCraft(const char *pCraftId, const char *pFilePath, const c
 	str_copy(Craft.m_aCategory, pCategory && pCategory[0] ? pCategory : "misc", sizeof(Craft.m_aCategory));
 
 	// results: either a single "result" object, or a "gives" array, or both
-	auto AddGive = [&](const json_value &rGive) {
+	auto AddGive = [&](const json_value &rGive)
+	{
 		if(Craft.m_NumGives >= SCraftDef::MAX_GIVES)
 			return;
 		SResult &Give = Craft.m_aGives[Craft.m_NumGives];

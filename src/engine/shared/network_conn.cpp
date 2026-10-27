@@ -348,7 +348,7 @@ int CNetConnection::Feed(CNetPacketConstruct *pPacket, NETADDR *pAddr)
 						// from the caller, because Reset() wipes m_Legacy.
 						const bool Legacy = !Net8HasGenerationMarker(pPacket->m_aChunkData, pPacket->m_DataSize, NET_CTRL_CONNECT_CAPABILITY_OFFSET);
 						const int PeerCapabilities = Legacy ? legacy::Net7ReadConnectCapabilities(pPacket->m_aChunkData, pPacket->m_DataSize) :
-										       (pPacket->m_DataSize > NET_CTRL_CONNECT_CAPABILITY_OFFSET_8 ? pPacket->m_aChunkData[NET_CTRL_CONNECT_CAPABILITY_OFFSET_8] : 0);
+										      (pPacket->m_DataSize > NET_CTRL_CONNECT_CAPABILITY_OFFSET_8 ? pPacket->m_aChunkData[NET_CTRL_CONNECT_CAPABILITY_OFFSET_8] : 0);
 
 						// send response and init connection
 						TOKEN Token = m_Token;

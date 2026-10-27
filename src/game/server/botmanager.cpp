@@ -502,9 +502,7 @@ IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 	}
 
 	const CBotTeeInfo TeeInfo = BotMakeRandomTeeInfo();
-	IBotEntity *pBot = pWorld->IsNpcWorld()
-		? NpcBotCreator(pWorld, SpawnPos, BotID, TeeInfo, TEAM_BLUE, nullptr)
-		: DefaultBotCreator(pWorld, SpawnPos, BotID, TeeInfo, TEAM_BLUE, nullptr);
+	IBotEntity *pBot = pWorld->IsNpcWorld() ? NpcBotCreator(pWorld, SpawnPos, BotID, TeeInfo, TEAM_BLUE, nullptr) : DefaultBotCreator(pWorld, SpawnPos, BotID, TeeInfo, TEAM_BLUE, nullptr);
 	if(!pBot)
 		return nullptr;
 

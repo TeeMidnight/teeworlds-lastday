@@ -39,38 +39,38 @@ static void WriteJsonValue(CJsonWriter &Writer, const json_value &Value)
 {
 	switch(Value.type)
 	{
-	case json_object:
-		Writer.BeginObject();
-		for(unsigned i = 0; i < Value.u.object.length; i++)
-		{
-			Writer.WriteAttribute(Value.u.object.values[i].name);
-			WriteJsonValue(Writer, *Value.u.object.values[i].value);
-		}
-		Writer.EndObject();
-		break;
-	case json_array:
-		Writer.BeginArray();
-		for(unsigned i = 0; i < Value.u.array.length; i++)
-			WriteJsonValue(Writer, *Value.u.array.values[i]);
-		Writer.EndArray();
-		break;
-	case json_integer:
-		Writer.WriteInt64Value(Value.u.integer);
-		break;
-	case json_double:
-		Writer.WriteDoubleValue(Value.u.dbl);
-		break;
-	case json_string:
-		Writer.WriteStrValue(Value.u.string.ptr);
-		break;
-	case json_boolean:
-		Writer.WriteBoolValue(Value.u.boolean != 0);
-		break;
-	case json_none:
-	case json_null:
-	default:
-		Writer.WriteNullValue();
-		break;
+		case json_object:
+			Writer.BeginObject();
+			for(unsigned i = 0; i < Value.u.object.length; i++)
+			{
+				Writer.WriteAttribute(Value.u.object.values[i].name);
+				WriteJsonValue(Writer, *Value.u.object.values[i].value);
+			}
+			Writer.EndObject();
+			break;
+		case json_array:
+			Writer.BeginArray();
+			for(unsigned i = 0; i < Value.u.array.length; i++)
+				WriteJsonValue(Writer, *Value.u.array.values[i]);
+			Writer.EndArray();
+			break;
+		case json_integer:
+			Writer.WriteInt64Value(Value.u.integer);
+			break;
+		case json_double:
+			Writer.WriteDoubleValue(Value.u.dbl);
+			break;
+		case json_string:
+			Writer.WriteStrValue(Value.u.string.ptr);
+			break;
+		case json_boolean:
+			Writer.WriteBoolValue(Value.u.boolean != 0);
+			break;
+		case json_none:
+		case json_null:
+		default:
+			Writer.WriteNullValue();
+			break;
 	}
 }
 
@@ -1501,8 +1501,8 @@ void CGameWorld::SaveToDatabase()
 		const CDroppedPickup *pPickup = lDrops[i];
 		JsonWriter.BeginObject();
 		char aUuid[UUID_MAXSTRSIZE];
-			pPickup->ItemId().FormatUuid(aUuid, sizeof(aUuid));
-			JsonWriter.WriteAttribute("item");
+		pPickup->ItemId().FormatUuid(aUuid, sizeof(aUuid));
+		JsonWriter.WriteAttribute("item");
 		JsonWriter.WriteStrValue(aUuid);
 		JsonWriter.WriteAttribute("count");
 		JsonWriter.WriteIntValue(pPickup->Count());

@@ -37,13 +37,9 @@ public:
 		{
 			// spread the pellets evenly over the same arc the built-in shotgun
 			// uses; a single pellet flies straight
-			const float Offset = PelletCount > 1
-				? -0.185f + 0.370f * ((float) i / (float) (PelletCount - 1))
-				: 0.0f;
+			const float Offset = PelletCount > 1 ? -0.185f + 0.370f * ((float) i / (float) (PelletCount - 1)) : 0.0f;
 			float a = angle(Direction) + Offset;
-			float v = PelletCount > 1
-				? 1.0f - absolute((float) i / (float) (PelletCount - 1) - 0.5f) * 2.0f * (1.0f - pChr->GameServer()->Tuning()->m_ShotgunSpeeddiff)
-				: 1.0f;
+			float v = PelletCount > 1 ? 1.0f - absolute((float) i / (float) (PelletCount - 1) - 0.5f) * 2.0f * (1.0f - pChr->GameServer()->Tuning()->m_ShotgunSpeeddiff) : 1.0f;
 			float Speed = v * Ammo.m_Speed;
 			new CProjectile(pWorld, SnapStyle(), ClientID, ProjStartPos,
 				vec2(cosf(a), sinf(a)) * Speed,

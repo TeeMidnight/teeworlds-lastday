@@ -82,10 +82,10 @@ static const char *RarityName(int Rarity)
 {
 	switch(Rarity)
 	{
-	case 1: return "uncommon";
-	case 2: return "rare";
-	case 3: return "legendary";
-	default: return "common";
+		case 1: return "uncommon";
+		case 2: return "rare";
+		case 3: return "legendary";
+		default: return "common";
 	}
 }
 

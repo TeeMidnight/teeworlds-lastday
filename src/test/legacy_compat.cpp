@@ -149,7 +149,6 @@ TEST(LegacyCompat, TranslatorEntryPointsAreDirectionPinned)
 		<< "0.7 traffic must be lifted by TranslateServerChunk";
 }
 
-
 // --- outbound (0.8 server -> 0.7 client) ------------------------------------
 
 // Wraps a finished 0.8 snapshot into a NETMSG_SNAPSINGLE chunk exactly the way
@@ -767,7 +766,7 @@ TEST(LegacyCompat, OutboundCharacterFieldsAreNotShifted)
 	pChar->m_Health = 1001;
 	pChar->m_Armor = 1002;
 	pChar->m_MaxHealth = 9999; // 0.8-only, must never surface in 0.7
-	pChar->m_MaxArmor = 8888;  // 0.8-only, must never surface in 0.7
+	pChar->m_MaxArmor = 8888; // 0.8-only, must never surface in 0.7
 	pChar->m_AmmoCount = 1003;
 	pChar->m_Weapon = 4;
 	pChar->m_Emote = 5;

@@ -105,7 +105,6 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 	dbg_msg("worldgen", "surface resources: %d node(s)", Placed);
 }
 
-
 // ---------------------------------------------------------------------------
 // euclidean structure pasting
 //
@@ -574,7 +573,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 		// levels; an art-only structure falls back to the configured width.
 		int ContactStart = 0; // the span that has to be level
 		int ContactEnd = RegionWidth - 1;
-		int FullStart = 0;    // every foot contact, used to pick the base line
+		int FullStart = 0; // every foot contact, used to pick the base line
 		int FullEnd = RegionWidth - 1;
 		if(StructMap.m_ContactMaxX >= 0)
 		{
@@ -737,7 +736,8 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 				continue;
 			}
 
-			const int BaseY = [&]() {
+			const int BaseY = [&]()
+			{
 				// Align to the lowest ground under any foot contact, so no
 				// contact floats; the higher ones sink into the terrain.
 				const int FlatStart = ChosenX + FullStart;
@@ -1300,10 +1300,11 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 	// the set records as its source file name.
 	// -----------------------------------------------------------------
 	const CAutoMapper::CDoodadSet *pDoodadSet = Gen.m_aDoodadsRuleset[0] ?
-		Mapper.FindDoodadSet(Gen.m_aDoodadsRuleset, Gen.m_aDoodadsTileset) : nullptr;
+							    Mapper.FindDoodadSet(Gen.m_aDoodadsRuleset, Gen.m_aDoodadsTileset) :
+							    nullptr;
 	CCreatorImage *pDoodadsImage = FindCreatorImage(Gen.m_aDoodadsTileset);
 	const bool DoodadsMatch = pDoodadSet && pDoodadsImage && SubWidth > 0 &&
-		str_comp(pDoodadSet->m_aSource, Gen.m_aDoodadsTileset) == 0;
+				  str_comp(pDoodadSet->m_aSource, Gen.m_aDoodadsTileset) == 0;
 	array<CTile> lDoodadTiles;
 	if(DoodadsMatch)
 	{

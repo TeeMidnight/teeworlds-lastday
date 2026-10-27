@@ -581,7 +581,8 @@ CEntity *CGameContext::AimedBuildable(int ClientID)
 	float BestDist = 1e30f;
 	const float Reach = 4.0f * 32.0f;
 
-	auto Consider = [&](CEntity *pEntity) {
+	auto Consider = [&](CEntity *pEntity)
+	{
 		if(!pEntity || pEntity->IsMarkedForDestroy())
 			return;
 		if(distance(pEntity->GetPos(), pChr->GetPos()) > Reach)
@@ -680,7 +681,7 @@ bool CGameContext::SetAimedBuildLock(int ClientID, int Mode)
 
 	CLanguageScope LanguageScope(LanguageOf(ClientID));
 	const char *pMode = Mode == BUILD_LOCK_PUBLIC ? Localize("everyone", "Building") :
-		(Mode == BUILD_LOCK_TEAM ? Localize("team only", "Building") : Localize("owner only", "Building"));
+							(Mode == BUILD_LOCK_TEAM ? Localize("team only", "Building") : Localize("owner only", "Building"));
 	SendChat(-1, CHAT_ALL, ClientID, LocalizeFormat("Building", "Building lock: {}.", pMode).c_str());
 	return true;
 }
@@ -727,8 +728,8 @@ void CGameContext::SendSkinChange(int ClientID, int TargetID)
 	// TeeInfo snapshot object, so a skin change is carried by the next snapshot
 	// of that client's TeeInfo. Nothing has to be sent explicitly here; the
 	// (ClientID, TargetID) signature is kept so callers stay unchanged.
-	(void)ClientID;
-	(void)TargetID;
+	(void) ClientID;
+	(void) TargetID;
 }
 
 void CGameContext::SendGameMsg(int GameMsgID, int ClientID)
@@ -931,7 +932,7 @@ void CGameContext::SendTuningParams(int ClientID)
 	// 0.8: tuning is no longer a message (Sv_TuneParams). It is a singleton
 	// snapshot object (NETOBJTYPE_TUNING, item id 0) emitted in OnSnap(), so
 	// there is nothing to send here. Callers are kept for timing compatibility.
-	(void)ClientID;
+	(void) ClientID;
 }
 
 void CGameContext::SendReadyToEnter(CPlayer *pPlayer)
@@ -1166,7 +1167,6 @@ void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 		dbg_msg("game", "client %d connected to a missing world, ignoring", ClientID);
 		return;
 	}
-
 
 	if(!m_apPlayers[ClientID])
 	{

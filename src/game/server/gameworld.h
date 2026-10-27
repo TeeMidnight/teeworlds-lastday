@@ -115,12 +115,12 @@ public:
 	// of its own; enabled means its left and right edges lead into the
 	// neighbouring instances of the floor's ring.
 	bool m_Ring;
-	int m_RingSeed;     // this instance's index, 1..m_RingSize
+	int m_RingSeed; // this instance's index, 1..m_RingSize
 	int m_RingSize;
 	int m_SharedMargin; // tiles shared with each neighbour
-	int m_OffsetX;      // global x of this instance's local x = 0
-	int m_Stride;       // distance between two neighbouring instances
-	int m_Period;       // circumference of the whole ring
+	int m_OffsetX; // global x of this instance's local x = 0
+	int m_Stride; // distance between two neighbouring instances
+	int m_Period; // circumference of the whole ring
 
 	// Ring: the live neighbours' players are bound into this world's core under
 	// their real client id, translated onto this world's axis, so a hook or a
