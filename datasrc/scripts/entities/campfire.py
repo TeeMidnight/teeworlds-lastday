@@ -1,7 +1,7 @@
 # Campfire: a persistent fire prop built from the generic scripted entity.
 #
-# The base is drawn with snapshot lasers: a small hexagon of stones and two
-# crossed sticks. The flames are intentionally made of WEAPON_HAMMER
+# The base is drawn with two crossed snapshot lasers (the logs). The flames are
+# intentionally made of WEAPON_HAMMER
 # projectiles: the stock client draws no projectile sprite for that type but
 # still emits its bullet trail particle for every live projectile, so a stream
 # of short-lived stationary puffs reads as embers. They are spawned with
@@ -33,7 +33,7 @@ PUFFS_PER_EMIT = 7
 BASE_Y = 16.0
 LINE_RADIUS = 3.0
 SNAP_ID_KEY = "_snap_ids"
-BASE_SEGMENT_COUNT = 8
+BASE_SEGMENT_COUNT = 2
 
 # Rising wave. The flame starts wide at the base (phase 0) and tapers to the
 # tip as the phase advances to SPREAD_PHASES - 1. The taper is curved and the
@@ -43,7 +43,8 @@ SPREAD_PHASES = 5
 FLAME_RISE = 86.0
 FLAME_HEIGHT_MIN = 0.80
 FLAME_HEIGHT_MAX = 1.10
-FLAME_BASE_WIDTH = 38.0
+# The flame bottom spans the top ends of the crossed logs: x = +-30 at y = 10.
+FLAME_BASE_WIDTH = 30.0
 FLAME_TIP_WIDTH = 3.0
 FLAME_BULGE = 0.15
 FLAME_LEAN = 11.0
@@ -94,23 +95,19 @@ def _laser(snap_id, x1, y1, x2, y2):
 
 
 def _draw_base(ctx):
-    """Draw the stone ring and crossed sticks with snapshot lasers."""
+    """Draw the two crossed logs with snapshot lasers.
+
+    The top ends sit at (-30, 10) and (30, 10), which is exactly the height and
+    width the flame starts from, so the fire stands on the logs instead of
+    floating over a wider base."""
     if ctx.entity is None:
         return
 
     ids = _snap_ids(ctx)
     ctx.entity.set_visual({
         "lasers": [
-            # hexagon of stones, bottom edge on the ground
-            _laser(ids[0], -22, 18, -11, 24),
-            _laser(ids[1], -11, 24, 11, 24),
-            _laser(ids[2], 11, 24, 22, 18),
-            _laser(ids[3], 22, 18, 11, 12),
-            _laser(ids[4], 11, 12, -11, 12),
-            _laser(ids[5], -11, 12, -22, 18),
-            # crossed sticks inside the ring
-            _laser(ids[6], -20, 15, 20, 21),
-            _laser(ids[7], -20, 21, 20, 15),
+            _laser(ids[0], -30, 10, 30, 24),
+            _laser(ids[1], -30, 24, 30, 10),
         ],
     })
 

@@ -237,9 +237,9 @@ velocity on either side, so a short-lived stationary puff reads as an ember. The
 flamethrower spawns a cone of those puffs; the flame cannon is the heavy,
 wider, slower-firing variant. Both eat `fuel_canister` ammo.
 
-The same particle backs the `campfire` scripted prop. Its base is a
-laser-drawn stone ring with crossed sticks; each emission advances a phase from
-that base outward, so a tall central flame visibly grows from the bottom, widest
+The same particle backs the `campfire` scripted prop. Its base is two
+crossed lasers (the logs); each emission advances a phase from the top ends of
+that cross, so a tall central flame visibly grows from the bottom, widest
 at the base and tapering to the tip. It emits friendly puffs (owner sentinel
 `-4`) on a short timer, so it burns hostile bots but never players, friendly
 units or neutral units. It is a proper building:
