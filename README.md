@@ -130,7 +130,11 @@ hurts a player. The same rules apply to configured town NPCs: a friendly Medic
 never gains aggro or starts a fight, while the neutral Blacksmith gains aggro
 when a player hits it and, because it sets `attack_hostiles`, also defends the
 square against hostile monsters. A neutral NPC without that flag only answers
-the exact creature that hit it.
+the exact creature that hit it. Its aggro ledger also decays passively: every
+`decay_seconds` an online player loses `decay_amount` (Blacksmith: 1 per 10s),
+in addition to the `kill_decay` applied when the NPC kills that player. Chasing
+requires a hit within the last 30 seconds, so stale ledger values cannot make a
+neutral NPC attack someone merely for walking close.
 
 `datasrc/mobs/pool.json` is the weighted random population of euclidean
 floors. `datasrc/mobs/spawns.json` places fixed content: the friendly Ranger in

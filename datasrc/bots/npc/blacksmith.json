@@ -27,7 +27,9 @@
         "threshold": 3,
         "per_kill": 5,
         "per_hit": 1,
-        "kill_decay": 10
+        "kill_decay": 10,
+        "decay_seconds": 10,
+        "decay_amount": 1
     },
     "dialogue": {
         "spawn": ["The forge is hot. Say your piece."],

@@ -72,6 +72,8 @@ private:
 	int CachedAggro(int ClientID);
 	// keep the cache in step with a delta that was just written
 	void UpdateAggroCache(const Uuid &Account, int Delta);
+	// passively reduce every online player's aggro on a fixed interval
+	void TickAggroDecay();
 
 	// begin the scripted respawn: teleport to the main world, emote, come back
 	void StartRespawn();
@@ -106,6 +108,7 @@ private:
 	// A neutral NPC only retaliates against a player who hit it recently, so an
 	// old ledger value cannot make it attack someone on approach.
 	int m_aLastPlayerHitTick[MAX_CLIENTS] = {};
+	int m_LastAggroDecayTick = 0;
 
 	// who was inside the trading range last tick, so the unlock notice fires
 	// once per entry instead of every frame

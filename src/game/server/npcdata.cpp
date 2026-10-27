@@ -217,6 +217,8 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 			pDef->m_Aggro.m_PerKill = ReadInt(rAggro["per_kill"], 0);
 			pDef->m_Aggro.m_PerHit = ReadInt(rAggro["per_hit"], 0);
 			pDef->m_Aggro.m_KillDecay = ReadInt(rAggro["kill_decay"], 0);
+			pDef->m_Aggro.m_DecaySeconds = maximum(0, ReadInt(rAggro["decay_seconds"], 10));
+			pDef->m_Aggro.m_DecayAmount = maximum(1, ReadInt(rAggro["decay_amount"], 1));
 		}
 	}
 

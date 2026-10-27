@@ -44,6 +44,11 @@ struct SNpcAggroDef
 	int m_PerKill;   // added when that player kills the NPC
 	int m_PerHit;    // added when that player hits the NPC
 	int m_KillDecay; // removed when the NPC kills that player
+	// passive decay: every m_DecaySeconds the NPC removes m_DecayAmount from
+	// each online player's ledger, so old hostility fades instead of lasting
+	// forever. 0 seconds disables passive decay.
+	int m_DecaySeconds;
+	int m_DecayAmount;
 };
 
 // One configured NPC, loaded from datasrc/bots/npc/<npc_id>.json. A definition

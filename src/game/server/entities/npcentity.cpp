@@ -86,6 +86,7 @@ void CNpcEntity::Tick()
 
 	TickInteract();
 	TickAuras();
+	TickAggroDecay();
 
 	// the scripted respawn drives itself once started
 	if(m_State == NPCSTATE_TELEPORTING)
@@ -497,6 +498,27 @@ void CNpcEntity::TickInteract()
 			SayEvent(MOBDIALOGUE_SIGHT);
 		}
 		m_aClientInRange[i] = InRange;
+	}
+}
+
+void CNpcEntity::TickAggroDecay()
+{
+	if(!m_pDef || m_pDef->m_Aggro.m_DecaySeconds <= 0 || m_pDef->m_Aggro.m_DecayAmount <= 0)
+		return;
+	const int Interval = m_pDef->m_Aggro.m_DecaySeconds * Server()->TickSpeed();
+	if(Server()->Tick() - m_LastAggroDecayTick < Interval)
+		return;
+	m_LastAggroDecayTick = Server()->Tick();
+
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+		if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+			continue;
+		const int Aggro = CachedAggro(i);
+		if(Aggro <= 0)
+			continue;
+		AddAggro(i, -minimum(Aggro, m_pDef->m_Aggro.m_DecayAmount));
 	}
 }
 
