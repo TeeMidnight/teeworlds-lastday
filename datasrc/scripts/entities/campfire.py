@@ -20,13 +20,15 @@ import lastday
 WEAPON_HAMMER = 0
 PLAYER_TEAM_FRIENDLY = -4
 
-DEFAULT_EMIT_TICKS = 5
+DEFAULT_EMIT_TICKS = 3
 DEFAULT_RANGE = 96
 DEFAULT_DAMAGE = 1
-PUFFS_PER_EMIT = 3
+PUFFS_PER_EMIT = 8
 
 # Bottom of the entity in world units; the floor is 24 units below the centre.
-BASE_Y = 22.0
+# 16 keeps the swept line check clear of the floor (radius 3 -> 5 units margin).
+BASE_Y = 16.0
+LINE_RADIUS = 3.0
 SNAP_ID_KEY = "_snap_ids"
 BASE_SEGMENT_COUNT = 8
 
@@ -40,8 +42,8 @@ FLAME_SIDE = 36.0
 # so anything closer than 14 would hit (and be absorbed by) the campfire.
 SAFE_RADIUS = 15.0
 
-PUFF_SPAN_MIN = 8
-PUFF_SPAN_MAX = 12
+PUFF_SPAN_MIN = 10
+PUFF_SPAN_MAX = 14
 
 
 def _random01():
@@ -58,6 +60,9 @@ def _normalize(ctx):
     params = ctx.params if isinstance(ctx.params, dict) else {}
     if "emit_ticks" not in state:
         state["emit_ticks"] = int(params.get("emit_ticks", DEFAULT_EMIT_TICKS))
+    # Old campfires were saved with the sparse cadence. Cap it so an existing
+    # fire becomes dense after the script updates instead of staying thin.
+    state["emit_ticks"] = min(max(1, int(state["emit_ticks"])), DEFAULT_EMIT_TICKS)
     if "range" not in state:
         state["range"] = int(params.get("range", DEFAULT_RANGE))
     if "damage" not in state:
@@ -108,6 +113,11 @@ def _spawn_puff(ctx, state, t):
     base_x = pos.x
     base_y = pos.y + BASE_Y
 
+    # Slight jitter around the phase so the wave fills the volume instead of
+    # looking like a few discrete rings.
+    t = t + (_random01() - 0.5) * 0.22
+    t = max(0.0, min(1.0, t))
+
     rise = 4.0 + (FLAME_RISE - 4.0) * t
 
     # Keep the ember outside the prop's hitbox: at the heights where a purely
@@ -126,7 +136,7 @@ def _spawn_puff(ctx, state, t):
     y = base_y - rise
 
     # Do not burn through a wall next to the fire.
-    if lastday.world_test_line(base_x, base_y, x, y, 4.0):
+    if lastday.world_test_line(base_x, base_y, x, y, LINE_RADIUS):
         return
 
     span = PUFF_SPAN_MIN + (lastday.random_int() % (PUFF_SPAN_MAX - PUFF_SPAN_MIN + 1))

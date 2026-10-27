@@ -61,7 +61,7 @@ def on_place(ctx):
 
     params = {
         "range": 96,
-        "emit_ticks": 5,
+        "emit_ticks": 3,
         "drop_item": ctx.item.id,
         "drop_count": 1,
     }

@@ -6,7 +6,7 @@
 	"persistent": true,
 	"params": {
 		"range": 96,
-		"emit_ticks": 5,
+		"emit_ticks": 3,
 		"drop_item": "campfire",
 		"drop_count": 1
 	},
