@@ -307,17 +307,21 @@ The generator uses one such pack per floor automatically
   datafile writer itself writes through a stream), so no staging file exists at
   any point;
 - the server loads an instance straight out of the pack
-  (`CMapGen::AcquireMap` + `IEngineMap::LoadFromMemory`) and only writes
+  (`CMapGen::TryAcquireMap` + `IEngineMap::LoadFromMemory`) and only writes
   `<name>.map`/`.json` cache files when tooling asks for them;
-- a miss generates the instance, packs it, and serves it from memory;
-- background pre-generation (`StartPreGeneration`, train chunks) checks the
-  pack first: a rolled instance that is already packed is reused instead of
-  generated again, and the worker re-checks right before generating;
+- a miss never generates on the server tick thread: the game layer queues the
+  instance with `CMapGen::PrefetchMap` and retries the world load on a later
+  tick. Server generation only runs on the worker;
+- background pre-generation (`StartPreGeneration`, train chunks, ring
+  lookahead and entrance targets) checks the pack first: an instance that is
+  already packed is reused instead of generated again, and the worker
+  re-checks right before generating;
 - a cached map from before packs existed is appended once, the first time it is
   loaded, so the pack converges on the whole floor.
 
 `mapgentool ensure` drives the cache-file path (`EnsureNewMap`) and
-`mapgentool acquire` the in-memory path the server uses:
+`mapgentool acquire` the in-memory path through `AcquireMapOrGenerate`
+(`TryAcquireMap` when the instance already exists):
 
     mapgentool ensure Verdant 11     # generates and packs on a miss
     rm generatedmaps/.../Verdant_11.*

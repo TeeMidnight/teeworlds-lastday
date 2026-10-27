@@ -823,7 +823,7 @@ CMapGen::SFloorPack *CMapGen::PackFor(const char *pFloorName)
 		if(str_comp(m_lPacks[i]->m_aFloor, pFloorName) == 0)
 			return m_lPacks[i];
 
-	// the caller holds m_GenMutex, so a pack is never opened twice
+	// the caller holds m_PackMutex, so a pack is never opened twice
 	SFloorPack *pPack = new SFloorPack();
 	str_copy(pPack->m_aFloor, pFloorName, sizeof(pPack->m_aFloor));
 	pPack->m_Tried = false;
@@ -877,6 +877,8 @@ bool CMapGen::InstanceAvailable(const char *pFloorName, int Seed) const
 
 bool CMapGen::EnsurePackOpen(SFloorPack *pPack)
 {
+	// caller holds m_PackMutex; RememberPackInstances takes m_GenLock, so the
+	// lock order is pack -> known set, never the other way round.
 	if(!pPack)
 		return false;
 	if(pPack->m_Open)
@@ -1073,7 +1075,7 @@ void CMapGen::FreeInstance(SMapInstance *pInstance)
 	mem_zero(pInstance, sizeof(*pInstance));
 }
 
-bool CMapGen::AcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut)
+bool CMapGen::TryAcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut)
 {
 	if(!pOut)
 		return false;
@@ -1084,7 +1086,7 @@ bool CMapGen::AcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut)
 	char aMapName[64];
 	str_format(aMapName, sizeof(aMapName), "%s_%d", pFloorName, Seed);
 
-	scope_lock Lock(&m_GenMutex);
+	scope_lock Lock(&m_PackMutex);
 
 	// the pack is the source of truth: take the bytes straight out of it
 	if(ReadFromPack(pFloorName, Seed, pOut))
@@ -1093,15 +1095,7 @@ bool CMapGen::AcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut)
 	char aPath[IO_MAX_PATH_LENGTH];
 	const bool Existed = GeneratedMapExists(pFloorName, Seed);
 	if(!Existed)
-	{
-		if(!GenerateNow(pFloorName, Seed))
-			return false;
-		// a server drops the generator's staging file once it is packed, so
-		// consult the pack again before falling back to the file
-		// the instance is packed now: take it from there
-		if(ReadFromPack(pFloorName, Seed, pOut))
-			return true;
-	}
+		return false;
 
 	// read the bytes the generator (or an older cache) produced
 	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.map", aMapName);
@@ -1121,7 +1115,7 @@ bool CMapGen::AcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut)
 	if(!m_pStorage->ReadFile(aPath, IStorage::TYPE_SAVE, &pJson, &JsonSize))
 		JsonSize = 0;
 
-	if(Existed && m_UseMapPacks && !PackContains(pFloorName, Seed))
+	if(m_UseMapPacks && !PackContains(pFloorName, Seed))
 	{
 		// a cache from before packs existed: migrate it once
 		AppendToPack(pFloorName, Seed);
@@ -1134,8 +1128,44 @@ bool CMapGen::AcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut)
 	return true;
 }
 
+bool CMapGen::AcquireMapOrGenerate(const char *pFloorName, int Seed, SMapInstance *pOut)
+{
+	if(TryAcquireMap(pFloorName, Seed, pOut))
+		return true;
+
+	// Tooling path only. The server must never reach this, otherwise a whole
+	// world would be built on the server tick thread.
+	if(m_pEngine)
+	{
+		dbg_msg("mapgen", "refusing to generate %s_%d on the running server", pFloorName, Seed);
+		return false;
+	}
+	if(!GenerateNow(pFloorName, Seed))
+		return false;
+	return TryAcquireMap(pFloorName, Seed, pOut);
+}
+
+bool CMapGen::IsMapAvailable(const char *pFloorName, int Seed)
+{
+	if(!pFloorName || !pFloorName[0] || Seed <= 0)
+		return false;
+
+	scope_lock Lock(&m_GenLock);
+	return InstanceAvailable(pFloorName, Seed);
+}
+
+void CMapGen::PrefetchMap(const char *pFloorName, int Seed)
+{
+	if(!pFloorName || !pFloorName[0] || Seed <= 0)
+		return;
+
+	scope_lock Lock(&m_GenLock);
+	QueuePrefetchLocked(pFloorName, Seed);
+}
+
 void CMapGen::ClosePacks()
 {
+	scope_lock Lock(&m_PackMutex);
 	for(int i = 0; i < m_lPacks.size(); i++)
 	{
 		m_lPacks[i]->m_Reader.Close();
@@ -1350,24 +1380,38 @@ int CMapGen::GenWorker(void *pUser)
 		if(!pJob)
 			break;
 
-		// Check the pack (and the disk cache) once more before spending a
+		// Check the pack (and the generated file) once more before spending a
 		// generation: while this job waited in the queue a player may have
 		// loaded the same instance, and generating it again would append a
 		// duplicate record to the pack.
-		bool Generated;
+		bool Available;
 		{
 			scope_lock Lock(&pSelf->m_GenLock);
-			Generated = pSelf->InstanceAvailable(pJob->m_aFloorName, pJob->m_Seed);
+			Available = pSelf->InstanceAvailable(pJob->m_aFloorName, pJob->m_Seed);
 		}
-		if(Generated)
-			dbg_msg("mapgen", "map pack: %s_%d already available, skipping generation", pJob->m_aFloorName, pJob->m_Seed);
-		else
+		// The known set only covers packs that were opened on the main thread.
+		// An entrance target floor may never have been opened there, so read
+		// the instance here (on the worker) and skip instead of generating a
+		// duplicate. This also validates the pack record before trusting it:
+		// a corrupt entry falls through to a fresh generation.
+		if(!Available)
 		{
-			// Only one generation runs at a time: the generator caches ring
-			// geometry inside the instruction and writes one temporary file.
-			scope_lock Lock(&pSelf->m_GenMutex);
-			Generated = pSelf->GenerateNow(pJob->m_aFloorName, pJob->m_Seed);
+			SMapInstance Existing;
+			if(pSelf->TryAcquireMap(pJob->m_aFloorName, pJob->m_Seed, &Existing))
+			{
+				FreeInstance(&Existing);
+				Available = true;
+			}
 		}
+
+		bool Generated;
+		if(Available)
+		{
+			dbg_msg("mapgen", "map pack: %s_%d already available, skipping generation", pJob->m_aFloorName, pJob->m_Seed);
+			Generated = true;
+		}
+		else
+			Generated = pSelf->GenerateNow(pJob->m_aFloorName, pJob->m_Seed);
 
 		{
 			scope_lock Lock(&pSelf->m_GenLock);
@@ -1469,7 +1513,7 @@ void CMapGen::StartPreGeneration(IEngine *pEngine)
 	// must not wait on a generation to find that out.
 	if(m_UseMapPacks)
 	{
-		scope_lock Lock(&m_GenMutex);
+		scope_lock Lock(&m_PackMutex);
 		for(int i = 0; i < m_lTrainFloors.size(); i++)
 		{
 			SFloorPack *pPack = PackFor(m_lTrainFloors[i]->m_aFloorName);
@@ -1565,21 +1609,32 @@ bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 	// the instance is built entirely in memory: no staging file is involved
 	SGeneratedMap GeneratedMap;
 	bool Generated = false;
-	switch(pInstruction->m_Kind)
 	{
-		case WORLDKIND_HUB:
-			dbg_msg("mapgen", "the hub world '%s' is a static map and is not generated", pFloorName);
-			return false;
-		case WORLDKIND_EUCLID:
-			Generated = GenerateEuclidean(pInstruction, Seed, &GeneratedMap);
-			break;
-		case WORLDKIND_NONEUCLID:
-			Generated = GenerateNoneuclid(pInstruction, Seed, &GeneratedMap);
-			break;
+		// Hold the generator lock only while the world is being built. The
+		// pack file must not be touched here: the main thread reads packs when
+		// a world loads and must never wait for a generation.
+		scope_lock Lock(&m_GenMutex);
+		switch(pInstruction->m_Kind)
+		{
+			case WORLDKIND_HUB:
+				dbg_msg("mapgen", "the hub world '%s' is a static map and is not generated", pFloorName);
+				return false;
+			case WORLDKIND_EUCLID:
+				Generated = GenerateEuclidean(pInstruction, Seed, &GeneratedMap);
+				break;
+			case WORLDKIND_NONEUCLID:
+				Generated = GenerateNoneuclid(pInstruction, Seed, &GeneratedMap);
+				break;
+		}
 	}
 
 	if(!Generated)
 		return false;
+
+	// The map is finished; store it under the pack lock only. A reader that
+	// needs an already generated map waits for this short write, never for
+	// the generation above.
+	scope_lock PackLock(&m_PackMutex);
 
 	// every instance the generator produces joins its floor's pack, so the
 	// pack becomes the complete set of that floor's worlds
@@ -1589,8 +1644,8 @@ bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 
 	// A cache file is written when the caller wants one (tooling), when packs
 	// are disabled, or when the append failed. The last case is essential:
-	// AcquireMap must be able to read the instance back after GenerateNow;
-	// otherwise a ring neighbour or an entrance target cannot be created.
+	// a reader must be able to find the instance after GenerateNow; otherwise
+	// a ring neighbour or an entrance target cannot be created.
 	if(!Packed || !m_DeleteGeneratedFiles || !m_UseMapPacks)
 		WriteInstanceFiles(pFloorName, Seed,
 			GeneratedMap.m_Map.base_ptr(), GeneratedMap.m_Map.size(),
@@ -1603,7 +1658,11 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 {
 	// Explicit callers (mapgentool, tests) always rebuild the map, even when
 	// an older file with the same name exists.
-	scope_lock Lock(&m_GenMutex);
+	if(m_pEngine)
+	{
+		dbg_msg("mapgen", "refusing to rebuild %s_%d on the running server", pFloorName, Seed);
+		return false;
+	}
 	return GenerateNow(pFloorName, Seed);
 }
 
@@ -1612,37 +1671,30 @@ bool CMapGen::EnsureNewMap(const char *pFloorName, int Seed)
 	if(!pFloorName || !pFloorName[0])
 		return false;
 
-	if(!m_UseMapPacks)
+	// Check the pack and the generated file under the pack lock, then release
+	// it before generating: GenerateNow takes the generation and pack locks
+	// itself, and lock order must stay consistent.
 	{
+		scope_lock Lock(&m_PackMutex);
 		if(GeneratedMapExists(pFloorName, Seed))
+		{
+			// a map generated before its pack existed (or with packs disabled)
+			// is migrated once, on first use, so the pack converges on the
+			// whole floor
+			if(m_UseMapPacks && !PackContains(pFloorName, Seed))
+				AppendToPack(pFloorName, Seed);
 			return true;
+		}
 
-		// A background train job may be writing this very map. Take the
-		// generator lock so we wait for it, then check the disk again: the map
-		// file appears only after it is complete, so the worker's copy is
-		// reused instead of being generated a second time.
-		scope_lock Lock(&m_GenMutex);
-		if(GeneratedMapExists(pFloorName, Seed))
+		// the pack is the durable copy: restore instead of generating again
+		if(m_UseMapPacks && ExtractFromPack(pFloorName, Seed) && GeneratedMapExists(pFloorName, Seed))
 			return true;
-		return GenerateNow(pFloorName, Seed);
 	}
 
-	// The pack lookup needs the cached reader, so the whole path takes the
-	// generator lock. A map load happens once per transition, not per tick.
-	scope_lock Lock(&m_GenMutex);
-
-	if(GeneratedMapExists(pFloorName, Seed))
+	if(m_pEngine)
 	{
-		// a map generated before its pack existed (or with packs disabled) is
-		// migrated once, on first use, so the pack converges on the whole floor
-		if(!PackContains(pFloorName, Seed))
-			AppendToPack(pFloorName, Seed);
-		return true;
+		dbg_msg("mapgen", "refusing to generate %s_%d on the running server", pFloorName, Seed);
+		return false;
 	}
-
-	// the pack is the durable copy: restore instead of generating again
-	if(ExtractFromPack(pFloorName, Seed) && GeneratedMapExists(pFloorName, Seed))
-		return true;
-
 	return GenerateNow(pFloorName, Seed);
 }

@@ -379,6 +379,8 @@ public:
 	virtual bool IsMapInUse(unsigned MapID);
 	virtual void UnloadMap(unsigned MapID);
 	virtual bool LoadMapForWorld(unsigned MapID);
+	virtual bool IsMapAvailable(unsigned MapID);
+	virtual void PrefetchMap(unsigned MapID);
 	virtual bool RegisterMapName(const char *pName);
 	virtual bool GetMapMeta(unsigned MapID, const char **ppData, int *pSize);
 };

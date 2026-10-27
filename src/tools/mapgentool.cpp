@@ -495,7 +495,7 @@ static bool PackGet(IStorage *pStorage, const char *pPack, const char *pName)
 static bool AcquireInstance(IStorage *pStorage, CMapGen &rGen, const char *pFloor, int Seed)
 {
 	CMapGen::SMapInstance Instance;
-	if(!rGen.AcquireMap(pFloor, Seed, &Instance))
+	if(!rGen.AcquireMapOrGenerate(pFloor, Seed, &Instance))
 	{
 		dbg_msg("mapgentool", "acquire: FAILED %s_%d", pFloor, Seed);
 		return false;

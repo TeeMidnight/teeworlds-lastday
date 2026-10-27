@@ -556,13 +556,21 @@ private:
 	struct CWorkerJob;
 
 	class IEngine *m_pEngine;
+	// Guards the job queue, the train chunk state and m_lKnownInstances.
 	lock m_GenLock;
+	// Serializes the generator itself: it reads shared instruction caches and
+	// writes through one scratch map creator. Never held while a pack is read
+	// or written, so a map load never waits for a whole generation.
 	lock m_GenMutex;
+	// Guards the per floor pack readers/writers, the generated map files and
+	// the pack index cache. Held only for the short pack I/O, not for
+	// generation.
+	lock m_PackMutex;
 
 	// map packs: every generated instance is appended to its floor's pack, and
 	// a missing instance is restored from the pack instead of being generated
 	// again. The readers cache the pack index, so a lookup does not read the
-	// map data. Both are only touched under m_GenMutex.
+	// map data. All of this is only touched under m_PackMutex.
 	bool m_UseMapPacks;
 	// the server keeps no cache file: a generated instance is packed and the
 	// file the generator wrote is removed again
@@ -577,22 +585,24 @@ private:
 	void RememberPackInstances(SFloorPack *pPack);
 	// caller holds m_GenLock
 	bool KnownInstance(const char *pFloorName, int Seed) const;
-	// caller holds m_GenLock: available on disk or in the floor's pack
+	// caller holds m_GenLock: available on disk or in the known pack set
 	bool InstanceAvailable(const char *pFloorName, int Seed) const;
-	// caller holds m_GenMutex: open the pack and seed the known set once
+	// caller holds m_PackMutex: open the pack and seed the known set once
 	bool EnsurePackOpen(SFloorPack *pPack);
 	SFloorPack *PackFor(const char *pFloorName);
 	bool PackContains(const char *pFloorName, int Seed);
 	bool ReadFromPack(const char *pFloorName, int Seed, SMapInstance *pOut);
 	bool ExtractFromPack(const char *pFloorName, int Seed);
-	// append bytes that are already in memory
+	// append bytes that are already in memory; caller holds m_PackMutex
 	// Returns whether the instance was actually appended. Callers must keep a
 	// sidecar file when it returns false, otherwise the just-generated world
-	// cannot be read back by AcquireMap and ring/entrance switches fail.
+	// cannot be read back by TryAcquireMap and ring/entrance switches fail.
 	bool AppendInstanceToPack(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize);
 	// append an instance that exists as files (migration / tooling)
+	// caller holds m_PackMutex
 	void AppendToPack(const char *pFloorName, int Seed);
 	// write the instance as the usual "<name>.map" + ".json" cache files
+	// caller holds m_PackMutex
 	void WriteInstanceFiles(const char *pFloorName, int Seed, const void *pMap, int MapSize, const void *pJson, int JsonSize);
 	void ClosePacks();
 	CGenJob *m_pGenHead;
@@ -617,8 +627,9 @@ private:
 	void ReapWorkerJobsLocked();
 	void StopGeneration();
 
-	// the synchronous core, called by RequestNewMap, EnsureNewMap and the
-	// worker. The caller holds m_GenMutex.
+	// The synchronous generation core. It takes m_GenMutex only while the
+	// world is built, then m_PackMutex while the finished bytes are stored.
+	// Callers must not hold either lock.
 	bool GenerateNow(const char *pFloorName, int Seed);
 
 	// Resolves the actual destination of one carved euclidean entrance. It
@@ -664,21 +675,35 @@ public:
 	// actual base map file to load and the world kind, which selects the
 	// generation strategy. The result is written to
 	// "<GENERATED_MAPS_DIR>/<FloorName>_<Seed>.map". Returns true on success.
+	// This is the tooling entry point and always rebuilds the instance.
 	bool RequestNewMap(const char *pFloorName, int Seed);
 
-	// Generates a map only when it is not already on disk, and waits for an
-	// in-flight background generation of the same map instead of building it a
-	// second time. Called by the server when a transition actually loads a map.
-	// With map packs enabled the floor's pack is consulted first: a packed
-	// instance is extracted instead of generated, and a disk map that predates
-	// the pack is appended once so the pack converges on the whole floor.
+	// Generates a map only when it is not already available. Used by tooling
+	// and by tests; the running server never calls it. With map packs enabled
+	// the floor's pack is consulted first: a packed instance is extracted
+	// instead of generated, and a disk map that predates the pack is appended
+	// once so the pack converges on the whole floor.
 	bool EnsureNewMap(const char *pFloorName, int Seed);
 
 	// Returns one instance as bytes, without requiring a cache file: from the
-	// floor's pack when it is there, otherwise after generating it. A fresh
-	// generation is packed immediately and its cache file is removed again, so
-	// the pack stays the only durable copy. The server loads maps this way.
-	bool AcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut);
+	// floor's pack or the generated file. Unlike the old behaviour this never
+	// generates; a caller that wants generation (mapgentool) must use
+	// AcquireMapOrGenerate or EnsureNewMap first.
+	bool TryAcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut);
+
+	// Tooling convenience: TryAcquireMap, and generate the instance first when
+	// it is missing. The server must not use this, because generation would run
+	// on the server tick thread.
+	bool AcquireMapOrGenerate(const char *pFloorName, int Seed, SMapInstance *pOut);
+
+	// Whether the instance can be loaded without generating it. Cheap enough
+	// for the per tick game layer: it consults the known instance set first and
+	// only then the generated map directory; it never opens a pack.
+	bool IsMapAvailable(const char *pFloorName, int Seed);
+
+	// Queues a background generation for the instance when it is missing. Safe
+	// to call from the main thread; it only appends to the worker queue.
+	void PrefetchMap(const char *pFloorName, int Seed);
 
 	// Whether generated instances are kept in a per floor append-only pack.
 	// Defaults to on; the server maps sv_mappack onto it.

@@ -41,6 +41,50 @@
 
 volatile sig_atomic_t InterruptSignaled = 0;
 
+// The file name without its directory part.
+static const char *MapNameBasename(const char *pMapName)
+{
+	if(!pMapName)
+		return nullptr;
+	const char *pShort = pMapName;
+	for(const char *p = pMapName; *p; p++)
+		if(*p == '/' || *p == '\\')
+			pShort = p + 1;
+	return pShort;
+}
+
+// Splits a generated map name "<floor>_<seed>" into its floor and seed. Only a
+// numeric suffix marks a generated instance; a hand authored map returns false.
+static bool SplitGeneratedMapName(const char *pMapName, char *pFloor, int FloorSize, int *pSeed)
+{
+	if(!pFloor || FloorSize <= 0)
+		return false;
+	pFloor[0] = '\0';
+	if(pSeed)
+		*pSeed = 0;
+
+	const char *pShort = MapNameBasename(pMapName);
+	if(!pShort || !pShort[0])
+		return false;
+
+	const char *pUnderscore = nullptr;
+	for(const char *p = pShort; *p; p++)
+		if(*p == '_')
+			pUnderscore = p;
+
+	if(!pUnderscore || !pUnderscore[1] || str_is_number(pUnderscore + 1) != 0)
+		return false;
+
+	const int BaseLen = (int) (pUnderscore - pShort);
+	if(BaseLen <= 0 || BaseLen >= FloorSize)
+		return false;
+
+	str_copy(pFloor, pShort, BaseLen + 1);
+	if(pSeed)
+		*pSeed = str_toint(pUnderscore + 1);
+	return true;
+}
+
 // The floor part of a map name. Generated instances are named
 // "<floor>_<seed>" ("Depths_23"), and every instance of one floor shares the
 // same snapshot id pool because a ring snapshotted one instance together with
@@ -50,31 +94,18 @@ static void FloorNameFromMapName(const char *pMapName, char *pOut, int OutSize)
 	if(!pOut || OutSize <= 0)
 		return;
 	pOut[0] = '\0';
-	if(!pMapName)
-		return;
 
-	const char *pShort = pMapName;
-	for(const char *p = pMapName; *p; p++)
-		if(*p == '/' || *p == '\\')
-			pShort = p + 1;
-
-	int Len = str_length(pShort);
-	const char *pUnderscore = 0;
-	for(const char *p = pShort; *p; p++)
-		if(*p == '_')
-			pUnderscore = p;
-
-	// only a numeric suffix marks a generated instance, matching LoadMap
-	if(pUnderscore && pUnderscore[1] && str_is_number(pUnderscore + 1) == 0)
+	char aFloor[64];
+	int Seed = 0;
+	if(SplitGeneratedMapName(pMapName, aFloor, sizeof(aFloor), &Seed))
 	{
-		const int BaseLen = (int) (pUnderscore - pShort);
-		if(BaseLen > 0)
-			Len = BaseLen;
+		str_copy(pOut, aFloor, OutSize);
+		return;
 	}
 
-	str_copy(pOut, pShort, OutSize);
-	if(Len < OutSize)
-		pOut[Len] = '\0';
+	const char *pShort = MapNameBasename(pMapName);
+	if(pShort)
+		str_copy(pOut, pShort, OutSize);
 }
 
 CSnapIDPool::CSnapIDPool()
@@ -1625,11 +1656,12 @@ int CServer::LoadMap(CMapInfo *pInfo)
 			str_copy(aBaseMap, pInfo->m_aName, BaseLen + 1);
 			const int Seed = str_toint(pUnderscore + 1);
 
-			// The instance comes from its floor's pack; a miss generates it and
-			// packs it. Either way the server never needs a cache file.
-			if(!m_pMapGen || !m_pMapGen->AcquireMap(aBaseMap, Seed, &Instance))
+			// The instance must already come from the floor's pack or its
+			// generated file. Generation was queued earlier and runs on the
+			// background worker; doing it here would stall every client.
+			if(!m_pMapGen || !m_pMapGen->TryAcquireMap(aBaseMap, Seed, &Instance))
 			{
-				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "mapgen", "failed to generate the map");
+				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "mapgen", "the generated map is not ready yet");
 				return 0;
 			}
 			HaveInstance = true;
@@ -2445,6 +2477,37 @@ bool CServer::LoadMapForWorld(unsigned MapID)
 	// explicitly; RequestLoadWorld is idempotent.
 	GameServer()->RequestLoadWorld(MapID);
 	return true;
+}
+
+bool CServer::IsMapAvailable(unsigned MapID)
+{
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	if(!pInfo)
+		return false;
+	// The map bytes are already in memory; only the game world is missing.
+	if(pInfo->m_Loaded)
+		return true;
+
+	char aFloor[64];
+	int Seed = 0;
+	if(!SplitGeneratedMapName(pInfo->GetMapName(), aFloor, sizeof(aFloor), &Seed))
+		return true; // hand authored map: LoadMap reads it directly
+
+	return m_pMapGen && m_pMapGen->IsMapAvailable(aFloor, Seed);
+}
+
+void CServer::PrefetchMap(unsigned MapID)
+{
+	if(!m_pMapGen)
+		return;
+	CMapInfo *pInfo = m_MapInfos[MapID];
+	if(!pInfo)
+		return;
+
+	char aFloor[64];
+	int Seed = 0;
+	if(SplitGeneratedMapName(pInfo->GetMapName(), aFloor, sizeof(aFloor), &Seed))
+		m_pMapGen->PrefetchMap(aFloor, Seed);
 }
 
 bool CServer::RegisterMapName(const char *pName)

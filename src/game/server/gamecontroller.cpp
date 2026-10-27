@@ -563,7 +563,21 @@ bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 
 			if(pWorld->RingNeighbour(Direction, aTarget, sizeof(aTarget), NewPos.x, &ArrivalX))
 			{
 				dbg_msg("game", "ring crossing %s -> %s at x %.0f", pWorld->m_aMapName, aTarget, NewPos.x);
-				pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(aTarget), vec2(ArrivalX, NewPos.y), true);
+				pChr->GameServer()->Server()->RegisterMapName(aTarget);
+				bool Deferred = false;
+				if(!pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(aTarget), vec2(ArrivalX, NewPos.y), true, false, &Deferred))
+				{
+					// The neighbour is still being generated. Keep the character
+					// on this side of the seam; the next tick retries once the
+					// map is ready. This is rare because the game layer keeps a
+					// prefetch window around the occupied instance.
+					if(Deferred)
+					{
+						pChr->TeleTo(LastPos, true);
+						return true;
+					}
+					return false;
+				}
 				return true;
 			}
 		}
@@ -627,7 +641,21 @@ bool CGameController::HandleCharacterTiles(CCharacter *pChr, vec2 LastPos, vec2 
 		}
 		if(EntranceIndex >= 0)
 		{
-			pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pWorld->m_lEntrances[EntranceIndex].m_aTargetMap));
+			const char *pTarget = pWorld->m_lEntrances[EntranceIndex].m_aTargetMap;
+			pChr->GameServer()->Server()->RegisterMapName(pTarget);
+			bool Deferred = false;
+			if(!pChr->GameServer()->SwitchPlayerWorld(pChr->GetPlayer(), str_quickhash(pTarget), vec2(0.0f, 0.0f), false, false, &Deferred))
+			{
+				// The target world is still being generated. Put the character
+				// back where the movement started; the entrance is retried on a
+				// later tick when the world is ready.
+				if(Deferred)
+				{
+					pChr->TeleTo(LastPos, true);
+					return true;
+				}
+				return false;
+			}
 			return true;
 		}
 		return false;

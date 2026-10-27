@@ -476,9 +476,14 @@ bool CGameMenu::TravelTo(int ClientID, const char *pDestination)
 	}
 
 	pGameServer->Server()->RegisterMapName(aMapName);
+	if(!pGameServer->SwitchPlayerWorld(pPlayer, str_quickhash(aMapName), vec2(0.0f, 0.0f), false, true))
+	{
+		pGameServer->SendChat(-1, CHAT_ALL, ClientID,
+			Localize("The train is still being prepared. Try again in a moment.", "Menu Travel"));
+		return false;
+	}
 	pGameServer->SendChat(-1, CHAT_ALL, ClientID,
 		LocalizeFormat("Menu Travel", "The train takes you to {}.", Localize(pDestination, "World Name")).c_str());
-	pGameServer->SwitchPlayerWorld(pPlayer, str_quickhash(aMapName), vec2(0.0f, 0.0f), false, true);
 	return true;
 }
 

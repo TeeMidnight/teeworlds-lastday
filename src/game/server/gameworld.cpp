@@ -1027,9 +1027,15 @@ void CGameWorld::Tick()
 			// players should not be pulled in just because a wandering bot
 			// reached the boundary.
 			const bool IsBot = pEnt->ObjType() == ENTTYPE_BOTENTITY;
-			CGameWorld *pTarget = GameServer()->WorldByID(str_quickhash(aTarget));
+			const unsigned TargetID = str_quickhash(aTarget);
+			GameServer()->Server()->RegisterMapName(aTarget);
+			CGameWorld *pTarget = GameServer()->WorldByID(TargetID);
 			if(!pTarget && !IsBot)
-				pTarget = GameServer()->EnsureWorld(str_quickhash(aTarget));
+			{
+				// EnsureWorld never generates: it queues the prefetch and returns
+				// null, and the entity waits at the seam for a later tick.
+				pTarget = GameServer()->EnsureWorld(TargetID);
+			}
 			if(!pTarget || pTarget == this)
 				continue;
 			if(IsBot)

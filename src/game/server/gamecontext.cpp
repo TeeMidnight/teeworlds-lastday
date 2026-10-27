@@ -813,8 +813,13 @@ void CGameContext::SendRemoveChatCommand(const CCommandManager::CCommand *pComma
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientID);
 }
 
-void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos, bool HasArrival, bool TrainArrival)
+bool CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos, bool HasArrival, bool TrainArrival, bool *pDeferred)
 {
+	if(pDeferred)
+		*pDeferred = false;
+	if(!pPlayer)
+		return false;
+
 	if(pPlayer->GameWorld()->WorldID() == MapID)
 	{
 		vec2 SpawnPos;
@@ -828,18 +833,33 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 			pPlayer->QueueTrainProtection();
 			pPlayer->StartQueuedTrainProtection();
 		}
-		return;
+		return true;
 	}
 
-	// The engine must be able to create the game world before the client is
-	// told to switch: announcing a map whose world is missing would leave the
-	// player in the old world while the client loads the new one.
-	CGameWorld *pTargetWorld = EnsureWorld(MapID);
+	// Never let a tick wait for a generation. The game layer prefetches ring
+	// neighbours and entrance targets ahead of time; when a player still
+	// arrives too early the switch is deferred and retried on a later tick.
+	CGameWorld *pTargetWorld = WorldByID(MapID);
+	if(!pTargetWorld)
+	{
+		if(!Server()->IsMapAvailable(MapID))
+		{
+			Server()->PrefetchMap(MapID);
+			if(pDeferred)
+				*pDeferred = true;
+			// Movement re-enters the entrance/seam every tick until the map is
+			// ready, so this path deliberately stays silent.
+			return false;
+		}
+		// The map is available; this only creates the game world from the
+		// already generated map bytes.
+		pTargetWorld = EnsureWorld(MapID);
+	}
 	if(!pTargetWorld)
 	{
 		pPlayer->m_HasPendingArrival = false;
 		dbg_msg("game", "failed to switch client %d to map %u: missing world", pPlayer->GetCID(), MapID);
-		return;
+		return false;
 	}
 
 	// A ring crossing keeps the mapped column; every other switch falls back to
@@ -880,12 +900,12 @@ void CGameContext::SwitchPlayerWorld(CPlayer *pPlayer, unsigned MapID, const vec
 			if(TrainArrival)
 				pPlayer->StartQueuedTrainProtection();
 		}
+		return true;
 	}
-	else
-	{
-		pPlayer->m_HasPendingArrival = false;
-		dbg_msg("game", "failed to switch client %d to map %u", pPlayer->GetCID(), MapID);
-	}
+
+	pPlayer->m_HasPendingArrival = false;
+	dbg_msg("game", "failed to switch client %d to map %u", pPlayer->GetCID(), MapID);
+	return false;
 }
 
 bool CGameContext::IsOnTrainEntrance(CPlayer *pPlayer) const
@@ -2237,6 +2257,17 @@ CGameWorld *CGameContext::EnsureWorld(unsigned MapID)
 	CGameWorld *pWorld = WorldByID(MapID);
 	if(pWorld)
 		return pWorld;
+
+	// The cardinal rule of the world layer: never generate on the server tick
+	// thread. If the map is not ready, queue it and let the caller retry on a
+	// later tick once the background worker has produced it.
+	if(!Server()->IsMapAvailable(MapID))
+	{
+		Server()->PrefetchMap(MapID);
+		return nullptr;
+	}
+
+	// The bytes are available; this only builds the game world from them.
 	if(!Server()->LoadMapForWorld(MapID))
 		return nullptr;
 	return WorldByID(MapID);
@@ -2279,7 +2310,27 @@ void CGameContext::EnsureOccupiedRingNeighbours()
 			char aName[64];
 			if(!pWorld->RingNeighbour(Dir, aName, sizeof(aName), 0.0f, nullptr))
 				continue;
-			EnsureWorld(str_quickhash(aName));
+			Server()->RegisterMapName(aName);
+
+			// EnsureWorld only loads an available map; when it is still being
+			// generated it queues the prefetch and returns null.
+			CGameWorld *pNeighbour = EnsureWorld(str_quickhash(aName));
+			if(!pNeighbour || pNeighbour == pWorld || !pNeighbour->IsRing())
+				continue;
+
+			// Keep one instance of lookahead: as soon as the first neighbour is
+			// live, queue the one behind it. A crossing then normally finds its
+			// target already generated instead of having to defer.
+			char aNext[64];
+			if(pNeighbour->RingNeighbour(Dir, aNext, sizeof(aNext), 0.0f, nullptr))
+			{
+				const unsigned NextID = str_quickhash(aNext);
+				if(NextID != pWorld->WorldID())
+				{
+					Server()->RegisterMapName(aNext);
+					Server()->PrefetchMap(NextID);
+				}
+			}
 		}
 	}
 }
@@ -2324,7 +2375,24 @@ void CGameContext::EnsureOccupiedEntrances()
 			// The engine has to know the map name before LoadMapForWorld can
 			// find it; registration is idempotent.
 			Server()->RegisterMapName(Entrance.m_aTargetMap);
-			EnsureWorld(str_quickhash(Entrance.m_aTargetMap));
+			CGameWorld *pTarget = EnsureWorld(str_quickhash(Entrance.m_aTargetMap));
+			if(!pTarget || !pTarget->IsRing())
+				continue;
+
+			// The target is a ring instance. Warm its two neighbours now, so
+			// crossing a seam immediately after arriving through the entrance
+			// does not have to wait for a generation.
+			for(int Dir = -1; Dir <= 1; Dir += 2)
+			{
+				char aNeighbour[64];
+				if(!pTarget->RingNeighbour(Dir, aNeighbour, sizeof(aNeighbour), 0.0f, nullptr))
+					continue;
+				const unsigned NeighbourID = str_quickhash(aNeighbour);
+				if(NeighbourID == pTarget->WorldID())
+					continue;
+				Server()->RegisterMapName(aNeighbour);
+				Server()->PrefetchMap(NeighbourID);
+			}
 		}
 	}
 }

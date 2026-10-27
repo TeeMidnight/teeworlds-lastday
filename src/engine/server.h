@@ -134,11 +134,22 @@ public:
 	// (the map can be re-loaded on demand if a client switches to it again)
 	virtual void UnloadMap(unsigned MapID) = 0;
 
-	// Loads a map (generating it on demand) and makes sure its game world
-	// exists, without switching any client's map. Used to bring a ring
-	// neighbour in so an entity can cross into it. A default keeps the
-	// interface usable by an implementation that does not support worlds.
+	// Loads a map and makes sure its game world exists, without switching any
+	// client's map. The map must already be available (IsMapAvailable) or be a
+	// hand authored static map; generation never runs here. A default keeps
+	// the interface usable by an implementation that does not support worlds.
 	virtual bool LoadMapForWorld(unsigned MapID) { return false; }
+
+	// Whether LoadMapForWorld can load the map without generating it. The game
+	// layer consults this before creating a world so a server tick never
+	// spends seconds building a map. Implementations without generated maps
+	// can keep the default.
+	virtual bool IsMapAvailable(unsigned MapID) { return true; }
+
+	// Queues background generation of a map that is not available yet. The
+	// call must be cheap and non-blocking; the caller retries the world load
+	// on a later tick.
+	virtual void PrefetchMap(unsigned MapID) {}
 
 	// Registers a map name with the engine so it can be switched to or loaded
 	// later. A ring crossing names its target at runtime, and the engine only

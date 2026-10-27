@@ -200,9 +200,10 @@ public:
 	CGameWorld *MainWorld();
 	CGameWorld *WorldByID(unsigned MapID);
 
-	// The world of a map, loading (and generating) its map without switching any
-	// client's map when it does not exist yet. Null when the map cannot be
-	// loaded. Used to bring a ring neighbour in.
+	// The world of a map, loading an already available map without switching
+	// any client's map. When the map is still being generated it queues the
+	// prefetch and returns null; the caller retries on a later tick. Used to
+	// bring a ring neighbour in.
 	CGameWorld *EnsureWorld(unsigned MapID);
 
 	// whether a ring world with a player has the given map as a live neighbour
@@ -215,10 +216,10 @@ public:
 	// single owner nodes and entities in the shared strip can be reached.
 	void EnsureOccupiedRingNeighbours();
 
-	// Preload the target world of every entrance in an occupied world. Entrance
-	// switches are synchronous like ring crossings, so a world that is only
-	// discovered at the moment the player walks into the entrance would stall
-	// that tick and, if generation fails, drop the switch entirely.
+	// Load the target world of every entrance in an occupied world once its
+	// map is available, and prefetch the map in the background otherwise. An
+	// entrance switch never generates on the tick thread: if the player gets
+	// there first, the switch is deferred until the worker has built the map.
 	void EnsureOccupiedEntrances();
 
 	// apply a signed aggro delta to the (npc, account) ledger
@@ -322,7 +323,10 @@ public:
 	// only meaningful with HasArrival, which a ring crossing uses to land the
 	// character on the column it left instead of at a spawn. TrainArrival arms
 	// the short invincibility window that starts once the new map has loaded.
-	void SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos = vec2(0.0f, 0.0f), bool HasArrival = false, bool TrainArrival = false);
+	// Returns false when the switch did not happen; pDeferred (optional) is
+	// then true when the target map is still being generated in the background
+	// and the caller should keep the character where it is and retry later.
+	bool SwitchPlayerWorld(class CPlayer *pPlayer, unsigned MapID, const vec2 &ArrivalPos = vec2(0.0f, 0.0f), bool HasArrival = false, bool TrainArrival = false, bool *pDeferred = nullptr);
 
 	// Whether the player is standing on a TILE_TRAIN_ENTRANCE platform. The
 	// travel menu is only usable there; the tile itself never teleports.
