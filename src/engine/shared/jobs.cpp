@@ -6,6 +6,16 @@
 
 #include "jobs.h"
 
+int CJob::Run(JOBFUNC pfnFunc, void *pData)
+{
+	m_pfnFunc = pfnFunc;
+	m_pFuncData = pData;
+	m_Status = STATE_RUNNING;
+	m_Result = pfnFunc(pData);
+	m_Status = STATE_DONE;
+	return m_Result;
+}
+
 CJobPool::CJobPool()
 {
 	// empty the pool

@@ -80,7 +80,10 @@ void CHttpRequest::StartRun(IEngine *pEngine)
 
 void CHttpRequest::StartRunBlocking()
 {
-	Run(this);
+	// Go through the job so Result() and Status() report what actually
+	// happened; calling Run() directly left both at their defaults and hid
+	// every error from the caller.
+	m_Job.Run(&CHttpRequest::Run, this);
 }
 
 size_t CHttpRequest::WriteCallback(char *pData, size_t Size, size_t Number, void *pUser)
@@ -102,9 +105,9 @@ int CHttpRequest::Run(void *pUser)
 	curl_easy_setopt(pRequest->m_pHandle, CURLOPT_CUSTOMREQUEST, pRequest->m_aRequest);
 
 #if LIBCURL_VERSION_NUM >= 0x075500
-	curl_easy_setopt(pRequest->m_pHandle, CURLOPT_PROTOCOLS_STR, "https");
+	curl_easy_setopt(pRequest->m_pHandle, CURLOPT_PROTOCOLS_STR, "http,https");
 #else
-	curl_easy_setopt(pRequest->m_pHandle, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+	curl_easy_setopt(pRequest->m_pHandle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 #endif
 	curl_easy_setopt(pRequest->m_pHandle, CURLOPT_FOLLOWLOCATION, 1L);
 	curl_easy_setopt(pRequest->m_pHandle, CURLOPT_MAXREDIRS, 5L);

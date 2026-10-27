@@ -43,8 +43,12 @@ int CNetTokenManager::ProcessMessage(const NETADDR *pAddr, const CNetPacketConst
 	bool Verified = pPacket->m_Token != NET_TOKEN_NONE;
 	bool TokenMessage = (pPacket->m_Flags & NET_PACKETFLAG_CONTROL) && pPacket->m_aChunkData[0] == NET_CTRLMSG_TOKEN;
 
+	// Connless packets always need a token. The global (broadcast) token is a
+	// valid one here: the master server only knows the token the server
+	// advertises over HTTP, not the address specific token it would have to
+	// fetch first, so its challenge packet is signed with the global token.
 	if(pPacket->m_Flags & NET_PACKETFLAG_CONNLESS)
-		return (Verified && !BroadcastResponse) ? 1 : 0; // connless packets without token are not allowed
+		return Verified ? 1 : 0; // connless packets without token are not allowed
 
 	if(!TokenMessage)
 	{

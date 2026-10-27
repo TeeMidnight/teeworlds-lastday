@@ -23,6 +23,8 @@ class CRegister
 		PROTOCOL_IPV4 = 0,
 		PROTOCOL_IPV6,
 		NUM_PROTOCOLS,
+
+		MAX_EXTRA_HEADERS = 8,
 	};
 	static bool StatusFromString(int *pResult, const char *pString);
 	static bool ProtocolFromString(int *pResult, const char *pString);
@@ -34,6 +36,15 @@ class CRegister
 	char m_aVerifyPacketPrefix[sizeof(SERVERBROWSE_CHALLENGE) + UUID_MAXSTRSIZE];
 	char m_aServerInfo[32 * 1024];
 	char m_aConnlessTokenHex[16];
+	char m_aCommunityToken[128];
+	int m_NumExtraHeaders;
+	char m_aaExtraHeaders[MAX_EXTRA_HEADERS][128];
+	char m_aParsedExtra[256];
+
+	// Result of parsing sv_register, before the address families the server
+	// actually listens on are taken into account.
+	bool m_aRegisterEnabled[NUM_PROTOCOLS];
+	char m_aParsedRegister[16];
 
 	struct CProtocol
 	{
@@ -42,9 +53,11 @@ class CRegister
 			CRegister *m_pParent;
 			int m_Protocol;
 		} m_Context;
+		bool m_Enabled;
 		bool m_NewChallengeToken;
 		bool m_HaveChallengeToken;
 		char m_aChallengeToken[128];
+		int64 m_PrevRegister;
 		int64 m_NextRegister;
 
 		int m_NumTotalRequests;
@@ -73,17 +86,20 @@ private:
 	class IConsole *Console() const { return m_pConsole; }
 
 	static int SendRegister(void *pUser);
-	static void SendDeleteIfRegistered(void *pUser);
 
 	void CheckChallengeStatus(int Protocol);
 	void UpdateRegister(int Protocol);
+	void UpdateProtocols(int Nettype);
+	void ParseRegisterConfig();
+	void UpdateConfig();
+	void SendDelete(int Protocol, bool Shutdown);
 	void OnToken(int Protocol, const char *pToken);
 
 public:
 	CRegister();
 	~CRegister();
 	void Init(class IEngine *pEngine, class CConfig *pConfig, class IConsole *pConsole, TOKEN SecurityToken);
-	void RegisterUpdate(int Nettype);
+	void RegisterUpdate(int Nettype, TOKEN SecurityToken);
 	void OnNewInfo(const char *pInfo);
 	void OnShutdown();
 	bool OnPacket(const struct CNetChunk *pPacket);

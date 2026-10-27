@@ -2008,8 +2008,9 @@ int CServer::Run()
 
 				UpdateClientRconCommands();
 
-				// master server stuff
-				m_Register.RegisterUpdate(m_NetServer.NetType());
+				// master server stuff. The connless token rotates, so the
+				// current one has to be passed along every update.
+				m_Register.RegisterUpdate(m_NetServer.NetType(), m_NetServer.GetGlobalToken());
 
 				if(m_ServerInfoNeedsUpdate)
 				{

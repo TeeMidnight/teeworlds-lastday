@@ -28,6 +28,7 @@ public:
 	CJob()
 	{
 		m_Status = STATE_DONE;
+		m_Result = 0;
 		m_pFuncData = 0;
 	}
 
@@ -37,6 +38,10 @@ public:
 		STATE_RUNNING,
 		STATE_DONE
 	};
+
+	// Runs the function on the calling thread and records its status and
+	// result, so callers that cannot wait for the pool still see both.
+	int Run(JOBFUNC pfnFunc, void *pData);
 
 	int Status() const { return m_Status; }
 	int Result() const { return m_Result; }
