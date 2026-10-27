@@ -233,7 +233,57 @@ find_package(ZLIB)
 
 # Packet payload compression for the 0.8 handshake uses zstd with an embedded
 # dictionary (see src/engine/shared/zstd_dict.h).
-find_package(zstd)
+# Prefer the upstream config package. Ubuntu's libzstd-dev installs one, but an
+# unrelated Findzstd.cmake (LLVM and libzip ship one) can win module mode and
+# define only zstd::libzstd_shared/static. Resolve a link target once here so
+# every consumer can use ${ZSTD_TARGET}.
+find_package(zstd CONFIG QUIET)
+if(NOT zstd_FOUND)
+  find_package(zstd QUIET)
+endif()
+
+if(TARGET zstd::libzstd)
+  set(ZSTD_TARGET zstd::libzstd)
+  set(zstd_FOUND TRUE)
+elseif(TARGET zstd::libzstd_shared)
+  set(ZSTD_TARGET zstd::libzstd_shared)
+  set(zstd_FOUND TRUE)
+elseif(TARGET zstd::libzstd_static)
+  set(ZSTD_TARGET zstd::libzstd_static)
+  set(zstd_FOUND TRUE)
+else()
+  set(_zstd_libraries ${zstd_LIBRARIES})
+  set(_zstd_includes ${zstd_INCLUDE_DIRS})
+  if(NOT _zstd_libraries AND zstd_LIBRARY)
+    set(_zstd_libraries ${zstd_LIBRARY})
+  endif()
+  if(NOT _zstd_includes AND zstd_INCLUDE_DIR)
+    set(_zstd_includes ${zstd_INCLUDE_DIR})
+  endif()
+  if(NOT _zstd_libraries)
+    find_library(ZSTD_LIBRARY NAMES zstd)
+    if(ZSTD_LIBRARY)
+      set(_zstd_libraries ${ZSTD_LIBRARY})
+    endif()
+  endif()
+  if(NOT _zstd_includes)
+    find_path(ZSTD_INCLUDE_DIR NAMES zstd.h)
+    if(ZSTD_INCLUDE_DIR)
+      set(_zstd_includes ${ZSTD_INCLUDE_DIR})
+    endif()
+  endif()
+  if(_zstd_libraries AND _zstd_includes)
+    add_library(zstd::libzstd INTERFACE IMPORTED)
+    set_target_properties(zstd::libzstd PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${_zstd_includes}"
+      INTERFACE_LINK_LIBRARIES "${_zstd_libraries}")
+    set(ZSTD_TARGET zstd::libzstd)
+    set(zstd_FOUND TRUE)
+  else()
+    set(ZSTD_TARGET "")
+    set(zstd_FOUND FALSE)
+  endif()
+endif()
 
 find_package(OpenSSL)
 find_package(CURL)
@@ -740,7 +790,7 @@ set(GAME_GENERATED_SHARED
 set(DEPS ${DEP_JSON} ${DEP_MD5} ${ZLIB_DEP} ${PNGLITE_DEP})
 
 # Libraries
-set(LIBS ${CMAKE_THREAD_LIBS_INIT} OpenSSL::Crypto CURL::libcurl spng::spng zstd::libzstd ${PLATFORM_LIBS})
+set(LIBS ${CMAKE_THREAD_LIBS_INIT} OpenSSL::Crypto CURL::libcurl spng::spng ${ZSTD_TARGET} ${PLATFORM_LIBS})
 if(ZLIB_BUNDLED)
   list(APPEND LIBS ${ZLIB_LIBRARIES})
 else()
