@@ -391,7 +391,10 @@ void *CDataFileReader::GetDataImpl(int Index, int Swap)
 			// uncompressed size in the file
 			void *pTemp = (char *) mem_alloc(DataSize);
 			unsigned long UncompressedSize = m_pDataFile->m_Info.m_pDataSizes[Index];
-			size_t s = (size_t) UncompressedSize;
+			// zlib's uncompress() takes a uLongf*, which is 32-bit on Windows
+			// (LLP64) even though size_t is 64-bit there. ZSTD accepts the same
+			// value widened to size_t.
+			uLongf s = (uLongf) UncompressedSize;
 
 			dbg_msg("datafile", "loading data index=%d size=%d uncompressed=%lu", Index, DataSize, UncompressedSize);
 			m_pDataFile->m_ppDataPtrs[Index] = (char *) mem_alloc(UncompressedSize);
