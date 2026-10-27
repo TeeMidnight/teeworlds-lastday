@@ -26,6 +26,13 @@
 			"rarity": "common"
 		},
 		{
+			"item": "fuel_canister",
+			"count_min": 10,
+			"count_max": 20,
+			"weight": 8,
+			"rarity": "common"
+		},
+		{
 			"item": "pistol_bullet",
 			"count_min": 6,
 			"count_max": 12,

@@ -1,0 +1,5 @@
+{
+    "name": "Flamethrower",
+    "desc": "Sprays a short cone of burning embers. Feed it fuel canisters.",
+    "item_type": ["weapon"]
+}

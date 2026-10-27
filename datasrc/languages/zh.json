@@ -472,6 +472,46 @@
 			"context": "Item Type",
 			"or": "container",
 			"tr": "容器"
+		},
+		{
+			"context": "Item Name",
+			"or": "Campfire",
+			"tr": "营火"
+		},
+		{
+			"context": "Item Name",
+			"or": "Flame Cannon",
+			"tr": "火焰炮"
+		},
+		{
+			"context": "Item Name",
+			"or": "Flamethrower",
+			"tr": "火焰喷射器"
+		},
+		{
+			"context": "Item Name",
+			"or": "Fuel Canister",
+			"tr": "燃料罐"
+		},
+		{
+			"context": "Item Desc: Campfire",
+			"or": "A placeable fire. Its embers burn nearby monsters but never players.",
+			"tr": "可放置的营火。火星会灼烧附近的怪物，但不会伤到玩家。"
+		},
+		{
+			"context": "Item Desc: Flame Cannon",
+			"or": "A heavy flame projector that fires a wide, searing burst. Feed it fuel canisters.",
+			"tr": "重型火焰喷射器，能喷出宽而炽烈的火团。需要消耗燃料罐。"
+		},
+		{
+			"context": "Item Desc: Flamethrower",
+			"or": "Sprays a short cone of burning embers. Feed it fuel canisters.",
+			"tr": "喷射出短距离的燃烧余烬。需要消耗燃料罐。"
+		},
+		{
+			"context": "Item Desc: Fuel Canister",
+			"or": "Volatile fuel for the flamethrower and the flame cannon.",
+			"tr": "供火焰喷射器和火焰炮使用的不稳定燃料。"
 		}
 	],
 	"server strings": [
@@ -2184,6 +2224,51 @@
 			"context": "Mob Dialogue",
 			"or": "Then we will freeze together!",
 			"tr": "那就一起冻僵吧！"
+		},
+		{
+			"context": "Building",
+			"or": "Campfire",
+			"tr": "营火"
+		},
+		{
+			"context": "Campfire",
+			"or": "Campfire placed. It burns nearby monsters.",
+			"tr": "营火已放置。它会灼烧附近的怪物。"
+		},
+		{
+			"context": "Campfire",
+			"or": "Campfires are unavailable.",
+			"tr": "营火暂时不可用。"
+		},
+		{
+			"context": "Campfire",
+			"or": "Stand on the ground to place a campfire.",
+			"tr": "请站在地面上放置营火。"
+		},
+		{
+			"context": "Campfire",
+			"or": "There is already a campfire here.",
+			"tr": "这里已经有一个营火了。"
+		},
+		{
+			"context": "Campfire",
+			"or": "There is no floor below the campfire.",
+			"tr": "营火下方没有地面。"
+		},
+		{
+			"context": "Campfire",
+			"or": "There is no room for a campfire here.",
+			"tr": "这里没有空间放置营火。"
+		},
+		{
+			"context": "Campfire",
+			"or": "You have to be alive to place a campfire.",
+			"tr": "你必须活着才能放置营火。"
+		},
+		{
+			"context": "Tip",
+			"or": "Campfires burn nearby monsters. Flame weapons need fuel canisters.",
+			"tr": "营火会灼烧附近的怪物。火焰武器需要燃料罐。"
 		}
 	]
 }

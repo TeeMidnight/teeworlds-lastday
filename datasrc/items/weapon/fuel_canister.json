@@ -1,0 +1,11 @@
+{
+    "name": "Fuel Canister",
+    "desc": "Volatile fuel for the flamethrower and the flame cannon.",
+    "item_type": ["ammo"],
+    "ammo_for": ["flamethrower", "flame_cannon"],
+    "damage": 1,
+    "projectiles": 9,
+    "speed": 1.0,
+    "lifetime": 1.0,
+    "effect": 0
+}

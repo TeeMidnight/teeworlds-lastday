@@ -553,6 +553,23 @@ bool CBotEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, in
 	if(!m_Alive)
 		return false;
 
+	// A friendly source (a companion's shot, or a campfire's embers) must not
+	// hurt a non-hostile unit. Friendly and neutral bots both ignore it;
+	// hostile bots still take the damage, because they are nobody's ally.
+	if(m_Faction != BOTFACTION_HOSTILE)
+	{
+		int From = -1;
+		if(pFrom)
+		{
+			if(pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD)
+				From = static_cast<CChildEntity *>(pFrom)->GetOwner();
+			else
+				From = pFrom->GetHitAttacker();
+		}
+		if(From == PLAYER_TEAM_FRIENDLY)
+			return false;
+	}
+
 	m_Core.m_Vel += Force;
 
 	// bots are their own team: nothing is friendly fire

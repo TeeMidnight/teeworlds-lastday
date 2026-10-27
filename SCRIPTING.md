@@ -81,6 +81,14 @@ def on_fire(ctx):
                    False, -1, 1)
 ```
 
+A scripted prop can create a projectile without a client owner by passing one
+of the damage sentinels (`-3` hostile, `-4` friendly) as the owner. The
+projectile then spawns into the callback's active world and its hits follow the
+same sentinel rules as a bot's hits: a friendly projectile (used by the
+campfire) damages hostile bots but never players, friendly units or neutral
+units, while a hostile one hurts everyone. The projectile still uses the normal
+projectile type, so `WEAPON_HAMMER` (0) is the stationary ember particle.
+
 `ctx["player"]` etc. still work as a compatibility shim for older scripts and
 return the primitive id/name; new scripts should use the class attributes.
 
@@ -100,20 +108,32 @@ return the primitive id/name; new scripts should use the class attributes.
 - entities: `create_projectile`, `create_laser`, `sound`, `hammer_hit`,
   `tuning`, `random_int`, `random_int_range`, `log`.
 - server / worlds: `tick`, `tick_speed`, `active_world`, `world_name`,
-  `floor_name`, `world_kind`, `world_test_box`, `world_floor_y`, `drill_near`,
-  `drill_spawn`.
+  `floor_name`, `world_kind`, `world_test_box`, `world_test_line`,
+  `world_floor_y`, `drill_near`, `drill_spawn`. `world_test_line` is a
+  swept line test: radius 0 checks the line itself, a positive radius sweeps a
+  box of `2 * radius` along it, which is what a projectile-sized flame particle
+  needs to stay out of walls.
 - snapshot ids: `snap_new_id()`, `snap_new_id_for(world_id)`,
   `snap_free_id(id)`, `snap_free_id_for(id, world_id)`. The `_for` variants
   name the world explicitly; the plain ones use the callback's world. Freeing
   needs the world because different floors may hold the same numeric id.
 
-`import lastday_entity` adds the scripted-prop surface (`spawn`, `exists`,
-`pos`, `health`, `damage`, `destroy`, `set_visual`, `set_health`,
-`set_persistent`, `owner_near`, `allowed_player_near`, `can_use`, `lock_mode`,
-`player_near`, `world_id`, health/items drops) and its own `snap_new_id` /
-`snap_free_id` for code that only imported the entity module. `allowed_player_near`
-respects the building lock (`self` / `team` / `public`); use it instead of
-`owner_near` for a placeable that should be shared with a team.
+`import lastday_entity` adds the scripted-prop surface (`spawn`, `spawn_owned`,
+`kind_near`, `exists`, `pos`, `health`, `damage`, `destroy`, `set_visual`,
+`set_health`, `set_persistent`, `owner_near`, `allowed_player_near`, `can_use`,
+`lock_mode`, `player_near`, `world_id`, health/items drops) and its own
+`snap_new_id` / `snap_free_id` for code that only imported the entity module.
+`allowed_player_near` respects the building lock (`self` / `team` / `public`);
+use it instead of `owner_near` for a placeable that should be shared with a
+team.
+
+`spawn_owned(kind, x, y, params, owner_client, persistent, max_health,
+lock_mode)` is the placement form: it records the owner's account (so the
+building lock and the saved owner work), takes the persistence flag and maximum
+health explicitly, and defaults `max_health = 0` to the entity definition's
+health. Plain `spawn` stays ownerless and is the right call for transient
+props. `kind_near(kind, x, y, radius)` answers whether a prop of that kind
+already stands within reach, which placement scripts use for a duplicate check.
 
 ## Data formats
 
@@ -286,7 +306,8 @@ No `sv_` / `cl_` prefix:
 ## Migration status
 
 Scripted now: medicine item use, weapon firing for gun/shotgun/grenade/laser/
-hammer/hand/sword, buffs, health jar prop, and bot AI. Health drops are merged
+hammer/hand/sword and the flamethrower/flame cannon, buffs, the health jar and
+campfire props, and bot AI. Health drops are merged
 into `CDroppedPickup` as `KIND_HEALTH` (one physics/collection path, not a
 separate entity type). The ninja weapon, player character, projectile/laser
 simulation, resource/pickup/drill entities remain native (hot paths or still

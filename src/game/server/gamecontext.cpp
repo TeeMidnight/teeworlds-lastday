@@ -644,6 +644,8 @@ const char *CGameContext::BuildableName(CEntity *pEntity, char *pBuf, int BufSiz
 		const CScriptedEntity *pScripted = static_cast<const CScriptedEntity *>(pEntity);
 		if(str_comp(pScripted->Kind(), "health_jar") == 0)
 			str_copy(pBuf, Localize("Health Jar", "Building"), BufSize);
+		else if(str_comp(pScripted->Kind(), "campfire") == 0)
+			str_copy(pBuf, Localize("Campfire", "Building"), BufSize);
 		else
 			str_copy(pBuf, pScripted->Kind(), BufSize);
 	}

@@ -700,6 +700,14 @@ void CMonsterEntity::RememberAttacker(CEntity *pFrom)
 {
 	if(!pFrom)
 		return;
+
+	// A friendly source (a campfire's embers) must not make a neutral or
+	// friendly monster retaliate: CBotEntity::TakeDamage rejects the damage,
+	// but the aggro bookkeeping happens before it.
+	if((pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD) &&
+		static_cast<CChildEntity *>(pFrom)->GetOwner() == PLAYER_TEAM_FRIENDLY)
+		return;
+
 	m_RetaliateUntil = Server()->Tick() + Server()->TickSpeed() * 10;
 
 	if(pFrom->ObjType() == CGameWorld::ENTTYPE_CHARACTER)

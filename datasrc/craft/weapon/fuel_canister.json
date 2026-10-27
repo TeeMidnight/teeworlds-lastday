@@ -1,0 +1,8 @@
+{
+    "craft_id": "fuel_canister",
+    "needed": [
+        {"item_id": "grass", "count": 6},
+        {"item_id": "straw_rope", "count": 2}
+    ],
+    "result": {"item_id": "fuel_canister", "count": 120}
+}

@@ -228,6 +228,28 @@ generated maps and packs are not reused; delete the old
 `generatedmaps/LastDay/<old version>` and `mappacks/LastDay/<old version>`
 directories if they are still present.
 
+Fire content
+------------
+Flame weapons are built from the one projectile type the stock 0.7 client draws
+without a bullet sprite: `WEAPON_HAMMER`. The client still emits a bullet-trail
+particle for every live projectile of that type, and `CProjectile` gives it no
+velocity on either side, so a short-lived stationary puff reads as an ember. The
+flamethrower spawns a cone of those puffs; the flame cannon is the heavy,
+wider, slower-firing variant. Both eat `fuel_canister` ammo.
+
+The same particle backs the `campfire` scripted prop. Its base is a
+laser-drawn stone ring with crossed sticks; each emission advances a phase from
+that base outward, so the flame visibly grows from the bottom. It emits friendly
+puffs (owner sentinel `-4`) on a short timer, so it burns hostile bots but
+never players, friendly units or neutral units. It is a proper building:
+`spawn_owned` records the placer's account, the lock and the saved owner, and
+the item drops back when the fire is dismantled. A campfire is persistent world
+content; its flames are not. The scripts are
+`datasrc/scripts/weapons/flamethrower.py`,
+`datasrc/scripts/entities/campfire.py` and
+`datasrc/scripts/items/campfire.py`; the recipes are under
+`datasrc/craft/weapon` and `datasrc/craft/tool`.
+
 World packs
 -----------
 A generated instance is a `.map` plus a `.json` sidecar holding its entrances,

@@ -46,6 +46,19 @@ static CGameWorld *ActiveWorld()
 	return pRuntime ? pRuntime->ActiveWorld() : nullptr;
 }
 
+// The world a sound or a hit spark belongs to: the callback's world when there
+// is one, otherwise the first player's world (console/global calls).
+static CGameWorld *EffectWorld()
+{
+	CGameWorld *pWorld = ActiveWorld();
+	if(pWorld)
+		return pWorld;
+	CGameContext *pGame = Game();
+	if(!pGame || !pGame->m_apPlayers[0])
+		return nullptr;
+	return pGame->m_apPlayers[0]->GameWorld();
+}
+
 static bool ValidPos(float x, float y)
 {
 	return absolute(x) < 1.0e7f && absolute(y) < 1.0e7f;
@@ -61,10 +74,29 @@ static py::tuple Vec2Tuple(float x, float y)
 
 static int CreateProjectileScript(int Owner, float x, float y, float vx, float vy, int Span, int Damage, bool Explosive, int SoundImpact, int Weapon)
 {
-	CCharacter *pChr = Character(Owner);
-	if(!pChr || !ValidPos(x, y))
+	// A real client spawns the projectile into that client's world. A negative
+	// owner must be one of the PLAYER_TEAM_* damage sentinels: a scripted prop
+	// (a campfire) has no client slot but still needs a projectile whose hit is
+	// credited to "friendly" or "hostile" instead of a player. Those spawn into
+	// the callback's active world, which is the world the prop lives in.
+	CGameWorld *pWorld = nullptr;
+	if(Owner >= 0)
+	{
+		CCharacter *pChr = Character(Owner);
+		if(!pChr)
+			return -1;
+		pWorld = pChr->GameWorld();
+	}
+	else
+	{
+		if(Owner != PLAYER_TEAM_HOSTILE && Owner != PLAYER_TEAM_FRIENDLY &&
+			Owner != PLAYER_TEAM_RED && Owner != PLAYER_TEAM_BLUE)
+			return -1;
+		pWorld = ActiveWorld();
+	}
+	if(!pWorld || !ValidPos(x, y))
 		return -1;
-	CProjectile *pProjectile = new CProjectile(pChr->GameWorld(), Weapon, Owner, vec2(x, y), vec2(vx, vy),
+	CProjectile *pProjectile = new CProjectile(pWorld, Weapon, Owner, vec2(x, y), vec2(vx, vy),
 		Span, Damage, Explosive, 0.0f, SoundImpact, Weapon);
 	return pProjectile->GetID();
 }
@@ -352,10 +384,7 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 
 	m.def("sound", [](float x, float y, int Sound)
 	{
-		CGameContext *pGame = Game();
-		if(!pGame || !pGame->m_apPlayers[0])
-			return false;
-		CGameWorld *pWorld = pGame->m_apPlayers[0]->GameWorld();
+		CGameWorld *pWorld = EffectWorld();
 		if(!pWorld)
 			return false;
 		pWorld->CreateSound(vec2(x, y), Sound);
@@ -364,10 +393,7 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 
 	m.def("hammer_hit", [](float x, float y)
 	{
-		CGameContext *pGame = Game();
-		if(!pGame || !pGame->m_apPlayers[0])
-			return false;
-		CGameWorld *pWorld = pGame->m_apPlayers[0]->GameWorld();
+		CGameWorld *pWorld = EffectWorld();
 		if(!pWorld)
 			return false;
 		pWorld->CreateHammerHit(vec2(x, y));
@@ -434,6 +460,36 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 		if(!pWorld || Width <= 0.0f || Height <= 0.0f)
 			return false;
 		return pWorld->Collision()->TestBox(vec2(X, Y), vec2(Width, Height)) != 0;
+	});
+
+	// Swept line test. Radius 0 is a plain line; a positive radius sweeps a
+	// box of 2 * Radius around it, which is what a projectile-sized particle
+	// needs so it cannot spawn through a wall corner. Returns true when the
+	// line is blocked by solid (or otherwise non-zero) collision tiles.
+	m.def("world_test_line", [](float X1, float Y1, float X2, float Y2, float Radius) -> bool
+	{
+		CGameWorld *pWorld = ActiveWorld();
+		if(!pWorld || !ValidPos(X1, Y1) || !ValidPos(X2, Y2))
+			return true;
+		const vec2 From(X1, Y1);
+		const vec2 To(X2, Y2);
+		const float UseRadius = maximum(0.0f, Radius);
+		if(UseRadius <= 0.0f)
+			return pWorld->Collision()->IntersectLine(From, To, nullptr, nullptr) != 0;
+
+		// Walk a box along the segment. The step is one radius so consecutive
+		// boxes overlap and a thin wall cannot slip through between samples.
+		const vec2 Delta = To - From;
+		const float Distance = length(Delta);
+		// A script cannot stall the tick thread with an enormous line.
+		const int Steps = clamp((int) (Distance / UseRadius), 1, 2048);
+		for(int i = 0; i <= Steps; i++)
+		{
+			const vec2 Pos = From + Delta * ((float) i / (float) Steps);
+			if(pWorld->Collision()->TestBox(Pos, vec2(UseRadius * 2.0f, UseRadius * 2.0f)) != 0)
+				return true;
+		}
+		return false;
 	});
 
 	// (found, floor_y): the first solid surface below (X, Y), snapped to a tile

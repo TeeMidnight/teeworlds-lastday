@@ -1,0 +1,9 @@
+{
+	"name": "flamethrower",
+	"script": "scripts/weapons/flamethrower.py",
+	"snap_style": 2,
+	"fire_delay": 100,
+	"full_auto": true,
+	"default_ammo": 0,
+	"max_ammo": 0
+}

@@ -40,6 +40,13 @@
 			"rarity": "common"
 		},
 		{
+			"item": "fuel_canister",
+			"count_min": 20,
+			"count_max": 40,
+			"weight": 8,
+			"rarity": "common"
+		},
+		{
 			"item": "bandage",
 			"count_min": 1,
 			"count_max": 2,

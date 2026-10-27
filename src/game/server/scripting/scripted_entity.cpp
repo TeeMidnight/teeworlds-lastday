@@ -869,6 +869,43 @@ PYBIND11_EMBEDDED_MODULE(lastday_entity, m)
 		return pEntity ? pEntity->GetID() : -1;
 	});
 
+	// Spawn a prop that carries the placing player's account (so the building
+	// lock and the persisted owner work), with an explicit persistence flag and
+	// maximum health. A placement script uses this when the prop is a building
+	// rather than a transient world object.
+	m.def("spawn_owned", [](const std::string &Kind, float X, float Y, py::object Params, int OwnerClient, int Persistent, int MaxHealth, int LockMode) -> int
+	{
+		CGameWorld *pWorld = ActiveWorldOrMain();
+		CGameContext *pGame = Game();
+		if(!pWorld || !pGame || !pGame->ScriptedEntities() || !ValidPos(X, Y))
+			return -1;
+		CPlayer *pPlayer = OwnerClient >= 0 && OwnerClient < MAX_CLIENTS ? pGame->m_apPlayers[OwnerClient] : nullptr;
+		const Uuid Owner = pPlayer ? pPlayer->m_AccountUuid : UUID_ZEROED;
+		const std::string Json = JsonArg(Params);
+		CScriptedEntity *pEntity = pGame->ScriptedEntities()->Spawn(Kind.c_str(), pWorld, vec2(X, Y),
+			Json.c_str(), Owner, OwnerClient, Persistent, MaxHealth, -1, nullptr, false,
+			clamp(LockMode, (int) BUILD_LOCK_PUBLIC, (int) BUILD_LOCK_TEAM));
+		return pEntity ? pEntity->GetID() : -1;
+	});
+
+	// Whether a scripted prop of this kind stands within Radius of (X, Y). The
+	// placement scripts use it for a duplicate check without having to scan
+	// every entity through the game context.
+	m.def("kind_near", [](const std::string &Kind, float X, float Y, float Radius) -> bool
+	{
+		CGameWorld *pWorld = ActiveWorldOrMain();
+		if(!pWorld || Kind.empty() || Radius <= 0.0f)
+			return false;
+		for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_SCRIPTED); !r.empty(); r.pop_front())
+		{
+			CScriptedEntity *pEntity = static_cast<CScriptedEntity *>(r.front());
+			if(pEntity && str_comp(pEntity->Kind(), Kind.c_str()) == 0 &&
+				distance(pEntity->GetPos(), vec2(X, Y)) < Radius)
+				return true;
+		}
+		return false;
+	});
+
 	m.def("destroy", [](int EntityID) -> bool
 	{
 		CScriptedEntity *pEntity = FindScriptedEntity(EntityID);

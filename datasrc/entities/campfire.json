@@ -1,0 +1,14 @@
+{
+	"kind": "campfire",
+	"script": "scripts/entities/campfire.py",
+	"health": 16,
+	"radius": 8,
+	"persistent": true,
+	"params": {
+		"range": 96,
+		"emit_ticks": 5,
+		"drop_item": "campfire",
+		"drop_count": 1
+	},
+	"visual": {}
+}

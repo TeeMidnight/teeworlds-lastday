@@ -1,0 +1,5 @@
+{
+    "name": "Flame Cannon",
+    "desc": "A heavy flame projector that fires a wide, searing burst. Feed it fuel canisters.",
+    "item_type": ["weapon"]
+}

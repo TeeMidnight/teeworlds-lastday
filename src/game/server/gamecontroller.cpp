@@ -22,6 +22,7 @@
 #include "gamecontroller.h"
 #include "item.h"
 #include "player.h"
+#include "scripting/scripted_weapon.h"
 #include "team.h"
 #include "trade.h"
 #include "weapon.h"
@@ -184,6 +185,28 @@ void CGameController::OnCharacterSpawn(CCharacter *pChr)
 			{
 				IWeaponInterface *pWeapon = WeaponManager()->GetWeaponByIndex(i);
 				if(pWeapon && GameServer()->Item()->HasItem(pChr->GetCID(), pWeapon->Name()))
+					pChr->EquipWeaponSlot(Slot++, CItemID::FromName(pWeapon->Name()));
+			}
+			// Scripted-only weapons (flamethrower, flame cannon, ...) are not in
+			// the native registry. A scripted entry that overrides a native name
+			// is already equipped above, so only add the missing names.
+			for(int i = 0; i < WeaponManager()->NumScriptedWeapons() && Slot < NUM_WEAPONS; i++)
+			{
+				IWeaponInterface *pWeapon = WeaponManager()->GetScriptedWeaponByIndex(i);
+				if(!pWeapon || !GameServer()->Item()->HasItem(pChr->GetCID(), pWeapon->Name()))
+					continue;
+				bool AlreadyEquipped = false;
+				for(int s = 0; s < NUM_WEAPONS; s++)
+				{
+					const CItemID SlotItem = pChr->WeaponAtSlot(s);
+					if(!SlotItem.IsZero() &&
+						str_comp(GameServer()->Item()->GetWeaponName(SlotItem), pWeapon->Name()) == 0)
+					{
+						AlreadyEquipped = true;
+						break;
+					}
+				}
+				if(!AlreadyEquipped)
 					pChr->EquipWeaponSlot(Slot++, CItemID::FromName(pWeapon->Name()));
 			}
 		}

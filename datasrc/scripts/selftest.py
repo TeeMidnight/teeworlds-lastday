@@ -37,7 +37,13 @@ def on_selftest(ctx):
     ctx.result["item_jar"] = lastday.item_health_jar("lastday:health_jar")
     ctx.result["jar_size"] = lastday_entity.health_jar_size()
     ctx.result["floor"] = lastday.world_floor_y(0.0, 0.0, 128.0)
+    ctx.result["line"] = lastday.world_test_line(0.0, 0.0, 32.0, 0.0, 4.0)
     ctx.result["drill_near"] = lastday.drill_near(0.0, 0.0, 40.0)
+    ctx.result["kind_near"] = lastday_entity.kind_near("campfire", 0.0, 0.0, 64.0)
+    # no world in the console test: this must fail cleanly with -1
+    ctx.result["spawn_owned"] = lastday_entity.spawn_owned(
+        "campfire", 0.0, 0.0, None, -1, 1, 0, 1
+    )
 
     # per-floor snapshot id allocation through the host bridge
     snap_id = ctx.snap_new_id()

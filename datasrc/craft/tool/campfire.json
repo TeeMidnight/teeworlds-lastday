@@ -1,0 +1,9 @@
+{
+    "craft_id": "campfire",
+    "needed": [
+        {"item_id": "stone", "count": 6},
+        {"item_id": "straw_rope", "count": 3},
+        {"item_id": "grass", "count": 2}
+    ],
+    "result": {"item_id": "campfire", "count": 1}
+}
