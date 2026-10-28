@@ -12,8 +12,6 @@
     "worm": {
         "segments": 6,
         "speed": 2.8,
-        "burrow_ticks": 100,
-        "surface_ticks": 70,
         "damage": 2,
         "bite_radius": 52,
         "chase_radius": 560

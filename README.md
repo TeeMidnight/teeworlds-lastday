@@ -143,9 +143,10 @@ them does not also roll random mobs.
 
 `burrower` is a segmented worm: the head and body are real tee-shaped bot
 entities, so it reads as a chain of tees, while one `CWormEntity` owns the
-shared health, the burrow/surface cycle, contact damage and loot. It phases
-through terrain instead of carving it, is only hittable while surfaced, and any
-body link routes damage to the whole creature.
+shared health, ground movement, contact damage and loot. It crawls along the
+first floor below it instead of flying or phasing through terrain, is visible
+and hittable for its whole life, and any body link routes damage to the whole
+creature.
 
 Hostile, neutral and friendly combat uses the `PLAYER_TEAM_HOSTILE` and
 `PLAYER_TEAM_FRIENDLY` damage sentinels. They keep hostile hits from being

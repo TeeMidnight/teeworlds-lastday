@@ -43,7 +43,7 @@ public:
 
 	// moves the link directly; the worm has already computed the trail
 	void SetWormPos(vec2 Pos, vec2 Dir);
-	// hidden links are underground: they do not collide, hook or snap
+	// links are visible for their whole life; hiding is only used on death
 	void SetWormVisible(bool Visible);
 	void SetWorm(CWormEntity *pWorm) { m_pWorm = pWorm; }
 	// removes the link from the world and the bot manager
@@ -59,9 +59,10 @@ private:
 /*
 	Class: CWormEntity
 		A segmented burrower. The head and body are bots (so they look like a
-		chain of tees), while this entity owns the shared health, the burrow
-		cycle, contact damage and loot. It moves through terrain instead of
-		carving it, so the map stays immutable.
+		chain of tees), while this entity owns the shared health, ground
+		movement, contact damage and loot. It crawls along the terrain and never
+		flies or turns invisible, so the map stays immutable and the fight stays
+		readable.
 */
 class CWormEntity : public CHitableEntity
 {
@@ -76,7 +77,6 @@ public:
 	int GetHitAttacker() override;
 
 	bool Alive() const { return m_Alive; }
-	bool Burrowed() const { return m_Burrowed; }
 	const SMobDef *Def() const { return m_pDef; }
 	IBotEntity *HeadSegment();
 
@@ -97,8 +97,6 @@ private:
 	int m_MaxHealth;
 	int m_Armor;
 	bool m_Alive;
-	bool m_Burrowed;
-	int m_StateTimer;
 	int m_BiteTimer;
 	int m_LastHitTick;
 	int m_WanderTimer;

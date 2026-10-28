@@ -29,7 +29,9 @@ CWormSegmentEntity::CWormSegmentEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID,
 	m_Natural = Natural;
 	SetAI(nullptr);
 	// the worm drives the body: no input strategy and no physics tick
-	SetWormVisible(false);
+	// The links are visible from birth; the old burrow cycle made the whole
+	// creature untargetable and invisible for half of its life.
+	SetWormVisible(true);
 }
 
 CWormSegmentEntity::~CWormSegmentEntity()
@@ -124,8 +126,6 @@ CWormEntity::CWormEntity(CGameWorld *pWorld, vec2 Pos, const SMobDef *pDef, Uuid
 	m_Health = m_MaxHealth;
 	m_Armor = pDef ? pDef->m_Armor : 0;
 	m_Alive = true;
-	m_Burrowed = true;
-	m_StateTimer = pDef ? pDef->m_Worm.m_BurrowTicks : 90;
 	m_BiteTimer = 0;
 	m_LastHitTick = -100;
 	m_WanderTimer = 0;
@@ -265,21 +265,30 @@ void CWormEntity::UpdateSegments()
 	}
 }
 
+// The first solid tile at X at or below FromY is the floor the worm stands
+// on. Starting at the worm's own row lets it step onto a one-tile ledge, while
+// a taller wall leaves the candidate centre inside the wall and is rejected by
+// the clearance test below.
+static bool FindWormGround(CGameWorld *pWorld, float X, float FromY, float *pGroundTop)
+{
+	CCollision *pCollision = pWorld->Collision();
+	const int Height = pCollision->GetHeight();
+	const int StartY = maximum(0, (int) (FromY / 32.0f));
+	for(int Y = StartY; Y < Height; Y++)
+	{
+		if(pCollision->CheckPoint(vec2(X, Y * 32.0f + 16.0f)))
+		{
+			*pGroundTop = Y * 32.0f;
+			return true;
+		}
+	}
+	return false;
+}
+
 void CWormEntity::Tick()
 {
-	if(!m_Alive)
+	if(!m_Alive || !m_pDef)
 		return;
-
-	if(m_StateTimer > 0)
-		m_StateTimer--;
-	if(m_StateTimer <= 0)
-	{
-		m_Burrowed = !m_Burrowed;
-		m_StateTimer = m_Burrowed ? m_pDef->m_Worm.m_BurrowTicks : m_pDef->m_Worm.m_SurfaceTicks;
-		SetVisible(!m_Burrowed);
-		if(!m_Burrowed)
-			GameWorld()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_SHORT);
-	}
 
 	CCharacter *pTarget = nullptr;
 	if(GameWorld()->HasBotManager())
@@ -289,29 +298,57 @@ void CWormEntity::Tick()
 			pTarget = static_cast<CCharacter *>(pClosest);
 	}
 
-	vec2 Dir = m_WanderDir;
+	float Direction = 0.0f;
 	if(pTarget && pTarget->IsAlive())
 	{
-		const vec2 Target = pTarget->GetPos();
-		vec2 Delta = Target - m_Pos;
-		if(length(Delta) > 0.001f)
-			Dir = normalize(Delta);
-		m_WanderDir = Dir;
+		const vec2 Delta = pTarget->GetPos() - m_Pos;
+		if(absolute(Delta.x) > 1.0f)
+			Direction = Delta.x < 0.0f ? -1.0f : 1.0f;
+		m_WanderDir = vec2(Direction, 0.0f);
 	}
 	else
 	{
 		if(Server()->Tick() >= m_WanderTimer)
 		{
-			m_WanderDir = normalize(vec2((float) (random_int() % 200 - 100), (float) (random_int() % 120 - 60)));
+			m_WanderDir = vec2((random_int() % 2) ? 1.0f : -1.0f, 0.0f);
 			m_WanderTimer = Server()->Tick() + Server()->TickSpeed() * 2;
 		}
-		Dir = m_WanderDir;
+		Direction = m_WanderDir.x < 0.0f ? -1.0f : (m_WanderDir.x > 0.0f ? 1.0f : 0.0f);
 	}
 
-	const float Speed = m_pDef->m_Worm.m_Speed * (m_Burrowed ? 1.15f : 0.75f);
-	m_Pos += Dir * Speed;
-	// keep the worm inside the playable bounds; GameLayerClipped only tests the
-	// map rectangle, so burrowing through solid rock stays legal
+	// Only horizontal motion is driven here. The vertical position is always
+	// snapped back to the first floor below the worm, so it crawls over the
+	// terrain instead of flying at the player through the air.
+	const float Speed = m_pDef->m_Worm.m_Speed;
+	if(Direction != 0.0f)
+	{
+		const float NewX = m_Pos.x + Direction * Speed;
+		float GroundTop = 0.0f;
+		if(FindWormGround(GameWorld(), NewX, m_Pos.y, &GroundTop))
+		{
+			const vec2 NewPos(NewX, GroundTop - 14.0f);
+			const bool SameLevel = absolute(NewPos.y - m_Pos.y) <= 1.5f * 32.0f;
+			const bool Clear = !GameWorld()->Collision()->TestBox(NewPos, vec2(24.0f, 24.0f));
+			if(SameLevel && Clear)
+				m_Pos = NewPos;
+			else
+				m_WanderDir.x = -m_WanderDir.x;
+		}
+		else
+			m_WanderDir.x = -m_WanderDir.x;
+	}
+	else
+	{
+		// keep resting on the floor even while turning or waiting
+		float GroundTop = 0.0f;
+		if(FindWormGround(GameWorld(), m_Pos.x, m_Pos.y, &GroundTop))
+		{
+			const float NewY = GroundTop - 14.0f;
+			if(absolute(NewY - m_Pos.y) <= 1.5f * 32.0f)
+				m_Pos.y = NewY;
+		}
+	}
+
 	if(GameLayerClipped(m_Pos))
 	{
 		WormDie();
@@ -322,7 +359,7 @@ void CWormEntity::Tick()
 
 	if(m_BiteTimer > 0)
 		m_BiteTimer--;
-	if(!m_Burrowed && pTarget && pTarget->IsAlive() && distance(pTarget->GetPos(), m_Pos) <= m_pDef->m_Worm.m_BiteRadius && m_BiteTimer <= 0)
+	if(pTarget && pTarget->IsAlive() && distance(pTarget->GetPos(), m_Pos) <= m_pDef->m_Worm.m_BiteRadius && m_BiteTimer <= 0)
 	{
 		Bite(pTarget);
 		m_BiteTimer = WORM_BITE_COOLDOWN;
@@ -347,7 +384,7 @@ bool CWormEntity::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int 
 	(void) Source;
 	(void) pFrom;
 	(void) Weapon;
-	if(!m_Alive || m_Burrowed)
+	if(!m_Alive)
 		return false;
 
 	// an explosion can touch every link at once; one hit per few ticks is
