@@ -321,8 +321,11 @@ The generator uses one such pack per floor automatically
 
 The datafile codec prints which file it opens and which layers it decompresses.
 Generation opens many base and structure maps, so the generator silences those
-progress lines; `dbg_datafile 1` turns them back on for debugging. Datafile
-errors are always printed.
+progress lines. The generator itself is quiet as well: with the switches off, a
+generation reports one `generated <floor>_<seed>` or `failed to generate ...`
+line. `dbg_mapgen 1` enables the detailed mapgen/worldgen/automap output
+(including the datafile lines of a generation); `dbg_datafile 1` enables the
+datafile lines for every map. Datafile errors are always printed.
 
 `mapgentool ensure` drives the cache-file path (`EnsureNewMap`) and
 `mapgentool acquire` the in-memory path through `AcquireMapOrGenerate`

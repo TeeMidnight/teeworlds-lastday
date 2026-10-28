@@ -4,10 +4,24 @@
 #ifndef ENGINE_SERVER_MAPGEN_H
 #define ENGINE_SERVER_MAPGEN_H
 
+#include <base/system.h>
 #include <base/tl/array.h>
 #include <base/tl/hashtable.h>
 #include <base/tl/string.h>
 #include <base/tl/threading.h>
+
+// Detailed generation logging, controlled by the dbg_mapgen config. When off,
+// mapgen and worldgen only report the result of each generation; the per-step
+// lines are for debugging a generator change. Set through CMapGen::SetVerbose.
+// Inline so every translation unit shares one flag even though the testrunner
+// links worldgen.cpp without mapgen.cpp.
+inline bool g_MapGenVerbose = false;
+#define MAPGEN_LOG(...) \
+	do \
+	{ \
+		if(g_MapGenVerbose) \
+			dbg_msg(__VA_ARGS__); \
+	} while(0)
 
 class CJsonWriter;
 class IEngine;
@@ -677,6 +691,10 @@ public:
 	// Turns the datafile reader's progress lines on or off for every map this
 	// generator opens. Off keeps the console clean; errors are always printed.
 	void SetDatafileConsoleOutput(bool ConsoleOutput) { m_DatafileConsoleOutput = ConsoleOutput; }
+
+	// Detailed mapgen/worldgen logging (dbg_mapgen). Off reports only whether
+	// each generation succeeded.
+	void SetVerbose(bool Verbose) { g_MapGenVerbose = Verbose; }
 
 	// Generates a new map for the given floor (the floor name, e.g. the map
 	// name prefix "<FloorName>_<Seed>"). The floor's instruction carries the

@@ -24,6 +24,15 @@
 
 #include <climits>
 
+// dbg_mapgen is off by default. Then the generator prints nothing but the
+// outcome of each attempt; every step-by-step line needs the switch.
+static void LogGenerationResult(const char *pFloorName, int Seed, bool Success)
+{
+	if(g_MapGenVerbose)
+		return;
+	dbg_msg("mapgen", "%s %s_%d", Success ? "generated" : "failed to generate", pFloorName, Seed);
+}
+
 void GeneratedWorldMetaPath(const char *pMapName, char *pBuf, int Size)
 {
 	str_format(pBuf, Size, GENERATED_MAPS_DIR "/%s.json", pMapName);
@@ -325,7 +334,7 @@ void CMapGen::LoadStructDefinition(const char *pDefaultId, const char *pFilePath
 	json_value *pJson = Parser.ParseFile(pFilePath, m_pStorage, IStorage::TYPE_ALL);
 	if(!pJson || pJson->type != json_object)
 	{
-		dbg_msg("mapgen", "failed to load structure definition '%s'", pFilePath);
+		MAPGEN_LOG("mapgen", "failed to load structure definition '%s'", pFilePath);
 		return;
 	}
 
@@ -338,7 +347,7 @@ void CMapGen::LoadStructDefinition(const char *pDefaultId, const char *pFilePath
 	{
 		if(str_comp(m_lStructCatalog[i].m_aId, pId) == 0)
 		{
-			dbg_msg("mapgen", "duplicate structure id '%s' in '%s', keeping the first", pId, pFilePath);
+			MAPGEN_LOG("mapgen", "duplicate structure id '%s' in '%s', keeping the first", pId, pFilePath);
 			return;
 		}
 	}
@@ -378,7 +387,7 @@ void CMapGen::LoadStructDefinition(const char *pDefaultId, const char *pFilePath
 
 	if(!Entry.m_lVariants.size())
 	{
-		dbg_msg("mapgen", "structure '%s' has no usable variant", pId);
+		MAPGEN_LOG("mapgen", "structure '%s' has no usable variant", pId);
 		m_lStructCatalog.remove_index(m_lStructCatalog.size() - 1);
 	}
 }
@@ -388,7 +397,7 @@ void CMapGen::LoadStructCatalog()
 	m_lStructCatalog.clear();
 	if(m_pStorage)
 		m_pStorage->ListDirectory(IStorage::TYPE_ALL, "maps/struct", ListStructDefsCallback, this);
-	dbg_msg("mapgen", "loaded %d struct id(s) from maps/struct/*.json", m_lStructCatalog.size());
+	MAPGEN_LOG("mapgen", "loaded %d struct id(s) from maps/struct/*.json", m_lStructCatalog.size());
 }
 
 const CStructCatalogEntry *CMapGen::FindStructCatalog(const char *pId) const
@@ -453,7 +462,7 @@ int CMapGen::ListWorldsCallback(const char *pFilename, int IsDir, int StorageTyp
 	char aFloorName[64];
 	if(Len - 5 >= (int) sizeof(aFloorName))
 	{
-		dbg_msg("mapgen", "floor file name too long: '%s'", pFilename);
+		MAPGEN_LOG("mapgen", "floor file name too long: '%s'", pFilename);
 		return 0;
 	}
 	str_copy(aFloorName, pFilename, sizeof(aFloorName));
@@ -471,7 +480,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 	json_value *pJson = Parser.ParseFile(pFilePath, m_pStorage, IStorage::TYPE_ALL);
 	if(!pJson || pJson->type != json_object)
 	{
-		dbg_msg("mapgen", "failed to load floor '%s' from '%s'", pFloorName, pFilePath);
+		MAPGEN_LOG("mapgen", "failed to load floor '%s' from '%s'", pFloorName, pFilePath);
 		return;
 	}
 
@@ -494,7 +503,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 			bool Valid = false;
 			pFloor->m_Kind = WorldKindFromString(rKind.u.string.ptr, &Valid);
 			if(!Valid)
-				dbg_msg("mapgen", "floor '%s' has an unknown kind '%s', assuming euclid", pFloorName, rKind.u.string.ptr);
+				MAPGEN_LOG("mapgen", "floor '%s' has an unknown kind '%s', assuming euclid", pFloorName, rKind.u.string.ptr);
 		}
 		else if(rBase["generation"].type == json_object)
 			pFloor->m_Kind = WORLDKIND_EUCLID;
@@ -513,7 +522,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 	// and takes its look from the tileset and rule sets in its generation
 	// block, so "base" is optional there.
 	if(pFloor->m_aBaseMap[0] == '\0' && pFloor->m_Kind != WORLDKIND_EUCLID)
-		dbg_msg("mapgen", "floor '%s' is %s but has no base map", pFloorName, WorldKindName(pFloor->m_Kind));
+		MAPGEN_LOG("mapgen", "floor '%s' is %s but has no base map", pFloorName, WorldKindName(pFloor->m_Kind));
 
 	const json_value &rStructsArray = rBase["structs"];
 	for(unsigned j = 0; j < rStructsArray.u.array.length; j++)
@@ -569,7 +578,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 					str_copy(Struct.m_aBaseMap, Struct.m_lVariants[0].m_aBaseMap, sizeof(Struct.m_aBaseMap));
 			}
 			else
-				dbg_msg("mapgen", "floor '%s': struct id '%s' has no definition in maps/struct", pFloorName, pId);
+				MAPGEN_LOG("mapgen", "floor '%s': struct id '%s' has no definition in maps/struct", pFloorName, pId);
 		}
 
 		// A literal "base" still works. It also pins a catalog id to one map,
@@ -587,7 +596,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 
 		if(!Struct.m_lVariants.size())
 		{
-			dbg_msg("mapgen", "floor '%s': struct entry %u has no base map or catalog id, skipping", pFloorName, j);
+			MAPGEN_LOG("mapgen", "floor '%s': struct entry %u has no base map or catalog id, skipping", pFloorName, j);
 			pFloor->m_Structs.remove_index(pFloor->m_Structs.size() - 1);
 			continue;
 		}
@@ -677,7 +686,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 	// sharing the same base map do not collide
 	m_lInstructions.set(str_quickhash(pFloor->m_aFloorName), pFloor);
 
-	dbg_msg("mapgen", "loaded floor '%s' (kind %s, base '%s')", pFloorName, WorldKindName(pFloor->m_Kind), pFloor->m_aBaseMap);
+	MAPGEN_LOG("mapgen", "loaded floor '%s' (kind %s, base '%s')", pFloorName, WorldKindName(pFloor->m_Kind), pFloor->m_aBaseMap);
 }
 
 bool CMapGen::GetFloorKind(const char *pFloorName, EWorldKind *pKind) const
@@ -765,7 +774,7 @@ void CMapGen::ResolveEntranceTarget(const CInstruction *pSource, int Seed, int E
 	PickHash ^= PickHash >> 16;
 	const int Pick = (int) (PickHash % (unsigned) m_lNonEuclidFloors.size());
 	str_copy(pOut, m_lNonEuclidFloors[Pick]->m_aFloorName, OutSize);
-	dbg_msg("worldgen", "entrance %d of '%s' seed %d leads into the non euclidean world '%s'",
+	MAPGEN_LOG("worldgen", "entrance %d of '%s' seed %d leads into the non euclidean world '%s'",
 		EntranceIndex, pSource->m_aFloorName, Seed, pOut);
 }
 
@@ -960,7 +969,7 @@ bool CMapGen::ExtractFromPack(const char *pFloorName, int Seed)
 	const bool Extracted = pPack->m_Reader.ExtractMap(Index, m_pStorage, aPath, true);
 	if(Extracted)
 		RememberInstance(pFloorName, Seed);
-	dbg_msg("mapgen", "map pack: %s %s", Extracted ? "restored" : "FAILED to restore", aMapName);
+	MAPGEN_LOG("mapgen", "map pack: %s %s", Extracted ? "restored" : "FAILED to restore", aMapName);
 	return Extracted;
 }
 
@@ -980,7 +989,7 @@ bool CMapGen::AppendInstanceToPack(const char *pFloorName, int Seed, const void 
 	if(Writer.Open(m_pStorage, aPackPath))
 		Added = Writer.AddMap(aMapName, Seed, pMap, MapSize, pJson, JsonSize);
 	else
-		dbg_msg("mapgen", "map pack: cannot open %s", aPackPath);
+		MAPGEN_LOG("mapgen", "map pack: cannot open %s", aPackPath);
 
 	// the cached reader may predate this append (or the pack's creation)
 	SFloorPack *pPack = PackFor(pFloorName);
@@ -993,9 +1002,9 @@ bool CMapGen::AppendInstanceToPack(const char *pFloorName, int Seed, const void 
 
 	if(Added)
 		RememberInstance(pFloorName, Seed);
-	dbg_msg("mapgen", "map pack: %s %s into %s", Added ? "packed" : "FAILED to pack", aMapName, aPackPath);
+	MAPGEN_LOG("mapgen", "map pack: %s %s into %s", Added ? "packed" : "FAILED to pack", aMapName, aPackPath);
 	if(!Added)
-		dbg_msg("mapgen", "map pack: keeping sidecar files for %s", aMapName);
+		MAPGEN_LOG("mapgen", "map pack: keeping sidecar files for %s", aMapName);
 	return Added;
 }
 
@@ -1015,7 +1024,7 @@ void CMapGen::AppendToPack(const char *pFloorName, int Seed)
 	unsigned MapSize = 0;
 	if(!m_pStorage->ReadFile(aPath, IStorage::TYPE_SAVE, &pMap, &MapSize) || !pMap)
 	{
-		dbg_msg("mapgen", "map pack: cannot read %s", aPath);
+		MAPGEN_LOG("mapgen", "map pack: cannot read %s", aPath);
 		return;
 	}
 	str_format(aPath, sizeof(aPath), GENERATED_MAPS_DIR "/%s.json", aMapName);
@@ -1045,13 +1054,13 @@ void CMapGen::WriteInstanceFiles(const char *pFloorName, int Seed, const void *p
 	IOHANDLE File = m_pStorage->OpenFile(aPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
 	if(!File)
 	{
-		dbg_msg("mapgen", "cannot write %s", aPath);
+		MAPGEN_LOG("mapgen", "cannot write %s", aPath);
 		return;
 	}
 	const bool MapOk = io_write(File, pMap, (unsigned) MapSize) == (unsigned) MapSize;
 	io_close(File);
 	if(!MapOk)
-		dbg_msg("mapgen", "short write of %s", aPath);
+		MAPGEN_LOG("mapgen", "short write of %s", aPath);
 
 	if(!pJson || JsonSize <= 0)
 		return;
@@ -1059,7 +1068,7 @@ void CMapGen::WriteInstanceFiles(const char *pFloorName, int Seed, const void *p
 	File = m_pStorage->OpenFile(aPath, IOFLAG_WRITE, IStorage::TYPE_SAVE);
 	if(!File)
 	{
-		dbg_msg("mapgen", "cannot write %s", aPath);
+		MAPGEN_LOG("mapgen", "cannot write %s", aPath);
 		return;
 	}
 	io_write(File, pJson, (unsigned) JsonSize);
@@ -1107,7 +1116,7 @@ bool CMapGen::TryAcquireMap(const char *pFloorName, int Seed, SMapInstance *pOut
 	{
 		if(pMap)
 			mem_free(pMap);
-		dbg_msg("mapgen", "cannot read the instance %s", aMapName);
+		MAPGEN_LOG("mapgen", "cannot read the instance %s", aMapName);
 		return false;
 	}
 
@@ -1139,7 +1148,8 @@ bool CMapGen::AcquireMapOrGenerate(const char *pFloorName, int Seed, SMapInstanc
 	// world would be built on the server tick thread.
 	if(m_pEngine)
 	{
-		dbg_msg("mapgen", "refusing to generate %s_%d on the running server", pFloorName, Seed);
+		MAPGEN_LOG("mapgen", "refusing to generate %s_%d on the running server", pFloorName, Seed);
+		LogGenerationResult(pFloorName, Seed, false);
 		return false;
 	}
 	if(!GenerateNow(pFloorName, Seed))
@@ -1409,7 +1419,7 @@ int CMapGen::GenWorker(void *pUser)
 		bool Generated;
 		if(Available)
 		{
-			dbg_msg("mapgen", "map pack: %s_%d already available, skipping generation", pJob->m_aFloorName, pJob->m_Seed);
+			MAPGEN_LOG("mapgen", "map pack: %s_%d already available, skipping generation", pJob->m_aFloorName, pJob->m_Seed);
 			Generated = true;
 		}
 		else
@@ -1601,7 +1611,8 @@ bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 	CInstruction *pInstruction = ppInstruction ? *ppInstruction : nullptr;
 	if(!pInstruction)
 	{
-		dbg_msg("mapgen", "the floor '%s' has no generation instructions", pFloorName);
+		MAPGEN_LOG("mapgen", "the floor '%s' has no generation instructions", pFloorName);
+		LogGenerationResult(pFloorName, Seed, false);
 		return false;
 	}
 
@@ -1619,7 +1630,8 @@ bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 		switch(pInstruction->m_Kind)
 		{
 			case WORLDKIND_HUB:
-				dbg_msg("mapgen", "the hub world '%s' is a static map and is not generated", pFloorName);
+				MAPGEN_LOG("mapgen", "the hub world '%s' is a static map and is not generated", pFloorName);
+				LogGenerationResult(pFloorName, Seed, false);
 				return false;
 			case WORLDKIND_EUCLID:
 				Generated = GenerateEuclidean(pInstruction, Seed, &GeneratedMap);
@@ -1631,7 +1643,10 @@ bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 	}
 
 	if(!Generated)
+	{
+		LogGenerationResult(pFloorName, Seed, false);
 		return false;
+	}
 
 	// The map is finished; store it under the pack lock only. A reader that
 	// needs an already generated map waits for this short write, never for
@@ -1653,6 +1668,7 @@ bool CMapGen::GenerateNow(const char *pFloorName, int Seed)
 			GeneratedMap.m_Map.base_ptr(), GeneratedMap.m_Map.size(),
 			GeneratedMap.m_Meta.base_ptr(), GeneratedMap.m_Meta.size());
 
+	LogGenerationResult(pFloorName, Seed, true);
 	return true;
 }
 
@@ -1662,7 +1678,8 @@ bool CMapGen::RequestNewMap(const char *pFloorName, int Seed)
 	// an older file with the same name exists.
 	if(m_pEngine)
 	{
-		dbg_msg("mapgen", "refusing to rebuild %s_%d on the running server", pFloorName, Seed);
+		MAPGEN_LOG("mapgen", "refusing to rebuild %s_%d on the running server", pFloorName, Seed);
+		LogGenerationResult(pFloorName, Seed, false);
 		return false;
 	}
 	return GenerateNow(pFloorName, Seed);
@@ -1695,7 +1712,8 @@ bool CMapGen::EnsureNewMap(const char *pFloorName, int Seed)
 
 	if(m_pEngine)
 	{
-		dbg_msg("mapgen", "refusing to generate %s_%d on the running server", pFloorName, Seed);
+		MAPGEN_LOG("mapgen", "refusing to generate %s_%d on the running server", pFloorName, Seed);
+		LogGenerationResult(pFloorName, Seed, false);
 		return false;
 	}
 	return GenerateNow(pFloorName, Seed);

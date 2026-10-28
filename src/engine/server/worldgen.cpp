@@ -418,7 +418,7 @@ static void CarveCaves(const CInstruction::CGeneration &rGen, int Seed, CGenerat
 
 	delete[] pCave;
 	delete[] pClean;
-	dbg_msg("worldgen", "carved %d cave tile(s)", Carved);
+	MAPGEN_LOG("worldgen", "carved %d cave tile(s)", Carved);
 }
 
 // ---------------------------------------------------------------------------
@@ -531,7 +531,7 @@ static void GenerateOres(const CInstruction::CGeneration &rGen, int Seed, CGener
 				SurfaceCount++;
 			}
 		}
-		dbg_msg("worldgen", "ore '%s': %d vein tile(s), %d surface node(s)", Ore.m_aResId, VeinCount, SurfaceCount);
+		MAPGEN_LOG("worldgen", "ore '%s': %d vein tile(s), %d surface node(s)", Ore.m_aResId, VeinCount, SurfaceCount);
 	}
 }
 
@@ -614,7 +614,7 @@ static void CarveSurfaceEntrances(const CInstruction::CGeneration &rGen, int See
 
 	if(!lTargetNames.size())
 	{
-		dbg_msg("worldgen", "floor '%s' wants surface entrances but lists no exit targets", rGen.m_aTileset);
+		MAPGEN_LOG("worldgen", "floor '%s' wants surface entrances but lists no exit targets", rGen.m_aTileset);
 		return;
 	}
 
@@ -709,7 +709,7 @@ static void CarveSurfaceEntrances(const CInstruction::CGeneration &rGen, int See
 
 	if(!lChosen.size())
 	{
-		dbg_msg("worldgen", "no suitable ground for a surface entrance was found");
+		MAPGEN_LOG("worldgen", "no suitable ground for a surface entrance was found");
 		return;
 	}
 
@@ -782,7 +782,7 @@ static void CarveSurfaceEntrances(const CInstruction::CGeneration &rGen, int See
 		Entrance.m_EndY = FloorY;
 		str_copy(Entrance.m_aTarget, lTargetNames[i % lTargetNames.size()].m_aName, sizeof(Entrance.m_aTarget));
 
-		dbg_msg("worldgen", "surface entrance %d: recess x %d..%d, floor y %d -> %s",
+		MAPGEN_LOG("worldgen", "surface entrance %d: recess x %d..%d, floor y %d -> %s",
 			i + 1, Left, Right, FloorY, Entrance.m_aTarget);
 	}
 }
@@ -859,7 +859,7 @@ static void PlaceSpawns(const CInstruction::CGeneration &rGen, int Seed, CGenera
 		}
 	}
 
-	dbg_msg("worldgen", "placed %d spawn point(s)", Placed);
+	MAPGEN_LOG("worldgen", "placed %d spawn point(s)", Placed);
 }
 
 // Builds the collision layer from the finished terrain. This is the layer the
@@ -921,7 +921,7 @@ CGeneratedWorld *GenerateEuclideanWorld(const CInstruction *pInstruction, int Se
 	const CInstruction::CGeneration &Gen = pInstruction->m_Generation;
 	if(!Gen.m_Enabled)
 	{
-		dbg_msg("worldgen", "floor '%s' has no generation settings", pInstruction->m_aFloorName);
+		MAPGEN_LOG("worldgen", "floor '%s' has no generation settings", pInstruction->m_aFloorName);
 		return 0;
 	}
 	// Each tile layer is a flat Width*Height CTile array allocated with int
@@ -930,7 +930,7 @@ CGeneratedWorld *GenerateEuclideanWorld(const CInstruction *pInstruction, int Se
 	const int64 Area = (int64) Gen.m_Width * (int64) Gen.m_Height;
 	if(Gen.m_Width <= 0 || Gen.m_Height <= 0 || Area > (int64) 0x7fffffff)
 	{
-		dbg_msg("worldgen", "floor '%s' has an invalid size %dx%d", pInstruction->m_aFloorName, Gen.m_Width, Gen.m_Height);
+		MAPGEN_LOG("worldgen", "floor '%s' has an invalid size %dx%d", pInstruction->m_aFloorName, Gen.m_Width, Gen.m_Height);
 		return 0;
 	}
 
@@ -964,7 +964,7 @@ CGeneratedWorld *GenerateEuclideanWorld(const CInstruction *pInstruction, int Se
 	// resets every solid tile to its basetile, so anything marked earlier would
 	// be wiped. The entrances are therefore built afterwards.
 
-	dbg_msg("worldgen", "generated euclidean floor '%s' (%dx%d, %d resource(s))",
+	MAPGEN_LOG("worldgen", "generated euclidean floor '%s' (%dx%d, %d resource(s))",
 		pInstruction->m_aFloorName, Gen.m_Width, Gen.m_Height, pWorld->m_lResources.size());
 	return pWorld;
 }

@@ -6,6 +6,7 @@
 #include <engine/shared/jsonparser.h>
 
 #include "automap.h"
+#include "mapgen.h"
 
 // see automap.h for the semantics, which mirror the Teeworlds 0.7 editor
 
@@ -147,7 +148,7 @@ bool CAutoMapper::LoadFile(IStorage *pStorage, const char *pPath)
 	json_value *pJson = Parser.ParseFile(pPath, pStorage, IStorage::TYPE_ALL);
 	if(!pJson || pJson->type != json_object)
 	{
-		dbg_msg("automap", "failed to parse '%s'", pPath);
+		MAPGEN_LOG("automap", "failed to parse '%s'", pPath);
 		return false;
 	}
 
@@ -183,7 +184,7 @@ bool CAutoMapper::LoadFile(IStorage *pStorage, const char *pPath)
 			str_copy(DoodadSet.m_aName, pName, sizeof(DoodadSet.m_aName));
 			str_copy(DoodadSet.m_aSource, aSource, sizeof(DoodadSet.m_aSource));
 			ParseDoodads(rBody["rules"], DoodadSet);
-			dbg_msg("automap", "loaded doodad set '%s' (%d rule(s))", DoodadSet.m_aName, DoodadSet.m_aDoodads.size());
+			MAPGEN_LOG("automap", "loaded doodad set '%s' (%d rule(s))", DoodadSet.m_aName, DoodadSet.m_aDoodads.size());
 		}
 	}
 
@@ -214,7 +215,7 @@ bool CAutoMapper::LoadFile(IStorage *pStorage, const char *pPath)
 		RuleSet.m_BaseTile = rBaseTile.type == json_integer ? clamp((int) rBaseTile.u.integer, 0, 255) : 1;
 
 		ParseRules(rBody["rules"], RuleSet);
-		dbg_msg("automap", "loaded rule set '%s' (%d rule(s), basetile %d)", RuleSet.m_aName, RuleSet.m_aRules.size(), RuleSet.m_BaseTile);
+		MAPGEN_LOG("automap", "loaded rule set '%s' (%d rule(s), basetile %d)", RuleSet.m_aName, RuleSet.m_aRules.size(), RuleSet.m_BaseTile);
 	}
 	return true;
 }

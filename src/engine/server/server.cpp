@@ -1879,10 +1879,9 @@ void CServer::InitInterfaces(IKernel *pKernel)
 	m_pMapChecker = pKernel->RequestInterface<IMapChecker>();
 	m_pStorage = pKernel->RequestInterface<IStorage>();
 	m_pMapGen = new CMapGen(m_pStorage, m_pConsole);
-	// Map generation opens and decompresses a lot of datafiles; keep that out
-	// of the console unless the admin enabled the debug output. The console
-	// chain below keeps a runtime change of dbg_datafile in sync.
-	m_pMapGen->SetDatafileConsoleOutput(Config()->m_DbgDatafile != 0);
+	// Map generation is quiet unless dbg_mapgen/dbg_datafile asks for detail;
+	// the console chains below keep runtime changes in sync.
+	ApplyGenerationVerboseSettings();
 	// generated instances are kept in one append-only pack per floor
 	m_pMapGen->SetUseMapPacks(Config()->m_SvMappack != 0);
 	// the server loads instances from the pack, so no cache file has to stay
@@ -2229,12 +2228,28 @@ void CServer::ConchainMaxclientsUpdate(IConsole::IResult *pResult, void *pUserDa
 	}
 }
 
+void CServer::ApplyGenerationVerboseSettings()
+{
+	if(!m_pMapGen)
+		return;
+	m_pMapGen->SetVerbose(Config()->m_DbgMapgen != 0);
+	// dbg_mapgen asks for everything about a generation, including the
+	// datafile part; dbg_datafile alone still enables it for all maps.
+	m_pMapGen->SetDatafileConsoleOutput(Config()->m_DbgMapgen != 0 || Config()->m_DbgDatafile != 0);
+}
+
 void CServer::ConchainDatafileUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
 {
 	pfnCallback(pResult, pCallbackUserData);
-	CServer *pSelf = (CServer *) pUserData;
-	if(pResult->NumArguments() && pSelf->m_pMapGen)
-		pSelf->m_pMapGen->SetDatafileConsoleOutput(pResult->GetInteger(0) != 0);
+	if(pResult->NumArguments())
+		((CServer *) pUserData)->ApplyGenerationVerboseSettings();
+}
+
+void CServer::ConchainMapgenUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+{
+	pfnCallback(pResult, pCallbackUserData);
+	if(pResult->NumArguments())
+		((CServer *) pUserData)->ApplyGenerationVerboseSettings();
 }
 
 void CServer::ConchainMaxclientsperipUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
@@ -2313,6 +2328,7 @@ void CServer::RegisterCommands()
 	Console()->Chain("console_output_level", ConchainConsoleOutputLevelUpdate, this);
 	Console()->Chain("sv_rcon_password", ConchainRconPasswordSet, this);
 	Console()->Chain("dbg_datafile", ConchainDatafileUpdate, this);
+	Console()->Chain("dbg_mapgen", ConchainMapgenUpdate, this);
 
 	// register console commands in sub parts
 	m_ServerBan.InitServerBan(Console(), Storage(), this);

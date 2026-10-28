@@ -41,7 +41,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 	BaseFile.SetConsoleOutput(m_DatafileConsoleOutput);
 	if(!BaseFile.Open(Storage(), aBasePath, IStorage::TYPE_ALL))
 	{
-		dbg_msg("mapgen", "failed to open the base map '%s'", aBasePath);
+		MAPGEN_LOG("mapgen", "failed to open the base map '%s'", aBasePath);
 		return false;
 	}
 
@@ -73,7 +73,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 			lCreatorImages.add(Creator.AddExternalImage(aImageName, pImage->m_Width, pImage->m_Height));
 		else
 		{
-			dbg_msg("mapgen", "base map '%s' uses embedded images, which are not supported by the generator", pInstruction->m_aBaseMap);
+			MAPGEN_LOG("mapgen", "base map '%s' uses embedded images, which are not supported by the generator", pInstruction->m_aBaseMap);
 			lCreatorImages.add(nullptr);
 		}
 	}
@@ -324,14 +324,14 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 
 		// statistics: summarize how the anchors are distributed over the
 		// struct types, so the merge step below knows what it will place
-		dbg_msg("mapgen", "anchor plan for '%s': %d anchor(s) -> %d placement(s)",
+		MAPGEN_LOG("mapgen", "anchor plan for '%s': %d anchor(s) -> %d placement(s)",
 			pFloorName, lAnchors.size(), lStructPlacements.size());
 		for(int s = 0; s < pInstruction->m_Structs.size(); s++)
 		{
 			if(lPlacementsPerStruct[s] <= 0)
 				continue;
 			const CInstruction::CStruct &Struct = pInstruction->m_Structs[s];
-			dbg_msg("mapgen", "  %2d x '%s' (proba %3.0f%%, paste_air=%s)",
+			MAPGEN_LOG("mapgen", "  %2d x '%s' (proba %3.0f%%, paste_air=%s)",
 				lPlacementsPerStruct[s], Struct.m_aBaseMap, Struct.m_GenerateProba * 100.0f,
 				Struct.m_PasteAir ? "true" : "false");
 		}
@@ -374,7 +374,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 			const int VariantIndex = PickStructVariant(Struct, Seed, (s + 1) * 100000 + 13);
 			if(VariantIndex < 0)
 			{
-				dbg_msg("mapgen", "struct id '%s' has no usable variant", Struct.m_aId);
+				MAPGEN_LOG("mapgen", "struct id '%s' has no usable variant", Struct.m_aId);
 				continue;
 			}
 			const CStructVariant &Variant = Struct.m_lVariants[VariantIndex];
@@ -387,7 +387,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 			StructFile.SetConsoleOutput(m_DatafileConsoleOutput);
 			if(!StructFile.Open(Storage(), aStructPath, IStorage::TYPE_ALL))
 			{
-				dbg_msg("mapgen", "failed to open the struct map '%s'", aStructPath);
+				MAPGEN_LOG("mapgen", "failed to open the struct map '%s'", aStructPath);
 				continue;
 			}
 
@@ -463,7 +463,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 
 			if(!pStructGameTiles)
 			{
-				dbg_msg("mapgen", "the struct map '%s' has no game layer, skipping", pStructMapName);
+				MAPGEN_LOG("mapgen", "the struct map '%s' has no game layer, skipping", pStructMapName);
 				for(int st = 0; st < lStructTemplates.size(); st++)
 					delete[] lStructTemplates[st].m_pTiles;
 				continue;
@@ -578,7 +578,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 						if(!FindContainerSpot(pGameTiles, GameWidth, GameHeight,
 							   DestX1, DestY1, DestX2, DestY2, PreferredX, &SpotX, &SpotY))
 						{
-							dbg_msg("mapgen", "struct '%s': no floor spot for its '%s' container",
+							MAPGEN_LOG("mapgen", "struct '%s': no floor spot for its '%s' container",
 								pStructMapName, Variant.m_aContainers[c].m_aKind);
 							continue;
 						}
@@ -651,7 +651,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 						Variant.m_aSubId[0] ? Variant.m_aSubId : pStructMapName);
 				else
 					str_copy(aLogName, pStructMapName, sizeof(aLogName));
-				dbg_msg("mapgen", "merged struct '%s' into '%s' (%d anchor(s))", aLogName, pFloorName, MergedAnchors);
+				MAPGEN_LOG("mapgen", "merged struct '%s' into '%s' (%d anchor(s))", aLogName, pFloorName, MergedAnchors);
 			}
 
 			delete[] pStructGameTiles;
@@ -762,7 +762,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 	// ---------------------------------------------------------------
 	if(!Creator.SaveMapToMemory(pOut->m_Map))
 	{
-		dbg_msg("mapgen", "failed to build the generated map '%s_%d'", pFloorName, Seed);
+		MAPGEN_LOG("mapgen", "failed to build the generated map '%s_%d'", pFloorName, Seed);
 		return false;
 	}
 	BuildGeneratedWorldMeta(lEntranceJson.base_ptr(), lEntranceJson.size(),
@@ -771,6 +771,6 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 		nullptr, 0,
 		nullptr, 0, pOut->m_Meta);
 
-	dbg_msg("mapgen", "generated map '%s_%d' from base '%s'", pFloorName, Seed, pInstruction->m_aBaseMap);
+	MAPGEN_LOG("mapgen", "generated map '%s_%d' from base '%s'", pFloorName, Seed, pInstruction->m_aBaseMap);
 	return true;
 }

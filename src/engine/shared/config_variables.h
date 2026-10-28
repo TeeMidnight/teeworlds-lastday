@@ -60,7 +60,10 @@ MACRO_CONFIG_INT(DbgHitch, dbg_hitch, 0, 0, 0, CFGFLAG_SERVER, "Hitch warnings")
 // Generating a map reads a base map and every structure map it may paste,
 // which floods the console with the datafile codec's progress lines. They are
 // off unless an admin asks for them; datafile errors are always printed.
-MACRO_CONFIG_INT(DbgDatafile, dbg_datafile, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Print the datafile load progress while generating maps")
+MACRO_CONFIG_INT(DbgDatafile, dbg_datafile, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Print the datafile load progress of maps")
+// The generator is talkative: every cave, ore and structure step, plus the
+// worldgen summary. Off reports only whether each generation succeeded.
+MACRO_CONFIG_INT(DbgMapgen, dbg_mapgen, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Print the detailed mapgen and worldgen output")
 MACRO_CONFIG_INT(DbgResizable, dbg_resizable, 0, 0, 0, CFGFLAG_CLIENT, "Enables window resizing")
 #ifdef CONF_DEBUG
 MACRO_CONFIG_INT(DbgStress, dbg_stress, 0, 0, 0, CFGFLAG_CLIENT | CFGFLAG_SERVER, "Stress systems")

@@ -102,7 +102,7 @@ static void GenerateSurfaceResources(const CInstruction *pInstruction, int Seed,
 		}
 	}
 
-	dbg_msg("worldgen", "surface resources: %d node(s)", Placed);
+	MAPGEN_LOG("worldgen", "surface resources: %d node(s)", Placed);
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +234,7 @@ static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, bool C
 	File.SetConsoleOutput(ConsoleOutput);
 	if(!File.Open(pStorage, aPath, IStorage::TYPE_ALL))
 	{
-		dbg_msg("mapgen", "failed to open the struct map '%s'", aPath);
+		MAPGEN_LOG("mapgen", "failed to open the struct map '%s'", aPath);
 		return false;
 	}
 
@@ -334,7 +334,7 @@ static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, bool C
 
 	if(!rMap.m_pGameTiles)
 	{
-		dbg_msg("mapgen", "the euclid struct map '%s' has no game layer, skipping", pBaseMap);
+		MAPGEN_LOG("mapgen", "the euclid struct map '%s' has no game layer, skipping", pBaseMap);
 		FreeEuclidStructMap(rMap);
 		return false;
 	}
@@ -355,7 +355,7 @@ static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, bool C
 	// bounding box of the art decide the paste region.
 	if(rMap.m_RedX < 0 || rMap.m_RedY < 0 || rMap.m_BlueX < 0 || rMap.m_BlueY < 0)
 	{
-		dbg_msg("mapgen", "the euclid struct map '%s' has no red/blue flag stand anchors, skipping", pBaseMap);
+		MAPGEN_LOG("mapgen", "the euclid struct map '%s' has no red/blue flag stand anchors, skipping", pBaseMap);
 		FreeEuclidStructMap(rMap);
 		return false;
 	}
@@ -379,7 +379,7 @@ static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, bool C
 	rMap.m_ContentHeight = rMap.m_RegionY2 - rMap.m_RegionY1 + 1;
 	if(rMap.m_ContentWidth <= 0 || rMap.m_ContentHeight <= 0)
 	{
-		dbg_msg("mapgen", "the euclid struct map '%s' has an empty paste region, skipping", pBaseMap);
+		MAPGEN_LOG("mapgen", "the euclid struct map '%s' has an empty paste region, skipping", pBaseMap);
 		FreeEuclidStructMap(rMap);
 		return false;
 	}
@@ -554,7 +554,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 		const int VariantIndex = PickStructVariant(Struct, Seed, (s + 1) * 100000 + 13);
 		if(VariantIndex < 0)
 		{
-			dbg_msg("mapgen", "euclid struct '%s': no usable variant", Struct.m_aId);
+			MAPGEN_LOG("mapgen", "euclid struct '%s': no usable variant", Struct.m_aId);
 			continue;
 		}
 		const CStructVariant &Variant = Struct.m_lVariants[VariantIndex];
@@ -608,7 +608,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 		const int RangeEnd = Width - Struct.m_Margin - SharedMargin - RegionWidth;
 		if(RangeEnd < RangeStart)
 		{
-			dbg_msg("mapgen", "euclid struct '%s': no room on a %d tile wide floor", pStructMapName, Width);
+			MAPGEN_LOG("mapgen", "euclid struct '%s': no room on a %d tile wide floor", pStructMapName, Width);
 			FreeEuclidStructMap(StructMap);
 			continue;
 		}
@@ -732,7 +732,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 			}
 			if(ChosenX < 0)
 			{
-				dbg_msg("mapgen", "euclid struct '%s': no flat ground in band %d/%d",
+				MAPGEN_LOG("mapgen", "euclid struct '%s': no flat ground in band %d/%d",
 					pStructMapName, p + 1, Struct.m_Count);
 				continue;
 			}
@@ -835,7 +835,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 						   ChosenX, AnchorY - (RegionHeight - 1), ChosenX + RegionWidth - 1, AnchorY,
 						   PreferredX, &SpotX, &SpotY))
 					{
-						dbg_msg("mapgen", "euclid struct '%s': no floor spot for its '%s' container",
+						MAPGEN_LOG("mapgen", "euclid struct '%s': no floor spot for its '%s' container",
 							pStructMapName, Variant.m_aContainers[c].m_aKind);
 						continue;
 					}
@@ -894,7 +894,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 							   ChosenX, AnchorY - (RegionHeight - 1), ChosenX + RegionWidth - 1, AnchorY,
 							   PreferredX, &SpotX, &SpotY))
 						{
-							dbg_msg("mapgen", "euclid struct '%s': no floor spot for mob '%s'", pStructMapName, MobDef.m_aMob);
+							MAPGEN_LOG("mapgen", "euclid struct '%s': no floor spot for mob '%s'", pStructMapName, MobDef.m_aMob);
 							continue;
 						}
 
@@ -905,7 +905,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 						Spawn.m_Boss = MobDef.m_Boss;
 						Spawn.m_X = SpotX;
 						Spawn.m_Y = SpotY;
-						dbg_msg("mapgen", "euclid struct '%s': mob '%s'%s at (%d,%d), group %d",
+						MAPGEN_LOG("mapgen", "euclid struct '%s': mob '%s'%s at (%d,%d), group %d",
 							pStructMapName, MobDef.m_aMob, MobDef.m_Boss ? " (boss)" : "", SpotX, SpotY, Group);
 						MobIndex++;
 					}
@@ -954,7 +954,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 					Variant.m_aSubId[0] ? Variant.m_aSubId : pStructMapName);
 			else
 				str_copy(aLogName, pStructMapName, sizeof(aLogName));
-			dbg_msg("mapgen", "euclid struct '%s': anchor tile (%d,%d), region %dx%d, %d quad(s)",
+			MAPGEN_LOG("mapgen", "euclid struct '%s': anchor tile (%d,%d), region %dx%d, %d quad(s)",
 				aLogName, ChosenX, AnchorY, RegionWidth, RegionHeight, StructMap.m_lQuadLayers.size());
 		}
 
@@ -962,7 +962,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 	}
 
 	if(TotalPlaced > 0)
-		dbg_msg("mapgen", "euclid structures: %d placement(s)", TotalPlaced);
+		MAPGEN_LOG("mapgen", "euclid structures: %d placement(s)", TotalPlaced);
 }
 
 // ---------------------------------------------------------------------------
@@ -977,7 +977,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 	const char *pFloorName = pInstruction->m_aFloorName;
 	const CWorldRing Ring = WorldRing(pInstruction, Seed);
 	if(Ring.m_Enabled)
-		dbg_msg("mapgen", "ring instance %d/%d, shared margin %d, stride %d, period %d",
+		MAPGEN_LOG("mapgen", "ring instance %d/%d, shared margin %d, stride %d, period %d",
 			Seed, pInstruction->m_Generation.m_Ring.m_Size, pInstruction->m_Generation.m_Ring.m_SharedMargin, Ring.m_Stride, Ring.m_Period);
 
 	// A euclidean floor does not read a base map at all. Its terrain is entirely
@@ -1003,7 +1003,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		const int NumRuleSets = Mapper.LoadAll(Storage(), Console());
 		if(NumRuleSets == 0)
 		{
-			dbg_msg("mapgen", "no automap rule sets found in 'automap/', the terrain stays unstyled");
+			MAPGEN_LOG("mapgen", "no automap rule sets found in 'automap/', the terrain stays unstyled");
 		}
 		else
 		{
@@ -1023,7 +1023,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			// instead of hitting a wall; the outermost columns are held out of
 			// that wrap so the border does not wear corner tiles
 			if(!Mapper.Proceed(pMainSet, Layer.m_pTiles, Layer.m_Width, Layer.m_Height, Ring.m_NoiseSeed, !Ring.m_Enabled, pInstruction->m_Generation.m_WrapMargin, nullptr, Ring.m_OffsetX))
-				dbg_msg("mapgen", "automap rule set '%s' is unknown, the layer '%s' stays unstyled", pMainSet, Layer.m_aName);
+				MAPGEN_LOG("mapgen", "automap rule set '%s' is unknown, the layer '%s' stays unstyled", pMainSet, Layer.m_aName);
 		}
 	}
 
@@ -1162,7 +1162,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		str_format(aFile, sizeof(aFile), "%s.png", Req.m_aName);
 		if(!Storage()->FindFile(aFile, "mapres", IStorage::TYPE_ALL, aFound, sizeof(aFound)))
 		{
-			dbg_msg("mapgen", "%s image '%s' is missing from mapres/, the layer will render without a texture",
+			MAPGEN_LOG("mapgen", "%s image '%s' is missing from mapres/, the layer will render without a texture",
 				Req.m_Optional ? "background" : "tileset", Req.m_aName);
 			lCreatorImages.add(nullptr);
 			continue;
@@ -1172,9 +1172,9 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		int Width = Req.m_Width;
 		int Height = Req.m_Height;
 		if(ReadPngSize(aFound, &Width, &Height))
-			dbg_msg("mapgen", "image '%s' is %dx%d", Req.m_aName, Width, Height);
+			MAPGEN_LOG("mapgen", "image '%s' is %dx%d", Req.m_aName, Width, Height);
 		else
-			dbg_msg("mapgen", "image '%s' has an unreadable png header, assuming %dx%d",
+			MAPGEN_LOG("mapgen", "image '%s' has an unreadable png header, assuming %dx%d",
 				Req.m_aName, Width, Height);
 		lCreatorImages.add(Creator.AddExternalImage(Req.m_aName, Width, Height));
 	}
@@ -1271,7 +1271,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		const bool CaveMatches = pCaveSet && str_comp(pCaveSet->m_aSource, pMainSource) == 0;
 		pWallSet = CaveMatches ? Gen.m_aCaveRuleSet : Gen.m_aMainRuleSet;
 		if(!Mapper.Proceed(pWallSet, lWallTiles.base_ptr(), SubWidth, SubHeight, Ring.m_NoiseSeed + 0x51ed, !Ring.m_Enabled, Gen.m_WrapMargin, nullptr, Ring.m_OffsetX))
-			dbg_msg("mapgen", "cave rule set '%s' is unknown, the wall stays plain", pWallSet);
+			MAPGEN_LOG("mapgen", "cave rule set '%s' is unknown, the wall stays plain", pWallSet);
 		WallDarkened = !CaveMatches;
 
 		// On the ground line the foreground is a grass edge whose blades leave
@@ -1764,7 +1764,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			CCreatorImage *pImage = Pass.m_aImage[0] ? FindCreatorImage(Pass.m_aImage) : nullptr;
 			if(Pass.m_aImage[0] && !pImage)
 			{
-				dbg_msg("mapgen", "layer '%s': image '%s' is missing from mapres/, skipping that pass", Layer.m_aName, Pass.m_aImage);
+				MAPGEN_LOG("mapgen", "layer '%s': image '%s' is missing from mapres/, skipping that pass", Layer.m_aName, Pass.m_aImage);
 				continue;
 			}
 
@@ -2001,14 +2001,14 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 		if(!Mapper.Proceed(Gen.m_aMainRuleSet, pCreatorTerrain->m_pTiles,
 			   pCreatorTerrain->m_Width, pCreatorTerrain->m_Height,
 			   Ring.m_NoiseSeed, !Ring.m_Enabled, Gen.m_WrapMargin, nullptr, Ring.m_OffsetX))
-			dbg_msg("mapgen", "automap rule set '%s' is unknown, the terrain stays unstyled", Gen.m_aMainRuleSet);
+			MAPGEN_LOG("mapgen", "automap rule set '%s' is unknown, the terrain stays unstyled", Gen.m_aMainRuleSet);
 	}
 	if(pCreatorWall)
 	{
 		if(!Mapper.Proceed(pWallSet, pCreatorWall->m_pTiles,
 			   pCreatorWall->m_Width, pCreatorWall->m_Height,
 			   Ring.m_NoiseSeed + 0x51ed, !Ring.m_Enabled, Gen.m_WrapMargin, nullptr, Ring.m_OffsetX))
-			dbg_msg("mapgen", "cave rule set '%s' is unknown, the wall stays plain", pWallSet);
+			MAPGEN_LOG("mapgen", "cave rule set '%s' is unknown, the wall stays plain", pWallSet);
 	}
 
 	// 3. the foreground layers, only now that the game layer exists, so they are
@@ -2155,10 +2155,10 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 
 	if(!Saved)
 	{
-		dbg_msg("mapgen", "failed to build the generated map '%s_%d'", pFloorName, Seed);
+		MAPGEN_LOG("mapgen", "failed to build the generated map '%s_%d'", pFloorName, Seed);
 		return false;
 	}
 
-	dbg_msg("mapgen", "generated euclidean map '%s_%d' from base '%s'", pFloorName, Seed, pInstruction->m_aBaseMap);
+	MAPGEN_LOG("mapgen", "generated euclidean map '%s_%d' from base '%s'", pFloorName, Seed, pInstruction->m_aBaseMap);
 	return true;
 }
