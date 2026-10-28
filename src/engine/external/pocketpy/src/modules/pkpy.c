@@ -86,12 +86,12 @@ static bool pkpy_currentvm(int argc, py_Ref argv) {
 #if PK_ENABLE_WATCHDOG
 void py_watchdog_begin(py_i64 timeout) {
     WatchdogInfo* info = &pk_current_vm->watchdog_info;
-    info->max_reset_time = clock() + (timeout * (CLOCKS_PER_SEC / 1000));
+    info->deadline_ms = pk_watchdog_now_ms() + timeout;
 }
 
 void py_watchdog_end() {
     WatchdogInfo* info = &pk_current_vm->watchdog_info;
-    info->max_reset_time = 0;
+    info->deadline_ms = 0;
 }
 
 static bool pkpy_watchdog_begin(int argc, py_Ref argv) {

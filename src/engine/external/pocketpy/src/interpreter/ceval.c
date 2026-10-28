@@ -115,9 +115,9 @@ __NEXT_STEP:
     }
 
 #if PK_ENABLE_WATCHDOG
-    if(self->watchdog_info.max_reset_time > 0) {
-        if(py_debugger_status() == 0 && clock() > self->watchdog_info.max_reset_time) {
-            self->watchdog_info.max_reset_time = 0;
+    if(self->watchdog_info.deadline_ms > 0) {
+        if(py_debugger_status() == 0 && pk_watchdog_now_ms() > self->watchdog_info.deadline_ms) {
+            self->watchdog_info.deadline_ms = 0;
             TimeoutError("watchdog timeout");
             goto __ERROR;
         }

@@ -26,8 +26,19 @@ typedef struct TraceInfo {
 } TraceInfo;
 
 typedef struct WatchdogInfo {
-    clock_t max_reset_time;
+    // LastDay: a wall-clock deadline in milliseconds. PocketPy's stock
+    // watchdog uses clock(), which is *process* CPU time; on a multi-threaded
+    // host the background worker threads inflate it and a cheap script can be
+    // killed by a timeout it never spent. A wall-clock budget bounds the
+    // script callback itself, which is what the runtime's timeout promises.
+    py_i64 deadline_ms;
 } WatchdogInfo;
+
+static inline py_i64 pk_watchdog_now_ms(void) {
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    return (py_i64)ts.tv_sec * 1000 + (py_i64)ts.tv_nsec / 1000000;
+}
 
 typedef struct TypePointer {
     py_TypeInfo* ti;
