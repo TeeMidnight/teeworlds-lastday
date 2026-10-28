@@ -2181,6 +2181,14 @@ void CGameContext::RefreshLegacyIdentities()
 		if(!pPlayer)
 			continue;
 
+		// Only an in-game client has a displayed identity. While it is loading a
+		// map, ClientName() reports "(connecting)" instead of the real name and
+		// the team may still be in flux, so comparing that would look like a
+		// rename on every map load and turn the reset below into an endless
+		// MAP_CHANGE loop (enter -> load -> spurious rename -> reload -> ...).
+		if(!Server()->ClientIngame(i))
+			continue;
+
 		// build exactly what CPlayer::Snap puts into TeeInfo
 		char aClan[MAX_CLAN_ARRAY_SIZE];
 		str_utf8_copy_num(aClan, Teams()->TeamNameFor(pPlayer->m_AccountUuid), sizeof(aClan), MAX_CLAN_LENGTH);
@@ -2201,10 +2209,8 @@ void CGameContext::RefreshLegacyIdentities()
 		str_copy(pPlayer->m_aShownClan, aClan, sizeof(pPlayer->m_aShownClan));
 
 		// A 0.7 peer is the only one that needs the reset; a 0.8 client picks
-		// the new values up from the next snapshot. A client that is still
-		// loading will announce the new identity when it enters, so it needs
-		// no second map change either.
-		if(Server()->GetClientVersion(i) < 0x0800 && Server()->ClientIngame(i))
+		// the new values up from the next snapshot.
+		if(Server()->GetClientVersion(i) < 0x0800)
 		{
 			// A map change makes the client load the map and send CL_STARTINFO
 			// again. The game layer normally clears this flag when it moves a
