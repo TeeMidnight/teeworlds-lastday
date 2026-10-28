@@ -210,7 +210,7 @@ static CCreatorImage *FindRequestedImage(const array<SImageRequest> &lRequests,
 // blue flag stands, exactly like the static (non euclidean) merge; a euclidean
 // structure therefore has to carry both flags even though they are consumed by
 // the merge and never reach the generated map.
-static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, SEuclidStructMap &rMap)
+static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, bool ConsoleOutput, SEuclidStructMap &rMap)
 {
 	rMap.m_pGameTiles = nullptr;
 	rMap.m_GameWidth = 0;
@@ -231,6 +231,7 @@ static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, SEucli
 	str_format(aPath, sizeof(aPath), "maps/struct/%s.map", pBaseMap);
 
 	CDataFileReader File;
+	File.SetConsoleOutput(ConsoleOutput);
 	if(!File.Open(pStorage, aPath, IStorage::TYPE_ALL))
 	{
 		dbg_msg("mapgen", "failed to open the struct map '%s'", aPath);
@@ -526,7 +527,7 @@ static int UniqueStructureSeed(const CInstruction::CStruct &Struct, const CInstr
 // the foreground and night shade groups, so the structure art sits over the
 // terrain but under the final shade.
 static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed, CGeneratedWorld *pWorld,
-	IStorage *pStorage, CCreatorGroupInfo *pStructGroup,
+	IStorage *pStorage, bool ConsoleOutput, CCreatorGroupInfo *pStructGroup,
 	CCreatorLayerTilemap *pTerrainLayer, CCreatorLayerTilemap *pGameLayer,
 	CCreatorLayerTilemap *pUnhookableLayer, CCreatorLayerTilemap *pWallLayer,
 	CCreatorLayerTilemap *pDoodadsLayer,
@@ -560,7 +561,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 		const char *pStructMapName = Variant.m_aBaseMap;
 
 		SEuclidStructMap StructMap;
-		if(!LoadEuclidStructMap(pStorage, pStructMapName, StructMap))
+		if(!LoadEuclidStructMap(pStorage, pStructMapName, ConsoleOutput, StructMap))
 			continue;
 
 		const int RegionWidth = StructMap.m_ContentWidth;
@@ -1132,6 +1133,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 			char aStructPath[IO_MAX_PATH_LENGTH];
 			str_format(aStructPath, sizeof(aStructPath), "maps/struct/%s.map", Struct.m_lVariants[v].m_aBaseMap);
 			CDataFileReader StructFile;
+			StructFile.SetConsoleOutput(m_DatafileConsoleOutput);
 			if(!StructFile.Open(Storage(), aStructPath, IStorage::TYPE_ALL))
 				continue;
 			int StructImagesStart = 0, StructImagesNum = 0;
@@ -1984,7 +1986,7 @@ bool CMapGen::GenerateEuclidean(const CInstruction *pInstruction, int Seed, SGen
 	// 2b. the euclidean structures: their tiles merge into the terrain and game
 	//     layers above, their quads into a world-parallax group placed after the
 	//     terrain, so the art sits in the world and the collision stays exact.
-	PasteEuclideanStructures(pInstruction, Seed, pWorld, Storage(), pStructGroup,
+	PasteEuclideanStructures(pInstruction, Seed, pWorld, Storage(), m_DatafileConsoleOutput, pStructGroup,
 		pCreatorTerrain, pCreatorGame, pCreatorUnhookable, pCreatorWall, pCreatorDoodads,
 		lRequests, lCreatorImages);
 

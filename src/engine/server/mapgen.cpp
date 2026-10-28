@@ -417,6 +417,8 @@ CMapGen::CMapGen(IStorage *pStorage, IConsole *pConsole)
 	m_GenWorkerActive = false;
 	m_UseMapPacks = true;
 	m_DeleteGeneratedFiles = false;
+	// Quiet by default; the server sets this from dbg_datafile.
+	m_DatafileConsoleOutput = false;
 
 	LoadStructCatalog();
 

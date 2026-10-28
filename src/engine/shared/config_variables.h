@@ -57,6 +57,10 @@ MACRO_CONFIG_INT(Debug, debug, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SERVER, "Debug 
 MACRO_CONFIG_INT(DbgPref, dbg_pref, 0, 0, 1, CFGFLAG_SERVER, "Performance outputs")
 MACRO_CONFIG_INT(DbgGraphs, dbg_graphs, 0, 0, 1, CFGFLAG_CLIENT, "Performance graphs")
 MACRO_CONFIG_INT(DbgHitch, dbg_hitch, 0, 0, 0, CFGFLAG_SERVER, "Hitch warnings")
+// Generating a map reads a base map and every structure map it may paste,
+// which floods the console with the datafile codec's progress lines. They are
+// off unless an admin asks for them; datafile errors are always printed.
+MACRO_CONFIG_INT(DbgDatafile, dbg_datafile, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Print the datafile load progress while generating maps")
 MACRO_CONFIG_INT(DbgResizable, dbg_resizable, 0, 0, 0, CFGFLAG_CLIENT, "Enables window resizing")
 #ifdef CONF_DEBUG
 MACRO_CONFIG_INT(DbgStress, dbg_stress, 0, 0, 0, CFGFLAG_CLIENT | CFGFLAG_SERVER, "Stress systems")

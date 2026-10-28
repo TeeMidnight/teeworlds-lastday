@@ -38,6 +38,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 	str_format(aBasePath, sizeof(aBasePath), "maps/%s.map", pInstruction->m_aBaseMap);
 
 	CDataFileReader BaseFile;
+	BaseFile.SetConsoleOutput(m_DatafileConsoleOutput);
 	if(!BaseFile.Open(Storage(), aBasePath, IStorage::TYPE_ALL))
 	{
 		dbg_msg("mapgen", "failed to open the base map '%s'", aBasePath);
@@ -383,6 +384,7 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 			str_format(aStructPath, sizeof(aStructPath), "maps/struct/%s.map", pStructMapName);
 
 			CDataFileReader StructFile;
+			StructFile.SetConsoleOutput(m_DatafileConsoleOutput);
 			if(!StructFile.Open(Storage(), aStructPath, IStorage::TYPE_ALL))
 			{
 				dbg_msg("mapgen", "failed to open the struct map '%s'", aStructPath);

@@ -319,6 +319,11 @@ The generator uses one such pack per floor automatically
 - a cached map from before packs existed is appended once, the first time it is
   loaded, so the pack converges on the whole floor.
 
+The datafile codec prints which file it opens and which layers it decompresses.
+Generation opens many base and structure maps, so the generator silences those
+progress lines; `dbg_datafile 1` turns them back on for debugging. Datafile
+errors are always printed.
+
 `mapgentool ensure` drives the cache-file path (`EnsureNewMap`) and
 `mapgentool acquire` the in-memory path through `AcquireMapOrGenerate`
 (`TryAcquireMap` when the instance already exists):

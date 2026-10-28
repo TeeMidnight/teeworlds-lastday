@@ -1879,6 +1879,10 @@ void CServer::InitInterfaces(IKernel *pKernel)
 	m_pMapChecker = pKernel->RequestInterface<IMapChecker>();
 	m_pStorage = pKernel->RequestInterface<IStorage>();
 	m_pMapGen = new CMapGen(m_pStorage, m_pConsole);
+	// Map generation opens and decompresses a lot of datafiles; keep that out
+	// of the console unless the admin enabled the debug output. The console
+	// chain below keeps a runtime change of dbg_datafile in sync.
+	m_pMapGen->SetDatafileConsoleOutput(Config()->m_DbgDatafile != 0);
 	// generated instances are kept in one append-only pack per floor
 	m_pMapGen->SetUseMapPacks(Config()->m_SvMappack != 0);
 	// the server loads instances from the pack, so no cache file has to stay
@@ -2225,6 +2229,14 @@ void CServer::ConchainMaxclientsUpdate(IConsole::IResult *pResult, void *pUserDa
 	}
 }
 
+void CServer::ConchainDatafileUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+{
+	pfnCallback(pResult, pCallbackUserData);
+	CServer *pSelf = (CServer *) pUserData;
+	if(pResult->NumArguments() && pSelf->m_pMapGen)
+		pSelf->m_pMapGen->SetDatafileConsoleOutput(pResult->GetInteger(0) != 0);
+}
+
 void CServer::ConchainMaxclientsperipUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
 {
 	pfnCallback(pResult, pCallbackUserData);
@@ -2300,6 +2312,7 @@ void CServer::RegisterCommands()
 	Console()->Chain("mod_command", ConchainModCommandUpdate, this);
 	Console()->Chain("console_output_level", ConchainConsoleOutputLevelUpdate, this);
 	Console()->Chain("sv_rcon_password", ConchainRconPasswordSet, this);
+	Console()->Chain("dbg_datafile", ConchainDatafileUpdate, this);
 
 	// register console commands in sub parts
 	m_ServerBan.InitServerBan(Console(), Storage(), this);

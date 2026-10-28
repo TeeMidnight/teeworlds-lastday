@@ -502,6 +502,10 @@ public:
 private:
 	class IStorage *m_pStorage;
 	class IConsole *m_pConsole;
+	// Whether the datafile reader prints which base/structure maps it opens and
+	// which layers it decompresses. The server derives this from dbg_datafile;
+	// map generation reads many maps and would otherwise flood the console.
+	bool m_DatafileConsoleOutput;
 
 	class IStorage *Storage() { return m_pStorage; };
 	class IConsole *Console() { return m_pConsole; };
@@ -669,6 +673,10 @@ private:
 public:
 	CMapGen(class IStorage *pStorage, class IConsole *pConsole);
 	~CMapGen();
+
+	// Turns the datafile reader's progress lines on or off for every map this
+	// generator opens. Off keeps the console clean; errors are always printed.
+	void SetDatafileConsoleOutput(bool ConsoleOutput) { m_DatafileConsoleOutput = ConsoleOutput; }
 
 	// Generates a new map for the given floor (the floor name, e.g. the map
 	// name prefix "<FloorName>_<Seed>"). The floor's instruction carries the

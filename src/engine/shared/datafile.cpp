@@ -80,7 +80,8 @@ struct CDatafile
 
 bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int StorageType)
 {
-	dbg_msg("datafile", "loading. filename='%s'", pFilename);
+	if(m_ConsoleOutput)
+		dbg_msg("datafile", "loading. filename='%s'", pFilename);
 
 	IOHANDLE File = pStorage->OpenFile(pFilename, IOFLAG_READ, StorageType);
 	if(!File)
@@ -262,7 +263,7 @@ bool CDataFileReader::Open(stream *pStream, bool OwnStream)
 	Close();
 	m_pDataFile = pTmpDataFile;
 
-	// if(DEBUG)
+	if(m_ConsoleOutput)
 	{
 		dbg_msg("datafile", "allocsize=%d", unsigned(AllocSize));
 		dbg_msg("datafile", "readsize=%d", ReadSize);
@@ -283,7 +284,8 @@ bool CDataFileReader::Open(stream *pStream, bool OwnStream)
 		m_pDataFile->m_Info.m_pItemStart = (char *) &m_pDataFile->m_Info.m_pDataOffsets[m_pDataFile->m_Header.m_NumRawData];
 	m_pDataFile->m_Info.m_pDataStart = m_pDataFile->m_Info.m_pItemStart + m_pDataFile->m_Header.m_ItemSize;
 
-	dbg_msg("datafile", "loading done. items=%d data=%d", m_pDataFile->m_Header.m_NumItems, m_pDataFile->m_Header.m_NumRawData);
+	if(m_ConsoleOutput)
+		dbg_msg("datafile", "loading done. items=%d data=%d", m_pDataFile->m_Header.m_NumItems, m_pDataFile->m_Header.m_NumRawData);
 
 	if(DEBUG)
 	{
@@ -396,7 +398,8 @@ void *CDataFileReader::GetDataImpl(int Index, int Swap)
 			// value widened to size_t.
 			uLongf s = (uLongf) UncompressedSize;
 
-			dbg_msg("datafile", "loading data index=%d size=%d uncompressed=%lu", Index, DataSize, UncompressedSize);
+			if(m_ConsoleOutput)
+				dbg_msg("datafile", "loading data index=%d size=%d uncompressed=%lu", Index, DataSize, UncompressedSize);
 			m_pDataFile->m_ppDataPtrs[Index] = (char *) mem_alloc(UncompressedSize);
 			m_pDataFile->m_pDataSizes[Index] = UncompressedSize;
 
@@ -437,7 +440,8 @@ void *CDataFileReader::GetDataImpl(int Index, int Swap)
 		else
 		{
 			// load the data
-			dbg_msg("datafile", "loading data index=%d size=%d", Index, DataSize);
+			if(m_ConsoleOutput)
+				dbg_msg("datafile", "loading data index=%d size=%d", Index, DataSize);
 			m_pDataFile->m_ppDataPtrs[Index] = (char *) mem_alloc(DataSize);
 			m_pDataFile->m_pDataSizes[Index] = DataSize;
 			m_pDataFile->m_pStream->seek(m_pDataFile->m_DataStartOffset + m_pDataFile->m_Info.m_pDataOffsets[Index], STREAM_SEEK_START);

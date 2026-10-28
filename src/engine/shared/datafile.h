@@ -13,15 +13,21 @@
 class CDataFileReader
 {
 	struct CDatafile *m_pDataFile;
+	// Progress lines (which file is opened, which layers are decompressed). A
+	// map generation reads many base and structure maps, so it asks for these
+	// to be silenced; errors are printed regardless.
+	bool m_ConsoleOutput;
 	void *GetDataImpl(int Index, int Swap);
 	int GetFileDataSize(int Index) const;
 	int GetFileItemSize(int Index) const;
 
 public:
-	CDataFileReader() : m_pDataFile(0) {}
+	CDataFileReader() :
+		m_pDataFile(0), m_ConsoleOutput(true) {}
 	~CDataFileReader() { Close(); }
 
 	bool IsOpen() const { return m_pDataFile != 0; }
+	void SetConsoleOutput(bool ConsoleOutput) { m_ConsoleOutput = ConsoleOutput; }
 
 	bool Open(class IStorage *pStorage, const char *pFilename, int StorageType);
 	// Read a datafile from any stream: a file (the overload above wraps one) or
