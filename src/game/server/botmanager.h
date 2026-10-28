@@ -61,6 +61,11 @@ public:
 	CGameController *GameController() const;
 	class IServer *Server() const;
 
+	// The one live manager, or null. An entity destructor uses this instead of
+	// GameWorld()->BotManager(): a bot may already be deleted from a world
+	// that is half torn down, and its teardown must still unlink it.
+	static CBotManager *Active() { return s_pActive; }
+
 	// Advance every configured world: respawn its defined NPCs or top up its
 	// random hostile population.
 	void Tick();
@@ -135,6 +140,10 @@ public:
 	// because the world deletes the entity at the end of the tick and no later
 	// lookup may see a dangling pointer.
 	void OnBotDeath(Uuid BotID);
+	// Unlinks a bot from every table without emitting anything. Idempotent:
+	// safe for a bot that never died (a world unload) and safe as a second
+	// call from the destructor after Die() already retired it.
+	void ForgetBot(Uuid BotID);
 	// Called when a client enters the game, so its stale mapping is dropped
 	// and the bot identities are re-sent from scratch.
 	void OnClientRefresh(int ClientID);
@@ -160,6 +169,10 @@ public:
 	int TranslateTeeIDForClient(int SnappingClient, int TeeID) const;
 
 private:
+	// the instance handed out by Active(); cleared by the destructor so a bot
+	// outliving its manager cannot call back into freed memory
+	static CBotManager *s_pActive;
+
 	CGameContext *m_pGameServer;
 
 	// Every live bot of every world, by BotID. A bot unlinks itself the moment

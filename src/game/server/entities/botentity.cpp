@@ -112,6 +112,23 @@ CBotEntity::~CBotEntity()
 {
 	SetAI(nullptr);
 
+	// Unlink from the manager first. Die(), ClearBots() and the worm's
+	// Despawn() retire a bot before deleting it, but a bot can also be
+	// destroyed by a path that never retired it: a world torn down with it
+	// still listed, a segment whose Despawn was missed, a script. A stale
+	// entry is followed later by ClearBots(), which calls TeeID() on it, and
+	// that is a use after free. ForgetBot() is idempotent, so the normal
+	// paths only pay a hash lookup.
+	//
+	// Only forget the id while it still names this object: a fixed spawn is
+	// respawned under the same BotID, and its replacement may already be
+	// registered when the old entity is finally deleted.
+	if(CBotManager *pBots = CBotManager::Active())
+	{
+		if(pBots->BotByID(m_BotID) == this)
+			pBots->ForgetBot(m_BotID);
+	}
+
 	// Unbind before the core dies, or a physics tick would read a dangling
 	// pointer out of the world's table. Only touch the slot while it still
 	// points at this bot: OnBotDeath frees the TeeID before the entity is

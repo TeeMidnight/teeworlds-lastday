@@ -153,7 +153,19 @@ void CGameContext::Clear()
 	m_pWorlds.clear();
 
 	m_Resetting = true;
+	// The worlds survive this reset (they are restored below), so their bots
+	// must not. Retire them while the manager can still match a bot to its
+	// world: otherwise the restored worlds keep ticking bots that no table
+	// knows about, and the next world unload deletes them behind the
+	// manager's back. It also keeps a leftover bot from holding a TeeID that
+	// a freshly spawned bot would be handed as free.
+	if(m_pBotManager)
+		m_pBotManager->ClearBots();
 	this->~CGameContext();
+	// The reset destructor deliberately keeps the worlds, so it never frees
+	// the manager either: release it here, now that its bots are gone.
+	delete m_pBotManager;
+	m_pBotManager = 0;
 	mem_zero(this, sizeof(*this));
 	new(this) CGameContext(RESET);
 
@@ -2606,6 +2618,16 @@ bool CGameContext::UnloadWorld(unsigned MapID)
 
 	// persist the world state (dropped items etc.) before destroying it
 	pWorld->SaveToDatabase();
+
+	// No other world may keep a borrowed pointer into this one. The ring
+	// proxies are raw pointers in both directions, so a live neighbour whose
+	// proxy still names this world would follow the pointer after it is gone.
+	m_pWorlds.for_each([](CGameWorld *&pOther, void *pUser) -> void
+	{
+		CGameWorld *pUnloaded = static_cast<CGameWorld *>(pUser);
+		if(pOther && pOther != pUnloaded)
+			pOther->DropRingProxiesOf(pUnloaded);
+	}, pWorld);
 
 	delete pWorld;
 	m_pWorlds.remove(MapID);

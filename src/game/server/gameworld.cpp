@@ -318,6 +318,36 @@ void CGameWorld::RefreshRingProxies()
 	}
 }
 
+void CGameWorld::DropRingProxiesOf(CGameWorld *pOwner)
+{
+	if(!pOwner)
+		return;
+
+	// player proxies: the core entry is only released while it still points
+	// at our own copy, so a real character of this world is never unbound
+	for(int c = 0; c < MAX_CLIENTS; c++)
+	{
+		if(m_apRingProxyOwner[c] != pOwner)
+			continue;
+		if(m_Core.GetCharacter(c) == &m_aRingProxyCores[c])
+			m_Core.SetCharacter(c, nullptr);
+		m_apRingProxyOwner[c] = nullptr;
+	}
+
+	// bot proxies: the owner was about to be destroyed, so any borrowed core
+	// still naming it is dropped with the proxy
+	for(int i = m_lBotRingProxies.size() - 1; i >= 0; i--)
+	{
+		if(m_lBotRingProxies[i].m_pOwner != pOwner)
+			continue;
+		const int TeeID = m_lBotRingProxies[i].m_TeeID;
+		if(m_Core.GetCharacter(TeeID) == m_lBotRingProxies[i].m_pCore)
+			m_Core.SetCharacter(TeeID, nullptr);
+		delete m_lBotRingProxies[i].m_pCore;
+		m_lBotRingProxies.remove_index(i);
+	}
+}
+
 void CGameWorld::ForwardRingProxyDrag()
 {
 	if(!m_Ring)
@@ -373,7 +403,8 @@ CGameWorld::~CGameWorld()
 	// The global manager owns the bots as entities, so retire this world's
 	// before the entity lists are torn down: a bot's destructor unbinds its
 	// core from this world and must not run after that core is gone.
-	if(class CBotManager *pBots = GameServer()->BotManager())
+	CBotManager *pBots = GameServer()->BotManager();
+	if(pBots)
 		pBots->ClearBots(this);
 
 	// release the borrowed neighbour bots before this world's core dies
@@ -388,7 +419,21 @@ CGameWorld::~CGameWorld()
 	// delete all entities
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 		while(m_alpEntityLists[i].size())
-			delete m_alpEntityLists[i][0];
+		{
+			CEntity *pEnt = m_alpEntityLists[i][0];
+			// ClearBots() only claims the bots whose GameWorld() still names
+			// this world. A bot left behind here is nonetheless destroyed by
+			// this loop, so its manager entry has to go first: otherwise the
+			// table keeps a dangling pointer that a later ClearBots() would
+			// follow through TeeID().
+			if(pBots && i == ENTTYPE_BOTENTITY)
+			{
+				const Uuid BotID = static_cast<IBotEntity *>(pEnt)->GetBotID();
+				if(pBots->BotByID(BotID) == pEnt)
+					pBots->ForgetBot(BotID);
+			}
+			delete pEnt;
+		}
 }
 
 CBotManager *CGameWorld::BotManager()
@@ -888,6 +933,18 @@ void CGameWorld::InsertEntity(CEntity *pEnt)
 	m_alpEntityLists[pEnt->m_ObjType].add(pEnt);
 	if(pEnt->ObjFlag() != 0)
 		m_lpFlagEntityList.add(pEnt);
+}
+
+bool CGameWorld::HasEntity(const CEntity *pEnt) const
+{
+	if(!pEnt || pEnt->ObjType() < 0 || pEnt->ObjType() >= NUM_ENTTYPES)
+		return false;
+
+	const array<CEntity *> &List = m_alpEntityLists[pEnt->ObjType()];
+	for(int i = 0; i < List.size(); i++)
+		if(List[i] == pEnt)
+			return true;
+	return false;
 }
 
 void CGameWorld::DestroyEntity(CEntity *pEnt)

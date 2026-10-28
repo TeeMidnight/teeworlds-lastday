@@ -37,7 +37,9 @@ CWormSegmentEntity::CWormSegmentEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID,
 CWormSegmentEntity::~CWormSegmentEntity()
 {
 	// The worm uses BotIDs, not this pointer, so nothing has to be unlinked
-	// here. The worm nulls the back-pointer from its own destructor.
+	// from it here: the worm nulls the back-pointer from its own destructor.
+	// The manager entry itself is retired by ~CBotEntity, so a segment that is
+	// destroyed without Despawn() no longer leaves a dangling BotID behind.
 }
 
 void CWormSegmentEntity::Reset()

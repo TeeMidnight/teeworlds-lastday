@@ -56,12 +56,16 @@ static void ApplySpawnAI(IBotEntity *pBot)
 	dbg_msg("bot", "spawned bot with AI '%s'", pBotEntity->AIName());
 }
 
+CBotManager *CBotManager::s_pActive = nullptr;
+
 CBotManager::CBotManager(CGameContext *pGameServer)
 {
 	m_pGameServer = pGameServer;
 	m_lBotOrder.hint_size(MAX_BOTS_07);
 
 	ClearPlayerMap(-1);
+
+	s_pActive = this;
 
 	dbg_msg("bot", "global manager ready, bots=%s, natural density=1/%d tiles (0.7 tee ids %d..%d, 0.8 tee ids %d..%d)",
 		Config()->m_SvBots ? "on" : "off", BOT_NATURAL_TILES_PER_MONSTER,
@@ -71,6 +75,10 @@ CBotManager::CBotManager(CGameContext *pGameServer)
 CBotManager::~CBotManager()
 {
 	ClearBots();
+
+	// no bot may be left that would still resolve this manager
+	if(s_pActive == this)
+		s_pActive = nullptr;
 }
 
 IBotEntity *CBotManager::BotByID(Uuid BotID) const
@@ -132,6 +140,11 @@ void CBotManager::ClearBots(CGameWorld *pWorld)
 			i++;
 			continue;
 		}
+
+		// The table and the world have to agree: a bot registered for this
+		// world is an entity of it. A mismatch means a stale entry reached
+		// the table, and the TeeID() call below would be a use after free.
+		dbg_assert(pWorld->HasEntity(pBot), "stale bot in CBotManager");
 
 		const Uuid BotID = m_lBotOrder[i];
 		if(pBot->TeeID() != -1)
@@ -728,11 +741,11 @@ void CBotManager::CreateDeath(vec2 Pos, Uuid BotID)
 	}
 }
 
-void CBotManager::OnBotDeath(Uuid BotID)
+void CBotManager::ForgetBot(Uuid BotID)
 {
-	// Unlink right away. The world deletes the entity in RemoveEntities, long
-	// before PostSnap, so keeping the pointer would leave a dangling entry that
-	// any lookup in between (snap, damage events) would follow.
+	// Never dereference a bot that is already gone: BotByID() is the only
+	// check that the entry is still live, and every field read through pBot
+	// (TeeID is virtual) would be a use after free.
 	IBotEntity *pBot = BotByID(BotID);
 	if(pBot && pBot->TeeID() != -1)
 		m_BotsByTeeID.remove(pBot->TeeID());
@@ -741,6 +754,14 @@ void CBotManager::OnBotDeath(Uuid BotID)
 	// assignment (and the demo tee ids) deterministic
 	m_lBotOrder.remove(BotID);
 	RemoveFromPlayerMaps(BotID);
+}
+
+void CBotManager::OnBotDeath(Uuid BotID)
+{
+	// Unlink right away. The world deletes the entity in RemoveEntities, long
+	// before PostSnap, so keeping the pointer would leave a dangling entry that
+	// any lookup in between (snap, damage events) would follow.
+	ForgetBot(BotID);
 }
 
 void CBotManager::OnClientRefresh(int ClientID)

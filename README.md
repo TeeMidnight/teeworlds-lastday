@@ -58,6 +58,14 @@ collision on this side reaches it and the drag is forwarded to the real bot at
 the end of the tick. Since bot ids and real client ids never overlap, a world
 can hold player and bot proxies at the same time.
 
+A bot leaves the manager through CBotManager::ForgetBot(), which is idempotent
+and is called from the entity destructor as well as from Die(). A bot can also
+disappear when its world is unloaded, when a worm segment is torn down, or when
+a script removes it; a leftover table entry would be followed by the next world
+unload and read a freed object. CGameWorld's destructor therefore retires any
+bot the unload sweep did not claim before deleting the entity, and unloading a
+world drops every neighbouring proxy that still borrows it.
+
 Storage containers
 -------------------
 Generated map structures carry storage containers. A container holds one

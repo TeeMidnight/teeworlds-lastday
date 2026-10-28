@@ -153,6 +153,10 @@ public:
 	bool RingNeighbour(int Direction, char *pMapName, int MapNameSize, float LocalX, float *pArrivalX) const;
 	// bind / update the neighbour proxies (call before the worlds tick)
 	void RefreshRingProxies();
+	// drop every proxy that borrows pOwner. Called before pOwner is destroyed:
+	// CWorldCore keeps raw pointers to the proxies and the proxies keep a raw
+	// pointer back into the owner, so an unloaded neighbour must not linger.
+	void DropRingProxiesOf(CGameWorld *pOwner);
 	// release the proxies that no longer have an owner and pass any hook drag on
 	void ForwardRingProxyDrag();
 	// The live ring neighbour worlds of this world, with the offset (world
@@ -304,6 +308,10 @@ public:
 			entity - Entity to add
 	*/
 	void InsertEntity(CEntity *pEntity);
+
+	// Whether pEntity is still listed in this world's entity table. Used by
+	// the bot manager to prove a registered bot was not already deleted.
+	bool HasEntity(const CEntity *pEntity) const;
 
 	/*
 		Function: remove_entity
