@@ -47,7 +47,12 @@ void CWormSegmentEntity::SetWormVisible(bool Visible)
 {
 	m_Alive = Visible;
 	if(m_TeeID != -1 && GameWorld())
-		GameWorld()->m_Core.SetCharacter(m_TeeID, Visible ? &m_Core : nullptr);
+	{
+		if(Visible)
+			GameWorld()->m_Core.SetCharacter(m_TeeID, &m_Core);
+		else if(GameWorld()->m_Core.GetCharacter(m_TeeID) == &m_Core)
+			GameWorld()->m_Core.SetCharacter(m_TeeID, nullptr);
+	}
 }
 
 void CWormSegmentEntity::SetWormPos(vec2 Pos, vec2 Dir)
@@ -91,13 +96,15 @@ void CWormSegmentEntity::Die(CEntity *pKiller, int Weapon)
 
 void CWormSegmentEntity::Despawn()
 {
-	if(m_Despawning)
+	if(m_Despawning || !GameWorld())
 		return;
 	m_Despawning = true;
 	m_Alive = false;
-	if(m_TeeID != -1 && GameWorld())
+	// The TeeID may already belong to a replacement bot: never clear a core
+	// that this segment no longer owns.
+	if(m_TeeID != -1 && GameWorld()->m_Core.GetCharacter(m_TeeID) == &m_Core)
 		GameWorld()->m_Core.SetCharacter(m_TeeID, nullptr);
-	CBotManager *pBots = GameWorld() ? GameWorld()->BotManager() : nullptr;
+	CBotManager *pBots = GameWorld()->BotManager();
 	if(pBots)
 		pBots->OnBotDeath(m_BotID);
 	GameWorld()->DestroyEntity(this);
@@ -190,17 +197,30 @@ void CWormEntity::SetVisible(bool Visible)
 	}
 }
 
+void CWormEntity::DespawnSegments()
+{
+	array<Uuid> lSegments = m_lSegments;
+	m_lSegments.clear();
+	CBotManager *pBots = GameWorld()->HasBotManager() ? GameWorld()->GetBotManager() : nullptr;
+	if(!pBots)
+		return;
+	for(int i = 0; i < lSegments.size(); i++)
+	{
+		IBotEntity *pBot = pBots->BotByID(lSegments[i]);
+		if(!pBot || str_comp(pBot->BotTypeName(), "worm_segment") != 0)
+			continue;
+		CWormSegmentEntity *pSegment = static_cast<CWormSegmentEntity *>(pBot);
+		// No link may call back into a worm that is being torn down.
+		pSegment->SetWorm(nullptr);
+		pSegment->Despawn();
+	}
+}
+
 void CWormEntity::Reset()
 {
 	m_Alive = false;
 	SetVisible(false);
-	for(int i = 0; i < m_lSegments.size(); i++)
-	{
-		IBotEntity *pBot = GameWorld()->HasBotManager() ? GameWorld()->GetBotManager()->BotByID(m_lSegments[i]) : nullptr;
-		if(pBot && str_comp(pBot->BotTypeName(), "worm_segment") == 0)
-			static_cast<CWormSegmentEntity *>(pBot)->Despawn();
-	}
-	m_lSegments.clear();
+	DespawnSegments();
 	GameWorld()->DestroyEntity(this);
 }
 
@@ -432,16 +452,6 @@ void CWormEntity::WormDie()
 	GameWorld()->CreateSound(m_Pos, SOUND_PLAYER_DIE);
 
 	SetVisible(false);
-	CBotManager *pBots = GameWorld()->HasBotManager() ? GameWorld()->GetBotManager() : nullptr;
-	if(pBots)
-	{
-		for(int i = 0; i < m_lSegments.size(); i++)
-		{
-			IBotEntity *pBot = pBots->BotByID(m_lSegments[i]);
-			if(pBot && str_comp(pBot->BotTypeName(), "worm_segment") == 0)
-				static_cast<CWormSegmentEntity *>(pBot)->Despawn();
-		}
-	}
-	m_lSegments.clear();
+	DespawnSegments();
 	GameWorld()->DestroyEntity(this);
 }

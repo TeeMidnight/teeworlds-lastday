@@ -113,8 +113,10 @@ CBotEntity::~CBotEntity()
 	SetAI(nullptr);
 
 	// Unbind before the core dies, or a physics tick would read a dangling
-	// pointer out of the world's table.
-	if(m_TeeID != -1 && GameWorld())
+	// pointer out of the world's table. Only touch the slot while it still
+	// points at this bot: OnBotDeath frees the TeeID before the entity is
+	// deleted, and a replacement bot may already have taken it.
+	if(m_TeeID != -1 && GameWorld() && GameWorld()->m_Core.GetCharacter(m_TeeID) == &m_Core)
 		GameWorld()->m_Core.SetCharacter(m_TeeID, 0);
 }
 

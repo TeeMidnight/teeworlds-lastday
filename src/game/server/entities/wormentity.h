@@ -33,6 +33,10 @@ public:
 	void Reset() override;
 	void Tick() override {}
 	void TickDefered() override {}
+	// The worm owns the trail and its world: crossing only one link into a
+	// neighbour would leave the chain split across two worlds. The whole
+	// creature stays put until it is killed or its world unloads.
+	bool RingCrosses() const override { return false; }
 	bool TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon) override;
 	int GetHitAttacker() override;
 	void Die(CEntity *pKiller, int Weapon) override;
@@ -79,6 +83,9 @@ public:
 private:
 	void UpdateSegments();
 	void SetVisible(bool Visible);
+	// Detach every link before it is deleted. Taking a local copy keeps the
+	// worm's own list from changing while OnBotDeath runs.
+	void DespawnSegments();
 	void Bite(CCharacter *pChr);
 	void DropLoot();
 	void WormDie();
