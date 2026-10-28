@@ -486,7 +486,10 @@ IBotEntity *CBotManager::CreateBot(CGameWorld *pWorld, Uuid BotID, vec2 Pos)
 	vec2 SpawnPos = Pos;
 	if(SpawnPos == vec2(0.0f, 0.0f))
 	{
-		if(!GameController()->CanSpawn(pWorld, TEAM_BLUE, &SpawnPos))
+		// Monsters get their own spawn rule: no player spawn point, no train
+		// platform and no spot close to a player. If a floor has no such place
+		// yet, the population simply waits for the next tick.
+		if(!GameController()->CanSpawnBot(pWorld, &SpawnPos))
 			return nullptr;
 	}
 

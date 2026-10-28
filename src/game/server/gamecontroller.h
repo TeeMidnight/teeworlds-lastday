@@ -117,6 +117,10 @@ public:
 	int GetPlayerCheckTeam(class CPlayer *pPlayer) const;
 
 	bool CanSpawn(CGameWorld *pWorld, int Team, vec2 *pPos) const;
+	// natural monsters use this variant: it never picks a point close to a
+	// player or on a train platform, so players and monsters do not share a
+	// birth spot
+	bool CanSpawnBot(CGameWorld *pWorld, vec2 *pPos) const;
 	bool GetStartRespawnState() const;
 
 	// team

@@ -366,7 +366,10 @@ void CPlayer::StartQueuedTrainProtection()
 {
 	if(!m_TrainProtectionPending)
 		return;
-	constexpr int TRAIN_PROTECTION_SECONDS = 3;
+	// A train drops the player on a live floor where monsters already roam.
+	// Ten seconds gives them time to leave the platform and find cover; the
+	// monster spawner independently keeps its distance (CanSpawnBot).
+	constexpr int TRAIN_PROTECTION_SECONDS = 10;
 	m_TrainProtectionPending = false;
 	// three seconds after the destination map has loaded and the player has
 	// entered it, not from the moment the travel menu is clicked

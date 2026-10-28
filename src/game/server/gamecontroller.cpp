@@ -393,7 +393,9 @@ bool CGameController::CanSpawn(CGameWorld *pWorld, int Team, vec2 *pOutPos) cons
 		return false;
 
 	CSpawnEval Eval(pWorld);
-	Eval.m_RandomSpawn = true;
+	// Pick the safest point instead of a random one: a train arrival must not
+	// land next to a monster that already camped the spawn point.
+	Eval.m_RandomSpawn = false;
 
 	EvaluateSpawnType(&Eval, 0);
 	EvaluateSpawnType(&Eval, 1);
@@ -403,20 +405,82 @@ bool CGameController::CanSpawn(CGameWorld *pWorld, int Team, vec2 *pOutPos) cons
 	return Eval.m_Got;
 }
 
+bool CGameController::CanSpawnBot(CGameWorld *pWorld, vec2 *pOutPos) const
+{
+	if(!pWorld || !pOutPos)
+		return false;
+
+	// Natural monsters deliberately do not use the player spawn list. Sharing
+	// those points made a floor fill every spawn with a monster, so a player
+	// who stepped off the train landed on one. Instead, pick a random open
+	// surface tile away from players, bots, spawn points and train platforms.
+	CCollision *pCollision = pWorld->Collision();
+	const int Width = pCollision->GetWidth();
+	const int Height = pCollision->GetHeight();
+	if(Width <= 8 || Height <= 8)
+		return false;
+
+	const float MinPlayerDistance = 16.0f * 32.0f;
+	for(int Attempt = 0; Attempt < 256; Attempt++)
+	{
+		const int X = 4 + random_int() % (Width - 8);
+		for(int Y = 4; Y < Height - 2; Y++)
+		{
+			const vec2 P(X * 32.0f + 16.0f, Y * 32.0f + 16.0f);
+			if(pCollision->CheckPoint(P))
+				continue;
+			if(pCollision->CheckPoint(vec2(P.x, P.y - 32.0f)))
+				continue;
+			if(!pCollision->CheckPoint(vec2(P.x, P.y + 32.0f)))
+				continue;
+			if(pCollision->TestBox(P, vec2(48.0f, 48.0f), CCollision::COLFLAG_TRAIN_ENTRANCE))
+				break;
+
+			bool TooClose = false;
+			for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_CHARACTER); !r.empty() && !TooClose; r.pop_front())
+				TooClose = distance(P, r.front()->GetPos()) < MinPlayerDistance;
+			for(CGameWorld::TypeRange r = pWorld->DoTypeRange(CGameWorld::ENTTYPE_BOTENTITY); !r.empty() && !TooClose; r.pop_front())
+				TooClose = distance(P, r.front()->GetPos()) < 4.0f * 32.0f;
+			// keep the player spawn points themselves clear
+			for(int t = 0; t < 3 && !TooClose; t++)
+				for(int s = 0; s < pWorld->m_alSpawnPoints[t].size() && !TooClose; s++)
+					TooClose = distance(P, pWorld->m_alSpawnPoints[t][s]) < 2.0f * 32.0f;
+			if(TooClose)
+				break;
+
+			*pOutPos = P;
+			return true;
+		}
+	}
+	return false;
+}
+
 float CGameController::EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos) const
 {
-	float Score = 0.0f;
+	// A small random tie-breaker keeps a quiet spawn area from always choosing
+	// the same point while the danger terms still dominate.
+	float Score = random_float() * 0.001f;
 
 	for(CGameWorld::TypeRange r = pEval->m_pWorld->DoTypeRange(CGameWorld::ENTTYPE_PROJECTILE); !r.empty(); r.pop_front())
 	{
-		CCharacter *pChr = static_cast<CCharacter *>(r.front());
+		CProjectile *pProj = static_cast<CProjectile *>(r.front());
 		// team mates are not as dangerous as enemies
 		float Scoremod = 1.0f;
-		if(pEval->m_FriendlyTeam != -1 && pChr->GetPlayer()->GetTeam() == pEval->m_FriendlyTeam)
+		if(pEval->m_FriendlyTeam != -1 && pProj->GetOwner() >= 0 && GameServer()->m_apPlayers[pProj->GetOwner()] &&
+			GameServer()->m_apPlayers[pProj->GetOwner()]->GetTeam() == pEval->m_FriendlyTeam)
 			Scoremod = 0.5f;
 
-		float d = distance(Pos, pChr->GetPos());
+		// GetPos() takes an age in seconds; 0 is the launch point, which is
+		// enough to keep a spawn from being chosen inside a fresh volley.
+		float d = distance(Pos, pProj->GetPos(0.0f));
 		Score += Scoremod * (d == 0 ? 1000000000.0f : 1.0f / d);
+	}
+
+	// A monster sitting on a spawn point is the immediate danger here.
+	for(CGameWorld::TypeRange r = pEval->m_pWorld->DoTypeRange(CGameWorld::ENTTYPE_BOTENTITY); !r.empty(); r.pop_front())
+	{
+		float d = distance(Pos, r.front()->GetPos());
+		Score += d == 0 ? 1000000000.0f : 1.0f / d;
 	}
 
 	return Score;
