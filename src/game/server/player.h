@@ -114,6 +114,14 @@ public:
 	// player skin
 	CTeeInfos m_TeeInfos;
 
+	// The displayed name and clan (the team name) this player had when its
+	// identity was last refreshed. A 0.7 client caches both and ignores a new
+	// Sv_ClientInfo for a client it already knows, so the game layer has to
+	// reset that client's connection when they change.
+	char m_aShownName[MAX_NAME_ARRAY_SIZE];
+	char m_aShownClan[MAX_CLAN_ARRAY_SIZE];
+	bool m_ShownIdentityValid;
+
 	int m_RespawnTick;
 	int m_DieTick;
 	int m_Score;

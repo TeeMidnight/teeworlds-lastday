@@ -2159,7 +2159,78 @@ void CGameContext::OnSnap(int ClientID)
 		}
 	}
 }
-void CGameContext::OnPreSnap() {}
+// A 0.7 client builds its teammate list from Sv_ClientInfo and keeps the name
+// and clan it was given; a second ClientInfo for the same client is rejected as
+// invalid. 0.8 instead re-reads them from the TeeInfo snapshot object every
+// tick, which is why a rename or a team change is invisible to a 0.7 peer
+// unless its connection is reset. A map change does exactly that: the client
+// clears its table, reloads, and the next snapshot announces every tee again.
+//
+// Every other 0.7 peer only needs the changed tee retired and re-entered, which
+// the translator does on its own when it sees the new TeeInfo (it emits a
+// silent Sv_ClientDrop followed by a silent Sv_ClientInfo). Bots take the same
+// path.
+void CGameContext::RefreshLegacyIdentities()
+{
+	if(!Teams())
+		return;
+
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = m_apPlayers[i];
+		if(!pPlayer)
+			continue;
+
+		// build exactly what CPlayer::Snap puts into TeeInfo
+		char aClan[MAX_CLAN_ARRAY_SIZE];
+		str_utf8_copy_num(aClan, Teams()->TeamNameFor(pPlayer->m_AccountUuid), sizeof(aClan), MAX_CLAN_LENGTH);
+		const char *pName = Server()->ClientName(i);
+
+		if(!pPlayer->m_ShownIdentityValid)
+		{
+			str_copy(pPlayer->m_aShownName, pName, sizeof(pPlayer->m_aShownName));
+			str_copy(pPlayer->m_aShownClan, aClan, sizeof(pPlayer->m_aShownClan));
+			pPlayer->m_ShownIdentityValid = true;
+			continue;
+		}
+
+		if(str_comp(pPlayer->m_aShownName, pName) == 0 && str_comp(pPlayer->m_aShownClan, aClan) == 0)
+			continue;
+
+		str_copy(pPlayer->m_aShownName, pName, sizeof(pPlayer->m_aShownName));
+		str_copy(pPlayer->m_aShownClan, aClan, sizeof(pPlayer->m_aShownClan));
+
+		// A 0.7 peer is the only one that needs the reset; a 0.8 client picks
+		// the new values up from the next snapshot. A client that is still
+		// loading will announce the new identity when it enters, so it needs
+		// no second map change either.
+		if(Server()->GetClientVersion(i) < 0x0800 && Server()->ClientIngame(i))
+		{
+			// A map change makes the client load the map and send CL_STARTINFO
+			// again. The game layer normally clears this flag when it moves a
+			// player to another world; the world stays here, so it has to be
+			// cleared explicitly or the client is never told it may enter and
+			// waits in its loading screen forever. The character is untouched:
+			// the destination is the same world, so the entry path keeps the
+			// current tee where it stands.
+			pPlayer->m_IsReadyToEnter = false;
+
+			const unsigned MapID = Server()->GetClientMapID(i);
+			if(!Server()->SwitchClientMap(i, MapID))
+			{
+				pPlayer->m_IsReadyToEnter = true;
+				char aBuf[128];
+				str_format(aBuf, sizeof(aBuf), "failed to refresh legacy identity of client %d", i);
+				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
+			}
+		}
+	}
+}
+
+void CGameContext::OnPreSnap()
+{
+	RefreshLegacyIdentities();
+}
 void CGameContext::OnPostSnap()
 {
 	// refresh the global per-client bot mapping once, after the entities of

@@ -60,6 +60,10 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_AccountUuid = UUID_ZEROED;
 	m_LoggedIn = false;
 	m_Guest = false;
+
+	m_aShownName[0] = 0;
+	m_aShownClan[0] = 0;
+	m_ShownIdentityValid = false;
 }
 
 CPlayer::~CPlayer()

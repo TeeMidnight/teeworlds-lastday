@@ -125,6 +125,8 @@ private:
 	// client can only see these; the identity cache may still hold tees of a
 	// world it has left.
 	bool m_aPresent8[MAX_TEES8];
+	// A present and already announced tee whose displayed name or clan changed.
+	bool m_aIdentityChanged8[MAX_TEES8];
 	// The client loaded a map, so its own tee table is empty again and every
 	// visible tee has to be announced from scratch.
 	bool m_ResendIdentity8;

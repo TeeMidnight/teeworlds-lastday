@@ -339,6 +339,9 @@ public:
 
 	virtual void OnTick();
 	virtual void OnPreSnap();
+	// Resets the connection of a 0.7 client whose displayed name or clan
+	// changed, because such a client cannot replace a cached identity.
+	void RefreshLegacyIdentities();
 	virtual void OnSnap(int ClientID);
 	virtual void OnPostSnap();
 

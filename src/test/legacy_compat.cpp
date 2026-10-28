@@ -502,6 +502,32 @@ TEST(LegacyCompat, OutboundTeeLeavingTheSnapshotIsDroppedSilently)
 	EXPECT_EQ(FindClientDrop7(aOut, NumOut, 3), nullptr) << "a tee still in the snapshot must stay";
 }
 
+// A 0.7 client rejects a second Sv_ClientInfo for a client it already knows,
+// so a renamed player (or a changed team name) has to be dropped and re-entered.
+TEST(LegacyCompat, OutboundIdentityChangeReannouncesTheTee)
+{
+	legacy::CNetworkTranslator Translator;
+	const SSeedTee aBefore[] = {{3, "zed", "old-clan", 0}};
+	CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
+	ASSERT_GT(SendTeeSnapshot8(Translator, aBefore, 1, 1, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0);
+
+	const SSeedTee aAfter[] = {{3, "new-name", "new-clan", 0}};
+	const int NumOut = SendTeeSnapshot8(Translator, aAfter, 1, 2, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
+	ASSERT_GT(NumOut, 0);
+
+	int DropIndex = -1;
+	int InfoIndex = -1;
+	const protocol7::CNetMsg_Sv_ClientDrop *pDrop = FindClientDrop7(aOut, NumOut, 3, &DropIndex);
+	const protocol7::CNetMsg_Sv_ClientInfo *pInfo = FindClientInfo7(aOut, NumOut, 3, &InfoIndex);
+	ASSERT_NE(pDrop, nullptr);
+	ASSERT_NE(pInfo, nullptr);
+	EXPECT_EQ(pDrop->m_Silent, 1);
+	EXPECT_EQ(pInfo->m_Silent, 1);
+	EXPECT_LT(DropIndex, InfoIndex) << "the drop has to reach the client before the new identity";
+	EXPECT_STREQ(pInfo->m_pName, "new-name");
+	EXPECT_STREQ(pInfo->m_pClan, "new-clan");
+}
+
 // A map change wipes the 0.7 client's tee table, so every visible tee must be
 // announced again on the first snapshot afterwards.
 TEST(LegacyCompat, OutboundMapReloadReannouncesEveryTee)
@@ -522,6 +548,24 @@ TEST(LegacyCompat, OutboundMapReloadReannouncesEveryTee)
 	const protocol7::CNetMsg_Sv_ClientInfo *pInfo = FindClientInfo7(aOut, NumOut, 3);
 	ASSERT_NE(pInfo, nullptr) << "the reloaded client knows nobody and must be told again";
 	EXPECT_EQ(pInfo->m_Silent, 1);
+}
+
+// The client's own identity cannot be replaced over the wire at all: the 0.7
+// client ignores both an Sv_ClientDrop and a second Sv_ClientInfo for its own
+// id. CGameContext resets that client's connection with a map change instead,
+// so the translator deliberately sends nothing for the local tee.
+TEST(LegacyCompat, OutboundLocalIdentityChangeIsLeftToTheMapReset)
+{
+	legacy::CNetworkTranslator Translator;
+	const SSeedTee aBefore[] = {{3, "old", nullptr, TEEFLAG_LOCAL}};
+	CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
+	ASSERT_GT(SendTeeSnapshot8(Translator, aBefore, 1, 1, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0);
+
+	const SSeedTee aAfter[] = {{3, "new", nullptr, TEEFLAG_LOCAL}};
+	const int NumOut = SendTeeSnapshot8(Translator, aAfter, 1, 2, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
+	ASSERT_GT(NumOut, 0);
+	EXPECT_EQ(FindClientDrop7(aOut, NumOut, 3), nullptr);
+	EXPECT_EQ(FindClientInfo7(aOut, NumOut, 3), nullptr);
 }
 
 TEST(LegacyCompat, OutboundClientDropIsSilent)

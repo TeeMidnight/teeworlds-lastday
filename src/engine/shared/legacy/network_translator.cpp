@@ -182,6 +182,7 @@ void CNetworkTranslator::Reset()
 	mem_zero(m_aTeeActive8, sizeof(m_aTeeActive8));
 	mem_zero(m_aAnnounced8, sizeof(m_aAnnounced8));
 	mem_zero(m_aPresent8, sizeof(m_aPresent8));
+	mem_zero(m_aIdentityChanged8, sizeof(m_aIdentityChanged8));
 	m_ResendIdentity8 = false;
 	m_TuningValid8 = false;
 	mem_zero(m_aTuneParams8, sizeof(m_aTuneParams8));
@@ -264,6 +265,19 @@ void CNetworkTranslator::AbsorbTeeInfo8(int ID, const CSnapshotItem *pItem, int 
 	const CNetObj_TeeInfo *pIn = (const CNetObj_TeeInfo *) pItem->Data();
 	CTeeState8 *pState = &m_aTees8[ID];
 
+	// Compare the displayed identity before overwriting it. A 0.7 client cannot
+	// replace a name or clan it already knows (it ignores a second
+	// Sv_ClientInfo), so the emitter has to drop and re-enter the tee instead.
+	if(m_aTeeActive8[ID])
+	{
+		char aName[MAX_NAME_ARRAY_SIZE];
+		char aClan[MAX_CLAN_ARRAY_SIZE];
+		CopyFixedWidth(aName, sizeof(aName), pIn->m_aName, sizeof(pIn->m_aName));
+		CopyFixedWidth(aClan, sizeof(aClan), pIn->m_aClan, sizeof(pIn->m_aClan));
+		if(str_comp(aName, pState->m_aName) != 0 || str_comp(aClan, pState->m_aClan) != 0)
+			m_aIdentityChanged8[ID] = true;
+	}
+
 	pState->m_Active = true;
 	pState->m_Flag = pIn->m_Flag;
 	pState->m_Score = pIn->m_Score;
@@ -304,6 +318,7 @@ int CNetworkTranslator::BuildSnapshot7(const CSnapshot *pSnap8)
 	}
 
 	mem_zero(m_aPresent8, sizeof(m_aPresent8));
+	mem_zero(m_aIdentityChanged8, sizeof(m_aIdentityChanged8));
 
 	// Pass one: learn every identity so the split objects are consistent even
 	// if a TeeInfo appears after the item that references it.
@@ -574,8 +589,35 @@ int CNetworkTranslator::EmitIdentityMessages(int BufferStart, CNetChunk *pOutChu
 			continue;
 		}
 
-		if(Announced)
+		if(Announced && !m_aIdentityChanged8[TeeID])
 			continue;
+
+		// A 0.7 client cannot replace the name or clan of a client it already
+		// knows: it drops the second Sv_ClientInfo as invalid. A changed
+		// identity is therefore retired first and re-announced below. The
+		// local tee is the client itself, which the game layer instead pulls
+		// back through a map change, so it is left alone here.
+		if(Announced)
+		{
+			if(m_aTees8[TeeID].m_Flag & TEEFLAG_LOCAL)
+				continue;
+			if(Num >= MaxOutChunks || BufferStart + Num >= MAX_OUT_CHUNKS)
+				break;
+
+			array<unsigned char> &Buf = m_aClientOut[BufferStart + Num];
+			Buf.set_size(512);
+			const int Size = BuildClientDrop7(TeeID, Buf.base_ptr(), Buf.size());
+			if(Size <= 0)
+				continue;
+			pOutChunks[Num].m_ClientID = 0;
+			pOutChunks[Num].m_Flags = NETSENDFLAG_VITAL;
+			pOutChunks[Num].m_DataSize = Size;
+			pOutChunks[Num].m_pData = Buf.base_ptr();
+			// The client has forgotten the tee now. If the re-announcement
+			// below cannot be built this tick, the next one retries it here.
+			m_aAnnounced8[TeeID] = false;
+			Num++;
+		}
 
 		if(Num >= MaxOutChunks || BufferStart + Num >= MAX_OUT_CHUNKS)
 			break;
