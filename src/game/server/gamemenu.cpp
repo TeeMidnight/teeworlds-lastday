@@ -60,6 +60,15 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	{
 		Data.Reset();
 	}
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		m_aLastMenuSoundTick[i] = -1000000;
+		m_aLastContextRefreshTick[i] = -1000000;
+		mem_zero(&m_aMenuContext[i], sizeof(m_aMenuContext[i]));
+		m_aMenuContext[i].m_ContainerID = -1;
+		m_aMenuContext[i].m_BuildableID = -1;
+		m_aMenuContext[i].m_BuildLock = -1;
+	}
 
 	m_MenuPages.clear();
 	for(int i = 0; i < MAX_CLIENTS; i++)
@@ -109,6 +118,12 @@ void CGameMenu::Register(const char *pPageName, const char *pTitle, FMenuCallbac
 void CGameMenu::OnClientEntered(int ClientID)
 {
 	m_aPlayerData[ClientID].Reset(true);
+	m_aLastMenuSoundTick[ClientID] = -1000000;
+	m_aLastContextRefreshTick[ClientID] = -1000000;
+	mem_zero(&m_aMenuContext[ClientID], sizeof(m_aMenuContext[ClientID]));
+	m_aMenuContext[ClientID].m_ContainerID = -1;
+	m_aMenuContext[ClientID].m_BuildableID = -1;
+	m_aMenuContext[ClientID].m_BuildLock = -1;
 	m_aTradeDraft[ClientID] = STradeDraft();
 	m_aTradeOpen[ClientID][0] = '\0';
 	m_aCraftOpen[ClientID][0] = '\0';
@@ -159,7 +174,14 @@ void CGameMenu::OnMenuVote(int ClientID, CCallVoteStatus &VoteStatus, bool Sound
 	}
 
 	if(Sound)
-		GameServer()->SendSoundTarget(ClientID, SOUND_WEAPON_NOAMMO);
+	{
+		const int Now = Server()->Tick();
+		if(Now - m_aLastMenuSoundTick[ClientID] >= Server()->TickSpeed())
+		{
+			GameServer()->SendSoundTarget(ClientID, SOUND_WEAPON_NOAMMO);
+			m_aLastMenuSoundTick[ClientID] = Now;
+		}
+	}
 
 	if(str_comp(VoteStatus.m_aCmd, "PREPAGE") == 0)
 	{

@@ -99,7 +99,28 @@ public:
 
 private:
 	int m_CurrentClientID;
+	// The old clients can repeat the same callvote packet while the menu is
+	// being rebuilt (0.7 translation layer included); a short cooldown keeps
+	// the NO_AMMO click sound from looping.
+	int m_aLastMenuSoundTick[MAX_CLIENTS];
+
+	// Last contextual state of every player; used by TickContext to refresh
+	// only when something the main page depends on actually changed.
+	struct SMenuContext
+	{
+		bool m_Valid;
+		bool m_OnTrainEntrance;
+		int m_ContainerID;
+		int m_BuildableID;
+		int m_BuildLock;
+		bool m_BuildOwner;
+		int m_TrainDestinations;
+	};
+	SMenuContext m_aMenuContext[MAX_CLIENTS];
+	int m_aLastContextRefreshTick[MAX_CLIENTS];
 	static bool MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// first-run guide: controls, registration, menu, containers and travel
+	static bool MenuHelp(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// item menus: inventory, item view and crafting (implemented in menus/item_menu.cpp)
 	static bool MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// shows one item: description + actions ("use", ...)
