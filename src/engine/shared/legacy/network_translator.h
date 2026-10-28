@@ -114,8 +114,20 @@ private:
 	array<unsigned char> m_aClientOut[MAX_OUT_CHUNKS];
 
 	CTeeState8 m_aTees8[MAX_TEES8];
-	// Which tee each 0.8 client slot is; Sv_ClientEnter carries the tee id.
+	// Whether the identity of this tee has been cached from a TeeInfo yet.
 	bool m_aTeeActive8[MAX_TEES8];
+	// Tees the 0.7 client currently has a live ClientInfo for. A 0.7 client
+	// only tracks a tee after Sv_ClientInfo and ignores a second ClientInfo for
+	// one it already knows, so this is what the drop/enter messages are diffed
+	// against instead of the identity cache.
+	bool m_aAnnounced8[MAX_TEES8];
+	// Tees that carried a TeeInfo in the snapshot being translated. The 0.7
+	// client can only see these; the identity cache may still hold tees of a
+	// world it has left.
+	bool m_aPresent8[MAX_TEES8];
+	// The client loaded a map, so its own tee table is empty again and every
+	// visible tee has to be announced from scratch.
+	bool m_ResendIdentity8;
 	int m_aTuneParams8[NUM_TUNES];
 	bool m_TuningValid8;
 	// The netversion string a legacy peer is told the server speaks. The
@@ -151,6 +163,16 @@ private:
 	int TranslateCompleteSnapshot8(int GameTick, int DeltaTick, int CompleteSize, CNetChunk *pOutChunks, int MaxOutChunks);
 	int HandleSnapshot8(CUnpacker *pUnpacker, int MsgId, CNetChunk *pOutChunks, int MaxOutChunks);
 	void StoreSnapshot8Copy(int GameTick, int DeltaTick);
+
+	// Identity messages are always emitted silently, like a 0.7 server did:
+	// 0.7 peers must not see join/leave chatter for tees that merely came into
+	// or left snapshot range.
+	int BuildClientInfo7(int TeeID, void *pOut, int OutSize);
+	int BuildClientDrop7(int TeeID, void *pOut, int OutSize);
+	// Emits the ClientInfo/ClientDrop messages that bring the 0.7 client's tee
+	// table in step with the snapshot just translated. pOutChunks points at the
+	// first free entry; BufferStart is the matching m_aClientOut index.
+	int EmitIdentityMessages(int BufferStart, CNetChunk *pOutChunks, int MaxOutChunks);
 
 	// Message-level translation. Returns bytes written to pOut, -1 if the
 	// message is dropped, -2 on error.

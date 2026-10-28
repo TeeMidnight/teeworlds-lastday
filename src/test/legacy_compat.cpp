@@ -197,6 +197,166 @@ static int SendSnapshot8AsServer(legacy::CNetworkTranslator &Translator, CSnapsh
 	return Translator.TranslateServerToClientChunk(Packer.Data(), Packer.Size(), NETSENDFLAG_VITAL, pOut, MaxOut);
 }
 
+// One tee as it appears in a 0.8 snapshot: an identity object at the id the
+// receiving client knows the tee by.
+struct SSeedTee
+{
+	int m_ID;
+	const char *m_pName;
+	const char *m_pClan;
+	int m_Flag;
+};
+
+static int SendTeeSnapshot8(legacy::CNetworkTranslator &Translator, const SSeedTee *pSeeds, int NumSeeds, int GameTick, CNetChunk *pOut, int MaxOut)
+{
+	CSnapshotBuilder Builder;
+	Builder.Init();
+	for(int i = 0; i < NumSeeds; i++)
+	{
+		CNetObj_TeeInfo *pTeeInfo = (CNetObj_TeeInfo *) Builder.NewItem(NETOBJTYPE_TEEINFO, pSeeds[i].m_ID, sizeof(CNetObj_TeeInfo));
+		if(!pTeeInfo)
+			return 0;
+		mem_zero(pTeeInfo, sizeof(*pTeeInfo));
+		pTeeInfo->m_Flag = pSeeds[i].m_Flag;
+		pTeeInfo->m_Team = 0;
+		pTeeInfo->m_LatencyAndCountry = (12 << 16) | 99;
+		str_copy_fixed(pTeeInfo->m_aName, pSeeds[i].m_pName, sizeof(pTeeInfo->m_aName));
+		if(pSeeds[i].m_pClan)
+			str_copy_fixed(pTeeInfo->m_aClan, pSeeds[i].m_pClan, sizeof(pTeeInfo->m_aClan));
+		for(int p = 0; p < NUM_SKINPARTS; p++)
+			str_copy_fixed(pTeeInfo->m_aaSkinPartNames[p], "body", sizeof(pTeeInfo->m_aaSkinPartNames[p]));
+	}
+	return SendSnapshot8AsServer(Translator, Builder, pOut, MaxOut, GameTick);
+}
+
+// Copies a 0.7 Sv_ClientInfo out of the translated chunks. The handler reuses
+// its internal message buffer, so the result is copied before it is handed out.
+static const protocol7::CNetMsg_Sv_ClientInfo *FindClientInfo7(const CNetChunk *pChunks, int NumChunks, int ClientID, int *pIndex = nullptr)
+{
+	static protocol7::CNetObjHandler s_Handler;
+	static protocol7::CNetMsg_Sv_ClientInfo s_Info;
+	for(int i = 0; i < NumChunks; i++)
+	{
+		CMsgUnpacker Unpacker(pChunks[i].m_pData, pChunks[i].m_DataSize);
+		if(Unpacker.Error() || Unpacker.System() || Unpacker.Type() != protocol7::NETMSGTYPE_SV_CLIENTINFO)
+			continue;
+		const protocol7::CNetMsg_Sv_ClientInfo *pInfo = (const protocol7::CNetMsg_Sv_ClientInfo *) s_Handler.SecureUnpackMsg(Unpacker.Type(), &Unpacker);
+		if(!pInfo || pInfo->m_ClientID != ClientID)
+			continue;
+		mem_copy(&s_Info, pInfo, sizeof(s_Info));
+		if(pIndex)
+			*pIndex = i;
+		return &s_Info;
+	}
+	return nullptr;
+}
+
+static const protocol7::CNetMsg_Sv_ClientDrop *FindClientDrop7(const CNetChunk *pChunks, int NumChunks, int ClientID, int *pIndex = nullptr)
+{
+	static protocol7::CNetObjHandler s_Handler;
+	static protocol7::CNetMsg_Sv_ClientDrop s_Drop;
+	for(int i = 0; i < NumChunks; i++)
+	{
+		CMsgUnpacker Unpacker(pChunks[i].m_pData, pChunks[i].m_DataSize);
+		if(Unpacker.Error() || Unpacker.System() || Unpacker.Type() != protocol7::NETMSGTYPE_SV_CLIENTDROP)
+			continue;
+		const protocol7::CNetMsg_Sv_ClientDrop *pDrop = (const protocol7::CNetMsg_Sv_ClientDrop *) s_Handler.SecureUnpackMsg(Unpacker.Type(), &Unpacker);
+		if(!pDrop || pDrop->m_ClientID != ClientID)
+			continue;
+		mem_copy(&s_Drop, pDrop, sizeof(s_Drop));
+		if(pIndex)
+			*pIndex = i;
+		return &s_Drop;
+	}
+	return nullptr;
+}
+
+static int CountClientMessages7(const CNetChunk *pChunks, int NumChunks, int MsgType)
+{
+	int Count = 0;
+	for(int i = 0; i < NumChunks; i++)
+	{
+		CMsgUnpacker Unpacker(pChunks[i].m_pData, pChunks[i].m_DataSize);
+		if(!Unpacker.Error() && !Unpacker.System() && Unpacker.Type() == MsgType)
+			Count++;
+	}
+	return Count;
+}
+
+// Rebuilds the complete 0.7 snapshot from the first snapshot chunk, which the
+// helper above always sends as a full snapshot.
+static const CSnapshot *DecodeFirstSnapshot7(const CNetChunk *pChunks, int NumChunks, array<unsigned char> &Storage)
+{
+	for(int c = 0; c < NumChunks; c++)
+	{
+		CMsgUnpacker Head(pChunks[c].m_pData, pChunks[c].m_DataSize);
+		if(Head.Error() || !Head.System())
+			continue;
+		const int Type = Head.Type();
+		if(Type != NETMSG_SNAPSINGLE && Type != NETMSG_SNAP)
+			continue;
+
+		const int Tick = Head.GetInt();
+		Head.GetInt(); // delta distance
+		int NumParts = 1;
+		if(Type == NETMSG_SNAP)
+		{
+			NumParts = Head.GetInt();
+			Head.GetInt(); // part index
+		}
+		Head.GetInt(); // crc
+		if(Head.Error() || NumParts < 1 || NumParts > CSnapshot::MAX_PARTS)
+			continue;
+
+		// The compressed stream is split over NumParts consecutive chunks.
+		array<unsigned char> aComp;
+		aComp.set_size(NumParts * MAX_SNAPSHOT_PACKSIZE);
+		int CompSize = 0;
+		int Seen = 0;
+		for(int Scan = c; Scan < NumChunks && Seen < NumParts; Scan++)
+		{
+			CMsgUnpacker PartUnpacker(pChunks[Scan].m_pData, pChunks[Scan].m_DataSize);
+			if(PartUnpacker.Error() || !PartUnpacker.System() || PartUnpacker.Type() != Type)
+				break;
+			const int PartTick = PartUnpacker.GetInt();
+			PartUnpacker.GetInt(); // delta distance
+			int ThisNumParts = 1;
+			int ThisPart = 0;
+			if(Type == NETMSG_SNAP)
+			{
+				ThisNumParts = PartUnpacker.GetInt();
+				ThisPart = PartUnpacker.GetInt();
+			}
+			PartUnpacker.GetInt(); // crc
+			const int Size = PartUnpacker.GetInt();
+			const unsigned char *pData = (const unsigned char *) PartUnpacker.GetRaw(Size);
+			if(PartUnpacker.Error() || !pData || Size <= 0 || PartTick != Tick || ThisNumParts != NumParts || ThisPart != Seen)
+				break;
+			mem_copy(aComp.base_ptr() + CompSize, pData, Size);
+			CompSize += Size;
+			Seen++;
+		}
+		if(Seen != NumParts || CompSize <= 0)
+			continue;
+
+		array<unsigned char> aDelta;
+		aDelta.set_size(CompSize * 8 + 4096);
+		const int DeltaSize = CVariableInt::Decompress(aComp.base_ptr(), CompSize, aDelta.base_ptr(), aDelta.size());
+		if(DeltaSize <= 0)
+			continue;
+
+		CSnapshotDelta Delta7;
+		legacy::Net7ConfigureSnapshotDelta(&Delta7);
+		CSnapshot Empty7;
+		Empty7.Clear();
+		Storage.set_size(DeltaSize * 8 + 65536);
+		if(Delta7.UnpackDelta(&Empty7, (CSnapshot *) Storage.base_ptr(), aDelta.base_ptr(), DeltaSize) <= 0)
+			continue;
+		return (const CSnapshot *) Storage.base_ptr();
+	}
+	return nullptr;
+}
+
 TEST(LegacyCompat, OutboundTuneParamsAreSplitFromTuningObject)
 {
 	// The Tuning snapshot object is 0.8-only; a 0.7 client must receive the same
@@ -263,50 +423,128 @@ TEST(LegacyCompat, OutboundTeeInfoBecomesThreeObjects)
 	EXPECT_EQ(pState->m_Flag & ~(TEEFLAG_HIDDEN_IN_BOARD | TEEFLAG_LOCAL), TEEFLAG_ADMIN | TEEFLAG_READY);
 }
 
-TEST(LegacyCompat, OutboundClientEnterExpandsToClientInfo)
+// A 0.7 client learns of a tee only from Sv_ClientInfo, and an identity is
+// only known once its TeeInfo has been snapped. A bare Sv_ClientEnter can
+// therefore not be the announcement: it arrives before the snapshot that
+// carries the name, which used to leave the tee permanently unknown to the
+// client. The snapshot itself is what every visible tee is announced from.
+TEST(LegacyCompat, OutboundSnapshotAnnouncesEveryPresentTee)
 {
-	// 0.8 announces a join with a bare Sv_ClientEnter; 0.7 needs the full
-	// Sv_ClientInfo carrying the identity.
 	legacy::CNetworkTranslator Translator;
-
-	// Seed identity through a snapshot first, exactly as the server would.
-	CSnapshotBuilder Builder;
-	Builder.Init();
-	CNetObj_TeeInfo *pTeeInfo = (CNetObj_TeeInfo *) Builder.NewItem(NETOBJTYPE_TEEINFO, 3, sizeof(CNetObj_TeeInfo));
-	ASSERT_NE(pTeeInfo, nullptr);
-	mem_zero(pTeeInfo, sizeof(*pTeeInfo));
-	pTeeInfo->m_Team = 0;
-	pTeeInfo->m_LatencyAndCountry = (12 << 16) | 99;
-	str_copy_fixed(pTeeInfo->m_aName, "zed", sizeof(pTeeInfo->m_aName));
-	for(int p = 0; p < 6; p++)
-		str_copy_fixed(pTeeInfo->m_aaSkinPartNames[p], "body", sizeof(pTeeInfo->m_aaSkinPartNames[p]));
-	array<unsigned char> aSnap;
-	aSnap.set_size(Builder.RequiredSize());
-	ASSERT_GT(Builder.Finish(aSnap.base_ptr()), 0);
+	// Real clients use 0..63; a 0.7 peer's bots live in 64..127. Both ranges
+	// must be announced, or a 128-player-capable client still cannot see the
+	// tees around it.
+	const SSeedTee aSeeds[] = {
+		{3, "zed", "clan", 0},
+		{64, "bot-a", nullptr, TEEFLAG_BOT},
+		{100, "bot-b", nullptr, TEEFLAG_BOT},
+		{127, "bot-c", nullptr, TEEFLAG_BOT},
+	};
 
 	CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
-	EXPECT_GT(SendSnapshot8AsServer(Translator, Builder, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0);
-	ASSERT_TRUE(Translator.TeeState8(3)->m_Active);
+	const int NumOut = SendTeeSnapshot8(Translator, aSeeds, 4, 1, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
+	ASSERT_GT(NumOut, 0);
 
-	// Now the enter message.
-	CNetMsg_Sv_ClientEnter Enter;
-	Enter.m_ClientID = 3;
-	CMsgPacker Packer(NETMSGTYPE_SV_CLIENTENTER);
-	Enter.Pack(&Packer);
+	for(const SSeedTee &Seed : aSeeds)
+	{
+		const protocol7::CNetMsg_Sv_ClientInfo *pInfo = FindClientInfo7(aOut, NumOut, Seed.m_ID);
+		ASSERT_NE(pInfo, nullptr) << "tee " << Seed.m_ID << " was not announced";
+		EXPECT_STREQ(pInfo->m_pName, Seed.m_pName);
+		EXPECT_EQ(pInfo->m_Silent, 1) << "a 0.7 client would print a join line";
+	}
+
+	// Announcements are vital on their own: the snapshot chunk is sent at a
+	// fixed rate and unacknowledged, so a lost ClientInfo would not be retried.
+	for(int i = 0; i < NumOut; i++)
+	{
+		CMsgUnpacker Unpacker(aOut[i].m_pData, aOut[i].m_DataSize);
+		if(Unpacker.Error() || Unpacker.System() || Unpacker.Type() != protocol7::NETMSGTYPE_SV_CLIENTINFO)
+			continue;
+		EXPECT_TRUE(aOut[i].m_Flags & NETSENDFLAG_VITAL);
+	}
+
+	// The 0.7 snapshot carries the identity objects for every one of them.
+	array<unsigned char> aSnap;
+	const CSnapshot *pSnap = DecodeFirstSnapshot7(aOut, NumOut, aSnap);
+	ASSERT_NE(pSnap, nullptr);
+	for(const SSeedTee &Seed : aSeeds)
+	{
+		bool Found = false;
+		for(int i = 0; i < pSnap->NumItems(); i++)
+			if(pSnap->GetItem(i)->Type() == protocol7::NETOBJTYPE_DE_CLIENTINFO && pSnap->GetItem(i)->ID() == Seed.m_ID)
+				Found = true;
+		EXPECT_TRUE(Found) << "no De_ClientInfo for tee " << Seed.m_ID;
+	}
+
+	// The same tees in a later snapshot need no second ClientInfo.
+	const int NumOut2 = SendTeeSnapshot8(Translator, aSeeds, 4, 2, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
+	ASSERT_GT(NumOut2, 0);
+	EXPECT_EQ(CountClientMessages7(aOut, NumOut2, protocol7::NETMSGTYPE_SV_CLIENTINFO), 0);
+}
+
+// A tee that leaves the client's snapshot range (another map, a bot slot
+// reassignment) has to be retired, and silently: otherwise the 0.7 client
+// prints "<name> has left the game" for every world change around it.
+TEST(LegacyCompat, OutboundTeeLeavingTheSnapshotIsDroppedSilently)
+{
+	legacy::CNetworkTranslator Translator;
+	const SSeedTee aBefore[] = {{3, "zed", nullptr, 0}, {4, "gone", nullptr, 0}};
+	CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
+	ASSERT_GT(SendTeeSnapshot8(Translator, aBefore, 2, 1, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0);
+
+	const SSeedTee aAfter[] = {{3, "zed", nullptr, 0}};
+	const int NumOut = SendTeeSnapshot8(Translator, aAfter, 1, 2, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
+	ASSERT_GT(NumOut, 0);
+
+	const protocol7::CNetMsg_Sv_ClientDrop *pDrop = FindClientDrop7(aOut, NumOut, 4);
+	ASSERT_NE(pDrop, nullptr) << "the departed tee must be retired";
+	EXPECT_EQ(pDrop->m_Silent, 1) << "a 0.7 client would print a leave line";
+	EXPECT_EQ(FindClientDrop7(aOut, NumOut, 3), nullptr) << "a tee still in the snapshot must stay";
+}
+
+// A map change wipes the 0.7 client's tee table, so every visible tee must be
+// announced again on the first snapshot afterwards.
+TEST(LegacyCompat, OutboundMapReloadReannouncesEveryTee)
+{
+	legacy::CNetworkTranslator Translator;
+	const SSeedTee aSeeds[] = {{3, "zed", nullptr, 0}};
+	CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
+	ASSERT_GT(SendTeeSnapshot8(Translator, aSeeds, 1, 1, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0);
+
+	// The server announces a map change; the client empties its tee table while
+	// it loads. The payload is opaque here: the translator only tracks the id.
+	CMsgPacker MapChange(NETMSG_MAP_CHANGE, true);
+	MapChange.AddInt(0);
+	ASSERT_EQ(Translator.TranslateServerToClientChunk(MapChange.Data(), MapChange.Size(), NETSENDFLAG_VITAL, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 1);
+
+	const int NumOut = SendTeeSnapshot8(Translator, aSeeds, 1, 2, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
+	ASSERT_GT(NumOut, 0);
+	const protocol7::CNetMsg_Sv_ClientInfo *pInfo = FindClientInfo7(aOut, NumOut, 3);
+	ASSERT_NE(pInfo, nullptr) << "the reloaded client knows nobody and must be told again";
+	EXPECT_EQ(pInfo->m_Silent, 1);
+}
+
+TEST(LegacyCompat, OutboundClientDropIsSilent)
+{
+	legacy::CNetworkTranslator Translator;
+	const SSeedTee aSeeds[] = {{3, "zed", nullptr, 0}};
+	CNetChunk aOut[legacy::CNetworkTranslator::MAX_OUT_CHUNKS];
+	ASSERT_GT(SendTeeSnapshot8(Translator, aSeeds, 1, 1, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0);
+
+	CNetMsg_Sv_ClientDrop Drop;
+	Drop.m_ClientID = 3;
+	Drop.m_pReason = "quit";
+	CMsgPacker Packer(NETMSGTYPE_SV_CLIENTDROP);
+	Drop.Pack(&Packer);
 
 	const int NumOut = Translator.TranslateServerToClientChunk(Packer.Data(), Packer.Size(), NETSENDFLAG_VITAL, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS);
 	ASSERT_EQ(NumOut, 1);
+	const protocol7::CNetMsg_Sv_ClientDrop *pDrop = FindClientDrop7(aOut, NumOut, 3);
+	ASSERT_NE(pDrop, nullptr);
+	EXPECT_EQ(pDrop->m_Silent, 1);
 
-	// The emitted message must be the 0.7 Sv_ClientInfo carrying our identity.
-	CMsgUnpacker Unpacker(aOut[0].m_pData, aOut[0].m_DataSize);
-	ASSERT_FALSE(Unpacker.Error());
-	EXPECT_EQ(Unpacker.Type(), protocol7::NETMSGTYPE_SV_CLIENTINFO);
-	const protocol7::CNetMsg_Sv_ClientInfo *pInfo = (const protocol7::CNetMsg_Sv_ClientInfo *) protocol7::CNetObjHandler().SecureUnpackMsg(Unpacker.Type(), &Unpacker);
-	ASSERT_NE(pInfo, nullptr);
-	EXPECT_EQ(pInfo->m_ClientID, 3);
-	EXPECT_STREQ(pInfo->m_pName, "zed");
-	EXPECT_EQ(pInfo->m_Country, 99);
-	EXPECT_EQ(pInfo->m_Team, 0);
+	// The tee is gone now, so a duplicate drop must not be forwarded.
+	EXPECT_EQ(Translator.TranslateServerToClientChunk(Packer.Data(), Packer.Size(), NETSENDFLAG_VITAL, aOut, legacy::CNetworkTranslator::MAX_OUT_CHUNKS), 0);
 }
 
 TEST(LegacyCompat, OutboundClientEnterWithoutIdentityIsDropped)

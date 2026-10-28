@@ -180,6 +180,9 @@ void CNetworkTranslator::Reset()
 	// outbound state
 	mem_zero(m_aTees8, sizeof(m_aTees8));
 	mem_zero(m_aTeeActive8, sizeof(m_aTeeActive8));
+	mem_zero(m_aAnnounced8, sizeof(m_aAnnounced8));
+	mem_zero(m_aPresent8, sizeof(m_aPresent8));
+	m_ResendIdentity8 = false;
 	m_TuningValid8 = false;
 	mem_zero(m_aTuneParams8, sizeof(m_aTuneParams8));
 	m_Snapshots8.PurgeAll();
@@ -279,6 +282,10 @@ void CNetworkTranslator::AbsorbTeeInfo8(int ID, const CSnapshotItem *pItem, int 
 		pState->m_aSkinPartColors[p] = pIn->m_aSkinPartColors[p];
 	}
 	m_aTeeActive8[ID] = true;
+	// Only a tee the snapshot actually carries can be seen by this client. The
+	// identity cache intentionally outlives that (a tee can leave the snapshot
+	// range and come back), so presence is tracked separately.
+	m_aPresent8[ID] = true;
 }
 
 // Rebuilds a 0.7 snapshot from one of our 0.8 snapshots: TeeInfo splits back
@@ -287,6 +294,16 @@ void CNetworkTranslator::AbsorbTeeInfo8(int ID, const CSnapshotItem *pItem, int 
 int CNetworkTranslator::BuildSnapshot7(const CSnapshot *pSnap8)
 {
 	const int NumItems = pSnap8->NumItems();
+
+	// A map load wipes the client's own tee table, even though the identities
+	// are still cached here: everything visible has to be announced again.
+	if(m_ResendIdentity8)
+	{
+		mem_zero(m_aAnnounced8, sizeof(m_aAnnounced8));
+		m_ResendIdentity8 = false;
+	}
+
+	mem_zero(m_aPresent8, sizeof(m_aPresent8));
 
 	// Pass one: learn every identity so the split objects are consistent even
 	// if a TeeInfo appears after the item that references it.
@@ -306,11 +323,12 @@ int CNetworkTranslator::BuildSnapshot7(const CSnapshot *pSnap8)
 	Builder.Init();
 
 	// The 0.7 client needs a PlayerInfo for every tee it can see, and the
-	// identity objects alongside it. Emit them from the cached state so a
-	// client that missed the Sv_ClientEnter still gets a complete tee list.
+	// identity objects alongside it. Emit them from the cached state, but only
+	// for tees the snapshot actually carries: the cache may still hold a tee
+	// that was visible before this client changed world.
 	for(int TeeID = 0; TeeID < MAX_TEES8; TeeID++)
 	{
-		if(!m_aTeeActive8[TeeID])
+		if(!m_aPresent8[TeeID] || !m_aTeeActive8[TeeID])
 			continue;
 		const CTeeState8 *pState = &m_aTees8[TeeID];
 		if(!pState->m_Active)
@@ -469,6 +487,114 @@ int CNetworkTranslator::BuildSnapshot7(const CSnapshot *pSnap8)
 	return Builder.Finish(m_Snap7Out.base_ptr());
 }
 
+// Builds the 0.7 Sv_ClientInfo for a cached tee. Always silent: a 0.7 server
+// kept joins quiet, and the 0.7 client prints a chat line for every
+// non-silent ClientInfo even when the tee already exists in its table.
+int CNetworkTranslator::BuildClientInfo7(int TeeID, void *pOut, int OutSize)
+{
+	if(TeeID < 0 || TeeID > MAX_TEEID7)
+		return -1;
+	const CTeeState8 *pState = &m_aTees8[TeeID];
+	if(!m_aTeeActive8[TeeID] || !pState->m_Active)
+		return -1;
+
+	protocol7::CNetMsg_Sv_ClientInfo Out;
+	Out.m_ClientID = TeeID;
+	Out.m_Local = (pState->m_Flag & TEEFLAG_LOCAL) ? 1 : 0;
+	Out.m_Team = pState->m_Team;
+	Out.m_pName = pState->m_aName;
+	Out.m_pClan = pState->m_aClan;
+	Out.m_Country = pState->m_Country;
+	for(int p = 0; p < NUM_SKINPARTS; p++)
+	{
+		Out.m_apSkinPartNames[p] = pState->m_aaSkinPartNames[p];
+		Out.m_aUseCustomColors[p] = pState->m_aUseCustomColors[p];
+		Out.m_aSkinPartColors[p] = pState->m_aSkinPartColors[p];
+	}
+	Out.m_Silent = 1;
+	CMsgPacker Packer(protocol7::NETMSGTYPE_SV_CLIENTINFO);
+	Out.Pack(&Packer);
+	return FinishMsg(&Packer, pOut, OutSize);
+}
+
+int CNetworkTranslator::BuildClientDrop7(int TeeID, void *pOut, int OutSize)
+{
+	if(TeeID < 0 || TeeID > MAX_TEEID7)
+		return -1;
+	protocol7::CNetMsg_Sv_ClientDrop Out;
+	Out.m_ClientID = TeeID;
+	Out.m_pReason = "";
+	// Silent, for the same reason as BuildClientInfo7: the 0.7 client would
+	// otherwise print "<name> has left the game" for every tee that merely
+	// left this client's snapshot range.
+	Out.m_Silent = 1;
+	CMsgPacker Packer(protocol7::NETMSGTYPE_SV_CLIENTDROP);
+	Out.Pack(&Packer);
+	return FinishMsg(&Packer, pOut, OutSize);
+}
+
+// Diffs the 0.7 client's tee table against the snapshot that was just
+// translated. This is what makes a 0.7 peer see every tee in its snapshots:
+// identity no longer depends on the Sv_ClientEnter/Sv_ClientDrop messages
+// arriving in a particular order, which they cannot for a tee that was snapped
+// after its join, or for a bot whose teleport channel only opens after the
+// snapshot it is already part of.
+int CNetworkTranslator::EmitIdentityMessages(int BufferStart, CNetChunk *pOutChunks, int MaxOutChunks)
+{
+	int Num = 0;
+	for(int TeeID = 0; TeeID <= MAX_TEEID7; TeeID++)
+	{
+		if(Num >= MaxOutChunks || BufferStart + Num >= MAX_OUT_CHUNKS)
+			break;
+
+		const bool Present = m_aPresent8[TeeID];
+		const bool Announced = m_aAnnounced8[TeeID];
+
+		if(!Present)
+		{
+			// The tee is not part of this client's view any more, so its cached
+			// identity is stale as well; forget it even if it was never
+			// announced.
+			m_aTeeActive8[TeeID] = false;
+			m_aTees8[TeeID].m_Active = false;
+			if(!Announced)
+				continue;
+
+			array<unsigned char> &Buf = m_aClientOut[BufferStart + Num];
+			Buf.set_size(512);
+			const int Size = BuildClientDrop7(TeeID, Buf.base_ptr(), Buf.size());
+			if(Size <= 0)
+				continue;
+			pOutChunks[Num].m_ClientID = 0;
+			pOutChunks[Num].m_Flags = NETSENDFLAG_VITAL;
+			pOutChunks[Num].m_DataSize = Size;
+			pOutChunks[Num].m_pData = Buf.base_ptr();
+			m_aAnnounced8[TeeID] = false;
+			Num++;
+			continue;
+		}
+
+		if(Announced)
+			continue;
+
+		if(Num >= MaxOutChunks || BufferStart + Num >= MAX_OUT_CHUNKS)
+			break;
+
+		array<unsigned char> &Buf = m_aClientOut[BufferStart + Num];
+		Buf.set_size(2048);
+		const int Size = BuildClientInfo7(TeeID, Buf.base_ptr(), Buf.size());
+		if(Size <= 0)
+			continue;
+		pOutChunks[Num].m_ClientID = 0;
+		pOutChunks[Num].m_Flags = NETSENDFLAG_VITAL;
+		pOutChunks[Num].m_DataSize = Size;
+		pOutChunks[Num].m_pData = Buf.base_ptr();
+		m_aAnnounced8[TeeID] = true;
+		Num++;
+	}
+	return Num;
+}
+
 void CNetworkTranslator::StoreSnapshot8Copy(int GameTick, int DeltaTick)
 {
 	// An empty 0.8 delta means the snapshot at GameTick equals the one at
@@ -618,7 +744,16 @@ int CNetworkTranslator::TranslateCompleteSnapshot8(int GameTick, int DeltaTick, 
 	if(DeltaSize7 < 0)
 		return 0;
 
-	return EmitSnapshot7(GameTick, GameTick - BaseTickBefore, DeltaSize7, aDelta7.base_ptr(), pOutChunks, MaxOutChunks);
+	const int NumSnapChunks = EmitSnapshot7(GameTick, GameTick - BaseTickBefore, DeltaSize7, aDelta7.base_ptr(), pOutChunks, MaxOutChunks);
+	if(NumSnapChunks <= 0)
+		return NumSnapChunks;
+
+	// The snapshot is queued first so the identity messages describe the view
+	// the client is about to have. They are separate, vital chunks because the
+	// snapshot chunk itself is sent at a fixed rate and not acknowledged.
+	// A newly announced tee becomes visible on the next snapshot, which is one
+	// tick later; the snapshot it arrives with already carried its items.
+	return NumSnapChunks + EmitIdentityMessages(NumSnapChunks, pOutChunks + NumSnapChunks, MaxOutChunks - NumSnapChunks);
 }
 
 int CNetworkTranslator::HandleSnapshot8(CUnpacker *pUnpacker, int MsgId, CNetChunk *pOutChunks, int MaxOutChunks)
@@ -1145,6 +1280,11 @@ int CNetworkTranslator::TranslateServerChunk(const void *pInData, int InSize, CN
 		if(MsgId == NETMSG_SNAP || MsgId == NETMSG_SNAPSINGLE || MsgId == NETMSG_SNAPEMPTY)
 			return 0;
 
+		// An INFO starts a new connection on this slot, so nothing cached from
+		// a previous occupant may leak into it.
+		if(MsgId == NETMSG_INFO)
+			Reset();
+
 		// A map change restarts the tick domain, so stale baselines and
 		// history would alias the new ticks.
 		if(MsgId == NETMSG_MAP_CHANGE)
@@ -1384,54 +1524,32 @@ int CNetworkTranslator::TranslateServerToClientMsg(const void *pMsg8, int Size8,
 		}
 		case NETMSGTYPE_SV_CLIENTENTER:
 		{
-			// 0.8 only announces that a tee entered; the identity travels in
-			// the TeeInfo snapshot object. 0.7 has no TeeInfo, so the cached
-			// identity is expanded back into a full Sv_ClientInfo here.
-			// Bots take the same path: the bot manager assigns them ids in
-			// the 0.7 range precisely so they become real tees for a 0.7
-			// client, which has no other way to learn about them.
-			CNetMsg_Sv_ClientEnter *pIn = (CNetMsg_Sv_ClientEnter *) pRaw;
-			const int TeeID = pIn->m_ClientID;
-			if(TeeID < 0 || TeeID > MAX_TEEID7)
-				return -1;
-			const CTeeState8 *pState = &m_aTees8[TeeID];
-			if(!pState->m_Active)
-				return -1; // identity not known yet; the snapshot will carry it
-			protocol7::CNetMsg_Sv_ClientInfo Out;
-			Out.m_ClientID = TeeID;
-			Out.m_Local = (pState->m_Flag & TEEFLAG_LOCAL) ? 1 : 0;
-			Out.m_Team = pState->m_Team;
-			Out.m_pName = pState->m_aName;
-			Out.m_pClan = pState->m_aClan;
-			Out.m_Country = pState->m_Country;
-			for(int p = 0; p < NUM_SKINPARTS; p++)
-			{
-				Out.m_apSkinPartNames[p] = pState->m_aaSkinPartNames[p];
-				Out.m_aUseCustomColors[p] = pState->m_aUseCustomColors[p];
-				Out.m_aSkinPartColors[p] = pState->m_aSkinPartColors[p];
-			}
-			// A bot is not a player joining: it appears quietly, like the
-			// silent entries a 0.7 server used for its own fake clients.
-			Out.m_Silent = (TeeID >= MAX_CLIENTS7) ? 1 : 0;
-			CMsgPacker Packer(protocol7::NETMSGTYPE_SV_CLIENTINFO);
-			Out.Pack(&Packer);
-			return FinishMsg(&Packer, pOut, OutSize);
+			// A 0.8 join says nothing but "this tee exists now"; the identity
+			// travels in the TeeInfo snapshot object. 0.7 has no TeeInfo, so
+			// the snapshot diff emits the Sv_ClientInfo as soon as a snapshot
+			// carries the new tee, which is also the first moment its name is
+			// known. Bots take the same path: the bot manager assigns them ids
+			// in the 0.7 range precisely so they become real tees for a 0.7
+			// client. Emitting anything here would either be empty or describe
+			// a stale identity.
+			return -1;
 		}
 		case NETMSGTYPE_SV_CLIENTDROP:
 		{
 			CNetMsg_Sv_ClientDrop *pIn = (CNetMsg_Sv_ClientDrop *) pRaw;
-			if(pIn->m_ClientID >= 0 && pIn->m_ClientID < MAX_TEES8)
-			{
-				m_aTees8[pIn->m_ClientID].m_Active = false;
-				m_aTeeActive8[pIn->m_ClientID] = false;
-			}
-			protocol7::CNetMsg_Sv_ClientDrop Out;
-			Out.m_ClientID = pIn->m_ClientID;
-			Out.m_pReason = pIn->m_pReason;
-			Out.m_Silent = 0; // 0.7 has the field, 0.8 no longer sends it
-			CMsgPacker Packer(protocol7::NETMSGTYPE_SV_CLIENTDROP);
-			Out.Pack(&Packer);
-			return FinishMsg(&Packer, pOut, OutSize);
+			const int TeeID = pIn->m_ClientID;
+			if(TeeID < 0 || TeeID >= MAX_TEES8)
+				return -1;
+			m_aTees8[TeeID].m_Active = false;
+			m_aTeeActive8[TeeID] = false;
+			m_aPresent8[TeeID] = false;
+			if(!m_aAnnounced8[TeeID])
+				return -1;
+			const int Written = BuildClientDrop7(TeeID, pOut, OutSize);
+			if(Written < 0)
+				return Written;
+			m_aAnnounced8[TeeID] = false;
+			return Written;
 		}
 		case NETMSGTYPE_SV_GAMEINFO:
 		{
@@ -1510,6 +1628,13 @@ int CNetworkTranslator::TranslateServerToClientChunk(const void *pInData, int In
 		// the non-snapshot system messages pass through untouched.
 		if(MsgId8 == NETMSG_SNAP || MsgId8 == NETMSG_SNAPSINGLE || MsgId8 == NETMSG_SNAPEMPTY)
 			return HandleSnapshot8(&Unpacker, MsgId8, pOutChunks, MaxOutChunks);
+
+		// A map change makes the client clear its own tee table while it loads.
+		// The first snapshot after it re-enters has to announce every visible
+		// tee again. Keyed on the message we send, not on the client's READY,
+		// so a peer cannot trigger a re-announcement on its own.
+		if(MsgId8 == NETMSG_MAP_CHANGE)
+			m_ResendIdentity8 = true;
 
 		m_aClientOut[0].set_size(InSize);
 		mem_copy(m_aClientOut[0].base_ptr(), pInData, InSize);
