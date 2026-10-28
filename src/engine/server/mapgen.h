@@ -82,6 +82,10 @@ struct CStructCatalogEntry
 	int m_FlatWidth;
 	int m_SurfaceOffset;
 	bool m_PasteAir;
+	// Decorative structures keep their art but do not paste their game layer,
+	// so a tent, ruin or tower can never trap a player or a container behind
+	// collision that has no doorway. Defaults to true for real platforms.
+	bool m_Collision;
 	// Unique floor content: only the one deterministic seed of a floor pastes
 	// this structure, so a ring floor holds exactly one instance of it.
 	bool m_Unique;
@@ -469,6 +473,10 @@ struct CInstruction
 		// above the ground line. 0 sits the structure exactly on the ground;
 		// negative floats it above, positive sinks it into the ground.
 		int m_SurfaceOffset;
+		// false pastes the structure art and anchors but not its game layer:
+		// decorative buildings then read as a background board instead of an
+		// inaccessible sealed room.
+		bool m_Collision;
 		// only the deterministic unique seed of the floor pastes this entry
 		bool m_Unique;
 	};

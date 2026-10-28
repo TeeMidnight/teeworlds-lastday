@@ -412,10 +412,13 @@ static bool LoadEuclidStructMap(IStorage *pStorage, const char *pBaseMap, bool C
 // structure has no tile, so a quad-only structure does not punch holes into the
 // ground and a structure never erases an entrance frame or a spawn point.
 static void PasteEuclidStructTiles(const SEuclidStructMap &rMap,
-	int OffsetX, int OffsetY,
+	int OffsetX, int OffsetY, bool Collision,
 	CCreatorLayerTilemap *pTerrain, CCreatorLayerTilemap *pGame, CCreatorLayerTilemap *pUnhookable)
 {
-	if(pGame && rMap.m_pGameTiles)
+	// a decorative structure keeps its template layers (the visible art) but
+	// never writes its game layer, so no sealed room can trap a player or a
+	// container inside a tent, ruin or tower
+	if(Collision && pGame && rMap.m_pGameTiles)
 	{
 		PasteTiles(pGame->m_pTiles, pGame->m_Width, pGame->m_Height,
 			rMap.m_pGameTiles, rMap.m_GameWidth, rMap.m_GameHeight,
@@ -813,7 +816,7 @@ static void PasteEuclideanStructures(const CInstruction *pInstruction, int Seed,
 				}
 			}
 
-			PasteEuclidStructTiles(StructMap, OffsetX, OffsetY, pTerrainLayer, pGameLayer, pUnhookableLayer);
+			PasteEuclidStructTiles(StructMap, OffsetX, OffsetY, Struct.m_Collision, pTerrainLayer, pGameLayer, pUnhookableLayer);
 			if(pStructGroup)
 				PasteEuclidStructQuads(StructMap, OffsetX, OffsetY, pStructMapName,
 					pStructGroup, lRequests, lCreatorImages);

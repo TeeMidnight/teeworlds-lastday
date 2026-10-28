@@ -1,5 +1,6 @@
 {
 	"id": "frost_shrine",
+	"collision": false,
 	"proba": 1.0,
 	"count": 1,
 	"margin": 48,

@@ -361,6 +361,7 @@ void CMapGen::LoadStructDefinition(const char *pDefaultId, const char *pFilePath
 	Entry.m_MinSeparation = maximum(0, JsonInt((*pJson)["min_separation"], 48));
 	Entry.m_FlatWidth = maximum(0, JsonInt((*pJson)["flat_width"], 0));
 	Entry.m_SurfaceOffset = JsonInt((*pJson)["surface_offset"], 0);
+	Entry.m_Collision = JsonBool((*pJson)["collision"], true);
 	Entry.m_Unique = JsonBool((*pJson)["unique"], false);
 
 	const json_value &rVariants = (*pJson)["variants"];
@@ -546,6 +547,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 		Struct.m_MinSeparation = 48;
 		Struct.m_FlatWidth = 0;
 		Struct.m_SurfaceOffset = 0;
+		Struct.m_Collision = true;
 		Struct.m_Unique = false;
 
 		const json_value &rId = rStruct["id"];
@@ -571,6 +573,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 				Struct.m_MinSeparation = pCatalogEntry->m_MinSeparation;
 				Struct.m_FlatWidth = pCatalogEntry->m_FlatWidth;
 				Struct.m_SurfaceOffset = pCatalogEntry->m_SurfaceOffset;
+				Struct.m_Collision = pCatalogEntry->m_Collision;
 				Struct.m_Unique = pCatalogEntry->m_Unique;
 				for(int v = 0; v < pCatalogEntry->m_lVariants.size(); v++)
 					Struct.m_lVariants.add(pCatalogEntry->m_lVariants[v]);
@@ -624,6 +627,9 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 			Struct.m_FlatWidth = maximum(0, JsonInt(rStruct["flat_width"], Struct.m_FlatWidth));
 		if(HasNumber(rStruct["surface_offset"]))
 			Struct.m_SurfaceOffset = JsonInt(rStruct["surface_offset"], Struct.m_SurfaceOffset);
+		const json_value &rCollision = rStruct["collision"];
+		if(rCollision.type == json_boolean)
+			Struct.m_Collision = (bool) rCollision;
 		const json_value &rPasteAir = rStruct["paste_air"];
 		if(rPasteAir.type == json_boolean)
 			Struct.m_PasteAir = (bool) rPasteAir;

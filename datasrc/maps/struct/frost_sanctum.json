@@ -1,5 +1,6 @@
 {
     "id": "frost_sanctum",
+    "collision": false,
     "unique": true,
     "count": 1,
     "margin": 48,

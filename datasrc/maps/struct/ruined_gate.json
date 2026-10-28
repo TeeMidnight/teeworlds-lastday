@@ -1,5 +1,6 @@
 {
 	"id": "ruined_gate",
+	"collision": false,
 	"proba": 1.0,
 	"count": 1,
 	"margin": 48,

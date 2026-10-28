@@ -538,9 +538,11 @@ bool CMapGen::GenerateNoneuclid(const CInstruction *pInstruction, int Seed, SGen
 				const int OffsetY = Anchor.m_Y - CornerY;
 
 				// merge the game layer: the struct region fully defines its
-				// tiles (air included), overwriting the base
-				PasteTiles(pGameTiles, GameWidth, GameHeight, pStructGameTiles, StructGameWidth, StructGameHeight,
-					OffsetX, OffsetY, Struct.m_PasteAir, RegionX1, RegionY1, RegionX2, RegionY2, true);
+				// tiles (air included), overwriting the base. A decorative
+				// structure skips this, so its art never blocks a path.
+				if(Struct.m_Collision)
+					PasteTiles(pGameTiles, GameWidth, GameHeight, pStructGameTiles, StructGameWidth, StructGameHeight,
+						OffsetX, OffsetY, Struct.m_PasteAir, RegionX1, RegionY1, RegionX2, RegionY2, true);
 
 				// merge the layers with the same name under the "Template"
 				// group; inside the struct region the layer is fully defined
