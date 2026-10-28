@@ -7,6 +7,7 @@
 #include <game/localization_format.h>
 
 #include "entities/character.h"
+#include "entities/container.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
 #include "gamemenu.h"
@@ -131,6 +132,73 @@ void CGameMenu::OnClientEntered(int ClientID)
 	SetPlayerPage(ClientID, "MAIN");
 	// the voter set changed
 	m_VoteUpdate = true;
+}
+
+void CGameMenu::TickContext()
+{
+	const unsigned MainPage = MENU_MAIN_PAGE_ID;
+	const unsigned TravelPage = str_quickhash("TRAVEL");
+	const unsigned ContainerPage = str_quickhash("CONTAINER");
+
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+		if(!pPlayer || pPlayer->IsDummy() || pPlayer->m_MapLoading)
+		{
+			m_aMenuContext[i].m_Valid = false;
+			continue;
+		}
+		CCharacter *pChr = pPlayer->GetCharacter();
+		if(!pChr || !pChr->IsAlive())
+		{
+			m_aMenuContext[i].m_Valid = false;
+			continue;
+		}
+
+		SMenuContext Context;
+		mem_zero(&Context, sizeof(Context));
+		Context.m_Valid = true;
+		Context.m_OnTrainEntrance = GameServer()->IsOnTrainEntrance(pPlayer);
+		Context.m_TrainDestinations = Server()->GetTrainDestinationCount();
+		Context.m_ContainerID = -1;
+		if(CContainerEntity *pContainer = GameServer()->AimedContainer(i))
+			Context.m_ContainerID = pContainer->GetID();
+		Context.m_BuildableID = -1;
+		Context.m_BuildLock = -1;
+		if(CEntity *pBuildable = GameServer()->AimedBuildable(i))
+		{
+			Context.m_BuildableID = pBuildable->GetID();
+			CBuildAccess Access;
+			if(GameServer()->BuildableAccess(pBuildable, &Access))
+			{
+				Context.m_BuildLock = Access.m_LockMode;
+				Context.m_BuildOwner = Access.m_Owner != UUID_ZEROED && Access.m_Owner == pPlayer->m_AccountUuid;
+			}
+		}
+
+		SMenuContext &Last = m_aMenuContext[i];
+		if(Last.m_Valid && mem_comp(&Last, &Context, sizeof(Context)) == 0)
+			continue;
+
+		// Only pages that actually render this state need a rebuild. Other
+		// pages (inventory, shop, ...) keep the player's current selection.
+		const unsigned Page = m_aPlayerData[i].m_CurrentPage;
+		if(Page != MainPage && Page != TravelPage && Page != ContainerPage)
+		{
+			Last = Context;
+			continue;
+		}
+
+		// A player walking over a boundary or moving the cursor across a prop
+		// can flip the state repeatedly; one rebuild per 0.2 s is enough. Keep
+		// the old snapshot when throttled so the change is retried next tick.
+		const int Now = Server()->Tick();
+		if(Now - m_aLastContextRefreshTick[i] < maximum(1, Server()->TickSpeed() / 5))
+			continue;
+		Last = Context;
+		m_aLastContextRefreshTick[i] = Now;
+		RefreshMenu(i);
+	}
 }
 
 void CGameMenu::OnMenuVote(int ClientID, CCallVoteStatus &VoteStatus, bool Sound)
@@ -394,12 +462,6 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	{
 		pMenu->AddOption(Localize("New Player Guide", "Menu Main"), "PAGE HELP", "?");
 		pMenu->AddOption(Localize("Inventory", "Menu Main"), "PAGE INVENTORY", "★");
-		// The entry is always present: the server cannot see when the client
-		// opens the vote menu, so a page that only exists while a container is
-		// aimed at could be missing from a list drawn earlier. Resolving the
-		// target when the page opens (and telling the player to aim if there is
-		// none) is reliable.
-		pMenu->AddOption(Localize("Container", "Menu Main"), "PAGE CONTAINER", "★");
 		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
@@ -433,6 +495,15 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	}
 	else
 		pMenu->AddOption(Localize("Travel (stand on a train entrance)", "Menu Main"), "DISPLAY", "-");
+
+	// The container page is also contextual: the line appears as soon as the
+	// player aims at a nearby container, and TickContext refreshes the list
+	// while the menu is open (or before it is opened).
+	CContainerEntity *pContainer = pMenu->GameServer()->AimedContainer(ClientID);
+	if(pContainer)
+		pMenu->AddOption(LocalizeFormat("Menu Main", "Container: {}", Localize(pContainer->Name(), "Container Name")).c_str(), "PAGE CONTAINER", "★");
+	else
+		pMenu->AddOption(Localize("Container (aim at one)", "Menu Main"), "DISPLAY", "-");
 
 	if(pPlayer)
 	{

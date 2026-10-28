@@ -58,6 +58,10 @@ public:
 	void OnClientEntered(int ClientID);
 	void OnMenuVote(int ClientID, CCallVoteStatus &VoteStatus, bool Sound = false);
 	void SendMenuChat(int ClientID, const char *pChat);
+	// Rebuild the page when a contextual condition changes (standing on a
+	// train platform, aiming at a container or a building). Without this the
+	// top-level options are a snapshot from the last click and look bugged.
+	void TickContext();
 
 	// ----- server vote -----
 	// The menu is carried over the vote protocol, so the vote state lives on this

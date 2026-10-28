@@ -1058,6 +1058,11 @@ void CGameContext::OnTick()
 		}
 	}
 
+	// The main page carries contextual actions (train, container, building
+	// lock). Rebuild it as soon as their condition changes instead of leaving
+	// a stale list that looks like a bug.
+	m_pGameMenu->TickContext();
+
 	// The cursor hint is a realtime broadcast: it is submitted again every tick
 	// while the cursor is over a resource, and gone the tick it moves away.
 	for(int i = 0; i < MAX_CLIENTS; i++)
