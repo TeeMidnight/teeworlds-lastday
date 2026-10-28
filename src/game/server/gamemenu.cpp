@@ -81,6 +81,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	}
 
 	Register("MAIN", "Main Menu", MenuMain, nullptr); // Localize("Main Menu", "MAIN")
+	Register("HELP", "New Player Guide", MenuHelp, nullptr); // Localize("New Player Guide", "HELP")
 	Register("INVENTORY", "Inventory", MenuInventory, nullptr); // Localize("Inventory", "INVENTORY")
 	Register("ITEMVIEW", "Item", MenuItemView, nullptr, "INVENTORY"); // Localize("Item", "ITEMVIEW")
 	Register("CRAFT", "Craft", MenuCraft, nullptr); // Localize("Craft", "CRAFT")
@@ -295,7 +296,12 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	// refresh
 	if(VoteStatus.m_aCmd[0])
 	{
-		if(str_comp(VoteStatus.m_aCmd, "PAGE INVENTORY") == 0)
+		if(str_comp(VoteStatus.m_aCmd, "PAGE HELP") == 0)
+		{
+			pMenu->SetPlayerPage(ClientID, "HELP");
+			return false;
+		}
+		else if(str_comp(VoteStatus.m_aCmd, "PAGE INVENTORY") == 0)
 		{
 			pMenu->SetPlayerPage(ClientID, "INVENTORY");
 			return false;
@@ -386,14 +392,15 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	pMenu->AddHorizontalRule();
 	// options
 	{
+		pMenu->AddOption(Localize("New Player Guide", "Menu Main"), "PAGE HELP", "?");
 		pMenu->AddOption(Localize("Inventory", "Menu Main"), "PAGE INVENTORY", "★");
-		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
 		// The entry is always present: the server cannot see when the client
 		// opens the vote menu, so a page that only exists while a container is
 		// aimed at could be missing from a list drawn earlier. Resolving the
 		// target when the page opens (and telling the player to aim if there is
 		// none) is reliable.
 		pMenu->AddOption(Localize("Container", "Menu Main"), "PAGE CONTAINER", "★");
+		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
 		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
 		pMenu->AddOption(Localize("Team", "Menu Main"), "PAGE TEAM", "★");
@@ -447,6 +454,39 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			}
 		}
 	}
+
+	return true;
+}
+
+// static
+bool CGameMenu::MenuHelp(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+{
+	(void) ClientID;
+	(void) VoteStatus;
+	(void) pUserData;
+
+	pMenu->ClearOptions(ClientID);
+	pMenu->AddPageTitle();
+	pMenu->AddWrappedLinesOption(Localize("Move with A and D, jump with space, and use the mouse to hook and shoot. Type /help at any time to open this page.", "Menu Help"));
+	pMenu->AddHorizontalRule();
+
+	pMenu->AddOption(Localize("1. Keep your progress", "Menu Help"), "DISPLAY", "-");
+	pMenu->AddWrappedLinesOption(Localize("Type /register <username> <password> in chat. Use /login <username> <password> to restore the same account on another day.", "Menu Help"));
+
+	pMenu->AddOption(Localize("2. Learn the menu", "Menu Help"), "DISPLAY", "-");
+	pMenu->AddWrappedLinesOption(Localize("Open the vote menu to reach Inventory, Craft, Loadout, Shop, Team, Language and this guide.", "Menu Help"));
+
+	pMenu->AddOption(Localize("3. Gather and build", "Menu Help"), "DISPLAY", "-");
+	pMenu->AddWrappedLinesOption(Localize("Aim at a resource and hold the scoreboard key to drill. Craft tools and weapons from the Craft page.", "Menu Help"));
+
+	pMenu->AddOption(Localize("4. Containers", "Menu Help"), "DISPLAY", "-");
+	pMenu->AddWrappedLinesOption(Localize("Stand near a crate, chest or vault, aim at it and open Container. Click a slot to take items, or an inventory item to store it.", "Menu Help"));
+
+	pMenu->AddOption(Localize("5. Travel", "Menu Help"), "DISPLAY", "-");
+	pMenu->AddWrappedLinesOption(Localize("Stand on a train platform and open the menu. Pick a destination under Travel. You stay invincible for ten seconds after arrival.", "Menu Help"));
+
+	pMenu->AddOption(Localize("6. Buildings", "Menu Help"), "DISPLAY", "-");
+	pMenu->AddWrappedLinesOption(Localize("Aim at a drill or building you own to change its lock on the main page.", "Menu Help"));
 
 	return true;
 }

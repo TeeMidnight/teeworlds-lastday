@@ -2269,6 +2269,111 @@
 			"context": "Tip",
 			"or": "Campfires burn nearby monsters. Flame weapons need fuel canisters.",
 			"tr": "营火会灼烧附近的怪物。火焰武器需要燃料罐。"
+		},
+		{
+			"context": "Menu Main",
+			"or": "New Player Guide",
+			"tr": "新手指引"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Container (aim at one)",
+			"tr": "容器（请瞄准一个）"
+		},
+		{
+			"context": "Menu Main",
+			"or": "Container: {}",
+			"tr": "容器：{}"
+		},
+		{
+			"context": "HELP",
+			"or": "New Player Guide",
+			"tr": "新手指引"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Move with A and D, jump with space, and use the mouse to hook and shoot. Type /help at any time to open this page.",
+			"tr": "用 A/D 移动，空格跳跃，鼠标钩爪和射击。随时输入 /help 打开本页。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "1. Keep your progress",
+			"tr": "1. 保存进度"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Type /register <username> <password> in chat. Use /login <username> <password> to restore the same account on another day.",
+			"tr": "在聊天框输入 /register <用户名> <密码> 注册。之后用 /login <用户名> <密码> 找回同一账号。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "2. Learn the menu",
+			"tr": "2. 熟悉菜单"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Open the vote menu to reach Inventory, Craft, Loadout, Shop, Team, Language and this guide.",
+			"tr": "打开投票菜单可进入背包、制作、装备、商店、队伍、语言和本指引。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "3. Gather and build",
+			"tr": "3. 采集与建造"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Aim at a resource and hold the scoreboard key to drill. Craft tools and weapons from the Craft page.",
+			"tr": "瞄准资源并按住记分板键开采。在制作页合成工具和武器。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "4. Containers",
+			"tr": "4. 容器"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Stand near a crate, chest or vault, aim at it and open Container. Click a slot to take items, or an inventory item to store it.",
+			"tr": "靠近木箱、宝箱或保险库，瞄准后打开容器菜单。点击容器格子取出物品，点击背包物品存入。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "5. Travel",
+			"tr": "5. 旅行"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Stand on a train platform and open the menu. Pick a destination under Travel. You stay invincible for ten seconds after arrival.",
+			"tr": "站在火车平台上打开菜单，在旅行中选择目的地。到达后有十秒无敌时间。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "6. Buildings",
+			"tr": "6. 建筑"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Aim at a drill or building you own to change its lock on the main page.",
+			"tr": "瞄准你拥有的钻机或建筑，可在主菜单更改锁定权限。"
+		},
+		{
+			"context": "Account",
+			"or": "Welcome to LastDay! This is a survival world: explore, gather, craft and keep moving.",
+			"tr": "欢迎来到 LastDay！这是一个生存世界：探索、采集、制作，并保持移动。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Move with A and D, jump with space, and use the mouse to hook and shoot.",
+			"tr": "用 A/D 移动，空格跳跃，鼠标钩爪和射击。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Open the vote menu for Inventory, Craft, Loadout, Shop, Team and the New Player Guide.",
+			"tr": "打开投票菜单可使用背包、制作、装备、商店、队伍和新手指引。"
+		},
+		{
+			"context": "Tip",
+			"or": "New here? Type /help for a short guide, or open the New Player Guide in the menu.",
+			"tr": "新来的？输入 /help 查看简短指引，或在菜单中打开新手指引。"
 		}
 	]
 }

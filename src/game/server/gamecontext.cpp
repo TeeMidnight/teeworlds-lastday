@@ -1912,6 +1912,14 @@ void CGameContext::SetupGuestPlayer(int ClientID)
 		m_pController->DoTeamChange(pPlayer, TEAM_RED, false);
 
 	CLanguageScope LanguageScope(LanguageOf(ClientID));
+	if(Created)
+	{
+		// A first visit gets a short, action-oriented walkthrough. The same text
+		// is always available from the New Player Guide page and /help.
+		SendChat(-1, CHAT_ALL, ClientID, Localize("Welcome to LastDay! This is a survival world: explore, gather, craft and keep moving.", "Account"));
+		SendChat(-1, CHAT_ALL, ClientID, Localize("Move with A and D, jump with space, and use the mouse to hook and shoot.", "Menu Help"));
+		SendChat(-1, CHAT_ALL, ClientID, Localize("Open the vote menu for Inventory, Craft, Loadout, Shop, Team and the New Player Guide.", "Menu Help"));
+	}
 	SendChat(-1, CHAT_ALL, ClientID, Localize("Playing as a guest. Use /register <username> <password> to keep your progress on an account.", "Account"));
 }
 

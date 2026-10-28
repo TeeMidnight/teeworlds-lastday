@@ -999,6 +999,19 @@ void CGameController::ComTeamChat(IConsole::IResult *pResult, void *pContext)
 	}
 }
 
+void CGameController::ComHelp(IConsole::IResult *pResult, void *pContext)
+{
+	(void) pResult;
+	CCommandManager::SCommandContext *pCmdContext = static_cast<CCommandManager::SCommandContext *>(pContext);
+	CGameController *pSelf = static_cast<CGameController *>(pCmdContext->m_pContext);
+	const int ClientID = pCmdContext->m_ClientID;
+
+	pSelf->SendSystemChat(ClientID, "Menu Help", "Move with A and D, jump with space, and use the mouse to hook and shoot.");
+	pSelf->SendSystemChat(ClientID, "Menu Help", "Type /register <username> <password> to keep your progress; /login restores it.");
+	pSelf->SendSystemChat(ClientID, "Menu Help", "Open the vote menu for Inventory, Craft, Loadout, Shop, Team and the New Player Guide.");
+	pSelf->GameServer()->GameMenu()->SetPlayerPage(ClientID, "HELP");
+}
+
 void CGameController::RegisterChatCommands(CCommandManager *pManager)
 {
 	pManager->AddCommand("about", "About the mod", "", Com_About, this);
@@ -1007,6 +1020,7 @@ void CGameController::RegisterChatCommands(CCommandManager *pManager)
 	pManager->AddCommand("login", "Log in to an account", "s[username] s[password]", ComLogin, this);
 	pManager->AddCommand("lang", "Set your language", "?s[code]", ComLanguage, this);
 	pManager->AddCommand("container", "Open the container you are aiming at", "", ComContainer, this);
+	pManager->AddCommand("help", "New player guide", "", ComHelp, this);
 	pManager->AddCommand("team", "Team menu / create / leave / disband / friendly fire", "?r[args]", ComTeam, this);
 	pManager->AddCommand("t", "Team chat", "r[text]", ComTeamChat, this);
 }

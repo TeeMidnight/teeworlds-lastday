@@ -140,6 +140,7 @@ public:
 	static void ComLogin(IConsole::IResult *pResult, void *pContext);
 	static void ComLanguage(IConsole::IResult *pResult, void *pContext);
 	static void ComContainer(IConsole::IResult *pResult, void *pContext);
+	static void ComHelp(IConsole::IResult *pResult, void *pContext);
 	static void ComTeam(IConsole::IResult *pResult, void *pContext);
 	static void ComTeamChat(IConsole::IResult *pResult, void *pContext);
 	void RegisterChatCommands(CCommandManager *pManager);
