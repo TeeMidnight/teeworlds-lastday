@@ -513,6 +513,16 @@ bool CMonsterEntity::FireRanged(vec2 Target)
 		return false;
 	Dir = normalize(Dir);
 
+	// A ranged mob aims at the target's current position, so a perfectly
+	// accurate shot is impossible to dodge at these projectile speeds. The
+	// content-defined spread gives the player a real chance to strafe out of
+	// the line, while keeping the mob threatening at close range.
+	if(m_pDef->m_Ranged.m_AimSpread > 0.0f)
+	{
+		const float Offset = (random_float() * 2.0f - 1.0f) * m_pDef->m_Ranged.m_AimSpread;
+		Dir = rotate(Dir, Offset);
+	}
+
 	const int Owner = m_pDef->m_Faction == BOTFACTION_FRIENDLY ? PLAYER_TEAM_FRIENDLY : PLAYER_TEAM_HOSTILE;
 	const vec2 Start = m_Pos + Dir * GetProximityRadius() * 0.75f;
 	CProjectile *pProjectile = new CProjectile(GameWorld(), m_pDef->m_Ranged.m_Weapon, Owner, Start, Dir,

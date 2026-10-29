@@ -22,7 +22,7 @@
     "ai": "skirmisher",
     "abilities": {
         "melee": {"damage": 2, "cooldown": 28, "range": 44},
-        "ranged": {"enabled": true, "weapon": "gun", "damage": 2, "cooldown": 65, "range": 340, "min_range": 120, "force": 1, "span": 700, "sound": "gun"}
+        "ranged": {"enabled": true, "weapon": "gun", "damage": 2, "cooldown": 65, "range": 340, "min_range": 120, "force": 1, "span": 700, "sound": "gun", "spread": 10}
     },
     "dialogue": {
         "spawn": ["The air tastes of iron."],

@@ -89,9 +89,10 @@ struct SMobRanged
 	int m_Sound;
 	float m_Range;
 	float m_MinRange;
+	float m_AimSpread; // degrees, 0 = perfectly accurate
 
 	SMobRanged() :
-		m_Enabled(false), m_Weapon(WEAPON_GUN), m_Damage(2), m_Cooldown(60), m_Force(1), m_Span(600), m_Sound(SOUND_GUN_FIRE), m_Range(360.0f), m_MinRange(96.0f) {}
+		m_Enabled(false), m_Weapon(WEAPON_GUN), m_Damage(2), m_Cooldown(60), m_Force(1), m_Span(600), m_Sound(SOUND_GUN_FIRE), m_Range(360.0f), m_MinRange(96.0f), m_AimSpread(0.0f) {}
 };
 
 struct SMobLeap

@@ -124,7 +124,8 @@ Monsters are content, not C++ classes. One file per creature lives in
 - `faction`: `hostile`, `neutral` or `friendly`
 - `ai`: `hunter`, `skirmisher`, `sentry`, `wanderer`, `companion` or
   `support`
-- abilities: melee, ranged projectile, leap, heal aura, armor aura, enrage
+- abilities: melee, ranged projectile (with an optional `spread` in degrees
+  so a shot can be strafed), leap, heal aura, armor aura, enrage
 - localized `dialogue` events (spawn, sight, combat, hurt, kill, death, idle,
   low health), with `{player}` substitution and per-event cooldowns
 - weighted `drops`; each entry is a normal item id with a count range and a

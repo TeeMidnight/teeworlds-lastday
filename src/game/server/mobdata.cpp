@@ -357,6 +357,7 @@ void CMobSystem::LoadDef(const char *pDefaultId, const char *pFilePath)
 			pDef->m_Ranged.m_Span = maximum(1, ReadInt(rRanged["span"], pDef->m_Ranged.m_Span));
 			pDef->m_Ranged.m_Range = maximum(32.0f, ReadFloat(rRanged["range"], pDef->m_Ranged.m_Range));
 			pDef->m_Ranged.m_MinRange = maximum(0.0f, ReadFloat(rRanged["min_range"], pDef->m_Ranged.m_MinRange));
+			pDef->m_Ranged.m_AimSpread = clamp(ReadFloat(rRanged["spread"], pDef->m_Ranged.m_AimSpread), 0.0f, 45.0f);
 			const char *pSound = rRanged["sound"];
 			if(pSound[0])
 				pDef->m_Ranged.m_Sound = str_comp_nocase(pSound, "shotgun") == 0 ? SOUND_SHOTGUN_FIRE : SOUND_GUN_FIRE;

@@ -24,7 +24,7 @@
     "ai": "boss",
     "abilities": {
         "melee": {"damage": 6, "cooldown": 20, "range": 64},
-        "ranged": {"enabled": true, "weapon": "shotgun", "damage": 3, "cooldown": 45, "range": 420, "min_range": 100, "force": 2, "span": 650, "sound": "shotgun"},
+        "ranged": {"enabled": true, "weapon": "shotgun", "damage": 3, "cooldown": 45, "range": 420, "min_range": 100, "force": 2, "span": 650, "sound": "shotgun", "spread": 6},
         "leap": {"enabled": true, "cooldown": 150, "range": 320, "force_x": 7.0, "force_y": -8.0},
         "enrage": {"health_percent": 40, "damage_bonus": 3, "speed_percent": 25}
     },
