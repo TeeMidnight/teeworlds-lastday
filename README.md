@@ -152,10 +152,14 @@ them does not also roll random mobs.
 
 `burrower` is a segmented worm: the head and body are real tee-shaped bot
 entities, so it reads as a chain of tees, while one `CWormEntity` owns the
-shared health, ground movement, contact damage and loot. It crawls along the
-first floor below it instead of flying or phasing through terrain, is visible
-and hittable for its whole life, and any body link routes damage to the whole
-creature.
+shared health, movement, contact damage and loot. It alternates between a
+surface phase and a burrowed phase (`burrow_ticks` / `surface_ticks` in the
+mob JSON). While surfaced it crawls along the first floor below it, is visible
+and hittable, and bites nearby players. When it burrows the links disappear,
+terrain no longer constrains it, and it tunnels toward its prey while leaving
+small dirt puffs on the surface. It is invulnerable until it breaks the
+surface again, so the fight has a clear strike window; any body link routes
+damage to the whole creature.
 
 Hostile, neutral and friendly combat uses the `PLAYER_TEAM_HOSTILE` and
 `PLAYER_TEAM_FRIENDLY` damage sentinels. They keep hostile hits from being

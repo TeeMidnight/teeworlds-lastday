@@ -103,6 +103,10 @@ public:
 
 	int ObjType() const { return m_ObjType; }
 	int ObjFlag() const { return m_ObjFlag; }
+	// Runtime flag changes are used by entities that temporarily leave the
+	// hit table (a burrowed worm) without leaving the world.
+	void AddObjFlag(int Flag) { m_ObjFlag |= Flag; }
+	void RemoveObjFlag(int Flag) { m_ObjFlag &= ~Flag; }
 
 	/* Getters */
 	int GetID() const { return m_ID; }

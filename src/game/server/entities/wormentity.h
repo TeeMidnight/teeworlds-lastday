@@ -43,7 +43,7 @@ public:
 
 	// moves the link directly; the worm has already computed the trail
 	void SetWormPos(vec2 Pos, vec2 Dir);
-	// links are visible for their whole life; hiding is only used on death
+	// links are visible while the worm is surfaced and hidden while it tunnels
 	void SetWormVisible(bool Visible);
 	void SetWorm(CWormEntity *pWorm) { m_pWorm = pWorm; }
 	// removes the link from the world and the bot manager
@@ -59,10 +59,12 @@ private:
 /*
 	Class: CWormEntity
 		A segmented burrower. The head and body are bots (so they look like a
-		chain of tees), while this entity owns the shared health, ground
-		movement, contact damage and loot. It crawls along the terrain and never
-		flies or turns invisible, so the map stays immutable and the fight stays
-		readable.
+		chain of tees), while this entity owns the shared health, movement,
+		contact damage and loot. It alternates between crawling along the
+		terrain and tunnelling through it: while buried the links are hidden and
+		invulnerable, while surfaced they are visible and can be hit. On the
+		surface it tracks the first floor below it, so it never flies or clips
+		through walls in view.
 */
 class CWormEntity : public CHitableEntity
 {
@@ -86,6 +88,9 @@ private:
 	// Detach every link before it is deleted. Taking a local copy keeps the
 	// worm's own list from changing while OnBotDeath runs.
 	void DespawnSegments();
+	void EnterBurrow();
+	bool TrySurface(CCharacter *pTarget);
+	void BurrowRumble();
 	void Bite(CCharacter *pChr);
 	void DropLoot();
 	void WormDie();
@@ -101,6 +106,9 @@ private:
 	int m_LastHitTick;
 	int m_WanderTimer;
 	vec2 m_WanderDir;
+	int m_PhaseTimer;
+	int m_RumbleTimer;
+	bool m_Burrowed;
 	Uuid m_HeadID;
 	bool m_Natural;
 	array<Uuid> m_lSegments;

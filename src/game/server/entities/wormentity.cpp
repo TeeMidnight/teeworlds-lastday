@@ -50,6 +50,12 @@ void CWormSegmentEntity::Reset()
 void CWormSegmentEntity::SetWormVisible(bool Visible)
 {
 	m_Alive = Visible;
+	// A hidden link must also leave the hit table: otherwise a projectile
+	// aimed at empty ground would still stop on an invisible body.
+	if(Visible)
+		AddObjFlag(CGameWorld::ENTFLAG_HITABLE);
+	else
+		RemoveObjFlag(CGameWorld::ENTFLAG_HITABLE);
 	if(m_TeeID != -1 && GameWorld())
 	{
 		if(Visible)
@@ -132,6 +138,9 @@ CWormEntity::CWormEntity(CGameWorld *pWorld, vec2 Pos, const SMobDef *pDef, Uuid
 	m_LastHitTick = -100;
 	m_WanderTimer = 0;
 	m_WanderDir = vec2(1.0f, 0.0f);
+	m_PhaseTimer = maximum(10, pDef ? pDef->m_Worm.m_SurfaceTicks : 70);
+	m_RumbleTimer = 0;
+	m_Burrowed = false;
 	m_HeadID = HeadID;
 
 	m_lPath.hint_size(256);
@@ -300,6 +309,22 @@ void CWormEntity::Tick()
 			pTarget = static_cast<CCharacter *>(pClosest);
 	}
 
+	// Alternate a surface window (visible and hittable) with a burrowed
+	// window (hidden and invulnerable). The timers come from the mob JSON, so
+	// each burrower can be tuned without touching the entity.
+	if(m_PhaseTimer > 0)
+		m_PhaseTimer--;
+	if(m_PhaseTimer <= 0)
+	{
+		if(m_Burrowed)
+		{
+			if(!TrySurface(pTarget))
+				m_PhaseTimer = 15; // no clear floor at this column yet
+		}
+		else
+			EnterBurrow();
+	}
+
 	float Direction = 0.0f;
 	if(pTarget && pTarget->IsAlive())
 	{
@@ -318,36 +343,66 @@ void CWormEntity::Tick()
 		Direction = m_WanderDir.x < 0.0f ? -1.0f : (m_WanderDir.x > 0.0f ? 1.0f : 0.0f);
 	}
 
-	// Only horizontal motion is driven here. The vertical position is always
-	// snapped back to the first floor below the worm, so it crawls over the
-	// terrain instead of flying at the player through the air.
 	const float Speed = m_pDef->m_Worm.m_Speed;
-	if(Direction != 0.0f)
+	if(m_Burrowed)
 	{
-		const float NewX = m_Pos.x + Direction * Speed;
-		float GroundTop = 0.0f;
-		if(FindWormGround(GameWorld(), NewX, m_Pos.y, &GroundTop))
+		// Tunnelling ignores terrain entirely. The links are hidden, and the
+		// regular dirt puffs show the player roughly where it is heading.
+		if(Direction != 0.0f)
 		{
-			const vec2 NewPos(NewX, GroundTop - 14.0f);
-			const bool SameLevel = absolute(NewPos.y - m_Pos.y) <= 1.5f * 32.0f;
-			const bool Clear = !GameWorld()->Collision()->TestBox(NewPos, vec2(24.0f, 24.0f));
-			if(SameLevel && Clear)
-				m_Pos = NewPos;
+			const float MaxX = GameWorld()->Collision()->GetWidth() * 32.0f - 16.0f;
+			float NewX = m_Pos.x + Direction * Speed;
+			if(NewX < 16.0f || NewX > MaxX)
+			{
+				NewX = clamp(NewX, 16.0f, MaxX);
+				m_WanderDir.x = -m_WanderDir.x;
+			}
+			m_Pos.x = NewX;
+
+			float GroundTop = 0.0f;
+			if(FindWormGround(GameWorld(), m_Pos.x, m_Pos.y - 96.0f, &GroundTop))
+			{
+				const float NewY = GroundTop - 14.0f;
+				// Follow the floor between short hops, but do not snap over a
+				// tall wall: the worm is supposed to pass underneath it.
+				if(absolute(NewY - m_Pos.y) <= 4.0f * 32.0f)
+					m_Pos.y = NewY;
+			}
+		}
+		BurrowRumble();
+	}
+	else
+	{
+		// Only horizontal motion is driven here. The vertical position is always
+		// snapped back to the first floor below the worm, so it crawls over the
+		// terrain instead of flying at the player through the air.
+		if(Direction != 0.0f)
+		{
+			const float NewX = m_Pos.x + Direction * Speed;
+			float GroundTop = 0.0f;
+			if(FindWormGround(GameWorld(), NewX, m_Pos.y, &GroundTop))
+			{
+				const vec2 NewPos(NewX, GroundTop - 14.0f);
+				const bool SameLevel = absolute(NewPos.y - m_Pos.y) <= 1.5f * 32.0f;
+				const bool Clear = !GameWorld()->Collision()->TestBox(NewPos, vec2(24.0f, 24.0f));
+				if(SameLevel && Clear)
+					m_Pos = NewPos;
+				else
+					m_WanderDir.x = -m_WanderDir.x;
+			}
 			else
 				m_WanderDir.x = -m_WanderDir.x;
 		}
 		else
-			m_WanderDir.x = -m_WanderDir.x;
-	}
-	else
-	{
-		// keep resting on the floor even while turning or waiting
-		float GroundTop = 0.0f;
-		if(FindWormGround(GameWorld(), m_Pos.x, m_Pos.y, &GroundTop))
 		{
-			const float NewY = GroundTop - 14.0f;
-			if(absolute(NewY - m_Pos.y) <= 1.5f * 32.0f)
-				m_Pos.y = NewY;
+			// keep resting on the floor even while turning or waiting
+			float GroundTop = 0.0f;
+			if(FindWormGround(GameWorld(), m_Pos.x, m_Pos.y, &GroundTop))
+			{
+				const float NewY = GroundTop - 14.0f;
+				if(absolute(NewY - m_Pos.y) <= 1.5f * 32.0f)
+					m_Pos.y = NewY;
+			}
 		}
 	}
 
@@ -359,6 +414,9 @@ void CWormEntity::Tick()
 
 	UpdateSegments();
 
+	if(m_Burrowed)
+		return;
+
 	if(m_BiteTimer > 0)
 		m_BiteTimer--;
 	if(pTarget && pTarget->IsAlive() && distance(pTarget->GetPos(), m_Pos) <= m_pDef->m_Worm.m_BiteRadius && m_BiteTimer <= 0)
@@ -368,9 +426,68 @@ void CWormEntity::Tick()
 	}
 }
 
+void CWormEntity::EnterBurrow()
+{
+	if(!m_pDef || m_Burrowed)
+		return;
+
+	m_Burrowed = true;
+	m_PhaseTimer = maximum(10, m_pDef->m_Worm.m_BurrowTicks);
+	m_RumbleTimer = 0;
+	m_BiteTimer = 0;
+	RemoveObjFlag(CGameWorld::ENTFLAG_HITABLE);
+	SetVisible(false);
+	GameWorld()->CreateHammerHit(m_Pos);
+	GameWorld()->CreateSound(m_Pos, SOUND_HOOK_ATTACH_GROUND);
+}
+
+bool CWormEntity::TrySurface(CCharacter *pTarget)
+{
+	if(!m_pDef)
+		return false;
+
+	// Prefer the floor under the prey, so the worm emerges in the same fight
+	// space instead of on top of a random ceiling. Without prey it simply
+	// re-emerges at its current column.
+	const float FromY = pTarget && pTarget->IsAlive() ? pTarget->GetPos().y - 96.0f : m_Pos.y - 96.0f;
+	float GroundTop = 0.0f;
+	vec2 NewPos = m_Pos;
+	if(FindWormGround(GameWorld(), m_Pos.x, FromY, &GroundTop))
+		NewPos.y = GroundTop - 14.0f;
+
+	if(GameWorld()->Collision()->TestBox(NewPos, vec2(24.0f, 24.0f)))
+		return false;
+
+	m_Pos = NewPos;
+	m_Burrowed = false;
+	m_PhaseTimer = maximum(10, m_pDef->m_Worm.m_SurfaceTicks);
+	// A short delay after breaking the surface gives the player time to react
+	// before the first bite lands.
+	m_BiteTimer = 18;
+	AddObjFlag(CGameWorld::ENTFLAG_HITABLE);
+	SetVisible(true);
+	GameWorld()->CreateHammerHit(m_Pos);
+	GameWorld()->CreateSound(m_Pos, SOUND_HOOK_ATTACH_GROUND);
+	return true;
+}
+
+void CWormEntity::BurrowRumble()
+{
+	if(m_RumbleTimer > 0)
+	{
+		m_RumbleTimer--;
+		return;
+	}
+	m_RumbleTimer = 18;
+
+	float GroundTop = 0.0f;
+	if(FindWormGround(GameWorld(), m_Pos.x, m_Pos.y - 96.0f, &GroundTop))
+		GameWorld()->CreateHammerHit(vec2(m_Pos.x, GroundTop - 4.0f));
+}
+
 void CWormEntity::Bite(CCharacter *pChr)
 {
-	if(!pChr || !pChr->IsAlive())
+	if(!pChr || !pChr->IsAlive() || m_Burrowed)
 		return;
 	vec2 Dir = pChr->GetPos() - m_Pos;
 	if(length(Dir) < 0.001f)
@@ -387,6 +504,12 @@ bool CWormEntity::TakeHit(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int 
 	(void) pFrom;
 	(void) Weapon;
 	if(!m_Alive)
+		return false;
+
+	// While tunnelling the links are hidden, so there is nothing to aim at.
+	// Explosions can still reach the worm entity itself, so reject those too:
+	// the surface window is the fight.
+	if(m_Burrowed)
 		return false;
 
 	// an explosion can touch every link at once; one hit per few ticks is
