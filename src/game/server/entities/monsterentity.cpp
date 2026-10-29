@@ -519,6 +519,10 @@ bool CMonsterEntity::FireRanged(vec2 Target)
 	// A bot has no client owner for the projectile to resolve, so without this
 	// the shot can collide with the monster that fired it on the very next tick.
 	pProjectile->SetIgnoreEntity(GetID());
+	// The team sentinel in m_Owner cannot name the shooter. Keep the bot id on
+	// the projectile so a victim can retaliate against the actual attacker.
+	pProjectile->SetOwnerBot(GetBotID());
+
 	GameWorld()->CreateSound(m_Pos, m_pDef->m_Ranged.m_Sound);
 	m_AttackTick = Server()->Tick();
 	m_RangedTimer = m_pDef->m_Ranged.m_Cooldown;
@@ -704,6 +708,28 @@ void CMonsterEntity::RememberAttacker(CEntity *pFrom)
 	{
 		m_LastAttackerBot = static_cast<IBotEntity *>(pFrom)->GetBotID();
 		m_LastAttackerClient = -1;
+	}
+	else if(pFrom->ObjType() == CGameWorld::ENTTYPE_PROJECTILE)
+	{
+		// A bot's projectile only carries a team sentinel in m_Owner, so the
+		// projectile also records the firing bot. Without this a Spitter could
+		// shoot another monster from range and never be identified as the
+		// attacker; that monster would stay neutral instead of fighting back.
+		const CProjectile *pProjectile = static_cast<const CProjectile *>(pFrom);
+		if(pProjectile->OwnerBot() != UUID_ZEROED)
+		{
+			m_LastAttackerBot = pProjectile->OwnerBot();
+			m_LastAttackerClient = -1;
+		}
+		else
+		{
+			const int Owner = pProjectile->GetOwner();
+			if(Owner >= 0)
+			{
+				m_LastAttackerClient = Owner;
+				m_LastAttackerBot = UUID_ZEROED;
+			}
+		}
 	}
 	else if(pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD)
 	{

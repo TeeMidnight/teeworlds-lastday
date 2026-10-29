@@ -29,6 +29,7 @@ CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, 
 	m_Weapon = Weapon;
 	m_StartTick = Server()->Tick();
 	m_IgnoreEntityID = -1;
+	m_OwnerBotID = UUID_ZEROED;
 	m_Explosive = Explosive;
 
 	GameWorld()->InsertEntity(this);
@@ -45,6 +46,7 @@ void CProjectile::LoseOwner()
 		m_Owner = PLAYER_TEAM_BLUE;
 	else
 		m_Owner = PLAYER_TEAM_RED;
+	m_OwnerBotID = UUID_ZEROED;
 }
 
 vec2 CProjectile::GetPos(float Time)

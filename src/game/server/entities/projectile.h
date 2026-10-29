@@ -5,6 +5,7 @@
 #ifndef GAME_SERVER_ENTITIES_PROJECTILE_H
 #define GAME_SERVER_ENTITIES_PROJECTILE_H
 
+#include <base/uuid.h>
 #include <game/server/entity.h>
 
 // PLAYER_TEAM_BLUE / PLAYER_TEAM_RED live in entity.h: an entity without a
@@ -23,6 +24,11 @@ public:
 	// campfire's own hitbox, for example). The id is resolved every tick so a
 	// destroyed ignore target does not leave a dangling pointer.
 	void SetIgnoreEntity(int EntityID) { m_IgnoreEntityID = EntityID; }
+
+	// Bots have no client slot, so a bot-owned projectile carries its firing
+	// bot separately. Victims use this for retaliation.
+	void SetOwnerBot(const Uuid &BotID) { m_OwnerBotID = BotID; }
+	const Uuid &OwnerBot() const { return m_OwnerBotID; }
 
 	void LoseOwner();
 
@@ -48,6 +54,7 @@ private:
 	float m_Force;
 	int m_StartTick;
 	int m_IgnoreEntityID;
+	Uuid m_OwnerBotID;
 	bool m_Explosive;
 };
 
