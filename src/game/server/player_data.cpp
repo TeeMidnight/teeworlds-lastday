@@ -15,6 +15,10 @@ void CPlayer::CaptureStatus(CDbJob &Job)
 	DbSet(Job, CJsonPath().Key("level"), m_Status.m_Level);
 	DbSet(Job, CJsonPath().Key("hide_tip"), m_Status.m_HideTip);
 	DbSet(Job, CJsonPath().Key("language"), m_Status.m_aLanguage);
+	// Keep the last displayed nickname with the account so the team menu can
+	// name an offline member instead of printing a bare UUID. The name is
+	// refreshed on every save, including the one made when the client drops.
+	DbSet(Job, CJsonPath().Key("nickname"), Server()->ClientName(GetCID()));
 
 	// characters
 	if(m_pCharacter)
@@ -77,6 +81,13 @@ void CPlayer::SaveStatus(CDatabase *pDB)
 	Job.m_Uuid = m_AccountUuid;
 	CaptureStatus(Job);
 	RunDbJob(&Job);
+}
+
+void CPlayer::SaveNickname(CDatabase *pDB)
+{
+	if(!pDB || m_AccountUuid == UUID_ZEROED)
+		return;
+	SetJsonField(pDB, m_AccountUuid, CJsonPath().Key("nickname"), Server()->ClientName(GetCID()));
 }
 
 void CPlayer::CaptureLoadout()

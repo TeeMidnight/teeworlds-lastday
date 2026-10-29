@@ -20,11 +20,24 @@ struct SGameTeam
 	Uuid m_Leader;
 	bool m_FriendlyFire;
 	array<Uuid> m_lMembers;
+	// Invitations are session state: a leader offers membership to an online
+	// player, and the player accepts or declines from the Team page. They are
+	// deliberately not stored in SQL, so an offer cannot outlive the team it
+	// belongs to.
+	array<Uuid> m_lInvites;
 
 	SGameTeam() : m_Id(0), m_FriendlyFire(false)
 	{
 		m_aName[0] = '\0';
 		m_Leader = UUID_ZEROED;
+	}
+
+	bool IsInvited(const Uuid &Account) const
+	{
+		for(int i = 0; i < m_lInvites.size(); i++)
+			if(m_lInvites[i] == Account)
+				return true;
+		return false;
 	}
 };
 
@@ -50,17 +63,30 @@ public:
 	bool HasOnlineMember(const SGameTeam *pTeam) const { return OnlineMemberCount(pTeam) > 0; }
 	bool IsOnline(const Uuid &Account) const;
 
+	// The client slot currently bound to the account, or -1. A connecting client
+	// has no usable name/menu yet, so it is not returned.
+	int ClientIDFor(const Uuid &Account) const;
+	// Name to show for an account: the live server name while connected, the
+	// nickname stored in the player's JSON data when offline, and the UUID only
+	// as a last resort for rows that predate the nickname field.
+	const char *MemberName(const Uuid &Account, char *pBuf, int Size) const;
+
+	// The team that has a pending invitation for this account, or nullptr.
+	const SGameTeam *InviteFrom(const Uuid &Account) const;
+
 	// Player actions. Each returns false and fills pError on failure.
 	bool CreateTeam(const Uuid &Leader, const char *pName, char *pError, int ErrorSize);
-	bool JoinTeam(const Uuid &Account, int TeamId, char *pError, int ErrorSize);
+	bool InviteMember(const Uuid &Leader, const Uuid &Target, char *pError, int ErrorSize);
+	bool CancelInvite(const Uuid &Leader, const Uuid &Target, char *pError, int ErrorSize);
+	bool AcceptInvite(const Uuid &Account, char *pError, int ErrorSize);
+	bool DeclineInvite(const Uuid &Account, char *pError, int ErrorSize);
 	bool LeaveTeam(const Uuid &Account, char *pError, int ErrorSize);
 	bool KickMember(const Uuid &Leader, const Uuid &Target, char *pError, int ErrorSize);
 	bool SetFriendlyFire(const Uuid &Leader, bool Enabled, char *pError, int ErrorSize);
 	bool DisbandTeam(const Uuid &Leader, char *pError, int ErrorSize);
 
-	// Called when a leader disconnects: hand the team to another online member
-	// so the guild can keep operating. With no other online member nothing
-	// changes, so the leader can return.
+	// Called when a player disconnects. A leader leaving disbands the guild;
+	// pending offers addressed to the account are dropped.
 	void OnPlayerDisconnected(const Uuid &Account);
 
 	// maximum display characters in a team name (TeeInfo clan limit)
@@ -76,9 +102,10 @@ private:
 	SGameTeam *MutableTeamFor(const Uuid &Account);
 	SGameTeam *MutableTeamByName(const char *pName);
 	SGameTeam *MutableTeamById(int Id);
+	SGameTeam *MutableInviteTeamFor(const Uuid &Account);
 	void AddLoadedTeam(const CDatabase::STeamData &Data);
 	void RemoveTeam(SGameTeam *pTeam);
-	void ChooseNewLeader(SGameTeam *pTeam, const Uuid &Exclude);
+	void ClearInvitesFor(const Uuid &Account);
 };
 
 #endif // GAME_SERVER_TEAM_H

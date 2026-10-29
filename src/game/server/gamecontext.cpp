@@ -1312,7 +1312,9 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 
 	// persist the player's status before dropping
 	SavePlayerData(m_apPlayers[ClientID]);
-	if(m_pTeamSystem && m_apPlayers[ClientID]->m_AccountUuid != UUID_ZEROED)
+	// A server shutdown drops every client too, but that is not a player
+	// leaving: keeping the team rows allows the guild to survive a restart.
+	if(m_pTeamSystem && !Server()->IsShuttingDown() && m_apPlayers[ClientID]->m_AccountUuid != UUID_ZEROED)
 		m_pTeamSystem->OnPlayerDisconnected(m_apPlayers[ClientID]->m_AccountUuid);
 
 	GameMenu()->AbortVoteOnDisconnect(ClientID);
@@ -1921,6 +1923,8 @@ void CGameContext::SetupGuestPlayer(int ClientID)
 	{
 		Created = m_pDatabase->EnsureGuestPlayer(GuestUuid, aUsername);
 		pPlayer->LoadStatus(m_pDatabase, false);
+		// record the name now; a drop also saves it with the full profile
+		pPlayer->SaveNickname(m_pDatabase);
 	}
 	if(Created)
 		GiveStartingKit(ClientID);

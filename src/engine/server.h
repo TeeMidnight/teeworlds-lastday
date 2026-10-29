@@ -74,6 +74,11 @@ public:
 	virtual bool IsBanned(int ClientID) = 0;
 	virtual void Kick(int ClientID, const char *pReason) = 0;
 
+	// True while the server is closing its client connections for shutdown.
+	// The game layer must not treat those drops as players choosing to leave
+	// (for example, a team leader disconnecting because the process is exiting).
+	virtual bool IsShuttingDown() const = 0;
+
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual bool DemoRecorder_IsRecording() = 0;
 

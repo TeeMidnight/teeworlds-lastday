@@ -193,6 +193,10 @@ public:
 	// database; each field is accessed individually through its json
 	// path
 	void SaveStatus(class CDatabase *pDB);
+	// Write only the displayed nickname into the player's json data. Used when
+	// an identity is bound (guest join, login) so the team menu can name the
+	// account even before its first full status save.
+	void SaveNickname(class CDatabase *pDB);
 	// fill a queued database job with a snapshot of everything SaveStatus
 	// writes, so the actual queries can run on the thread pool
 	void CaptureStatus(struct CDbJob &Job);

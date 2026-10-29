@@ -742,6 +742,11 @@
 		},
 		{
 			"context": "Menu Inventory",
+			"or": "Place",
+			"tr": "放置"
+		},
+		{
+			"context": "Menu Inventory",
 			"or": "Use a number as the vote reason to drop that many.",
 			"tr": "在投票理由里填数字可一次丢弃多个。"
 		},
@@ -1937,13 +1942,33 @@
 		},
 		{
 			"context": "Menu Team",
-			"or": "Use /team create <name> or type a name in the reason box below.",
-			"tr": "使用 /team create <名字>，或在下方理由框输入名字。"
+			"or": "Teams are invitation-only. Ask a team leader to invite you.",
+			"tr": "队伍仅限邀请加入，请联系队长邀请你。"
 		},
 		{
 			"context": "Menu Team",
 			"or": "Create team (reason box = name)",
 			"tr": "创建队伍（理由框填写名字）"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Invitation to team {}",
+			"tr": "来自队伍 {} 的邀请"
+		},
+		{
+			"context": "Menu Team",
+			"or": "From leader: {}",
+			"tr": "队长：{}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Accept invitation",
+			"tr": "接受邀请"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Decline invitation",
+			"tr": "拒绝邀请"
 		},
 		{
 			"context": "Menu Team",
@@ -1957,8 +1982,8 @@
 		},
 		{
 			"context": "Menu Team",
-			"or": "Leader: (offline)",
-			"tr": "队长：（离线）"
+			"or": "Leader: {} (offline)",
+			"tr": "队长：{}（离线）"
 		},
 		{
 			"context": "Menu Team",
@@ -1992,13 +2017,38 @@
 		},
 		{
 			"context": "Menu Team",
-			"or": "{} (offline) {}",
-			"tr": "{}（离线）{}"
+			"or": "{} {} (offline)",
+			"tr": "{} {}（离线）"
 		},
 		{
 			"context": "Menu Team",
-			"or": "  Kick this member",
-			"tr": "  踢出该成员"
+			"or": "  Kick {}: {}",
+			"tr": "  踢出 {}：{}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Pending invitations:",
+			"tr": "待处理邀请："
+		},
+		{
+			"context": "Menu Team",
+			"or": "  Cancel invite {}: {}",
+			"tr": "  取消邀请 {}：{}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "Invite online players:",
+			"tr": "邀请在线玩家："
+		},
+		{
+			"context": "Menu Team",
+			"or": "  Invite #{}: {}",
+			"tr": "  邀请 #{}：{}"
+		},
+		{
+			"context": "Menu Team",
+			"or": "No online player is available to invite.",
+			"tr": "当前没有可邀请的在线玩家。"
 		},
 		{
 			"context": "Menu Team",
@@ -2012,18 +2062,13 @@
 		},
 		{
 			"context": "Menu Team",
-			"or": "Online teams:",
-			"tr": "在线队伍："
+			"or": "Online teams (invitation only):",
+			"tr": "在线队伍（仅限邀请）："
 		},
 		{
 			"context": "Menu Team",
 			"or": "{}  ({} online / {} members)",
 			"tr": "{}（{} 在线 / {} 成员）"
-		},
-		{
-			"context": "Menu Team",
-			"or": "  Join {}",
-			"tr": "  加入 {}"
 		},
 		{
 			"context": "Menu Team",
@@ -2072,13 +2117,73 @@
 		},
 		{
 			"context": "Team",
-			"or": "That team no longer exists.",
-			"tr": "该队伍已不存在。"
+			"or": "Only the leader can invite players.",
+			"tr": "只有队长可以邀请玩家。"
+		},
+		{
+			"context": "Team",
+			"or": "You are already on the team.",
+			"tr": "你已经在队伍中。"
+		},
+		{
+			"context": "Team",
+			"or": "That player has no player identity yet.",
+			"tr": "该玩家还没有玩家身份。"
+		},
+		{
+			"context": "Team",
+			"or": "That player is already in a team.",
+			"tr": "该玩家已经在一个队伍中。"
+		},
+		{
+			"context": "Team",
+			"or": "That player already has a pending invitation.",
+			"tr": "该玩家已有待处理的邀请。"
+		},
+		{
+			"context": "Team",
+			"or": "That player is not online.",
+			"tr": "该玩家不在线。"
+		},
+		{
+			"context": "Team",
+			"or": "{} invited you to join team {}. Open the Team menu to accept or decline.",
+			"tr": "{} 邀请你加入队伍 {}，请打开队伍菜单接受或拒绝。"
+		},
+		{
+			"context": "Team",
+			"or": "Only the leader can cancel an invitation.",
+			"tr": "只有队长可以取消邀请。"
+		},
+		{
+			"context": "Team",
+			"or": "That player has no pending invitation.",
+			"tr": "该玩家没有待处理的邀请。"
+		},
+		{
+			"context": "Team",
+			"or": "The invitation to team {} was withdrawn.",
+			"tr": "加入队伍 {} 的邀请已被撤回。"
+		},
+		{
+			"context": "Team",
+			"or": "You have no pending team invitation.",
+			"tr": "你没有待处理的队伍邀请。"
 		},
 		{
 			"context": "Team",
 			"or": "Could not join the team.",
 			"tr": "加入队伍失败。"
+		},
+		{
+			"context": "Team",
+			"or": "{} joined the team.",
+			"tr": "{} 加入了队伍。"
+		},
+		{
+			"context": "Team",
+			"or": "{} declined the invitation to team {}.",
+			"tr": "{} 拒绝了加入队伍 {} 的邀请。"
 		},
 		{
 			"context": "Team",
@@ -2112,6 +2217,16 @@
 		},
 		{
 			"context": "Team",
+			"or": "The team was disbanded because the leader left.",
+			"tr": "队长已离开，队伍已解散。"
+		},
+		{
+			"context": "Team",
+			"or": "The leader disbanded the team.",
+			"tr": "队长解散了队伍。"
+		},
+		{
+			"context": "Team",
 			"or": "Team created.",
 			"tr": "队伍创建成功。"
 		},
@@ -2119,6 +2234,21 @@
 			"context": "Team",
 			"or": "Joined the team.",
 			"tr": "已加入队伍。"
+		},
+		{
+			"context": "Team",
+			"or": "Invitation sent.",
+			"tr": "邀请已发送。"
+		},
+		{
+			"context": "Team",
+			"or": "Invitation cancelled.",
+			"tr": "邀请已取消。"
+		},
+		{
+			"context": "Team",
+			"or": "Invitation declined.",
+			"tr": "已拒绝邀请。"
 		},
 		{
 			"context": "Team",
@@ -2162,8 +2292,18 @@
 		},
 		{
 			"context": "Team",
-			"or": "Usage: /team create <name>, /team leave, /team disband, /team ff on|off",
-			"tr": "用法：/team create <名字>、/team leave、/team disband、/team ff on|off"
+			"or": "No online player has that name.",
+			"tr": "没有该名字的在线玩家。"
+		},
+		{
+			"context": "Team",
+			"or": "Several players have that name. Use the Team menu to pick one.",
+			"tr": "有多名玩家使用该名字，请使用队伍菜单选择。"
+		},
+		{
+			"context": "Team",
+			"or": "Usage: /team create <name>, /team invite <player>, /team accept, /team decline, /team leave, /team disband, /team ff on|off",
+			"tr": "用法：/team create <名字>、/team invite <玩家>、/team accept、/team decline、/team leave、/team disband、/team ff on|off"
 		},
 		{
 			"context": "Drill",
@@ -2304,6 +2444,11 @@
 			"context": "Menu Help",
 			"or": "Type /register <username> <password> in chat. Use /login <username> <password> to restore the same account on another day.",
 			"tr": "在聊天框输入 /register <用户名> <密码> 注册。之后用 /login <用户名> <密码> 找回同一账号。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Type /register <username> <password> to keep your progress; /login restores it.",
+			"tr": "输入 /register <用户名> <密码> 保存进度；用 /login 恢复。"
 		},
 		{
 			"context": "Menu Help",

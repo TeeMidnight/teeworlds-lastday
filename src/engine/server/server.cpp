@@ -337,6 +337,7 @@ CServer::CServer() // : m_DemoRecorder(&m_SnapshotDelta)
 
 	m_CurrentGameTick = 0;
 	m_RunServer = true;
+	m_ShuttingDown = false;
 
 	str_copy(m_aShutdownReason, "Server shutdown", sizeof(m_aShutdownReason));
 
@@ -454,6 +455,11 @@ bool CServer::IsAuthed(int ClientID) const
 bool CServer::IsBanned(int ClientID)
 {
 	return m_ServerBan.IsBanned(m_NetServer.ClientAddr(ClientID), 0, 0, 0);
+}
+
+bool CServer::IsShuttingDown() const
+{
+	return m_ShuttingDown;
 }
 
 int CServer::GetClientInfo(int ClientID, CClientInfo *pInfo) const
@@ -2066,7 +2072,10 @@ int CServer::Run()
 			}
 		}
 	}
-	// disconnect all clients on shutdown
+	// disconnect all clients on shutdown. Mark that first: OnClientDrop runs
+	// for every one of them and must not treat the leader of a team as having
+	// left voluntarily.
+	m_ShuttingDown = true;
 	m_NetServer.Close(m_aShutdownReason);
 	m_Econ.Shutdown();
 

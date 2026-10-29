@@ -216,6 +216,7 @@ public:
 
 	int64 m_GameStartTime;
 	bool m_RunServer;
+	bool m_ShuttingDown;
 	int m_RconClientID;
 	int m_RconAuthLevel;
 	int m_PrintCBIndex;
@@ -297,6 +298,7 @@ public:
 	void SetRconCID(int ClientID);
 	bool IsAuthed(int ClientID) const;
 	bool IsBanned(int ClientID);
+	bool IsShuttingDown() const;
 	int GetClientInfo(int ClientID, CClientInfo *pInfo) const;
 	void GetClientAddr(int ClientID, char *pAddrStr, int Size) const;
 	int GetClientVersion(int ClientID) const;

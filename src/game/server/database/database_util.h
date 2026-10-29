@@ -99,7 +99,9 @@ inline bool GetJsonFieldRaw(CDatabase *pDB, const Uuid &uuid, const CJsonPath &p
 struct CDbField
 {
 	CJsonPath m_Path;
-	char m_aValue[128];
+	// room for a JSON string literal: a 64-byte nickname with every byte
+	// escaped still fits, and the existing short values are unaffected
+	char m_aValue[256];
 };
 
 struct CDbJob

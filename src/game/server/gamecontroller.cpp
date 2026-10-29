@@ -852,6 +852,7 @@ void CGameController::ComLogin(IConsole::IResult *pResult, void *pContext)
 		pSelf->DoTeamChange(pPlayer, TEAM_RED, false);
 	pPlayer->TryRespawn();
 	pPlayer->LoadStatus(pDB);
+	pPlayer->SaveNickname(pDB);
 	pSelf->SendSystemChat(ClientID, "Account", "Logged in.");
 }
 
@@ -939,10 +940,46 @@ void CGameController::ComTeam(IConsole::IResult *pResult, void *pContext)
 		else
 			pSelf->SendSystemChat(ClientID, "Team", aError);
 	}
+	else if(str_startswith(pArgs, "invite "))
+	{
+		const char *pName = str_skip_whitespaces_const(pArgs + str_length("invite "));
+		int TargetClientID = -1;
+		int Matches = 0;
+		for(int i = 0; i < MAX_CLIENTS; i++)
+		{
+			if(!pGame->Server()->ClientIngame(i) || str_comp_nocase(pGame->Server()->ClientName(i), pName) != 0)
+				continue;
+			TargetClientID = i;
+			Matches++;
+		}
+		if(TargetClientID < 0)
+			pSelf->SendSystemChat(ClientID, "Team", "No online player has that name.");
+		else if(Matches > 1)
+			pSelf->SendSystemChat(ClientID, "Team", "Several players have that name. Use the Team menu to pick one.");
+		else if(pTeams->InviteMember(pPlayer->m_AccountUuid, pGame->m_apPlayers[TargetClientID]->m_AccountUuid, aError, sizeof(aError)))
+			pSelf->SendSystemChat(ClientID, "Team", "Invitation sent.");
+		else
+			pSelf->SendSystemChat(ClientID, "Team", aError);
+	}
+	else if(str_comp(pArgs, "accept") == 0)
+	{
+		if(pTeams->AcceptInvite(pPlayer->m_AccountUuid, aError, sizeof(aError)))
+			pSelf->SendSystemChat(ClientID, "Team", "Joined the team.");
+		else
+			pSelf->SendSystemChat(ClientID, "Team", aError);
+	}
+	else if(str_comp(pArgs, "decline") == 0)
+	{
+		if(pTeams->DeclineInvite(pPlayer->m_AccountUuid, aError, sizeof(aError)))
+			pSelf->SendSystemChat(ClientID, "Team", "Invitation declined.");
+		else
+			pSelf->SendSystemChat(ClientID, "Team", aError);
+	}
 	else if(str_comp(pArgs, "leave") == 0)
 	{
+		const bool WasLeader = pTeams->IsLeader(pPlayer->m_AccountUuid);
 		if(pTeams->LeaveTeam(pPlayer->m_AccountUuid, aError, sizeof(aError)))
-			pSelf->SendSystemChat(ClientID, "Team", "Left the team.");
+			pSelf->SendSystemChat(ClientID, "Team", WasLeader ? "The team was disbanded because the leader left." : "Left the team.");
 		else
 			pSelf->SendSystemChat(ClientID, "Team", aError);
 	}
@@ -963,7 +1000,7 @@ void CGameController::ComTeam(IConsole::IResult *pResult, void *pContext)
 	}
 	else
 	{
-		pSelf->SendSystemChat(ClientID, "Team", "Usage: /team create <name>, /team leave, /team disband, /team ff on|off");
+		pSelf->SendSystemChat(ClientID, "Team", "Usage: /team create <name>, /team invite <player>, /team accept, /team decline, /team leave, /team disband, /team ff on|off");
 		pGame->GameMenu()->SetPlayerPage(ClientID, "TEAM");
 	}
 }
@@ -1021,7 +1058,7 @@ void CGameController::RegisterChatCommands(CCommandManager *pManager)
 	pManager->AddCommand("lang", "Set your language", "?s[code]", ComLanguage, this);
 	pManager->AddCommand("container", "Open the container you are aiming at", "", ComContainer, this);
 	pManager->AddCommand("help", "New player guide", "", ComHelp, this);
-	pManager->AddCommand("team", "Team menu / create / leave / disband / friendly fire", "?r[args]", ComTeam, this);
+	pManager->AddCommand("team", "Team menu / create / invite / accept / decline / leave / disband / friendly fire", "?r[args]", ComTeam, this);
 	pManager->AddCommand("t", "Team chat", "r[text]", ComTeamChat, this);
 }
 

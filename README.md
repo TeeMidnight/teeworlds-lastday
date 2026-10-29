@@ -191,13 +191,17 @@ Teams
 -----
 Teams are guilds: membership is unlimited and persisted in the `teams` and
 `team_members` SQLite/PostgreSQL tables. Every account (guest UUID included) can
-be in one team. The `Team` page of the vote menu lists the current guild, its
-leader, online/offline members and the online teams that can be joined, plus the
-online player list. `/team create <name>` founds a guild (the menu's reason box
-works for a short name), `/team leave`, `/team disband` and
-`/team ff on|off` manage it, and `/t <message>` is the team channel. A leader
-who disconnects hands the guild to another online member; with nobody else
-online the offline leader keeps it.
+be in one team. Membership is invitation-only: a leader invites an online player
+from the `Team` page (or with `/team invite <player>`), and the invited player
+accepts or declines there. The same page lists the current guild, its leader,
+online/offline members, pending session invitations and the online teams, plus
+the online player list. Offline members are shown by the nickname stored in their
+player JSON profile, not by UUID. `/team create <name>` founds a guild (the
+menu's reason box works for a short name), `/team accept` and `/team decline`
+answer an invitation, and `/team leave`, `/team disband` and
+`/team ff on|off` manage the guild; `/t <message>` is the team channel. A
+leader leaving the team or disconnecting disbands the guild immediately, so a
+team never lingers without someone who can manage it.
 
 The scoreboard clan of every player is their team name, and is empty when they
 are not in a team. The leader's friendly-fire switch only affects players who

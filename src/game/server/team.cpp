@@ -3,6 +3,8 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <base/system.h>
 
+#include <game/localization_format.h>
+
 #include "gamecontext.h"
 #include "player.h"
 #include "team.h"
@@ -11,6 +13,70 @@ static void SetTeamError(char *pError, int ErrorSize, const char *pText)
 {
 	if(pError && ErrorSize > 0)
 		str_copy(pError, pText, ErrorSize);
+}
+
+// Send a system message to one client in that client's language. The notice is
+// best effort: a client that is only connecting has no usable chat channel yet.
+static void SendNotice(CGameContext *pGame, int ClientID, const char *pText)
+{
+	if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS || !pGame->m_apPlayers[ClientID])
+		return;
+	if(!pGame->Server()->ClientIngame(ClientID))
+		return;
+	CLanguageScope LanguageScope(pGame->LanguageOf(ClientID));
+	pGame->SendChat(-1, CHAT_ALL, ClientID, Localize(pText, "Team"));
+}
+
+static void SendNotice(CGameContext *pGame, int ClientID, const char *pFormat, const char *pArg)
+{
+	if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS || !pGame->m_apPlayers[ClientID])
+		return;
+	if(!pGame->Server()->ClientIngame(ClientID))
+		return;
+	CLanguageScope LanguageScope(pGame->LanguageOf(ClientID));
+	pGame->SendChat(-1, CHAT_ALL, ClientID, LocalizeFormat("Team", pFormat, pArg).c_str());
+}
+
+static void SendNotice(CGameContext *pGame, int ClientID, const char *pFormat, const char *pArg1, const char *pArg2)
+{
+	if(!pGame || ClientID < 0 || ClientID >= MAX_CLIENTS || !pGame->m_apPlayers[ClientID])
+		return;
+	if(!pGame->Server()->ClientIngame(ClientID))
+		return;
+	CLanguageScope LanguageScope(pGame->LanguageOf(ClientID));
+	pGame->SendChat(-1, CHAT_ALL, ClientID, LocalizeFormat("Team", pFormat, pArg1, pArg2).c_str());
+}
+
+// Tell the online members of a team about a change. Exclude is the account that
+// caused it (usually the one that already got a direct confirmation).
+static void SendTeamNotice(CGameContext *pGame, const SGameTeam *pTeam, const Uuid &Exclude, const char *pText)
+{
+	if(!pGame || !pTeam)
+		return;
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = pGame->m_apPlayers[i];
+		if(!pPlayer || pPlayer->m_AccountUuid == UUID_ZEROED || pPlayer->m_AccountUuid == Exclude)
+			continue;
+		if(pGame->Teams()->TeamFor(pPlayer->m_AccountUuid) != pTeam)
+			continue;
+		SendNotice(pGame, i, pText);
+	}
+}
+
+static void SendTeamNotice(CGameContext *pGame, const SGameTeam *pTeam, const Uuid &Exclude, const char *pFormat, const char *pArg)
+{
+	if(!pGame || !pTeam)
+		return;
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = pGame->m_apPlayers[i];
+		if(!pPlayer || pPlayer->m_AccountUuid == UUID_ZEROED || pPlayer->m_AccountUuid == Exclude)
+			continue;
+		if(pGame->Teams()->TeamFor(pPlayer->m_AccountUuid) != pTeam)
+			continue;
+		SendNotice(pGame, i, pFormat, pArg);
+	}
 }
 
 CTeamSystem::CTeamSystem() :
@@ -112,6 +178,34 @@ SGameTeam *CTeamSystem::MutableTeamById(int Id)
 	return nullptr;
 }
 
+SGameTeam *CTeamSystem::MutableInviteTeamFor(const Uuid &Account)
+{
+	if(Account == UUID_ZEROED)
+		return nullptr;
+	for(int i = 0; i < m_lTeams.size(); i++)
+		if(m_lTeams[i]->IsInvited(Account))
+			return m_lTeams[i];
+	return nullptr;
+}
+
+const SGameTeam *CTeamSystem::InviteFrom(const Uuid &Account) const
+{
+	return const_cast<CTeamSystem *>(this)->MutableInviteTeamFor(Account);
+}
+
+void CTeamSystem::ClearInvitesFor(const Uuid &Account)
+{
+	if(Account == UUID_ZEROED)
+		return;
+	for(int i = 0; i < m_lTeams.size(); i++)
+	{
+		SGameTeam *pTeam = m_lTeams[i];
+		for(int j = pTeam->m_lInvites.size() - 1; j >= 0; j--)
+			if(pTeam->m_lInvites[j] == Account)
+				pTeam->m_lInvites.remove_index(j);
+	}
+}
+
 const char *CTeamSystem::TeamNameFor(const Uuid &Account) const
 {
 	const SGameTeam *pTeam = TeamFor(Account);
@@ -143,6 +237,64 @@ bool CTeamSystem::IsOnline(const Uuid &Account) const
 			return true;
 	}
 	return false;
+}
+
+int CTeamSystem::ClientIDFor(const Uuid &Account) const
+{
+	if(!m_pGameServer || Account == UUID_ZEROED)
+		return -1;
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		CPlayer *pPlayer = m_pGameServer->m_apPlayers[i];
+		if(pPlayer && pPlayer->m_AccountUuid == Account && m_pGameServer->Server()->ClientIngame(i))
+			return i;
+	}
+	return -1;
+}
+
+const char *CTeamSystem::MemberName(const Uuid &Account, char *pBuf, int Size) const
+{
+	if(!pBuf || Size <= 0)
+		return "";
+	pBuf[0] = '\0';
+	if(Account == UUID_ZEROED)
+	{
+		str_copy(pBuf, "?", Size);
+		return pBuf;
+	}
+
+	const int ClientID = ClientIDFor(Account);
+	if(ClientID >= 0)
+	{
+		str_copy(pBuf, m_pGameServer->Server()->ClientName(ClientID), Size);
+		return pBuf;
+	}
+
+	if(m_pDatabase)
+	{
+		// The nickname is captured with the rest of the player profile on every
+		// save, so this is the name the account last played under.
+		if(m_pDatabase->GetJson(Account, CJsonPath().Key("nickname"), pBuf, Size) && pBuf[0])
+			return pBuf;
+
+		// Profiles written before the nickname field existed still have the
+		// account name; a guest name is stored as "@guest:<nickname>".
+		CDatabase::SPlayerData Row;
+		if(m_pDatabase->LoadByUuid(Account, Row) && Row.m_aUsername[0])
+		{
+			const char *pName = Row.m_aUsername;
+			if(str_startswith(pName, "@guest:"))
+				pName += str_length("@guest:");
+			if(pName[0])
+			{
+				str_copy(pBuf, pName, Size);
+				return pBuf;
+			}
+		}
+	}
+
+	format_uuid(Account, pBuf, Size);
+	return pBuf;
 }
 
 int CTeamSystem::OnlineMemberCount(const SGameTeam *pTeam) const
@@ -219,10 +371,84 @@ bool CTeamSystem::CreateTeam(const Uuid &Leader, const char *pName, char *pError
 	m_lTeams.add(pTeam);
 	m_TeamsByName.set(str_quickhash(pTeam->m_aName), pTeam);
 	m_MemberTeam.set(Leader, pTeam);
+	ClearInvitesFor(Leader);
 	return true;
 }
 
-bool CTeamSystem::JoinTeam(const Uuid &Account, int TeamId, char *pError, int ErrorSize)
+bool CTeamSystem::InviteMember(const Uuid &Leader, const Uuid &Target, char *pError, int ErrorSize)
+{
+	SetTeamError(pError, ErrorSize, "");
+	SGameTeam *pTeam = MutableTeamFor(Leader);
+	if(!pTeam || pTeam->m_Leader != Leader)
+	{
+		SetTeamError(pError, ErrorSize, "Only the leader can invite players.");
+		return false;
+	}
+	if(Target == Leader)
+	{
+		SetTeamError(pError, ErrorSize, "You are already on the team.");
+		return false;
+	}
+	if(Target == UUID_ZEROED)
+	{
+		SetTeamError(pError, ErrorSize, "That player has no player identity yet.");
+		return false;
+	}
+	if(MutableTeamFor(Target))
+	{
+		SetTeamError(pError, ErrorSize, "That player is already in a team.");
+		return false;
+	}
+	if(pTeam->IsInvited(Target))
+	{
+		SetTeamError(pError, ErrorSize, "That player already has a pending invitation.");
+		return false;
+	}
+
+	const int TargetClientID = ClientIDFor(Target);
+	if(TargetClientID < 0)
+	{
+		SetTeamError(pError, ErrorSize, "That player is not online.");
+		return false;
+	}
+
+	char aLeaderName[128];
+	const char *pLeaderName = MemberName(Leader, aLeaderName, sizeof(aLeaderName));
+
+	pTeam->m_lInvites.add(Target);
+	SendNotice(m_pGameServer, TargetClientID, "{} invited you to join team {}. Open the Team menu to accept or decline.", pLeaderName, pTeam->m_aName);
+	return true;
+}
+
+bool CTeamSystem::CancelInvite(const Uuid &Leader, const Uuid &Target, char *pError, int ErrorSize)
+{
+	SetTeamError(pError, ErrorSize, "");
+	SGameTeam *pTeam = MutableTeamFor(Leader);
+	if(!pTeam || pTeam->m_Leader != Leader)
+	{
+		SetTeamError(pError, ErrorSize, "Only the leader can cancel an invitation.");
+		return false;
+	}
+	bool Removed = false;
+	for(int i = pTeam->m_lInvites.size() - 1; i >= 0; i--)
+		if(pTeam->m_lInvites[i] == Target)
+		{
+			pTeam->m_lInvites.remove_index(i);
+			Removed = true;
+		}
+	if(!Removed)
+	{
+		SetTeamError(pError, ErrorSize, "That player has no pending invitation.");
+		return false;
+	}
+
+	const int TargetClientID = ClientIDFor(Target);
+	if(TargetClientID >= 0)
+		SendNotice(m_pGameServer, TargetClientID, "The invitation to team {} was withdrawn.", pTeam->m_aName);
+	return true;
+}
+
+bool CTeamSystem::AcceptInvite(const Uuid &Account, char *pError, int ErrorSize)
 {
 	SetTeamError(pError, ErrorSize, "");
 	if(Account == UUID_ZEROED)
@@ -235,10 +461,10 @@ bool CTeamSystem::JoinTeam(const Uuid &Account, int TeamId, char *pError, int Er
 		SetTeamError(pError, ErrorSize, "You are already in a team. Leave it first.");
 		return false;
 	}
-	SGameTeam *pTeam = MutableTeamById(TeamId);
+	SGameTeam *pTeam = MutableInviteTeamFor(Account);
 	if(!pTeam)
 	{
-		SetTeamError(pError, ErrorSize, "That team no longer exists.");
+		SetTeamError(pError, ErrorSize, "You have no pending team invitation.");
 		return false;
 	}
 	if(m_pDatabase && !m_pDatabase->AddTeamMember(pTeam->m_Id, Account))
@@ -246,41 +472,39 @@ bool CTeamSystem::JoinTeam(const Uuid &Account, int TeamId, char *pError, int Er
 		SetTeamError(pError, ErrorSize, "Could not join the team.");
 		return false;
 	}
+
 	pTeam->m_lMembers.add(Account);
 	m_MemberTeam.set(Account, pTeam);
+	ClearInvitesFor(Account);
+
+	char aName[128];
+	const char *pName = MemberName(Account, aName, sizeof(aName));
+	SendTeamNotice(m_pGameServer, pTeam, Account, "{} joined the team.", pName);
 	return true;
 }
 
-void CTeamSystem::ChooseNewLeader(SGameTeam *pTeam, const Uuid &Exclude)
+bool CTeamSystem::DeclineInvite(const Uuid &Account, char *pError, int ErrorSize)
 {
-	if(!pTeam || pTeam->m_lMembers.size() == 0)
-		return;
-
-	Uuid NewLeader = UUID_ZEROED;
-	for(int i = 0; i < pTeam->m_lMembers.size(); i++)
+	SetTeamError(pError, ErrorSize, "");
+	if(Account == UUID_ZEROED)
 	{
-		const Uuid &Member = pTeam->m_lMembers[i];
-		if(Member != Exclude && IsOnline(Member))
-		{
-			NewLeader = Member;
-			break;
-		}
+		SetTeamError(pError, ErrorSize, "You have no player identity yet.");
+		return false;
 	}
-	if(NewLeader == UUID_ZEROED)
+	SGameTeam *pTeam = MutableInviteTeamFor(Account);
+	if(!pTeam)
 	{
-		for(int i = 0; i < pTeam->m_lMembers.size(); i++)
-			if(pTeam->m_lMembers[i] != Exclude)
-			{
-				NewLeader = pTeam->m_lMembers[i];
-				break;
-			}
+		SetTeamError(pError, ErrorSize, "You have no pending team invitation.");
+		return false;
 	}
-	if(NewLeader == UUID_ZEROED)
-		return;
 
-	pTeam->m_Leader = NewLeader;
-	if(m_pDatabase)
-		m_pDatabase->SetTeamLeader(pTeam->m_Id, NewLeader);
+	ClearInvitesFor(Account);
+	char aName[128];
+	const char *pName = MemberName(Account, aName, sizeof(aName));
+	const int LeaderClientID = ClientIDFor(pTeam->m_Leader);
+	if(LeaderClientID >= 0)
+		SendNotice(m_pGameServer, LeaderClientID, "{} declined the invitation to team {}.", pName, pTeam->m_aName);
+	return true;
 }
 
 bool CTeamSystem::LeaveTeam(const Uuid &Account, char *pError, int ErrorSize)
@@ -292,24 +516,26 @@ bool CTeamSystem::LeaveTeam(const Uuid &Account, char *pError, int ErrorSize)
 		SetTeamError(pError, ErrorSize, "You are not in a team.");
 		return false;
 	}
-	if(m_pDatabase)
-		m_pDatabase->RemoveTeamMember(pTeam->m_Id, Account);
+	ClearInvitesFor(Account);
 
-	const bool WasLeader = pTeam->m_Leader == Account;
-	for(int i = pTeam->m_lMembers.size() - 1; i >= 0; i--)
-		if(pTeam->m_lMembers[i] == Account)
-			pTeam->m_lMembers.remove_index(i);
-	m_MemberTeam.remove(Account);
-
-	if(pTeam->m_lMembers.size() == 0)
+	// A guild belongs to its leader. Losing the leader would otherwise leave a
+	// team nobody can manage, so the whole team disbands instead of handing the
+	// guild to a random member.
+	if(pTeam->m_Leader == Account)
 	{
+		SendTeamNotice(m_pGameServer, pTeam, Account, "The team was disbanded because the leader left.");
 		if(m_pDatabase)
 			m_pDatabase->DeleteTeam(pTeam->m_Id);
 		RemoveTeam(pTeam);
 		return true;
 	}
-	if(WasLeader)
-		ChooseNewLeader(pTeam, Account);
+
+	if(m_pDatabase)
+		m_pDatabase->RemoveTeamMember(pTeam->m_Id, Account);
+	for(int i = pTeam->m_lMembers.size() - 1; i >= 0; i--)
+		if(pTeam->m_lMembers[i] == Account)
+			pTeam->m_lMembers.remove_index(i);
+	m_MemberTeam.remove(Account);
 	return true;
 }
 
@@ -371,6 +597,7 @@ bool CTeamSystem::DisbandTeam(const Uuid &Leader, char *pError, int ErrorSize)
 		SetTeamError(pError, ErrorSize, "Only the leader can disband the team.");
 		return false;
 	}
+	SendTeamNotice(m_pGameServer, pTeam, Leader, "The leader disbanded the team.");
 	if(m_pDatabase)
 		m_pDatabase->DeleteTeam(pTeam->m_Id);
 	RemoveTeam(pTeam);
@@ -395,18 +622,26 @@ void CTeamSystem::RemoveTeam(SGameTeam *pTeam)
 
 void CTeamSystem::OnPlayerDisconnected(const Uuid &Account)
 {
-	SGameTeam *pTeam = MutableTeamFor(Account);
-	if(!pTeam || pTeam->m_Leader != Account)
+	if(Account == UUID_ZEROED)
 		return;
-	// Hand over only when another member is online. Otherwise the offline
-	// leader keeps the guild intact until they return.
-	for(int i = 0; i < pTeam->m_lMembers.size(); i++)
+
+	SGameTeam *pTeam = MutableTeamFor(Account);
+	if(!pTeam)
 	{
-		const Uuid &Member = pTeam->m_lMembers[i];
-		if(Member != Account && IsOnline(Member))
-		{
-			ChooseNewLeader(pTeam, Account);
-			return;
-		}
+		// An invitation is only an offer; drop it when the invited player leaves
+		// so a later client slot cannot inherit it.
+		ClearInvitesFor(Account);
+		return;
 	}
+
+	if(pTeam->m_Leader != Account)
+		return;
+
+	// The leader is gone: the guild disbands, even if other members are online.
+	// This is what makes "leader leaves" unambiguous and prevents a dead team
+	// from lingering with an offline owner.
+	SendTeamNotice(m_pGameServer, pTeam, Account, "The team was disbanded because the leader left.");
+	if(m_pDatabase)
+		m_pDatabase->DeleteTeam(pTeam->m_Id);
+	RemoveTeam(pTeam);
 }
