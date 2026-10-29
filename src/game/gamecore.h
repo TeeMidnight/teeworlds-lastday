@@ -286,7 +286,9 @@ public:
 
 	void Init(CWorldCore *pWorld, CCollision *pCollision);
 	void Reset();
-	void Tick(bool UseInput);
+	// LastDay only restores the water m_Jumped rule, which a tuning cannot
+	// express. Water and silent-step movement are already in Tuning().
+	void Tick(bool UseInput, bool LastDay);
 	void Move();
 
 	// Overrides the world's tuning for this core. The pointer must outlive the

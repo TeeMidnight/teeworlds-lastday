@@ -196,7 +196,7 @@ void CBotEntity::Tick()
 
 	m_Core.m_Input = m_Input;
 	UpdateTuning();
-	m_Core.Tick(true);
+	m_Core.Tick(true, true);
 
 	// handle leaving gamelayer
 	if(GameLayerClipped(m_Pos))
@@ -399,7 +399,7 @@ void CBotEntity::TickDefered()
 		CWorldCore TempWorld;
 		TempWorld.m_Tuning = m_Tuning;
 		m_ReckoningCore.Init(&TempWorld, GameWorld()->Collision());
-		m_ReckoningCore.Tick(false);
+		m_ReckoningCore.Tick(false, false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
 	}

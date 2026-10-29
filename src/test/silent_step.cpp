@@ -35,7 +35,7 @@ static void InitCore(CCharacterCore &Core, CWorldCore &World, CCollision &Coll)
 static void StepN(CCharacterCore &Core, int Ticks)
 {
 	for(int i = 0; i < Ticks; i++)
-		Core.Tick(true);
+		Core.Tick(true, true);
 }
 
 // Both cores saturate at their control speed, and the silent one sits exactly at

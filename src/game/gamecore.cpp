@@ -156,13 +156,18 @@ void CCharacterCore::Reset()
 	mem_zero(&m_Input, sizeof(m_Input));
 }
 
-void CCharacterCore::Tick(bool UseInput)
+void CCharacterCore::Tick(bool UseInput, bool LastDay)
 {
 	m_TriggeredEvents = 0;
 
 	// get ground state
 	const bool Grounded =
 		m_pCollision->CheckPoint(m_Pos.x + PHYS_SIZE / 2, m_Pos.y + PHYS_SIZE / 2 + 5) || m_pCollision->CheckPoint(m_Pos.x - PHYS_SIZE / 2, m_Pos.y + PHYS_SIZE / 2 + 5);
+
+	// The water movement itself is already in Tuning(); this query only feeds
+	// the m_Jumped rule below, so it is only needed on the LastDay path.
+	const bool InWater = LastDay &&
+			     m_pCollision->TestBox(m_Pos, vec2(PHYS_SIZE, PHYS_SIZE / 2), CCollision::COLFLAG_WATER);
 
 	vec2 TargetDirection = normalize(vec2(m_Input.m_TargetX, m_Input.m_TargetY));
 
@@ -237,6 +242,8 @@ void CCharacterCore::Tick(bool UseInput)
 	// 2 bit = to keep track if a air-jump has been made
 	if(Grounded)
 		m_Jumped &= ~2;
+	else if(InWater)
+		m_Jumped |= 3;
 	// do hook
 	if(m_HookState == HOOK_IDLE)
 	{

@@ -1045,6 +1045,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     item_id.cpp
     jsonparser.cpp
     jsonwriter.cpp
+    lastday_water.cpp
     legacy_compat.cpp
     localization.cpp
     mappack.cpp

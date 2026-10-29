@@ -677,7 +677,7 @@ void CCharacter::Tick()
 	}
 	else
 	{
-		m_Core.Tick(true);
+		m_Core.Tick(true, true);
 	}
 
 	// handle leaving gamelayer
@@ -738,7 +738,7 @@ void CCharacter::TickDefered()
 		else
 			TempWorld.m_Tuning = LegacyTuning(ClientVersion);
 		m_ReckoningCore.Init(&TempWorld, GameWorld()->Collision());
-		m_ReckoningCore.Tick(false);
+		m_ReckoningCore.Tick(false, false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
 	}
