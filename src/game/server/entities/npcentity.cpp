@@ -460,7 +460,7 @@ void CNpcEntity::TickRespawn()
 	if(!m_Emoted && Elapsed >= HalfSecond)
 	{
 		m_Emoted = true;
-		m_Emote = EMOTE_ANGRY;
+		SetEmote(EMOTE_ANGRY, Server()->Tick() + HalfSecond);
 		if(GameWorld()->HasBotManager())
 			GameWorld()->GetBotManager()->SendBotEmoticon(m_BotID, EMOTE_ANGRY);
 	}
@@ -486,7 +486,7 @@ void CNpcEntity::TickRespawn()
 
 		m_Invincible = false;
 		m_State = NPCSTATE_ALIVE;
-		m_Emote = EMOTE_NORMAL;
+		SetEmote(EMOTE_NORMAL, -1);
 	}
 }
 

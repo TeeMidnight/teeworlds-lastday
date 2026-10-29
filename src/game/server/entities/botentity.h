@@ -139,6 +139,10 @@ public:
 	void OnBotTick() override;
 	bool OnBotDamaged(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, int Weapon) override;
 
+	// Emote lifecycle: a future Tick restores EMOTE_NORMAL automatically,
+	// exactly like CCharacter::SetEmote. -1 keeps the emote until replaced.
+	void SetEmote(int Emote, int Tick);
+
 	// --- damage helpers ---
 	bool IncreaseHealth(int Amount);
 	bool IncreaseArmor(int Amount);
@@ -221,6 +225,7 @@ protected:
 	int m_MaxArmor;
 
 	int m_Emote;
+	int m_EmoteStop;
 	int m_AttackTick;
 	int m_ReloadTimer;
 

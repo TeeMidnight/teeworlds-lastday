@@ -71,6 +71,7 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	m_Armor = 0;
 
 	m_Emote = EMOTE_NORMAL;
+	m_EmoteStop = -1;
 	m_AttackTick = 0;
 	m_ReloadTimer = 0;
 	m_TriggeredEvents = 0;
@@ -106,6 +107,12 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	SetAIByName(BotAIDefaultName());
 
 	GameWorld()->InsertEntity(this);
+}
+
+void CBotEntity::SetEmote(int Emote, int Tick)
+{
+	m_Emote = Emote;
+	m_EmoteStop = Tick;
 }
 
 CBotEntity::~CBotEntity()
@@ -191,6 +198,11 @@ void CBotEntity::Tick()
 
 void CBotEntity::OnBotTick()
 {
+	// manage the emote here instead of in the snap function, so a pain or
+	// NPC emote expires on the same schedule a player character uses
+	if(m_EmoteStop > -1 && m_EmoteStop < Server()->Tick())
+		SetEmote(EMOTE_NORMAL, -1);
+
 	mem_copy(&m_PrevInput, &m_Input, sizeof(m_Input));
 	// reset the edge-triggered inputs; the action below may set them again
 	m_Input.m_Jump = 0;
@@ -442,6 +454,8 @@ void CBotEntity::TickPaused()
 {
 	++m_AttackTick;
 	++m_ReckoningTick;
+	if(m_EmoteStop > -1)
+		++m_EmoteStop;
 }
 
 void CBotEntity::ShiftForSnap(vec2 Delta)
@@ -647,7 +661,7 @@ bool CBotEntity::TakeDamage(vec2 Force, vec2 Source, int Dmg, CEntity *pFrom, in
 	else
 		GameWorld()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_SHORT);
 
-	m_Emote = EMOTE_PAIN;
+	SetEmote(EMOTE_PAIN, Server()->Tick() + 500 * Server()->TickSpeed() / 1000);
 
 	return OnBotDamaged(Force, Source, Dmg, pFrom, Weapon);
 }
