@@ -126,6 +126,9 @@ public:
 	Uuid GetBotID() const override { return m_BotID; }
 	const char *BotTypeName() const override { return "default"; }
 	const CBotTeeInfo *GetTeeInfo() const override { return &m_TeeInfo; }
+	// Effective per-tee tuning (speed bonus, silent step, water), snapped for
+	// the client that predicts this bot.
+	const CTuningParams &Tuning() const { return m_Tuning; }
 	int GetBotTeam() const override { return m_Team; }
 	int GetBotFaction() const override { return m_Faction; }
 	bool IsNaturalMonster() const override { return m_Natural; }
@@ -234,6 +237,9 @@ protected:
 
 	// the physics core, same shape as CCharacter's
 	CCharacterCore m_Core;
+	// Rebuilt every Tick from the server tuning plus the bot's state.
+	CTuningParams m_Tuning;
+	void UpdateTuning();
 
 	// info for dead reckoning
 	int m_ReckoningTick;

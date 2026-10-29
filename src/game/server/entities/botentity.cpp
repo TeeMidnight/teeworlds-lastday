@@ -87,6 +87,8 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	m_Core.Reset();
 	m_Core.Init(&GameWorld()->m_Core, GameWorld()->Collision());
 	m_Core.m_Pos = m_Pos;
+	m_Tuning = *GameServer()->Tuning();
+	m_Core.SetTuning(&m_Tuning);
 
 	// Bind the core to our TeeID, so characters collide with us and can hook us.
 	// The id is unique among live bots, which is what makes that table safe.
@@ -166,6 +168,7 @@ void CBotEntity::MoveToWorld(CGameWorld *pNewWorld, vec2 Pos)
 	m_Core.m_Pos = Pos;
 	m_Core.m_Vel = vec2(0.0f, 0.0f);
 	m_Pos = Pos;
+	UpdateTuning();
 	if(m_TeeID != -1)
 		pNewWorld->m_Core.SetCharacter(m_TeeID, &m_Core);
 
@@ -178,12 +181,22 @@ void CBotEntity::Reset()
 	Destroy();
 }
 
+void CBotEntity::UpdateTuning()
+{
+	const bool InWater = GameWorld()->Collision()->TestBox(m_Core.m_Pos,
+		vec2(CCharacterCore::PHYS_SIZE, CCharacterCore::PHYS_SIZE / 2), CCollision::COLFLAG_WATER);
+	m_Tuning = BuildCharacterTuning(*GameServer()->Tuning(), m_Core.m_SpeedScale, m_Core.m_SilentStep,
+		InWater, m_Core.m_Input.m_Jump != 0, m_Core.m_Vel.y);
+	m_Core.SetTuning(&m_Tuning);
+}
+
 void CBotEntity::Tick()
 {
 	OnBotTick();
 
 	m_Core.m_Input = m_Input;
-	m_Core.Tick(true, true);
+	UpdateTuning();
+	m_Core.Tick(true);
 
 	// handle leaving gamelayer
 	if(GameLayerClipped(m_Pos))
@@ -384,8 +397,9 @@ void CBotEntity::TickDefered()
 	// advance the dummy core used for dead reckoning
 	{
 		CWorldCore TempWorld;
+		TempWorld.m_Tuning = m_Tuning;
 		m_ReckoningCore.Init(&TempWorld, GameWorld()->Collision());
-		m_ReckoningCore.Tick(false, false);
+		m_ReckoningCore.Tick(false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
 	}
@@ -484,6 +498,12 @@ void CBotEntity::Snap(int SnappingClient)
 
 	if(NetworkClipped(SnappingClient))
 		return;
+
+	// The client predicts this bot; give it the bot's own tuning (speed scale,
+	// silent step, water) under the tee id it knows.
+	CNetObj_Tuning *pTuning = static_cast<CNetObj_Tuning *>(Server()->SnapNewItem(NETOBJTYPE_TUNING, TeeID, sizeof(CNetObj_Tuning)));
+	if(pTuning)
+		mem_copy(pTuning->m_aTuneParams, &m_Tuning, sizeof(pTuning->m_aTuneParams));
 
 	CNetObj_Character *pCharacter = static_cast<CNetObj_Character *>(Server()->SnapNewItem(NETOBJTYPE_CHARACTER, TeeID, sizeof(CNetObj_Character)));
 	if(!pCharacter)

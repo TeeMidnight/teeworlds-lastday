@@ -988,9 +988,10 @@ bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 D
 
 void CGameContext::SendTuningParams(int ClientID)
 {
-	// 0.8: tuning is no longer a message (Sv_TuneParams). It is a singleton
-	// snapshot object (NETOBJTYPE_TUNING, item id 0) emitted in OnSnap(), so
-	// there is nothing to send here. Callers are kept for timing compatibility.
+	// 0.8: tuning is no longer a message (Sv_TuneParams). It travels as a
+	// per-Tee snapshot object (NETOBJTYPE_TUNING, item ID = TeeInfoID) emitted
+	// in OnSnap() and by the character/bot snaps. Callers are kept for timing
+	// compatibility.
 	(void) ClientID;
 }
 
@@ -2149,40 +2150,21 @@ void CGameContext::OnShutdown()
 
 void CGameContext::OnSnap(int ClientID)
 {
-	// 0.8: tuning is a singleton snapshot object (NETOBJTYPE_TUNING, item id 0)
-	// instead of the Sv_TuneParams message / the De_TuneParams demo object. The
-	// delta makes it free in the common case and demos record it for free.
-	CNetObj_Tuning *pTuning = static_cast<CNetObj_Tuning *>(Server()->SnapNewItem(NETOBJTYPE_TUNING, 0, sizeof(CNetObj_Tuning)));
-	if(pTuning)
+	// Tuning is per Tee now. The local Tee always gets its own object under its
+	// TeeInfoID, even while it has no character (a spectator, or a player whose
+	// character is not snapped): the client uses it as its prediction fallback.
+	// Every other Tee emits its own object from CCharacter::Snap /
+	// CBotEntity::Snap, so a client predicts each tee with the server's values.
+	if(ClientID >= 0 && ClientID < MAX_CLIENTS)
 	{
-		// The client predicts its own movement with these tuning values, so a
-		// character with an accessory speed bonus must receive a matching
-		// control speed. The server applies the same scale in
-		// CCharacterCore::Tick, so prediction and simulation stay in step.
 		CTuningParams Tuning = m_Tuning;
-		CPlayer *pPlayer = (ClientID >= 0 && ClientID < MAX_CLIENTS) ? m_apPlayers[ClientID] : nullptr;
+		CPlayer *pPlayer = m_apPlayers[ClientID];
 		CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
-		if(pChr && pChr->IsDrillControl())
-		{
-			// steering a drill: the client's local prediction must keep the tee
-			// completely still while the server pins it in place
-			Tuning.m_GroundControlSpeed = 0.0f;
-			Tuning.m_AirControlSpeed = 0.0f;
-			Tuning.m_GroundJumpImpulse = 0.0f;
-			Tuning.m_AirJumpImpulse = 0.0f;
-			Tuning.m_PlayerHooking = 0.0f;
-			Tuning.m_Gravity = 0.0f;
-		}
-		else if(pChr)
-		{
-			const float SpeedScale = pChr->SpeedScale();
-			if(SpeedScale > 0.0f && SpeedScale != 1.0f)
-			{
-				Tuning.m_GroundControlSpeed = (float) Tuning.m_GroundControlSpeed * SpeedScale;
-				Tuning.m_AirControlSpeed = (float) Tuning.m_AirControlSpeed * SpeedScale;
-			}
-		}
-		mem_copy(pTuning->m_aTuneParams, &Tuning, sizeof(pTuning->m_aTuneParams));
+		if(pChr)
+			Tuning = pChr->Tuning();
+		CNetObj_Tuning *pTuning = static_cast<CNetObj_Tuning *>(Server()->SnapNewItem(NETOBJTYPE_TUNING, ClientID, sizeof(CNetObj_Tuning)));
+		if(pTuning)
+			mem_copy(pTuning->m_aTuneParams, &Tuning, sizeof(pTuning->m_aTuneParams));
 	}
 
 	m_pController->Snap(ClientID);

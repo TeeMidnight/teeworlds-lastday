@@ -128,6 +128,9 @@ public:
 	int Armor() const { return m_Armor; }
 	float RangeScale() const { return m_RangeScale; }
 	float SpeedScale() const { return m_SpeedScale; }
+	// Effective per-tee tuning (speed bonus, silent step, water) that the
+	// server simulates and snaps for this Tee's prediction.
+	const CTuningParams &Tuning() const { return m_Tuning; }
 
 	// drill control: while set, the character is pinned in place, ignores its
 	// movement input and stays silent; the player steers a nearby drill instead.
@@ -178,6 +181,9 @@ private:
 	int m_MaxHealth;
 	float m_RangeScale;
 	float m_SpeedScale;
+	// Rebuilt every Tick from the server tuning plus the per-player state.
+	CTuningParams m_Tuning;
+	void UpdateTuning();
 
 	int m_ActiveWeapon; // slot index of the currently held weapon (0..NUM_WEAPONS-1)
 	int m_QueuedWeapon; // slot index to switch to, or -1

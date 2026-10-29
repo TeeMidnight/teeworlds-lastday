@@ -66,6 +66,16 @@ unload and read a freed object. CGameWorld's destructor therefore retires any
 bot the unload sweep did not claim before deleting the entity, and unloading a
 world drops every neighbouring proxy that still borrows it.
 
+Per-Tee tuning
+--------------
+Water, silent step and the accessory/monster speed bonus are no longer special
+cases inside CCharacterCore::Tick. The server builds one CTuningParams per tee
+each tick (BuildCharacterTuning), simulates with it, and snaps it as a Tuning
+object keyed by that tee's TeeInfoID. A client predicts each tee with its own
+object, so water and bot movement match the server. The local tee always gets
+an object (even as a spectator, as the prediction fallback); a 0.7 client
+receives the local tee's values as its single De_TuneParams.
+
 Storage containers
 -------------------
 Generated map structures carry storage containers. A container holds one

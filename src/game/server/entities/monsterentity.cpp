@@ -85,6 +85,9 @@ CMonsterEntity::CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const S
 		if(pDef->m_Ranged.m_Enabled)
 			m_WeaponSlot = clamp(pDef->m_Ranged.m_Weapon, 0, NUM_WEAPONS - 1);
 	}
+	// pick up the definition's speed scale before the first snapshot, even if
+	// the first Tick lands after the bot list was already walked
+	UpdateTuning();
 
 	// the content AI drives the body directly; the generic strategy layer
 	// would only add a second, conflicting input pass

@@ -1057,6 +1057,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     test.h
     thread.cpp
     timer.cpp
+    tuning.cpp
     world_ring.cpp
     world_wrap.cpp
     worldpack.cpp

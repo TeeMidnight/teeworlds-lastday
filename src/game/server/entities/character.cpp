@@ -56,6 +56,7 @@ CCharacter::CCharacter(CGameWorld *pWorld) : CHitableEntity(pWorld, CGameWorld::
 	m_DrillExitRequest = false;
 	m_Ninja.m_Active = false;
 	mem_zero(m_aAccessories, sizeof(m_aAccessories));
+	m_Tuning = *GameServer()->Tuning();
 }
 
 void CCharacter::Reset()
@@ -104,6 +105,7 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_Alive = true;
 
 	GameServer()->m_pController->OnCharacterSpawn(this);
+	UpdateTuning();
 
 	return true;
 }
@@ -493,12 +495,37 @@ void CCharacter::RefreshAccessoryEffects()
 	if(m_Health > m_MaxHealth)
 		m_Health = m_MaxHealth;
 	m_Core.m_SpeedScale = m_SpeedScale;
+	UpdateTuning();
+}
+
+void CCharacter::UpdateTuning()
+{
+	// The same water query the old core used: the upper half of the physics
+	// box touching a water tile.
+	const bool InWater = GameWorld()->Collision()->TestBox(m_Core.m_Pos,
+		vec2(CCharacterCore::PHYS_SIZE, CCharacterCore::PHYS_SIZE / 2), CCollision::COLFLAG_WATER);
+	m_Tuning = BuildCharacterTuning(*GameServer()->Tuning(), m_SpeedScale, m_Core.m_SilentStep,
+		InWater, m_Core.m_Input.m_Jump != 0, m_Core.m_Vel.y);
+
+	if(m_DrillControl)
+	{
+		// the client and the server both use this tuning, so the tee is pinned
+		// on either side
+		m_Tuning.m_GroundControlSpeed = 0.0f;
+		m_Tuning.m_AirControlSpeed = 0.0f;
+		m_Tuning.m_GroundJumpImpulse = 0.0f;
+		m_Tuning.m_AirJumpImpulse = 0.0f;
+		m_Tuning.m_PlayerHooking = 0.0f;
+		m_Tuning.m_Gravity = 0.0f;
+	}
+	m_Core.SetTuning(&m_Tuning);
 }
 
 void CCharacter::SetDrillControl(bool Control)
 {
 	m_DrillControl = Control;
 	m_DrillExitRequest = false;
+	UpdateTuning();
 	if(!Control)
 		return;
 
@@ -619,6 +646,7 @@ void CCharacter::Tick()
 		m_Core.m_Input.m_Jump = 0;
 		m_Core.m_Input.m_Hook = 0;
 	}
+	UpdateTuning();
 	if(m_DrillControl)
 	{
 		// steering a drill: freeze the core in place. The client receives zeroed
@@ -633,7 +661,7 @@ void CCharacter::Tick()
 	}
 	else
 	{
-		m_Core.Tick(true, true);
+		m_Core.Tick(true);
 	}
 
 	// handle leaving gamelayer
@@ -689,9 +717,9 @@ void CCharacter::TickDefered()
 	{
 		CWorldCore TempWorld;
 		if(Server()->GetClientVersion(GetCID()) >= MIN_CORRECTTUNING_CLIENTVERSION)
-			TempWorld.m_Tuning = *GameServer()->Tuning();
+			TempWorld.m_Tuning = m_Tuning;
 		m_ReckoningCore.Init(&TempWorld, GameWorld()->Collision());
-		m_ReckoningCore.Tick(false, false);
+		m_ReckoningCore.Tick(false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
 	}
@@ -928,6 +956,7 @@ void CCharacter::MoveTo(CGameWorld *pWorld, vec2 Pos, bool KeepMomentum)
 	m_Pos = Pos;
 	GameWorld()->m_Core.SetCharacter(m_pPlayer->GetCID(), &m_Core);
 	GameWorld()->InsertEntity(this);
+	UpdateTuning();
 }
 
 bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon)
@@ -1064,7 +1093,18 @@ void CCharacter::Snap(int SnappingClient)
 	if(!GameServer()->m_pController->IsCharacterSnapable(SnappingClient, GetCID()))
 		return;
 
-	CNetObj_Character *pCharacter = static_cast<CNetObj_Character *>(Server()->SnapNewItem(NETOBJTYPE_CHARACTER, m_pPlayer->GetCID(), sizeof(CNetObj_Character)));
+	// A remote observer predicts this tee, so it needs this tee's own tuning.
+	// The local client's tuning is emitted by CGameContext::OnSnap under the
+	// same TeeInfoID; emitting it here as well would duplicate the item.
+	const int TuningID = m_pPlayer->GetCID();
+	if(SnappingClient != TuningID)
+	{
+		CNetObj_Tuning *pTuning = static_cast<CNetObj_Tuning *>(Server()->SnapNewItem(NETOBJTYPE_TUNING, TuningID, sizeof(CNetObj_Tuning)));
+		if(pTuning)
+			mem_copy(pTuning->m_aTuneParams, &m_Tuning, sizeof(pTuning->m_aTuneParams));
+	}
+
+	CNetObj_Character *pCharacter = static_cast<CNetObj_Character *>(Server()->SnapNewItem(NETOBJTYPE_CHARACTER, TuningID, sizeof(CNetObj_Character)));
 	if(!pCharacter)
 		return;
 

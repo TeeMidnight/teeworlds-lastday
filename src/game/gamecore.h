@@ -62,6 +62,16 @@ public:
 	int PossibleTunings(const char *pStr, IConsole::FPossibleCallback pfnCallback = IConsole::EmptyPossibleCommandCallback, void *pUser = 0);
 };
 
+// Builds the effective tuning of one tee from the server's base tuning plus
+// the per-player modifiers that used to be hard-coded in CCharacterCore::Tick
+// (accessory/monster speed scale, silent step and water). The server applies
+// this to its own core and snaps it for the tee, so a client predicts the tee
+// with exactly the values the server simulates. SwimJump/VelocityY are only
+// read in water: the old water branch clamped the upward speed, which cannot
+// be expressed by a constant gravity, so the delta is computed from the
+// current vertical velocity.
+CTuningParams BuildCharacterTuning(const CTuningParams &Base, float SpeedScale, bool SilentStep, bool InWater, bool SwimJump, float VelocityY);
+
 inline void StrToInts(int *pInts, int Num, const char *pStr)
 {
 	int Index = 0;
@@ -237,6 +247,10 @@ class CCharacterCore
 {
 	CWorldCore *m_pWorld;
 	CCollision *m_pCollision;
+	// Per-tee tuning used both by the server simulation and by client
+	// prediction; 0 falls back to the world tuning (a plain server core or a
+	// core that has not been given a tee's tuning yet).
+	const CTuningParams *m_pTuning;
 
 public:
 	static const float PHYS_SIZE;
@@ -262,19 +276,23 @@ public:
 
 	int m_TriggeredEvents;
 
+	// Inputs for the per-tee tuning built by the server entities. The core
+	// physics no longer reads them directly; it only reads Tuning().
 	// silent step: while set, self-propelled horizontal movement runs at
 	// half speed and jumps are snapped without their sound events
 	bool m_SilentStep;
-
-	// Accessory speed bonus: scales the horizontal control speed cap. The
-	// server applies it while the client, which does not send this field, is
-	// sent a tuning with the same speed so its local prediction agrees.
+	// Accessory/monster speed bonus: scales the horizontal control speed cap.
 	float m_SpeedScale;
 
 	void Init(CWorldCore *pWorld, CCollision *pCollision);
 	void Reset();
-	void Tick(bool UseInput, bool LastDay);
+	void Tick(bool UseInput);
 	void Move();
+
+	// Overrides the world's tuning for this core. The pointer must outlive the
+	// core; server entities point it at their own m_Tuning member.
+	void SetTuning(const CTuningParams *pTuning) { m_pTuning = pTuning; }
+	const CTuningParams *Tuning() const { return m_pTuning ? m_pTuning : &m_pWorld->m_Tuning; }
 
 	void AddDragVelocity();
 	void ResetDragVelocity();

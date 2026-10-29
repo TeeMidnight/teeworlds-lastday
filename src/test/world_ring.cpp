@@ -348,7 +348,7 @@ TEST(RingProxy, HookGrabsACoreBoundAtATranslatedColumn)
 	Hooker.m_HookedPlayer = -1;
 	Hooker.m_Input.m_Hook = 1;
 
-	Hooker.Tick(true, true);
+	Hooker.Tick(true);
 	EXPECT_EQ(Hooker.m_HookedPlayer, 5);
 }
 
@@ -382,6 +382,6 @@ TEST(RingProxy, HookGrabsABotCoreBoundUnderItsPrivateID)
 	Hooker.m_HookedPlayer = -1;
 	Hooker.m_Input.m_Hook = 1;
 
-	Hooker.Tick(true, true);
+	Hooker.Tick(true);
 	EXPECT_EQ(Hooker.m_HookedPlayer, BotTeeID);
 }

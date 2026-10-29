@@ -321,17 +321,41 @@ int CNetworkTranslator::BuildSnapshot7(const CSnapshot *pSnap8)
 	mem_zero(m_aIdentityChanged8, sizeof(m_aIdentityChanged8));
 
 	// Pass one: learn every identity so the split objects are consistent even
-	// if a TeeInfo appears after the item that references it.
+	// if a TeeInfo appears after the item that references it, and so the tuning
+	// selection below can see which tee is the local one.
 	for(int i = 0; i < NumItems; i++)
 	{
 		const CSnapshotItem *pItem = pSnap8->GetItem(i);
 		if(pItem->Type() == NETOBJTYPE_TEEINFO)
 			AbsorbTeeInfo8(pItem->ID(), pItem, pSnap8->GetItemSize(i));
-		else if(pItem->Type() == NETOBJTYPE_TUNING && pSnap8->GetItemSize(i) >= (int) sizeof(CNetObj_Tuning))
+	}
+
+	// Tuning is per Tee in 0.8, but a 0.7 client has only one server-wide
+	// De_TuneParams. Prefer the local tee's object, then tuning 0, then any.
+	const CSnapshotItem *pLocalTuning = nullptr;
+	const CSnapshotItem *pZeroTuning = nullptr;
+	const CSnapshotItem *pAnyTuning = nullptr;
+	for(int i = 0; i < NumItems; i++)
+	{
+		const CSnapshotItem *pItem = pSnap8->GetItem(i);
+		if(pItem->Type() != NETOBJTYPE_TUNING || pSnap8->GetItemSize(i) < (int) sizeof(CNetObj_Tuning))
+			continue;
+		if(!pAnyTuning)
+			pAnyTuning = pItem;
+		const int ID = pItem->ID();
+		if(ID == 0 && !pZeroTuning)
+			pZeroTuning = pItem;
+		if(ID >= 0 && ID < MAX_TEES8 && m_aPresent8[ID] && (m_aTees8[ID].m_Flag & TEEFLAG_LOCAL))
 		{
-			mem_copy(m_aTuneParams8, pItem->Data(), sizeof(m_aTuneParams8));
-			m_TuningValid8 = true;
+			pLocalTuning = pItem;
+			break;
 		}
+	}
+	const CSnapshotItem *pSelectedTuning = pLocalTuning ? pLocalTuning : (pZeroTuning ? pZeroTuning : pAnyTuning);
+	if(pSelectedTuning)
+	{
+		mem_copy(m_aTuneParams8, pSelectedTuning->Data(), sizeof(m_aTuneParams8));
+		m_TuningValid8 = true;
 	}
 
 	CSnapshotBuilder Builder;

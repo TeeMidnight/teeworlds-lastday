@@ -64,12 +64,78 @@ float VelocityRamp(float Value, float Start, float Range, float Curvature)
 	return 1.0f / powf(Curvature, (Value - Start) / Range);
 }
 
+CTuningParams BuildCharacterTuning(const CTuningParams &Base, float SpeedScale, bool SilentStep, bool InWater, bool SwimJump, float VelocityY)
+{
+	CTuningParams Tuning = Base;
+
+	// Accessory / monster speed bonus scales the control speed cap only.
+	Tuning.m_GroundControlSpeed = (float) Tuning.m_GroundControlSpeed * SpeedScale;
+	Tuning.m_AirControlSpeed = (float) Tuning.m_AirControlSpeed * SpeedScale;
+
+	// Silent step scales the cap and the acceleration together, so control
+	// keeps the same feel at half speed.
+	if(SilentStep)
+	{
+		Tuning.m_GroundControlSpeed = (float) Tuning.m_GroundControlSpeed * 0.5f;
+		Tuning.m_AirControlSpeed = (float) Tuning.m_AirControlSpeed * 0.5f;
+		Tuning.m_GroundControlAccel = (float) Tuning.m_GroundControlAccel * 0.5f;
+		Tuning.m_AirControlAccel = (float) Tuning.m_AirControlAccel * 0.5f;
+	}
+
+	if(InWater)
+	{
+		// The old LastDay water branch, expressed as tuning values. Water is a
+		// thicker medium: horizontal control and friction are reduced and the
+		// air jump is disabled. The vertical motion is carried by m_Gravity.
+		// The old code multiplied the speed and accel by 0.9 and then damped the
+		// resulting horizontal velocity by another 0.9, so the effective control
+		// is 0.9^2; friction only saw one 0.9.
+		const float WaterDamp = 0.9f;
+		const float WaterControl = WaterDamp * WaterDamp;
+		Tuning.m_GroundControlSpeed = (float) Tuning.m_GroundControlSpeed * WaterControl;
+		Tuning.m_AirControlSpeed = (float) Tuning.m_AirControlSpeed * WaterControl;
+		Tuning.m_GroundControlAccel = (float) Tuning.m_GroundControlAccel * WaterControl;
+		Tuning.m_AirControlAccel = (float) Tuning.m_AirControlAccel * WaterControl;
+		Tuning.m_GroundFriction = (float) Tuning.m_GroundFriction * WaterDamp;
+		Tuning.m_AirFriction = (float) Tuning.m_AirFriction * WaterDamp;
+		Tuning.m_AirJumpImpulse = 0.0f;
+
+		const float Gravity = Base.m_Gravity;
+		if(SwimJump)
+		{
+			// Net change of the old "gravity, then swim" pair:
+			//   vy += gravity * 0.96;
+			//   vy = SaturatedAdd(-3.5g, 2.5g, vy, -1.5g);
+			// The standard core applies only m_Gravity, so bake the whole
+			// per-tick delta into it. The clamp keeps a held dive at 3.5g.
+			const float AfterGravity = VelocityY + Gravity * 0.96f;
+			const float UpLimit = -Gravity * 7.0f;
+			float AfterSwim = AfterGravity - Gravity * 1.5f;
+			if(AfterGravity < UpLimit)
+				AfterSwim = AfterGravity;
+			else if(AfterSwim < UpLimit)
+				AfterSwim = UpLimit;
+			Tuning.m_Gravity = AfterSwim - VelocityY;
+		}
+		else
+		{
+			// A constant value keeps client prediction reproducible. The old
+			// tick was (vy + 0.96g) * 0.96, so 0.96^2 is its zero-velocity step;
+			// the exact per-tick damping cannot be expressed by a constant.
+			Tuning.m_Gravity = Gravity * 0.9216f;
+		}
+	}
+
+	return Tuning;
+}
+
 const float CCharacterCore::PHYS_SIZE = 28.0f;
 
 void CCharacterCore::Init(CWorldCore *pWorld, CCollision *pCollision)
 {
 	m_pWorld = pWorld;
 	m_pCollision = pCollision;
+	m_pTuning = 0;
 }
 
 void CCharacterCore::Reset()
@@ -87,9 +153,10 @@ void CCharacterCore::Reset()
 	m_SilentStep = false;
 	m_SpeedScale = 1.0f;
 	m_Death = false;
+	mem_zero(&m_Input, sizeof(m_Input));
 }
 
-void CCharacterCore::Tick(bool UseInput, bool LastDay)
+void CCharacterCore::Tick(bool UseInput)
 {
 	m_TriggeredEvents = 0;
 
@@ -97,25 +164,16 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 	const bool Grounded =
 		m_pCollision->CheckPoint(m_Pos.x + PHYS_SIZE / 2, m_Pos.y + PHYS_SIZE / 2 + 5) || m_pCollision->CheckPoint(m_Pos.x - PHYS_SIZE / 2, m_Pos.y + PHYS_SIZE / 2 + 5);
 
-	// water state: any corner of the physics box touches a water tile
-	const bool InWater =
-		m_pCollision->TestBox(m_Pos, vec2(PHYS_SIZE, PHYS_SIZE / 2), CCollision::COLFLAG_WATER) && LastDay;
-
 	vec2 TargetDirection = normalize(vec2(m_Input.m_TargetX, m_Input.m_TargetY));
 
-	const float WaterFrictionX = 0.9f;
-	const float WaterFrictionY = 0.96f;
-	// water is a thicker medium: gravity pulls only at half strength
-	m_Vel.y += m_pWorld->m_Tuning.m_Gravity * (InWater ? WaterFrictionY : 1.0f);
+	// The core is pure standard physics. Water, silent step and speed bonuses
+	// are already folded into Tuning() by BuildCharacterTuning(), so the same
+	// values can be sent to a client for prediction.
+	m_Vel.y += Tuning()->m_Gravity;
 
-	// silent step creeps at half the normal speed: both the cap and the
-	// acceleration are scaled, so control keeps the same feel, only slower.
-	// It is a LastDay-only rule: the dead-reckoning / legacy prediction path
-	// passes LastDay false, so it keeps the vanilla speed and stays in sync.
-	const float SilentStepScale = (m_SilentStep && LastDay) ? 0.5f : 1.0f;
-	float MaxSpeed = (Grounded ? m_pWorld->m_Tuning.m_GroundControlSpeed : m_pWorld->m_Tuning.m_AirControlSpeed) * SilentStepScale * m_SpeedScale * (InWater ? WaterFrictionX : 1.0f);
-	float Accel = (Grounded ? m_pWorld->m_Tuning.m_GroundControlAccel : m_pWorld->m_Tuning.m_AirControlAccel) * SilentStepScale * (InWater ? WaterFrictionX : 1.0f);
-	float Friction = (Grounded ? m_pWorld->m_Tuning.m_GroundFriction : m_pWorld->m_Tuning.m_AirFriction) * (InWater ? WaterFrictionX : 1.0f);
+	float MaxSpeed = Grounded ? Tuning()->m_GroundControlSpeed : Tuning()->m_AirControlSpeed;
+	float Accel = Grounded ? Tuning()->m_GroundControlAccel : Tuning()->m_AirControlAccel;
+	float Friction = Grounded ? Tuning()->m_GroundFriction : Tuning()->m_AirFriction;
 
 	// handle input
 	if(UseInput)
@@ -131,13 +189,13 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 				if(Grounded)
 				{
 					m_TriggeredEvents |= COREEVENTFLAG_GROUND_JUMP;
-					m_Vel.y = -m_pWorld->m_Tuning.m_GroundJumpImpulse;
+					m_Vel.y = -Tuning()->m_GroundJumpImpulse;
 					m_Jumped |= 1;
 				}
 				else if(!(m_Jumped & 2))
 				{
 					m_TriggeredEvents |= COREEVENTFLAG_AIR_JUMP;
-					m_Vel.y = -m_pWorld->m_Tuning.m_AirJumpImpulse;
+					m_Vel.y = -Tuning()->m_AirJumpImpulse;
 					m_Jumped |= 3;
 				}
 			}
@@ -179,21 +237,6 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 	// 2 bit = to keep track if a air-jump has been made
 	if(Grounded)
 		m_Jumped &= ~2;
-	else if(InWater)
-		m_Jumped |= 3;
-	// swimming: while in water (and not standing on solid ground) holding the
-	// jump button adds upward acceleration (~3x gravity). the rising speed is
-	// saturated; faster upward velocity (e.g. from a jump impulse) is
-	// preserved, because SaturatedAdd only clamps when the modifier would push
-	// past the bound. releasing the jump lets the player sink again
-	if(InWater)
-	{
-		if(UseInput && m_Input.m_Jump)
-			m_Vel.y = SaturatedAdd(-m_pWorld->m_Tuning.m_Gravity * 7.0f, m_pWorld->m_Tuning.m_Gravity * 5.0f, m_Vel.y, -m_pWorld->m_Tuning.m_Gravity * 1.5f);
-		else
-			m_Vel.y *= WaterFrictionY;
-		m_Vel.x *= WaterFrictionX;
-	}
 	// do hook
 	if(m_HookState == HOOK_IDLE)
 	{
@@ -212,11 +255,11 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 	}
 	else if(m_HookState == HOOK_FLYING)
 	{
-		vec2 NewPos = m_HookPos + m_HookDir * m_pWorld->m_Tuning.m_HookFireSpeed;
-		if(distance(m_Pos, NewPos) > m_pWorld->m_Tuning.m_HookLength)
+		vec2 NewPos = m_HookPos + m_HookDir * Tuning()->m_HookFireSpeed;
+		if(distance(m_Pos, NewPos) > Tuning()->m_HookLength)
 		{
 			m_HookState = HOOK_RETRACT_START;
-			NewPos = m_Pos + normalize(NewPos - m_Pos) * m_pWorld->m_Tuning.m_HookLength;
+			NewPos = m_Pos + normalize(NewPos - m_Pos) * Tuning()->m_HookLength;
 		}
 
 		// make sure that the hook doesn't go though the ground
@@ -235,7 +278,7 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 		// this world are seen: a player across a ring boundary lives in another
 		// world core (and another map), so hooking them is deliberately not
 		// handled here. See the ring notes in the README.
-		if(m_pWorld && m_pWorld->m_Tuning.m_PlayerHooking)
+		if(m_pWorld && Tuning()->m_PlayerHooking)
 		{
 			float Distance = 0.0f;
 			for(int k = 0; k < m_pWorld->m_aCharacterIDs.size(); k++)
@@ -300,7 +343,7 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 		// don't do this hook routine when we are already hooked to a player
 		if(m_HookedPlayer == -1 && distance(m_HookPos, m_Pos) > 46.0f)
 		{
-			vec2 HookVel = normalize(m_HookPos - m_Pos) * m_pWorld->m_Tuning.m_HookDragAccel;
+			vec2 HookVel = normalize(m_HookPos - m_Pos) * Tuning()->m_HookDragAccel;
 			// the hook as more power to drag you up then down.
 			// this makes it easier to get on top of an platform
 			if(HookVel.y > 0)
@@ -316,7 +359,7 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 			vec2 NewVel = m_Vel + HookVel;
 
 			// check if we are under the legal limit for the hook
-			if(length(NewVel) < m_pWorld->m_Tuning.m_HookDragSpeed || length(NewVel) < length(m_Vel))
+			if(length(NewVel) < Tuning()->m_HookDragSpeed || length(NewVel) < length(m_Vel))
 				m_Vel = NewVel; // no problem. apply
 		}
 
@@ -346,7 +389,7 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 			// handle player <-> player collision
 			float Distance = distance(m_Pos, pCharCore->m_Pos);
 			vec2 Dir = normalize(m_Pos - pCharCore->m_Pos);
-			if(m_pWorld->m_Tuning.m_PlayerCollision && Distance < PHYS_SIZE * 1.25f && Distance > 0.0f)
+			if(Tuning()->m_PlayerCollision && Distance < PHYS_SIZE * 1.25f && Distance > 0.0f)
 			{
 				float a = (PHYS_SIZE * 1.45f - Distance);
 				float Velocity = 0.5f;
@@ -361,11 +404,11 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 			}
 
 			// handle hook influence
-			if(m_HookedPlayer == TeeID && m_pWorld->m_Tuning.m_PlayerHooking)
+			if(m_HookedPlayer == TeeID && Tuning()->m_PlayerHooking)
 			{
 				if(Distance > PHYS_SIZE * 1.50f) // TODO: fix tweakable variable
 				{
-					float Accel = m_pWorld->m_Tuning.m_HookDragAccel * (Distance / m_pWorld->m_Tuning.m_HookLength);
+					float Accel = Tuning()->m_HookDragAccel * (Distance / Tuning()->m_HookLength);
 
 					// add force to the hooked player
 					pCharCore->m_HookDragVel += Dir * Accel * 1.5f;
@@ -385,7 +428,7 @@ void CCharacterCore::Tick(bool UseInput, bool LastDay)
 void CCharacterCore::AddDragVelocity()
 {
 	// Apply hook interaction velocity
-	float DragSpeed = m_pWorld->m_Tuning.m_HookDragSpeed;
+	float DragSpeed = Tuning()->m_HookDragSpeed;
 
 	m_Vel.x = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.x, m_HookDragVel.x);
 	m_Vel.y = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.y, m_HookDragVel.y);
@@ -421,7 +464,7 @@ void CCharacterCore::Move()
 	if(!m_pWorld)
 		return;
 
-	float RampValue = VelocityRamp(length(m_Vel) * 50, m_pWorld->m_Tuning.m_VelrampStart, m_pWorld->m_Tuning.m_VelrampRange, m_pWorld->m_Tuning.m_VelrampCurvature);
+	float RampValue = VelocityRamp(length(m_Vel) * 50, Tuning()->m_VelrampStart, Tuning()->m_VelrampRange, Tuning()->m_VelrampCurvature);
 
 	m_Vel.x = m_Vel.x * RampValue;
 
@@ -430,7 +473,7 @@ void CCharacterCore::Move()
 
 	m_Vel.x = m_Vel.x * (1.0f / RampValue);
 
-	if(m_pWorld->m_Tuning.m_PlayerCollision)
+	if(Tuning()->m_PlayerCollision)
 	{
 		// check player collision
 		float Distance = distance(m_Pos, NewPos);

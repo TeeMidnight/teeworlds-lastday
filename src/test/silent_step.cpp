@@ -1,9 +1,9 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
-// Silent step: while a character creeps, its self-propelled horizontal speed is
-// half of the normal control speed. The state lives in CCharacterCore, so the
-// player (toggled by the scoreboard flag) and an NPC share one physics path.
+// Silent step and the accessory speed bonus used to be special cases inside
+// CCharacterCore::Tick. They are now folded into the per-tee tuning, so these
+// tests exercise the core together with BuildCharacterTuning().
 #include <game/collision.h>
 #include <game/gamecore.h>
 
@@ -32,10 +32,10 @@ static void InitCore(CCharacterCore &Core, CWorldCore &World, CCollision &Coll)
 	Core.m_Input.m_Direction = 1;
 }
 
-static void StepN(CCharacterCore &Core, int Ticks, bool LastDay = true)
+static void StepN(CCharacterCore &Core, int Ticks)
 {
 	for(int i = 0; i < Ticks; i++)
-		Core.Tick(true, LastDay);
+		Core.Tick(true);
 }
 
 // Both cores saturate at their control speed, and the silent one sits exactly at
@@ -48,11 +48,16 @@ TEST(SilentStep, CreepsAtHalfOfTheNormalSpeed)
 	Coll.InitForTesting(W, H, aTiles, false);
 	CWorldCore World;
 
+	const CTuningParams NormalTuning = BuildCharacterTuning(CTuningParams(), 1.0f, false, false, false, 0.0f);
+	const CTuningParams SilentTuning = BuildCharacterTuning(CTuningParams(), 1.0f, true, false, false, 0.0f);
+
 	CCharacterCore Normal;
 	InitCore(Normal, World, Coll);
+	Normal.SetTuning(&NormalTuning);
 
 	CCharacterCore Silent;
 	InitCore(Silent, World, Coll);
+	Silent.SetTuning(&SilentTuning);
 	Silent.m_SilentStep = true;
 
 	StepN(Normal, 50);
@@ -74,31 +79,18 @@ TEST(SilentStep, TogglingOnDoesNotSlowAnExistingRun)
 	Coll.InitForTesting(W, H, aTiles, false);
 	CWorldCore World;
 
+	const CTuningParams NormalTuning = BuildCharacterTuning(CTuningParams(), 1.0f, false, false, false, 0.0f);
+	const CTuningParams SilentTuning = BuildCharacterTuning(CTuningParams(), 1.0f, true, false, false, 0.0f);
+
 	CCharacterCore Core;
 	InitCore(Core, World, Coll);
+	Core.SetTuning(&NormalTuning);
 	StepN(Core, 50);
 	ASSERT_FLOAT_EQ(Core.m_Vel.x, 10.0f);
 
 	Core.m_SilentStep = true;
+	Core.SetTuning(&SilentTuning);
 	StepN(Core, 1);
-	EXPECT_FLOAT_EQ(Core.m_Vel.x, 10.0f);
-}
-
-// The non-LastDay path is the dead-reckoning / legacy prediction one: it must
-// keep the vanilla speed, or the client's extrapolation would diverge.
-TEST(SilentStep, NonLastDayPredictionIsUnaffected)
-{
-	int aTiles[W * H];
-	MakeFloor(aTiles);
-	CCollision Coll;
-	Coll.InitForTesting(W, H, aTiles, false);
-	CWorldCore World;
-
-	CCharacterCore Core;
-	InitCore(Core, World, Coll);
-	Core.m_SilentStep = true;
-	StepN(Core, 50, false);
-
 	EXPECT_FLOAT_EQ(Core.m_Vel.x, 10.0f);
 }
 
@@ -122,11 +114,16 @@ TEST(AccessorySpeed, ScalesTheControlSpeed)
 	Coll.InitForTesting(W, H, aTiles, false);
 	CWorldCore World;
 
+	const CTuningParams NormalTuning = BuildCharacterTuning(CTuningParams(), 1.0f, false, false, false, 0.0f);
+	const CTuningParams FastTuning = BuildCharacterTuning(CTuningParams(), 1.25f, false, false, false, 0.0f);
+
 	CCharacterCore Normal;
 	InitCore(Normal, World, Coll);
+	Normal.SetTuning(&NormalTuning);
 
 	CCharacterCore Fast;
 	InitCore(Fast, World, Coll);
+	Fast.SetTuning(&FastTuning);
 	Fast.m_SpeedScale = 1.25f;
 
 	StepN(Normal, 50);
