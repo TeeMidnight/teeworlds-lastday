@@ -100,6 +100,9 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	m_ReckoningTick = 0;
 	mem_zero(&m_SendCore, sizeof(m_SendCore));
 	mem_zero(&m_ReckoningCore, sizeof(m_ReckoningCore));
+	m_LegacyReckoningTick = 0;
+	mem_zero(&m_LegacySendCore, sizeof(m_LegacySendCore));
+	mem_zero(&m_LegacyReckoningCore, sizeof(m_LegacyReckoningCore));
 	mem_zero(&m_Input, sizeof(m_Input));
 	mem_zero(&m_PrevInput, sizeof(m_PrevInput));
 
@@ -188,6 +191,13 @@ void CBotEntity::UpdateTuning()
 	m_Tuning = BuildCharacterTuning(*GameServer()->Tuning(), m_Core.m_SpeedScale, m_Core.m_SilentStep,
 		InWater, m_Core.m_Input.m_Jump != 0, m_Core.m_Vel.y);
 	m_Core.SetTuning(&m_Tuning);
+}
+
+CTuningParams CBotEntity::LegacyTuning()
+{
+	// The 0.7 translation layer's old gamecore calculation: the speed bonus is
+	// kept, but an NPC's silent step and water are not part of it.
+	return BuildCharacterTuning(*GameServer()->Tuning(), m_Core.m_SpeedScale, false, false, false, 0.0f);
 }
 
 void CBotEntity::Tick()
@@ -394,7 +404,7 @@ void CBotEntity::TickDefered()
 {
 	static const vec2 ColBox(CCharacterCore::PHYS_SIZE, CCharacterCore::PHYS_SIZE);
 
-	// advance the dummy core used for dead reckoning
+	// advance the dummy core used for 0.8 clients (full per-Tee tuning)
 	{
 		CWorldCore TempWorld;
 		TempWorld.m_Tuning = m_Tuning;
@@ -402,6 +412,16 @@ void CBotEntity::TickDefered()
 		m_ReckoningCore.Tick(false, false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
+	}
+	// advance the legacy dummy used by the 0.7 translation layer (old gamecore
+	// calculation; an NPC's silent step is not part of this tuning)
+	{
+		CWorldCore TempWorld;
+		TempWorld.m_Tuning = LegacyTuning();
+		m_LegacyReckoningCore.Init(&TempWorld, GameWorld()->Collision());
+		m_LegacyReckoningCore.Tick(false, false);
+		m_LegacyReckoningCore.Move();
+		m_LegacyReckoningCore.Quantize();
 	}
 
 	m_Core.AddDragVelocity();
@@ -448,7 +468,7 @@ void CBotEntity::TickDefered()
 		return;
 	}
 
-	// update m_SendCore if needed
+	// update the send cores if needed
 	{
 		CNetObj_Character Predicted;
 		CNetObj_Character Current;
@@ -464,6 +484,17 @@ void CBotEntity::TickDefered()
 			m_SendCore = m_Core;
 			m_ReckoningCore = m_Core;
 		}
+
+		mem_zero(&Predicted, sizeof(Predicted));
+		mem_zero(&Current, sizeof(Current));
+		m_LegacyReckoningCore.Write(&Predicted);
+		m_Core.Write(&Current);
+		if(m_LegacyReckoningTick + Server()->TickSpeed() * 3 < Server()->Tick() || mem_comp(&Predicted, &Current, sizeof(CNetObj_Character)) != 0)
+		{
+			m_LegacyReckoningTick = Server()->Tick();
+			m_LegacySendCore = m_Core;
+			m_LegacyReckoningCore = m_Core;
+		}
 	}
 }
 
@@ -471,6 +502,7 @@ void CBotEntity::TickPaused()
 {
 	++m_AttackTick;
 	++m_ReckoningTick;
+	++m_LegacyReckoningTick;
 	if(m_EmoteStop > -1)
 		++m_EmoteStop;
 }
@@ -482,6 +514,8 @@ void CBotEntity::ShiftForSnap(vec2 Delta)
 	m_Core.m_HookPos += Delta;
 	m_SendCore.m_Pos += Delta;
 	m_SendCore.m_HookPos += Delta;
+	m_LegacySendCore.m_Pos += Delta;
+	m_LegacySendCore.m_HookPos += Delta;
 }
 
 void CBotEntity::Snap(int SnappingClient)
@@ -509,8 +543,12 @@ void CBotEntity::Snap(int SnappingClient)
 	if(!pCharacter)
 		return;
 
-	// write down the core
-	if(!m_ReckoningTick)
+	// 0.8 clients get the full per-Tee dead reckoning; the 0.7 translation
+	// layer gets the old gamecore calculation without water/silent tuning.
+	const bool LegacyClient = SnappingClient >= 0 && Server()->GetClientVersion(SnappingClient) < CCharacter::MIN_PERTEE_TUNING_CLIENTVERSION;
+	const int ReckoningTick = LegacyClient ? m_LegacyReckoningTick : m_ReckoningTick;
+	const CCharacterCore &SendCore = LegacyClient ? m_LegacySendCore : m_SendCore;
+	if(!ReckoningTick)
 	{
 		// no dead reckoning when paused because the client doesn't know
 		// how far to perform the reckoning
@@ -519,8 +557,8 @@ void CBotEntity::Snap(int SnappingClient)
 	}
 	else
 	{
-		pCharacter->m_Tick = m_ReckoningTick;
-		m_SendCore.Write(pCharacter);
+		pCharacter->m_Tick = ReckoningTick;
+		SendCore.Write(pCharacter);
 	}
 
 	// The core holds the hook target as a server-internal TeeID, but the client

@@ -129,6 +129,9 @@ public:
 	// Effective per-tee tuning (speed bonus, silent step, water), snapped for
 	// the client that predicts this bot.
 	const CTuningParams &Tuning() const { return m_Tuning; }
+	// The old gamecore tuning: speed scale only, no water/silent, for the 0.7
+	// translation layer's dead-reckoning core.
+	CTuningParams LegacyTuning();
 	int GetBotTeam() const override { return m_Team; }
 	int GetBotFaction() const override { return m_Faction; }
 	bool IsNaturalMonster() const override { return m_Natural; }
@@ -241,10 +244,15 @@ protected:
 	CTuningParams m_Tuning;
 	void UpdateTuning();
 
-	// info for dead reckoning
+	// info for dead reckoning. The full core carries the bot's tuning (an NPC's
+	// silent step included) for 0.8 clients; the legacy core is the old
+	// gamecore calculation used by the 0.7 translation layer.
 	int m_ReckoningTick;
 	CCharacterCore m_SendCore;
 	CCharacterCore m_ReckoningCore;
+	int m_LegacyReckoningTick;
+	CCharacterCore m_LegacySendCore;
+	CCharacterCore m_LegacyReckoningCore;
 
 	CNetObj_PlayerInput m_Input;
 	CNetObj_PlayerInput m_PrevInput;

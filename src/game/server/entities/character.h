@@ -240,10 +240,16 @@ private:
 	// the player core for the physics
 	CCharacterCore m_Core;
 
-	// info for dead reckoning
+	// info for dead reckoning. The full core carries this Tee's tuning and is
+	// what a 0.8 client extrapolates; the legacy core is the old gamecore
+	// calculation (no water/silent per-Tee values) for the 0.7 translation
+	// layer.
 	int m_ReckoningTick; // tick that we are performing dead reckoning From
 	CCharacterCore m_SendCore; // core that we should send
-	CCharacterCore m_ReckoningCore; // the dead reckoning core
+	CCharacterCore m_ReckoningCore; // the full dead reckoning core
+	int m_LegacyReckoningTick;
+	CCharacterCore m_LegacySendCore;
+	CCharacterCore m_LegacyReckoningCore;
 
 	// whether the character's physics box currently touches a water tile
 	// (drives the oxygen system)

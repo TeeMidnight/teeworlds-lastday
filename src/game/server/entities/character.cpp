@@ -100,6 +100,9 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_ReckoningTick = 0;
 	mem_zero(&m_SendCore, sizeof(m_SendCore));
 	mem_zero(&m_ReckoningCore, sizeof(m_ReckoningCore));
+	m_LegacyReckoningTick = 0;
+	mem_zero(&m_LegacySendCore, sizeof(m_LegacySendCore));
+	mem_zero(&m_LegacyReckoningCore, sizeof(m_LegacyReckoningCore));
 
 	GameWorld()->InsertEntity(this);
 	m_Alive = true;
@@ -729,18 +732,24 @@ bool CCharacter::InWater()
 void CCharacter::TickDefered()
 {
 	static const vec2 ColBox(CCharacterCore::PHYS_SIZE, CCharacterCore::PHYS_SIZE);
-	// advance the dummy
+	// advance the dummy used for 0.8 clients (full per-Tee tuning)
 	{
 		CWorldCore TempWorld;
-		const int ClientVersion = Server()->GetClientVersion(GetCID());
-		if(ClientVersion >= MIN_PERTEE_TUNING_CLIENTVERSION)
-			TempWorld.m_Tuning = m_Tuning;
-		else
-			TempWorld.m_Tuning = LegacyTuning(ClientVersion);
+		TempWorld.m_Tuning = m_Tuning;
 		m_ReckoningCore.Init(&TempWorld, GameWorld()->Collision());
 		m_ReckoningCore.Tick(false, false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
+	}
+	// advance the legacy dummy used by the 0.7 translation layer (old gamecore
+	// calculation: speed bonus only, no water/silent per-Tee values)
+	{
+		CWorldCore TempWorld;
+		TempWorld.m_Tuning = LegacyTuning(MIN_CORRECTTUNING_CLIENTVERSION);
+		m_LegacyReckoningCore.Init(&TempWorld, GameWorld()->Collision());
+		m_LegacyReckoningCore.Tick(false, false);
+		m_LegacyReckoningCore.Move();
+		m_LegacyReckoningCore.Quantize();
 	}
 
 	// apply drag velocity when the player is not firing ninja
@@ -812,7 +821,7 @@ void CCharacter::TickDefered()
 	if(!m_pPlayer->m_MapLoading)
 		GameServer()->m_pController->HandleCharacterTiles(this, StartPos, m_Pos);
 
-	// update the m_SendCore if needed
+	// update the send cores if needed
 	{
 		CNetObj_Character Predicted;
 		CNetObj_Character Current;
@@ -828,6 +837,17 @@ void CCharacter::TickDefered()
 			m_SendCore = m_Core;
 			m_ReckoningCore = m_Core;
 		}
+
+		mem_zero(&Predicted, sizeof(Predicted));
+		mem_zero(&Current, sizeof(Current));
+		m_LegacyReckoningCore.Write(&Predicted);
+		m_Core.Write(&Current);
+		if(m_LegacyReckoningTick + Server()->TickSpeed() * 3 < Server()->Tick() || mem_comp(&Predicted, &Current, sizeof(CNetObj_Character)) != 0)
+		{
+			m_LegacyReckoningTick = Server()->Tick();
+			m_LegacySendCore = m_Core;
+			m_LegacyReckoningCore = m_Core;
+		}
 	}
 }
 
@@ -835,6 +855,7 @@ void CCharacter::TickPaused()
 {
 	++m_AttackTick;
 	++m_ReckoningTick;
+	++m_LegacyReckoningTick;
 	if(m_LastAction != -1)
 		++m_LastAction;
 	if(m_EmoteStop > -1)
@@ -1127,8 +1148,12 @@ void CCharacter::Snap(int SnappingClient)
 	if(!pCharacter)
 		return;
 
-	// write down the m_Core
-	if(!m_ReckoningTick)
+	// 0.8 clients get the full per-Tee dead reckoning; the 0.7 translation
+	// layer gets the old gamecore calculation without water/silent tuning.
+	const bool LegacyClient = SnappingClient >= 0 && Server()->GetClientVersion(SnappingClient) < MIN_PERTEE_TUNING_CLIENTVERSION;
+	const int ReckoningTick = LegacyClient ? m_LegacyReckoningTick : m_ReckoningTick;
+	const CCharacterCore &SendCore = LegacyClient ? m_LegacySendCore : m_SendCore;
+	if(!ReckoningTick)
 	{
 		// no dead reckoning when paused because the client doesn't know
 		// how far to perform the reckoning
@@ -1137,8 +1162,8 @@ void CCharacter::Snap(int SnappingClient)
 	}
 	else
 	{
-		pCharacter->m_Tick = m_ReckoningTick;
-		m_SendCore.Write(pCharacter);
+		pCharacter->m_Tick = ReckoningTick;
+		SendCore.Write(pCharacter);
 	}
 
 	// The core holds the hook target as a server-internal TeeID, but the client
@@ -1208,6 +1233,8 @@ void CCharacter::ShiftForSnap(vec2 Delta)
 	m_Core.m_HookPos += Delta;
 	m_SendCore.m_Pos += Delta;
 	m_SendCore.m_HookPos += Delta;
+	m_LegacySendCore.m_Pos += Delta;
+	m_LegacySendCore.m_HookPos += Delta;
 }
 
 void CCharacter::PostSnap()
