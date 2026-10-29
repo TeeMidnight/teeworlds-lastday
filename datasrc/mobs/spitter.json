@@ -4,7 +4,7 @@
     "faction": "hostile",
     "group": "swarm",
     "type": "tee",
-    "health": 11,
+    "health": 10,
     "armor": 0,
     "speed_scale": 0.95,
     "aggro_radius": 500,
@@ -21,8 +21,8 @@
     },
     "ai": "skirmisher",
     "abilities": {
-        "melee": {"damage": 2, "cooldown": 25, "range": 44},
-        "ranged": {"enabled": true, "weapon": "gun", "damage": 2, "cooldown": 55, "range": 340, "min_range": 120, "force": 1, "span": 700, "sound": "gun"}
+        "melee": {"damage": 2, "cooldown": 28, "range": 44},
+        "ranged": {"enabled": true, "weapon": "gun", "damage": 2, "cooldown": 65, "range": 340, "min_range": 120, "force": 1, "span": 700, "sound": "gun"}
     },
     "dialogue": {
         "spawn": ["The air tastes of iron."],

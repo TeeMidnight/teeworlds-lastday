@@ -4,9 +4,9 @@
     "faction": "hostile",
     "group": "raiders",
     "type": "tee",
-    "health": 14,
-    "armor": 2,
-    "speed_scale": 1.05,
+    "health": 12,
+    "armor": 0,
+    "speed_scale": 1.0,
     "aggro_radius": 420,
     "attack_range": 48,
     "jump_chance": 25,
@@ -21,9 +21,9 @@
     },
     "ai": "hunter",
     "abilities": {
-        "melee": {"damage": 4, "cooldown": 18, "range": 52},
-        "leap":  {"enabled": true, "cooldown": 130, "range": 230, "force_x": 6.5, "force_y": -7.5},
-        "enrage": {"health_percent": 35, "damage_bonus": 2, "speed_percent": 35}
+        "melee": {"damage": 3, "cooldown": 24, "range": 52},
+        "leap":  {"enabled": true, "cooldown": 160, "range": 230, "force_x": 6.5, "force_y": -7.5},
+        "enrage": {"health_percent": 30, "damage_bonus": 1, "speed_percent": 25}
     },
     "dialogue": {
         "spawn": ["Another skull for the pile."],
