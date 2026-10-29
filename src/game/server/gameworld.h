@@ -66,6 +66,10 @@ private:
 	CLayers m_Layers;
 	CCollision m_Collision;
 
+	// player count and simulation state, see AddPlayer() / IsActive()
+	int m_NumPlayers = 0;
+	bool m_Active = false;
+
 	// One live ring neighbour of this world, with the offset (world units) that
 	// maps its local x onto this world's axis. The entity queries use these so a
 	// hit, a pickup or an explosion can cross the shared boundary.
@@ -104,6 +108,22 @@ public:
 
 	unsigned m_WorldID;
 	unsigned WorldID() const { return m_WorldID; }
+
+	// Number of players whose CPlayer currently lives in this world. It is kept
+	// by CPlayer entering, leaving and transferring, never by scanning the
+	// player slots every tick. A world is simulated only while it is active:
+	// occupied itself, or a ring neighbour of an occupied instance (the two
+	// sides share a strip, so a player looking across the seam must see the
+	// neighbour move). Bots alone keep a world frozen.
+	void AddPlayer() { m_NumPlayers++; }
+	void RemovePlayer()
+	{
+		if(m_NumPlayers > 0)
+			m_NumPlayers--;
+	}
+	int NumPlayers() const { return m_NumPlayers; }
+	bool IsActive() const { return m_Active; }
+	void SetActive(bool Active) { m_Active = Active; }
 
 	// canonical name of the map backing this world (e.g. "Connector" or the
 	// generated "<floor>_<seed>"); used as the persistence key of the world

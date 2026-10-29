@@ -645,6 +645,11 @@ void CBotManager::TickWorld(CGameWorld *pWorld)
 {
 	if(!pWorld || !pWorld->m_BotConfigured)
 		return;
+	// a frozen world does not spawn or respawn anything; its population is
+	// picked up again as soon as a player (or a ring neighbour's player) makes
+	// the world active
+	if(!pWorld->IsActive())
+		return;
 
 	// a town world that owns configured NPCs respawns those instead of rolling
 	// random monsters, so its population is exactly the definitions

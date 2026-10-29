@@ -186,6 +186,9 @@ void CGameContext::Clear()
 	m_pStorage = pStorage;
 	m_pWorlds = Worlds;
 	m_MainWorldID = MainWorldID;
+	// The players were destroyed while the table was detached, so the counts
+	// are zero but the restored active flags still reflect the old occupants.
+	RefreshWorldActivity();
 }
 
 class CCharacter *CGameContext::GetPlayerChar(int ClientID)
@@ -1026,12 +1029,18 @@ void CGameContext::OnTick()
 	// the switch never has to generate a world inside the movement tick
 	EnsureOccupiedEntrances();
 
+	// The active flags are maintained by CPlayer entering, leaving and
+	// transferring and by world load/unload; there is no per-tick player scan
+	// or activity recomputation here.
+
 	// bind the neighbours' players as proxy cores before anything moves, so a
-	// hook or a player collision this tick sees them where they are
+	// hook or a player collision this tick sees them where they are. A frozen
+	// world has no proxy work; its ring neighbours are active by construction.
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
 		(void) pUser;
-		pWorld->RefreshRingProxies();
+		if(pWorld && pWorld->IsActive())
+			pWorld->RefreshRingProxies();
 	}, nullptr);
 
 	// the one manager tops up every configured world before its entities
@@ -1039,17 +1048,23 @@ void CGameContext::OnTick()
 	if(m_pBotManager)
 		m_pBotManager->Tick();
 
+	// Only active worlds advance. An empty world (bots alone included) is
+	// frozen instead of paying for every entity tick it cannot show anyone.
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
+		if(!pWorld)
+			return;
 		pWorld->m_Core.m_Tuning = *static_cast<CGameContext *>(pUser)->Tuning();
-		pWorld->Tick();
+		if(pWorld->IsActive())
+			pWorld->Tick();
 	}, this);
 
 	// pass on the drag a hook applied to a proxy, so the real character is pulled
 	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
 		(void) pUser;
-		pWorld->ForwardRingProxyDrag();
+		if(pWorld && pWorld->IsActive())
+			pWorld->ForwardRingProxyDrag();
 	}, nullptr);
 
 	// if(world.paused) // make sure that the game object always updates
@@ -2373,26 +2388,32 @@ CGameWorld *CGameContext::EnsureWorld(unsigned MapID)
 	return WorldByID(MapID);
 }
 
-bool CGameContext::HasRingNeighbour(unsigned MapID) const
+void CGameContext::RefreshWorldActivity()
 {
-	for(int i = 0; i < MAX_CLIENTS; i++)
+	// Every world starts inactive; an occupied world activates itself and, in
+	// the second pass, the ring instances whose shared strip it can see.
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
 	{
-		CPlayer *pPlayer = m_apPlayers[i];
-		if(!pPlayer)
-			continue;
-		CGameWorld *pWorld = pPlayer->GameWorld();
-		if(!pWorld || !pWorld->IsRing())
-			continue;
+		(void) pUser;
+		if(pWorld)
+			pWorld->SetActive(pWorld->NumPlayers() > 0);
+	}, nullptr);
+
+	m_pWorlds.for_each([](CGameWorld *&pWorld, void *pUser) -> void
+	{
+		CGameContext *pSelf = static_cast<CGameContext *>(pUser);
+		if(!pWorld || !pWorld->IsRing() || pWorld->NumPlayers() <= 0)
+			return;
 		for(int Dir = -1; Dir <= 1; Dir += 2)
 		{
 			char aName[64];
-			float ArrivalX = 0.0f;
-			if(pWorld->RingNeighbour(Dir, aName, sizeof(aName), 0.0f, &ArrivalX) &&
-				str_quickhash(aName) == MapID)
-				return true;
+			if(!pWorld->RingNeighbour(Dir, aName, sizeof(aName), 0.0f, nullptr))
+				continue;
+			CGameWorld *pNeighbour = pSelf->WorldByID(str_quickhash(aName));
+			if(pNeighbour && pNeighbour != pWorld)
+				pNeighbour->SetActive(true);
 		}
-	}
-	return false;
+	}, this);
 }
 
 void CGameContext::EnsureOccupiedRingNeighbours()
@@ -2587,6 +2608,9 @@ void CGameContext::RequestLoadWorld(unsigned MapID)
 	pNewWorld->InitContainerLoot();
 
 	m_pWorlds.set(MapID, pNewWorld);
+	// A ring neighbour that just became live may already border an occupied
+	// world; recompute the flags so it ticks from this tick on.
+	RefreshWorldActivity();
 }
 
 bool CGameContext::UnloadWorld(unsigned MapID)
@@ -2607,12 +2631,10 @@ bool CGameContext::UnloadWorld(unsigned MapID)
 	if(Server()->IsMapInUse(MapID))
 		return false;
 
-	// keep the world while a player is still inside it
-	for(int i = 0; i < MAX_CLIENTS; i++)
-	{
-		if(m_apPlayers[i] && m_apPlayers[i]->GameWorld() == pWorld)
-			return false;
-	}
+	// keep the world while a player is still inside it; the count is kept by
+	// CPlayer entering, leaving and transferring
+	if(pWorld->NumPlayers() > 0)
+		return false;
 
 	// persist the world state (dropped items etc.) before destroying it
 	pWorld->SaveToDatabase();
@@ -2632,6 +2654,8 @@ bool CGameContext::UnloadWorld(unsigned MapID)
 
 	// release the cached map data on the engine side
 	Server()->UnloadMap(MapID);
+	// the missing world may have been the active neighbour of another instance
+	RefreshWorldActivity();
 	return true;
 }
 
@@ -2653,15 +2677,13 @@ void CGameContext::UnloadIdleWorlds()
 		if(pWorld->WorldID() == pSelf->m_MainWorldID)
 			return;
 
-		// check if any player is still in this world
-		for(int i = 0; i < MAX_CLIENTS; i++)
-		{
-			if(pSelf->m_apPlayers[i] && pSelf->m_apPlayers[i]->GameWorld() == pWorld)
-				return;
-		}
+		// the player counter replaces the old per-world scan
+		if(pWorld->NumPlayers() > 0)
+			return;
 		// keep the live neighbours of a ring world, so a crossing entity has
-		// somewhere to go even when nobody is in the neighbour yet
-		if(pSelf->HasRingNeighbour(pWorld->WorldID()))
+		// somewhere to go even when nobody is in the neighbour yet; being a
+		// ring neighbour of an occupied instance is exactly the active flag
+		if(pWorld->IsActive())
 			return;
 		// same for an entrance target: it is preloaded so the synchronous
 		// switch does not have to generate it; unloading it after 30s would

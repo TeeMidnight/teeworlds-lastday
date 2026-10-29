@@ -21,6 +21,13 @@ IServer *CPlayer::Server() const { return m_pWorld->Server(); }
 CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 {
 	m_pWorld = pWorld;
+	// the world counts its players on entry, leave and transfer, so the tick
+	// loop never has to scan the client slots to decide what to simulate
+	if(m_pWorld)
+	{
+		m_pWorld->AddPlayer();
+		GameServer()->RefreshWorldActivity();
+	}
 	m_RespawnTick = Server()->Tick();
 	m_DieTick = Server()->Tick();
 	m_ScoreStartTick = Server()->Tick();
@@ -70,6 +77,11 @@ CPlayer::~CPlayer()
 {
 	delete m_pCharacter;
 	m_pCharacter = 0;
+	if(m_pWorld)
+	{
+		m_pWorld->RemovePlayer();
+		m_pWorld->GameServer()->RefreshWorldActivity();
+	}
 }
 
 int CPlayer::Language() const
@@ -525,7 +537,16 @@ void CPlayer::SwitchWorld(CGameWorld *pWorld)
 		// one may be unloaded while the player is already in the new one.
 		m_pCharacter->RebindWorld(pWorld);
 	}
+	CGameWorld *pOldWorld = m_pWorld;
 	m_pWorld = pWorld;
+	// transfer the counter with the player, so the source can freeze and the
+	// destination starts simulating before the character is inserted
+	if(pOldWorld && pOldWorld != pWorld)
+		pOldWorld->RemovePlayer();
+	if(pWorld && pWorld != pOldWorld)
+		pWorld->AddPlayer();
+	GameServer()->RefreshWorldActivity();
+
 	m_IsReadyToEnter = false;
 	m_MapLoading = true;
 }

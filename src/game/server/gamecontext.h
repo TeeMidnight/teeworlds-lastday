@@ -56,7 +56,7 @@ enum
 /*
 	Tick
 		Game Context (CGameContext::tick)
-			Game World (GAMEWORLD::tick)
+			Game World (GAMEWORLD::tick, only while active; see RefreshWorldActivity)
 				Reset world if requested (GAMEWORLD::reset)
 				All entities in the world (ENTITY::tick)
 				All entities in the world (ENTITY::tick_defered)
@@ -207,8 +207,11 @@ public:
 	// bring a ring neighbour in.
 	CGameWorld *EnsureWorld(unsigned MapID);
 
-	// whether a ring world with a player has the given map as a live neighbour
-	bool HasRingNeighbour(unsigned MapID) const;
+	// Recompute every world's active flag from the player counters: a world
+	// runs while it has a player of its own, or while it is a ring instance
+	// next to one that has. Called when a player enters, leaves or transfers
+	// (and when a world is loaded or unloaded), never per tick.
+	void RefreshWorldActivity();
 
 	// whether an occupied world has an entrance pointing at the given map
 	bool HasEntranceTarget(unsigned MapID) const;
