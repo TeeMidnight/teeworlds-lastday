@@ -2205,7 +2205,13 @@ void CGameContext::OnSnap(int ClientID)
 		CPlayer *pPlayer = m_apPlayers[ClientID];
 		CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
 		if(pChr)
-			Tuning = pChr->Tuning();
+		{
+			// A 0.7 client has one tuning and a gamecore without LastDay
+			// physics, so it must not be handed the full per-Tee water/silent
+			// values. Its dead-reckoning core uses the same legacy tuning.
+			const int ClientVersion = Server()->GetClientVersion(ClientID);
+			Tuning = ClientVersion >= CCharacter::MIN_PERTEE_TUNING_CLIENTVERSION ? pChr->Tuning() : pChr->LegacyTuning(ClientVersion);
+		}
 		CNetObj_Tuning *pTuning = static_cast<CNetObj_Tuning *>(Server()->SnapNewItem(NETOBJTYPE_TUNING, ClientID, sizeof(CNetObj_Tuning)));
 		if(pTuning)
 			mem_copy(pTuning->m_aTuneParams, &Tuning, sizeof(pTuning->m_aTuneParams));

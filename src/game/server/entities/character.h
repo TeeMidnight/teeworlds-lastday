@@ -32,6 +32,9 @@ public:
 	{
 		MIN_KILLMESSAGE_CLIENTVERSION = 0x0704, // todo 0.8: remove me
 		MIN_CORRECTTUNING_CLIENTVERSION = 0x0706, // todo 0.8: remove me
+		// 0.8 clients understand one Tuning object per Tee. Older clients get
+		// the single legacy tuning and its vanilla physics below.
+		MIN_PERTEE_TUNING_CLIENTVERSION = 0x0800,
 	};
 
 	CCharacter(CGameWorld *pWorld);
@@ -131,6 +134,10 @@ public:
 	// Effective per-tee tuning (speed bonus, silent step, water) that the
 	// server simulates and snaps for this Tee's prediction.
 	const CTuningParams &Tuning() const { return m_Tuning; }
+	// The tuning a pre-0.8 client can actually predict: its single legacy
+	// tuning keeps the speed bonus and drill lock, but none of the LastDay
+	// physics (water, silent step) the old gamecore did not know about.
+	CTuningParams LegacyTuning(int ClientVersion);
 
 	// drill control: while set, the character is pinned in place, ignores its
 	// movement input and stays silent; the player steers a nearby drill instead.

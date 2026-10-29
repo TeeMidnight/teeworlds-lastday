@@ -498,6 +498,18 @@ void CCharacter::RefreshAccessoryEffects()
 	UpdateTuning();
 }
 
+// The client and the server both use this tuning, so a drill-controlled tee is
+// pinned on either side.
+static void ApplyDrillTuning(CTuningParams &Tuning)
+{
+	Tuning.m_GroundControlSpeed = 0.0f;
+	Tuning.m_AirControlSpeed = 0.0f;
+	Tuning.m_GroundJumpImpulse = 0.0f;
+	Tuning.m_AirJumpImpulse = 0.0f;
+	Tuning.m_PlayerHooking = 0.0f;
+	Tuning.m_Gravity = 0.0f;
+}
+
 void CCharacter::UpdateTuning()
 {
 	// The same water query the old core used: the upper half of the physics
@@ -508,17 +520,21 @@ void CCharacter::UpdateTuning()
 		InWater, m_Core.m_Input.m_Jump != 0, m_Core.m_Vel.y);
 
 	if(m_DrillControl)
-	{
-		// the client and the server both use this tuning, so the tee is pinned
-		// on either side
-		m_Tuning.m_GroundControlSpeed = 0.0f;
-		m_Tuning.m_AirControlSpeed = 0.0f;
-		m_Tuning.m_GroundJumpImpulse = 0.0f;
-		m_Tuning.m_AirJumpImpulse = 0.0f;
-		m_Tuning.m_PlayerHooking = 0.0f;
-		m_Tuning.m_Gravity = 0.0f;
-	}
+		ApplyDrillTuning(m_Tuning);
 	m_Core.SetTuning(&m_Tuning);
+}
+
+CTuningParams CCharacter::LegacyTuning(int ClientVersion)
+{
+	// The 0.7 translation layer has one tuning and a gamecore without water or
+	// silent-step handling. Reproduce the old Tick(false, false) path: keep the
+	// speed bonus (and the drill lock), but leave water and silent step out.
+	// Older 0.7 clients do not understand tuning at all and keep the defaults.
+	CTuningParams Base = ClientVersion >= MIN_CORRECTTUNING_CLIENTVERSION ? *GameServer()->Tuning() : CTuningParams();
+	CTuningParams Tuning = BuildCharacterTuning(Base, m_SpeedScale, false, false, false, 0.0f);
+	if(m_DrillControl)
+		ApplyDrillTuning(Tuning);
+	return Tuning;
 }
 
 void CCharacter::SetDrillControl(bool Control)
@@ -716,8 +732,11 @@ void CCharacter::TickDefered()
 	// advance the dummy
 	{
 		CWorldCore TempWorld;
-		if(Server()->GetClientVersion(GetCID()) >= MIN_CORRECTTUNING_CLIENTVERSION)
+		const int ClientVersion = Server()->GetClientVersion(GetCID());
+		if(ClientVersion >= MIN_PERTEE_TUNING_CLIENTVERSION)
 			TempWorld.m_Tuning = m_Tuning;
+		else
+			TempWorld.m_Tuning = LegacyTuning(ClientVersion);
 		m_ReckoningCore.Init(&TempWorld, GameWorld()->Collision());
 		m_ReckoningCore.Tick(false);
 		m_ReckoningCore.Move();
