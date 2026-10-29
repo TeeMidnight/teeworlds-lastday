@@ -8,6 +8,7 @@
 #include <game/collision.h>
 #include <game/localization_format.h>
 #include <game/mapitems.h>
+#include <game/server/currency.h>
 #include <game/server/database/account.h>
 #include <game/server/database/database.h>
 #include <game/version.h>
@@ -785,6 +786,9 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	}
 
 	const bool WasGuest = pPlayer->m_Guest;
+	// capture the guest identity before the account uuid replaces it: currency
+	// lives on the account ledger, so it has to be moved explicitly
+	const Uuid GuestAccount = pPlayer->m_AccountUuid;
 	pPlayer->m_AccountUuid = Row.m_Uuid;
 	pPlayer->m_LoggedIn = true;
 	pPlayer->m_Guest = false;
@@ -797,6 +801,24 @@ void CGameController::ComRegister(IConsole::IResult *pResult, void *pContext)
 	// a completely fresh account gets the starting kit.
 	if(!WasGuest)
 		pSelf->GameServer()->GiveStartingKit(ClientID);
+	else if(GuestAccount != UUID_ZEROED)
+	{
+		// The inventory stays because it is not reloaded here, but currency is
+		// account scoped: move the guest's ledger balance onto the new account
+		// so registering does not silently empty the player's wallet.
+		int64 Balance = 0;
+		if(pDB->GetCurrencyBalance(GuestAccount, &Balance) && Balance > 0)
+		{
+			char aGuest[UUID_MAXSTRSIZE];
+			char aFromReason[CURRENCY_REASON_SIZE];
+			char aToReason[CURRENCY_REASON_SIZE];
+			format_uuid(GuestAccount, aGuest, sizeof(aGuest));
+			str_format(aFromReason, sizeof(aFromReason), "account upgrade: guest balance moved to the new account");
+			str_format(aToReason, sizeof(aToReason), "account upgrade: balance moved from guest %s", aGuest);
+			if(!pDB->TransferCurrency(GuestAccount, Row.m_Uuid, Balance, aFromReason, aToReason))
+				dbg_msg("currency", "failed to move guest balance %lld for client %d", (long long) Balance, ClientID);
+		}
+	}
 
 	pPlayer->SaveStatus(pDB); // persist the initial status fields
 	pSelf->SendSystemChat(ClientID, "Account", "Account created. You are now logged in.");

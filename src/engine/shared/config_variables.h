@@ -28,6 +28,7 @@ MACRO_CONFIG_INT(SvMaxClients, sv_max_clients, 8, 1, NET_MAX_CLIENTS_07, CFGFLAG
 MACRO_CONFIG_INT(SvMaxClientsPerIP, sv_max_clients_per_ip, 4, 1, NET_MAX_CLIENTS_07, CFGFLAG_SAVE | CFGFLAG_SERVER, "Maximum number of clients with the same IP that can connect to the server")
 MACRO_CONFIG_INT(SvBots, sv_bots, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Enable bots (0/1); natural monsters are limited to one per 48 tiles of world width")
 MACRO_CONFIG_STR(SvBotAI, sv_bot_ai, 64, "chase", CFGFLAG_SAVE | CFGFLAG_SERVER, "Bot AI strategy: chase, wander, stand, or script:<path> (bare name loads scripts/bot_ai/<name>.py)")
+MACRO_CONFIG_INT(SvCurrencyStart, sv_currency_start, 100, 0, 1000000000, CFGFLAG_SAVE | CFGFLAG_SERVER, "Currency (G) a new player starts with; 0 disables the grant")
 MACRO_CONFIG_INT(SvMappack, sv_mappack, 1, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Keep every generated world in one append-only pack per floor and restore it from there")
 MACRO_CONFIG_INT(SvMapDownloadSpeed, sv_map_download_speed, 12, 1, 16, CFGFLAG_SAVE | CFGFLAG_SERVER, "Number of map data packages a client gets on each request")
 MACRO_CONFIG_INT(SvHighBandwidth, sv_high_bandwidth, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_SERVER, "Use high bandwidth mode. Doubles the bandwidth required for the server. LAN use only")

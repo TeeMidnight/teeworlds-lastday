@@ -15,15 +15,14 @@
 class CGameContext;
 class IStorage;
 
-// One entry on an NPC's shelf. The price is another item; price_count 0 makes
-// the entry free. The stock rules come from the json; the stock itself is
-// runtime state persisted in npc_stock.
+// One entry on an NPC's shelf. The price is currency in G (0 makes the entry
+// free); the stock rules come from the json, and the stock itself is runtime
+// state persisted in npc_stock.
 struct SNpcSell
 {
 	CItemID m_Item;
 	int m_Count; // units handed over per purchase
-	CItemID m_PriceItem;
-	int m_PriceCount;
+	int64 m_Price; // price in G, never an item
 
 	// restock rules
 	int m_StockMin;

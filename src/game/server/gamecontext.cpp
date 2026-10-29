@@ -15,6 +15,7 @@
 #include <game/gamecore.h>
 #include <game/localization.h>
 #include <game/localization_format.h>
+#include <game/server/currency.h>
 #include <game/server/database/database.h>
 #include <game/server/database/database_util.h>
 #include <game/version.h>
@@ -1907,6 +1908,13 @@ void CGameContext::GiveStartingKit(int ClientID)
 	pItem->AddItem(ClientID, "gun", 1, true);
 	pItem->AddItem(ClientID, "pistol_bullet", 100, true);
 	pItem->AddItem(ClientID, "bandage", 3, true);
+
+	// New players also get their first G. It is an account ledger entry, not an
+	// item; sv_currency_start = 0 disables the grant.
+	CPlayer *pPlayer = m_apPlayers[ClientID];
+	const int64 Start = (int64) Config()->m_SvCurrencyStart;
+	if(Start > 0 && pPlayer && pPlayer->m_AccountUuid != UUID_ZEROED && m_pDatabase)
+		m_pDatabase->AddCurrency(pPlayer->m_AccountUuid, Start, "starting balance");
 }
 
 void CGameContext::SetupGuestPlayer(int ClientID)
@@ -2005,11 +2013,24 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 		return false;
 	}
 
-	const bool HasPrice = Sell.m_PriceCount > 0 && !Sell.m_PriceItem.IsZero();
-	if(HasPrice && pItems->GetItemCount(ClientID, Sell.m_PriceItem) < Sell.m_PriceCount)
+	// The price is ledger money, not an inventory stack. Keep the buyer's
+	// account on hand so the debit and the (possible) refund use the same one.
+	CPlayer *pBuyer = m_apPlayers[ClientID];
+	const Uuid BuyerAccount = pBuyer ? pBuyer->m_AccountUuid : UUID_ZEROED;
+	const int64 Price = Sell.m_Price;
+	if(Price > 0)
 	{
-		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You cannot afford this.", "Trade"));
-		return false;
+		int64 Balance = 0;
+		if(!m_pDatabase || BuyerAccount == UUID_ZEROED)
+		{
+			SendChat(-1, CHAT_WHISPER, ClientID, Localize("The bank is unavailable.", "Trade"));
+			return false;
+		}
+		if(!m_pDatabase->GetCurrencyBalance(BuyerAccount, &Balance) || Balance < Price)
+		{
+			SendChat(-1, CHAT_WHISPER, ClientID, Localize("You cannot afford this.", "Trade"));
+			return false;
+		}
 	}
 
 	// hand over the goods first: if the buyer has no room nothing has changed
@@ -2018,21 +2039,44 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You have no inventory space.", "Trade"));
 		return false;
 	}
-	if(HasPrice && !pItems->RemoveItem(ClientID, Sell.m_PriceItem, Sell.m_PriceCount))
+
+	char aReason[CURRENCY_REASON_SIZE];
+	aReason[0] = '\0';
+	if(Price > 0)
 	{
-		pItems->RemoveItem(ClientID, Sell.m_Item, Sell.m_Count);
-		return false;
+		char aItem[UUID_MAXSTRSIZE];
+		const char *pItem = Sell.m_Item.SourceName();
+		if(!pItem[0])
+		{
+			Sell.m_Item.FormatUuid(aItem, sizeof(aItem));
+			pItem = aItem;
+		}
+		str_format(aReason, sizeof(aReason), "buy from %s: %s x%d",
+			NpcIDDisplayName(pDef->m_Id), pItem, Sell.m_Count);
+		if(!m_pDatabase->SpendCurrency(BuyerAccount, Price, aReason))
+		{
+			pItems->RemoveItem(ClientID, Sell.m_Item, Sell.m_Count);
+			SendChat(-1, CHAT_WHISPER, ClientID, Localize("Payment failed.", "Trade"));
+			return false;
+		}
 	}
 	// take the stock out of the shelf; the checkout above already checked it
 	if(!m_pNpcSystem->ConsumeStock(DefIndex, SellIndex, Sell.m_Count))
 	{
 		pItems->RemoveItem(ClientID, Sell.m_Item, Sell.m_Count);
-		if(HasPrice)
-			pItems->AddItem(ClientID, Sell.m_PriceItem, Sell.m_PriceCount, true);
+		if(Price > 0)
+		{
+			// a refund is its own ledger row, so the audit trail shows both the
+			// charge and the reversal
+			char aRefund[CURRENCY_REASON_SIZE];
+			str_format(aRefund, sizeof(aRefund), "refund: %s", aReason);
+			m_pDatabase->AddCurrency(BuyerAccount, Price, aRefund);
+		}
 		return false;
 	}
 
-	const std::string Msg = LocalizeFormat("Trade", "Bought {} x{} from {}", pItems->GetName(Sell.m_Item), Sell.m_Count, NpcIDDisplayName(pDef->m_Id));
+	const std::string Msg = LocalizeFormat("Trade", "Bought {} x{} for {} G from {}",
+		pItems->GetName(Sell.m_Item), Sell.m_Count, Price, NpcIDDisplayName(pDef->m_Id));
 	SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
 
 	// other players looking at the shop must see the stock drop too; the caller

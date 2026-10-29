@@ -20,9 +20,9 @@
         "heal_aura": {"enabled": true, "radius": 150, "amount": 1, "interval": 100}
     },
     "sells": [
-        {"item": "bandage",    "count": 1, "price_item": "grass",      "price_count": 3, "stock_min": 8, "stock_max": 16, "restock_seconds": 240},
-        {"item": "herb_tonic", "count": 1, "price_item": "grass",      "price_count": 4, "stock_min": 3, "stock_max": 6,  "restock_seconds": 360},
-        {"item": "medkit",     "count": 1, "price_item": "iron_ingot", "price_count": 3, "stock_min": 1, "stock_max": 3,  "restock_seconds": 600}
+        {"item": "bandage",    "count": 1, "price": 8,  "stock_min": 8, "stock_max": 16, "restock_seconds": 240},
+        {"item": "herb_tonic", "count": 1, "price": 15, "stock_min": 3, "stock_max": 6,  "restock_seconds": 360},
+        {"item": "medkit",     "count": 1, "price": 60, "stock_min": 1, "stock_max": 3,  "restock_seconds": 600}
     ],
     "aggro": {
         "threshold": 0,

@@ -4,6 +4,7 @@
 #include <base/system.h>
 #include <engine/shared/jsonparser.h>
 #include <engine/storage.h>
+#include <game/server/currency.h>
 #include <game/server/database/database.h>
 
 #include "gamecontext.h"
@@ -25,6 +26,13 @@ static int ReadInt(const json_value &Value, int Default)
 {
 	if(Value.type == json_integer || Value.type == json_double)
 		return (int) (json_int_t) Value;
+	return Default;
+}
+
+static int64 ReadInt64(const json_value &Value, int64 Default)
+{
+	if(Value.type == json_integer || Value.type == json_double)
+		return (int64) (json_int_t) Value;
 	return Default;
 }
 
@@ -173,7 +181,9 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 		}
 	}
 
-	// shelf: what this NPC sells; the price is another item
+	// shelf: what this NPC sells. The price is currency in G, so an old entry
+	// that still names a price_item is skipped with a warning instead of
+	// silently becoming free (or staying barter).
 	{
 		const json_value &rSells = (*pJson)["sells"];
 		if(rSells.type == json_array)
@@ -187,12 +197,27 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 				if(!pItem[0])
 					continue;
 
+				// An old entry that names a price_item cannot be repriced
+				// automatically, so skip it instead of making it free. A
+				// missing price keeps the old "free entry" semantics.
+				int64 Price = 0;
+				const json_value &rPrice = rSell["price"];
+				if(rPrice.type == json_integer || rPrice.type == json_double)
+					Price = ReadInt64(rPrice, 0);
+				else if(rSell["price_item"].type == json_string)
+				{
+					dbg_msg("npc", "shelf entry '%s' uses the removed price_item barter format; add a \"price\" in G", pItem);
+					continue;
+				}
+				if(Price < 0)
+					Price = 0;
+				if(Price > CURRENCY_MAX_AMOUNT)
+					Price = CURRENCY_MAX_AMOUNT;
+
 				SNpcSell &Sell = pDef->m_lSells.emplace();
 				Sell.m_Item = CItemID::FromName(pItem);
 				Sell.m_Count = maximum(1, ReadInt(rSell["count"], 1));
-				const char *pPrice = rSell["price_item"];
-				Sell.m_PriceItem = CItemID::FromName(pPrice);
-				Sell.m_PriceCount = maximum(0, ReadInt(rSell["price_count"], 0));
+				Sell.m_Price = Price;
 
 				// restock rules; without a restock interval the stock never changes
 				Sell.m_StockMin = maximum(0, ReadInt(rSell["stock_min"], Sell.m_Count));
@@ -283,10 +308,8 @@ void CNpcSystem::PersistShelves()
 		{
 			SNpcSell &Sell = pDef->m_lSells[s];
 			char aItem[64];
-			char aPrice[64];
 			ItemSourceName(Sell.m_Item, aItem, sizeof(aItem));
-			ItemSourceName(Sell.m_PriceItem, aPrice, sizeof(aPrice));
-			pDB->SaveNpcSell(pDef->m_Id.Value(), aItem, Sell.m_Count, aPrice, Sell.m_PriceCount);
+			pDB->SaveNpcSell(pDef->m_Id.Value(), aItem, Sell.m_Count, Sell.m_Price);
 			LoadOrInitStock(m_lDefs[i], Sell);
 		}
 	}
@@ -305,23 +328,19 @@ void CNpcSystem::PersistStock(const SNpcDef *pDef, const SNpcSell &Sell)
 	if(!pDB)
 		return;
 	char aItem[64];
-	char aPrice[64];
 	ItemSourceName(Sell.m_Item, aItem, sizeof(aItem));
-	ItemSourceName(Sell.m_PriceItem, aPrice, sizeof(aPrice));
-	pDB->SaveNpcStock(pDef->m_Id.Value(), aItem, aPrice, Sell.m_Stock, Sell.m_RestockAt);
+	pDB->SaveNpcStock(pDef->m_Id.Value(), aItem, Sell.m_Price, Sell.m_Stock, Sell.m_RestockAt);
 }
 
 void CNpcSystem::LoadOrInitStock(SNpcDef *pDef, SNpcSell &Sell)
 {
 	CDatabase *pDB = m_pGameServer ? m_pGameServer->Database() : nullptr;
 	char aItem[64];
-	char aPrice[64];
 	ItemSourceName(Sell.m_Item, aItem, sizeof(aItem));
-	ItemSourceName(Sell.m_PriceItem, aPrice, sizeof(aPrice));
 
 	int Stock = 0;
 	int RestockAt = 0;
-	if(pDB && pDB->GetNpcStock(pDef->m_Id.Value(), aItem, aPrice, &Stock, &RestockAt))
+	if(pDB && pDB->GetNpcStock(pDef->m_Id.Value(), aItem, Sell.m_Price, &Stock, &RestockAt))
 	{
 		Sell.m_Stock = Stock;
 		Sell.m_RestockAt = RestockAt;

@@ -63,16 +63,16 @@ public:
 	};
 
 	// one persisted shop listing. The seller is an account uuid, so a listing
-	// outlives the session that posted it, and the item ids are stored by their
-	// source name ("lastday:stone") so they survive an id rehash.
+	// outlives the session that posted it, and the item id is stored by its
+	// source name ("lastday:stone") so it survives an id rehash. The price is
+	// currency ("G"), never another item.
 	struct SShopListing
 	{
 		int m_Id;
 		Uuid m_Seller;
 		char m_aOfferItem[64];
 		int m_OfferCount;
-		char m_aPriceItem[64];
-		int m_PriceCount;
+		int64 m_Price;
 	};
 
 	// configuration selected at startup from the sv_db_* cvars
@@ -167,13 +167,33 @@ public:
 	// A configured NPC's shelf is mirrored into SQL when its json is loaded, so
 	// the shop data is queryable even though the json stays the authoring
 	// source. Loading clears the NPC's rows first, so a removed entry is gone.
+	// The price is currency ("G").
 	virtual bool ClearNpcSells(const Uuid &Npc) = 0;
-	virtual bool SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, const char *pPriceItem, int PriceCount) = 0;
+	virtual bool SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, int64 Price) = 0;
 
 	// runtime stock of one shelf entry: how much is left and when it next
 	// restocks (unix seconds). Get returns false when the entry has no row yet.
-	virtual bool GetNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int *pStock, int *pRestockAt) = 0;
-	virtual bool SaveNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int Stock, int RestockAt) = 0;
+	virtual bool GetNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int *pStock, int *pRestockAt) = 0;
+	virtual bool SaveNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int Stock, int RestockAt) = 0;
+
+	// -------- currency ledger ("G") --------
+	// Currency is account scoped and is never stored as an item or a mutable
+	// balance: every operation appends a ledger row with a signed int64 delta
+	// and a short reason, and the balance is SUM(delta). That makes every
+	// debit/credit auditable and keeps the total derived from one source.
+	//
+	// Read the current balance of an account (0 when it has no rows).
+	virtual bool GetCurrencyBalance(const Uuid &Account, int64 *pOut) = 0;
+	// Append one signed ledger row. Delta must not be 0; the caller supplies
+	// what the operation did (e.g. "buy listing #7: stone x1").
+	virtual bool AddCurrency(const Uuid &Account, int64 Delta, const char *pReason) = 0;
+	// Atomically check that the account holds at least Amount and append the
+	// matching negative row. Returns false without writing when it cannot pay.
+	virtual bool SpendCurrency(const Uuid &Account, int64 Amount, const char *pReason) = 0;
+	// Move Amount from one account to another: checks the sender's balance and
+	// appends both rows (negative for From, positive for To) in one statement.
+	virtual bool TransferCurrency(const Uuid &From, const Uuid &To, int64 Amount,
+		const char *pFromReason, const char *pToReason) = 0;
 
 	// -------- world saves (world persistence) --------
 	// one row per world instance (one map name, e.g. "<floor>_<seed>" for

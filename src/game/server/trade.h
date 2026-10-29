@@ -10,10 +10,11 @@
 
 class CGameContext;
 
-// Player owned shops. Unlike LunarTee's trader bots, a player may put their own
-// goods up for sale and name any item as the price. The offered stack is moved
-// into escrow when the listing is created, so a listing can never promise items
-// the seller no longer has.
+// Player owned shops. A player puts their own goods up for sale at a price in
+// currency ("G"): the price is never another item, and the money is moved on
+// the account ledger in the database, not through the inventory. The offered
+// stack is moved into escrow when the listing is created, so a listing can
+// never promise items the seller no longer has.
 class CTradeSystem
 {
 public:
@@ -24,8 +25,7 @@ public:
 		Uuid m_SellerAccount; // the account the listing belongs to, used to persist it
 		CItemID m_OfferItem;
 		int m_OfferCount;
-		CItemID m_PriceItem;
-		int m_PriceCount;
+		int64 m_Price; // price in G
 	};
 
 private:
@@ -45,10 +45,10 @@ public:
 
 	void Init(CGameContext *pGameServer);
 
-	// Put OfferCount of OfferItem into escrow and list it for PriceCount of
-	// PriceItem. Returns the listing id, or -1 on failure (the player already
-	// got a chat message explaining why).
-	int AddListing(int Seller, const CItemID &OfferItem, int OfferCount, const CItemID &PriceItem, int PriceCount);
+	// Put OfferCount of OfferItem into escrow and list it for Price (G).
+	// Returns the listing id, or -1 on failure (the player already got a chat
+	// message explaining why).
+	int AddListing(int Seller, const CItemID &OfferItem, int OfferCount, int64 Price);
 	// Return the escrowed goods to the seller (or, with Force, drop them when
 	// the owner is gone) and delete the listing.
 	bool RemoveListing(int ListingId, int ByClient, bool Force);

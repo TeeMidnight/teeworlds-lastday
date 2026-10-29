@@ -3,9 +3,12 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* PostgreSQL (libpq) backend for the database. */
 #include <base/system.h>
+#include <game/server/currency.h>
 #include <game/server/database/database_postgres.h>
 
 #include <libpq-fe.h>
+
+#include <stdlib.h>
 
 // convert a dot-notation json path ("inventory.0.count") into a PostgreSQL
 // jsonb text[] path ("{inventory,0,count}")
@@ -37,6 +40,46 @@ static bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
 	pOut[Offset - 1] = '}'; // replace the trailing comma
 	pOut[Offset] = '\0';
 	return true;
+}
+
+// whether an existing table has a column; used to recognise the old barter
+// shop schema and migrate it once instead of silently misreading it
+static bool PgTableHasColumn(PGconn *pConn, const char *pTable, const char *pColumn)
+{
+	const char *apParams[2] = {pTable, pColumn};
+	PGresult *pRes = PQexecParams(pConn,
+		"SELECT 1 FROM information_schema.columns "
+		"WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2;",
+		2, 0, apParams, 0, 0, 0);
+	const bool Found = PQresultStatus(pRes) == PGRES_TUPLES_OK && PQntuples(pRes) > 0;
+	PQclear(pRes);
+	return Found;
+}
+
+// The old barter listings cannot be converted to G, so keep them under a
+// different name for manual recovery; the npc tables are derived from the json
+// and are simply rebuilt.
+static void PgMigrateLegacyShopSchema(PGconn *pConn)
+{
+	if(PgTableHasColumn(pConn, "shop_listings", "price_item") && !PgTableHasColumn(pConn, "shop_listings", "price"))
+	{
+		PGresult *pRes = PQexec(pConn,
+			"DROP TABLE IF EXISTS shop_listings_barter_legacy;"
+			"ALTER TABLE shop_listings RENAME TO shop_listings_barter_legacy;");
+		if(PQresultStatus(pRes) == PGRES_COMMAND_OK)
+			dbg_msg("database", "legacy barter shop listings moved to shop_listings_barter_legacy");
+		else
+			dbg_msg("database", "failed to archive legacy barter shop listings: %s", PQresultErrorMessage(pRes));
+		PQclear(pRes);
+	}
+
+	if(PgTableHasColumn(pConn, "npc_shop", "price_item") || PgTableHasColumn(pConn, "npc_stock", "price_item"))
+	{
+		PGresult *pRes = PQexec(pConn, "DROP TABLE IF EXISTS npc_shop; DROP TABLE IF EXISTS npc_stock;");
+		if(PQresultStatus(pRes) == PGRES_COMMAND_OK)
+			dbg_msg("database", "dropped the legacy npc shop/stock tables; they are rebuilt from the npc json");
+		PQclear(pRes);
+	}
 }
 
 CDatabasePostgres::CDatabasePostgres(const SConfig &Config)
@@ -79,6 +122,8 @@ bool CDatabasePostgres::Init()
 		m_pConn = 0;
 		return false;
 	}
+
+	PgMigrateLegacyShopSchema(m_pConn);
 
 	// create the schema at runtime (idempotent); the "data" column is JSONB
 	// and the primary key uses PostgreSQL's native UUID type
@@ -136,16 +181,33 @@ bool CDatabasePostgres::Init()
 		dbg_msg("database", "failed to create npc_aggro schema: %s", PQresultErrorMessage(pRes));
 	PQclear(pRes);
 
+	// the currency ledger: one signed int64 delta per row and the reason it was
+	// written. The balance is always SUM(delta); there is no balance column
+	// that could drift.
+	const char *pCreateCurrency =
+		"CREATE TABLE IF NOT EXISTS currency_ledger ("
+		" id SERIAL PRIMARY KEY,"
+		" account UUID NOT NULL,"
+		" delta BIGINT NOT NULL,"
+		" reason TEXT NOT NULL,"
+		" created_at BIGINT NOT NULL);"
+		"CREATE INDEX IF NOT EXISTS currency_ledger_account ON currency_ledger(account);";
+
+	pRes = PQexec(m_pConn, pCreateCurrency);
+	const bool CurrencyOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!CurrencyOk)
+		dbg_msg("database", "failed to create currency_ledger schema: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+
 	// persisted shop listings; the seller is an account, so the escrowed goods
-	// outlive the session that posted them
+	// outlive the session that posted them. The price is currency (G).
 	const char *pCreateShop =
 		"CREATE TABLE IF NOT EXISTS shop_listings ("
 		" id INTEGER PRIMARY KEY,"
 		" seller UUID NOT NULL,"
 		" offer_item TEXT NOT NULL,"
 		" offer_count INTEGER NOT NULL,"
-		" price_item TEXT NOT NULL,"
-		" price_count INTEGER NOT NULL);";
+		" price BIGINT NOT NULL);";
 
 	pRes = PQexec(m_pConn, pCreateShop);
 	const bool ShopOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
@@ -159,9 +221,8 @@ bool CDatabasePostgres::Init()
 		" npc_id UUID NOT NULL,"
 		" item TEXT NOT NULL,"
 		" \"count\" INTEGER NOT NULL,"
-		" price_item TEXT NOT NULL,"
-		" price_count INTEGER NOT NULL,"
-		" PRIMARY KEY (npc_id, item, price_item));";
+		" price BIGINT NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price));";
 
 	pRes = PQexec(m_pConn, pCreateNpcShop);
 	const bool NpcShopOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
@@ -174,10 +235,10 @@ bool CDatabasePostgres::Init()
 		"CREATE TABLE IF NOT EXISTS npc_stock ("
 		" npc_id UUID NOT NULL,"
 		" item TEXT NOT NULL,"
-		" price_item TEXT NOT NULL,"
+		" price BIGINT NOT NULL,"
 		" stock INTEGER NOT NULL,"
 		" restock_at BIGINT NOT NULL,"
-		" PRIMARY KEY (npc_id, item, price_item));";
+		" PRIMARY KEY (npc_id, item, price));";
 
 	pRes = PQexec(m_pConn, pCreateNpcStock);
 	const bool NpcStockOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
@@ -185,9 +246,9 @@ bool CDatabasePostgres::Init()
 		dbg_msg("database", "failed to create npc_stock schema: %s", PQresultErrorMessage(pRes));
 	PQclear(pRes);
 
-	if(Ok && SavesOk && AggroOk && ShopOk && NpcShopOk && NpcStockOk)
+	if(Ok && SavesOk && AggroOk && CurrencyOk && ShopOk && NpcShopOk && NpcStockOk)
 		dbg_msg("database", "postgres database ready");
-	return Ok && SavesOk && AggroOk && ShopOk && NpcShopOk && NpcStockOk;
+	return Ok && SavesOk && AggroOk && CurrencyOk && ShopOk && NpcShopOk && NpcStockOk;
 }
 
 bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
@@ -721,7 +782,7 @@ bool CDatabasePostgres::LoadShopListings(array<SShopListing> &out)
 		return false;
 
 	PGresult *pRes = PQexec(m_pConn,
-		"SELECT id, seller, offer_item, offer_count, price_item, price_count FROM shop_listings ORDER BY id;");
+		"SELECT id, seller, offer_item, offer_count, price FROM shop_listings ORDER BY id;");
 	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
 	{
 		PQclear(pRes);
@@ -736,8 +797,7 @@ bool CDatabasePostgres::LoadShopListings(array<SShopListing> &out)
 		parse_uuid(&Listing.m_Seller, PQgetvalue(pRes, i, 1));
 		str_copy(Listing.m_aOfferItem, PQgetvalue(pRes, i, 2), sizeof(Listing.m_aOfferItem));
 		Listing.m_OfferCount = str_toint(PQgetvalue(pRes, i, 3));
-		str_copy(Listing.m_aPriceItem, PQgetvalue(pRes, i, 4), sizeof(Listing.m_aPriceItem));
-		Listing.m_PriceCount = str_toint(PQgetvalue(pRes, i, 5));
+		Listing.m_Price = (int64) strtoll(PQgetvalue(pRes, i, 4), 0, 10);
 	}
 	PQclear(pRes);
 	return true;
@@ -752,19 +812,19 @@ bool CDatabasePostgres::SaveShopListing(const SShopListing &Listing)
 	char aSeller[UUID_MAXSTRSIZE];
 	char aId[32];
 	char aOfferCount[32];
-	char aPriceCount[32];
+	char aPrice[32];
 	format_uuid(Listing.m_Seller, aSeller, sizeof(aSeller));
 	str_format(aId, sizeof(aId), "%d", Listing.m_Id);
 	str_format(aOfferCount, sizeof(aOfferCount), "%d", Listing.m_OfferCount);
-	str_format(aPriceCount, sizeof(aPriceCount), "%d", Listing.m_PriceCount);
+	str_format(aPrice, sizeof(aPrice), "%lld", (long long) Listing.m_Price);
 
-	const char *apParams[6] = {aId, aSeller, Listing.m_aOfferItem, aOfferCount, Listing.m_aPriceItem, aPriceCount};
+	const char *apParams[5] = {aId, aSeller, Listing.m_aOfferItem, aOfferCount, aPrice};
 	PGresult *pRes = PQexecParams(m_pConn,
-		"INSERT INTO shop_listings (id, seller, offer_item, offer_count, price_item, price_count) "
-		"VALUES ($1::int, $2::uuid, $3::text, $4::int, $5::text, $6::int) "
+		"INSERT INTO shop_listings (id, seller, offer_item, offer_count, price) "
+		"VALUES ($1::int, $2::uuid, $3::text, $4::int, $5::bigint) "
 		"ON CONFLICT (id) DO UPDATE SET seller = EXCLUDED.seller, offer_item = EXCLUDED.offer_item, "
-		"offer_count = EXCLUDED.offer_count, price_item = EXCLUDED.price_item, price_count = EXCLUDED.price_count;",
-		6, 0, apParams, 0, 0, 0);
+		"offer_count = EXCLUDED.offer_count, price = EXCLUDED.price;",
+		5, 0, apParams, 0, 0, 0);
 	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
 		dbg_msg("database", "failed to save shop listing #%d: %s", Listing.m_Id, PQresultErrorMessage(pRes));
@@ -802,7 +862,7 @@ bool CDatabasePostgres::ClearNpcSells(const Uuid &Npc)
 	return Ok;
 }
 
-bool CDatabasePostgres::SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, const char *pPriceItem, int PriceCount)
+bool CDatabasePostgres::SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, int64 Price)
 {
 	CDatabaseLock Guard(m_Lock);
 	if(!EnsureConnected())
@@ -810,16 +870,16 @@ bool CDatabasePostgres::SaveNpcSell(const Uuid &Npc, const char *pItem, int Coun
 
 	char aNpc[UUID_MAXSTRSIZE];
 	char aCount[32];
-	char aPriceCount[32];
+	char aPrice[32];
 	format_uuid(Npc, aNpc, sizeof(aNpc));
 	str_format(aCount, sizeof(aCount), "%d", Count);
-	str_format(aPriceCount, sizeof(aPriceCount), "%d", PriceCount);
+	str_format(aPrice, sizeof(aPrice), "%lld", (long long) Price);
 
-	const char *apParams[5] = {aNpc, pItem, aCount, pPriceItem, aPriceCount};
+	const char *apParams[4] = {aNpc, pItem, aCount, aPrice};
 	PGresult *pRes = PQexecParams(m_pConn,
-		"INSERT INTO npc_shop (npc_id, item, \"count\", price_item, price_count) VALUES ($1::uuid, $2::text, $3::int, $4::text, $5::int) "
-		"ON CONFLICT (npc_id, item, price_item) DO UPDATE SET \"count\" = EXCLUDED.\"count\", price_count = EXCLUDED.price_count;",
-		5, 0, apParams, 0, 0, 0);
+		"INSERT INTO npc_shop (npc_id, item, \"count\", price) VALUES ($1::uuid, $2::text, $3::int, $4::bigint) "
+		"ON CONFLICT (npc_id, item, price) DO UPDATE SET \"count\" = EXCLUDED.\"count\";",
+		4, 0, apParams, 0, 0, 0);
 	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
 		dbg_msg("database", "failed to save npc sell '%s': %s", aNpc, PQresultErrorMessage(pRes));
@@ -827,18 +887,20 @@ bool CDatabasePostgres::SaveNpcSell(const Uuid &Npc, const char *pItem, int Coun
 	return Ok;
 }
 
-bool CDatabasePostgres::GetNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int *pStock, int *pRestockAt)
+bool CDatabasePostgres::GetNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int *pStock, int *pRestockAt)
 {
 	CDatabaseLock Guard(m_Lock);
 	if(!EnsureConnected())
 		return false;
 
 	char aNpc[UUID_MAXSTRSIZE];
+	char aPrice[32];
 	format_uuid(Npc, aNpc, sizeof(aNpc));
+	str_format(aPrice, sizeof(aPrice), "%lld", (long long) Price);
 
-	const char *apParams[3] = {aNpc, pItem, pPriceItem};
+	const char *apParams[3] = {aNpc, pItem, aPrice};
 	PGresult *pRes = PQexecParams(m_pConn,
-		"SELECT stock, restock_at FROM npc_stock WHERE npc_id = $1::uuid AND item = $2::text AND price_item = $3::text;",
+		"SELECT stock, restock_at FROM npc_stock WHERE npc_id = $1::uuid AND item = $2::text AND price = $3::bigint;",
 		3, 0, apParams, 0, 0, 0);
 	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
 	{
@@ -857,27 +919,144 @@ bool CDatabasePostgres::GetNpcStock(const Uuid &Npc, const char *pItem, const ch
 	return Found;
 }
 
-bool CDatabasePostgres::SaveNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int Stock, int RestockAt)
+bool CDatabasePostgres::SaveNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int Stock, int RestockAt)
 {
 	CDatabaseLock Guard(m_Lock);
 	if(!EnsureConnected())
 		return false;
 
 	char aNpc[UUID_MAXSTRSIZE];
+	char aPrice[32];
 	char aStock[32];
 	char aRestock[32];
 	format_uuid(Npc, aNpc, sizeof(aNpc));
+	str_format(aPrice, sizeof(aPrice), "%lld", (long long) Price);
 	str_format(aStock, sizeof(aStock), "%d", Stock);
 	str_format(aRestock, sizeof(aRestock), "%d", RestockAt);
 
-	const char *apParams[5] = {aNpc, pItem, pPriceItem, aStock, aRestock};
+	const char *apParams[5] = {aNpc, pItem, aPrice, aStock, aRestock};
 	PGresult *pRes = PQexecParams(m_pConn,
-		"INSERT INTO npc_stock (npc_id, item, price_item, stock, restock_at) VALUES ($1::uuid, $2::text, $3::text, $4::int, $5::bigint) "
-		"ON CONFLICT (npc_id, item, price_item) DO UPDATE SET stock = EXCLUDED.stock, restock_at = EXCLUDED.restock_at;",
+		"INSERT INTO npc_stock (npc_id, item, price, stock, restock_at) VALUES ($1::uuid, $2::text, $3::bigint, $4::int, $5::bigint) "
+		"ON CONFLICT (npc_id, item, price) DO UPDATE SET stock = EXCLUDED.stock, restock_at = EXCLUDED.restock_at;",
 		5, 0, apParams, 0, 0, 0);
 	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
 		dbg_msg("database", "failed to save npc stock '%s': %s", aNpc, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+// currency helpers assume the caller already holds m_Lock
+static bool PgReadCurrencyBalance(PGconn *pConn, const Uuid &Account, int64 *pOut)
+{
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+
+	const char *apParams[1] = {aAccount};
+	PGresult *pRes = PQexecParams(pConn,
+		"SELECT COALESCE(SUM(delta), 0) FROM currency_ledger WHERE account = $1::uuid;",
+		1, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+
+	bool Ok = false;
+	if(PQntuples(pRes) > 0 && !PQgetisnull(pRes, 0, 0))
+	{
+		*pOut = (int64) strtoll(PQgetvalue(pRes, 0, 0), 0, 10);
+		Ok = true;
+	}
+	PQclear(pRes);
+	return Ok;
+}
+
+static bool PgInsertCurrency(PGconn *pConn, const Uuid &Account, int64 Delta, const char *pReason, int CreatedAt)
+{
+	char aAccount[UUID_MAXSTRSIZE];
+	char aDelta[32];
+	char aCreated[32];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+	str_format(aDelta, sizeof(aDelta), "%lld", (long long) Delta);
+	str_format(aCreated, sizeof(aCreated), "%d", CreatedAt);
+
+	const char *apParams[4] = {aAccount, aDelta, pReason ? pReason : "", aCreated};
+	PGresult *pRes = PQexecParams(pConn,
+		"INSERT INTO currency_ledger (account, delta, reason, created_at) "
+		"VALUES ($1::uuid, $2::bigint, $3::text, $4::bigint);",
+		4, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to append currency ledger row for '%s': %s", aAccount, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::GetCurrencyBalance(const Uuid &Account, int64 *pOut)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || !pOut || Account == UUID_ZEROED)
+		return false;
+	return PgReadCurrencyBalance(m_pConn, Account, pOut);
+}
+
+bool CDatabasePostgres::AddCurrency(const Uuid &Account, int64 Delta, const char *pReason)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || Account == UUID_ZEROED || Delta == 0 || Delta > CURRENCY_MAX_AMOUNT || Delta < -CURRENCY_MAX_AMOUNT)
+		return false;
+	return PgInsertCurrency(m_pConn, Account, Delta, pReason, time_timestamp());
+}
+
+bool CDatabasePostgres::SpendCurrency(const Uuid &Account, int64 Amount, const char *pReason)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || Account == UUID_ZEROED || Amount <= 0 || Amount > CURRENCY_MAX_AMOUNT)
+		return false;
+
+	int64 Balance = 0;
+	if(!PgReadCurrencyBalance(m_pConn, Account, &Balance))
+		return false;
+	if(Balance < Amount)
+		return false;
+	return PgInsertCurrency(m_pConn, Account, -Amount, pReason, time_timestamp());
+}
+
+bool CDatabasePostgres::TransferCurrency(const Uuid &From, const Uuid &To, int64 Amount,
+	const char *pFromReason, const char *pToReason)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected() || From == UUID_ZEROED || To == UUID_ZEROED || From == To ||
+		Amount <= 0 || Amount > CURRENCY_MAX_AMOUNT)
+		return false;
+
+	int64 Balance = 0;
+	if(!PgReadCurrencyBalance(m_pConn, From, &Balance))
+		return false;
+	if(Balance < Amount)
+		return false;
+
+	char aFrom[UUID_MAXSTRSIZE];
+	char aTo[UUID_MAXSTRSIZE];
+	char aNeg[32];
+	char aPos[32];
+	char aCreated[32];
+	format_uuid(From, aFrom, sizeof(aFrom));
+	format_uuid(To, aTo, sizeof(aTo));
+	str_format(aNeg, sizeof(aNeg), "%lld", (long long) -Amount);
+	str_format(aPos, sizeof(aPos), "%lld", (long long) Amount);
+	str_format(aCreated, sizeof(aCreated), "%d", time_timestamp());
+
+	// one INSERT keeps the debit and the credit together
+	const char *apParams[7] = {aFrom, aNeg, pFromReason ? pFromReason : "", aCreated, aTo, aPos, pToReason ? pToReason : ""};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO currency_ledger (account, delta, reason, created_at) VALUES "
+		"($1::uuid, $2::bigint, $3::text, $4::bigint), ($5::uuid, $6::bigint, $7::text, $4::bigint);",
+		7, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to transfer currency '%s' -> '%s': %s", aFrom, aTo, PQresultErrorMessage(pRes));
 	PQclear(pRes);
 	return Ok;
 }

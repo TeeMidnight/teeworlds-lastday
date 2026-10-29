@@ -3,6 +3,7 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 /* SQLite (embedded) backend for the database. */
 #include <base/system.h>
+#include <game/server/currency.h>
 #include <game/server/database/database_sqlite.h>
 
 #include <sqlite3.h>
@@ -51,6 +52,55 @@ static bool BuildJsonPath(const CJsonPath &Path, char *pOut, int Size)
 	return true;
 }
 
+// whether an existing table has a column; used to recognise the old barter
+// shop schema and migrate it once instead of silently misreading it
+static bool SqliteTableHasColumn(sqlite3 *pDB, const char *pTable, const char *pColumn)
+{
+	char aSql[128];
+	str_format(aSql, sizeof(aSql), "PRAGMA table_info(\"%s\");", pTable);
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(pDB, aSql, -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+
+	bool Found = false;
+	while(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		const unsigned char *pName = sqlite3_column_text(pStmt, 1);
+		if(pName && str_comp((const char *) pName, pColumn) == 0)
+		{
+			Found = true;
+			break;
+		}
+	}
+	sqlite3_finalize(pStmt);
+	return Found;
+}
+
+// The shop was a barter market before currency: shop_listings carried
+// price_item/price_count and the npc tables keyed their stock by the price
+// item. None of those rows can be converted to G, so the old listing table is
+// preserved under a different name for manual recovery and the derived npc
+// tables are dropped (they are rebuilt from the npc json on every start).
+static void SqliteMigrateLegacyShopSchema(sqlite3 *pDB)
+{
+	if(SqliteTableHasColumn(pDB, "shop_listings", "price_item") && !SqliteTableHasColumn(pDB, "shop_listings", "price"))
+	{
+		if(sqlite3_exec(pDB,
+			   "DROP TABLE IF EXISTS shop_listings_barter_legacy;"
+			   "ALTER TABLE shop_listings RENAME TO shop_listings_barter_legacy;",
+			   0, 0, 0) == SQLITE_OK)
+			dbg_msg("database", "legacy barter shop listings moved to shop_listings_barter_legacy");
+		else
+			dbg_msg("database", "failed to archive legacy barter shop listings");
+	}
+
+	if(SqliteTableHasColumn(pDB, "npc_shop", "price_item") || SqliteTableHasColumn(pDB, "npc_stock", "price_item"))
+	{
+		if(sqlite3_exec(pDB, "DROP TABLE IF EXISTS npc_shop; DROP TABLE IF EXISTS npc_stock;", 0, 0, 0) == SQLITE_OK)
+			dbg_msg("database", "dropped the legacy npc shop/stock tables; they are rebuilt from the npc json");
+	}
+}
+
 CDatabaseSQLite::CDatabaseSQLite(const SConfig &Config)
 {
 	m_pDB = 0;
@@ -90,6 +140,8 @@ bool CDatabaseSQLite::Init()
 		return false;
 	}
 
+	SqliteMigrateLegacyShopSchema(m_pDB);
+
 	// create the schema at runtime (idempotent); the "data" column is JSON.
 	// world_saves rows carry the auto-increment cell "id" as primary key
 	const char *pCreate =
@@ -121,30 +173,39 @@ bool CDatabaseSQLite::Init()
 		" delta INTEGER NOT NULL,"
 		" created_at INTEGER NOT NULL);"
 		"CREATE INDEX IF NOT EXISTS npc_aggro_pair ON npc_aggro(npc_id, userid);"
-		// persisted shop listings: the escrowed goods outlive the session
+		// the currency ledger: one signed int64 delta per row and the reason it
+		// was written. The balance is always SUM(delta); there is no balance
+		// column that could drift.
+		"CREATE TABLE IF NOT EXISTS currency_ledger ("
+		" \"id\" INTEGER PRIMARY KEY AUTOINCREMENT,"
+		" account TEXT NOT NULL,"
+		" delta INTEGER NOT NULL,"
+		" reason TEXT NOT NULL,"
+		" created_at INTEGER NOT NULL);"
+		"CREATE INDEX IF NOT EXISTS currency_ledger_account ON currency_ledger(account);"
+		// persisted shop listings: the escrowed goods outlive the session. The
+		// price is currency (G), not another item.
 		"CREATE TABLE IF NOT EXISTS shop_listings ("
 		" id INTEGER PRIMARY KEY,"
 		" seller TEXT NOT NULL,"
 		" offer_item TEXT NOT NULL,"
 		" offer_count INTEGER NOT NULL,"
-		" price_item TEXT NOT NULL,"
-		" price_count INTEGER NOT NULL);"
+		" price INTEGER NOT NULL);"
 		// the shelf of each configured NPC, mirrored from its json
 		"CREATE TABLE IF NOT EXISTS npc_shop ("
 		" npc_id TEXT NOT NULL,"
 		" item TEXT NOT NULL,"
 		" \"count\" INTEGER NOT NULL,"
-		" price_item TEXT NOT NULL,"
-		" price_count INTEGER NOT NULL,"
-		" PRIMARY KEY (npc_id, item, price_item));"
+		" price INTEGER NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price));"
 		// runtime stock of each shelf entry, so a purchase/restock survives a restart
 		"CREATE TABLE IF NOT EXISTS npc_stock ("
 		" npc_id TEXT NOT NULL,"
 		" item TEXT NOT NULL,"
-		" price_item TEXT NOT NULL,"
+		" price INTEGER NOT NULL,"
 		" stock INTEGER NOT NULL,"
 		" restock_at INTEGER NOT NULL,"
-		" PRIMARY KEY (npc_id, item, price_item));";
+		" PRIMARY KEY (npc_id, item, price));";
 
 	char *pErr = 0;
 	if(sqlite3_exec(m_pDB, pCreate, 0, 0, &pErr) != SQLITE_OK)
@@ -731,7 +792,7 @@ bool CDatabaseSQLite::LoadShopListings(array<SShopListing> &out)
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-		   "SELECT id, seller, offer_item, offer_count, price_item, price_count FROM shop_listings ORDER BY id;",
+		   "SELECT id, seller, offer_item, offer_count, price FROM shop_listings ORDER BY id;",
 		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 
@@ -747,9 +808,7 @@ bool CDatabaseSQLite::LoadShopListings(array<SShopListing> &out)
 		p = sqlite3_column_text(pStmt, 2);
 		str_copy(Listing.m_aOfferItem, p ? (const char *) p : "", sizeof(Listing.m_aOfferItem));
 		Listing.m_OfferCount = sqlite3_column_int(pStmt, 3);
-		p = sqlite3_column_text(pStmt, 4);
-		str_copy(Listing.m_aPriceItem, p ? (const char *) p : "", sizeof(Listing.m_aPriceItem));
-		Listing.m_PriceCount = sqlite3_column_int(pStmt, 5);
+		Listing.m_Price = (int64) sqlite3_column_int64(pStmt, 4);
 	}
 	sqlite3_finalize(pStmt);
 	return true;
@@ -766,16 +825,15 @@ bool CDatabaseSQLite::SaveShopListing(const SShopListing &Listing)
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-		   "INSERT OR REPLACE INTO shop_listings (id, seller, offer_item, offer_count, price_item, price_count) "
-		   "VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+		   "INSERT OR REPLACE INTO shop_listings (id, seller, offer_item, offer_count, price) "
+		   "VALUES (?1, ?2, ?3, ?4, ?5);",
 		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_int(pStmt, 1, Listing.m_Id);
 	sqlite3_bind_text(pStmt, 2, aSeller, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 3, Listing.m_aOfferItem, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_int(pStmt, 4, Listing.m_OfferCount);
-	sqlite3_bind_text(pStmt, 5, Listing.m_aPriceItem, -1, SQLITE_TRANSIENT);
-	sqlite3_bind_int(pStmt, 6, Listing.m_PriceCount);
+	sqlite3_bind_int64(pStmt, 5, (sqlite3_int64) Listing.m_Price);
 
 	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
@@ -818,7 +876,7 @@ bool CDatabaseSQLite::ClearNpcSells(const Uuid &Npc)
 	return Ok;
 }
 
-bool CDatabaseSQLite::SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, const char *pPriceItem, int PriceCount)
+bool CDatabaseSQLite::SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, int64 Price)
 {
 	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
@@ -829,14 +887,13 @@ bool CDatabaseSQLite::SaveNpcSell(const Uuid &Npc, const char *pItem, int Count,
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-		   "INSERT OR REPLACE INTO npc_shop (npc_id, item, \"count\", price_item, price_count) VALUES (?1, ?2, ?3, ?4, ?5);",
+		   "INSERT OR REPLACE INTO npc_shop (npc_id, item, \"count\", price) VALUES (?1, ?2, ?3, ?4);",
 		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 2, pItem, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_int(pStmt, 3, Count);
-	sqlite3_bind_text(pStmt, 4, pPriceItem, -1, SQLITE_TRANSIENT);
-	sqlite3_bind_int(pStmt, 5, PriceCount);
+	sqlite3_bind_int64(pStmt, 4, (sqlite3_int64) Price);
 
 	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
@@ -845,7 +902,7 @@ bool CDatabaseSQLite::SaveNpcSell(const Uuid &Npc, const char *pItem, int Count,
 	return Ok;
 }
 
-bool CDatabaseSQLite::GetNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int *pStock, int *pRestockAt)
+bool CDatabaseSQLite::GetNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int *pStock, int *pRestockAt)
 {
 	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
@@ -856,12 +913,12 @@ bool CDatabaseSQLite::GetNpcStock(const Uuid &Npc, const char *pItem, const char
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-		   "SELECT stock, restock_at FROM npc_stock WHERE npc_id = ?1 AND item = ?2 AND price_item = ?3;",
+		   "SELECT stock, restock_at FROM npc_stock WHERE npc_id = ?1 AND item = ?2 AND price = ?3;",
 		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 2, pItem, -1, SQLITE_TRANSIENT);
-	sqlite3_bind_text(pStmt, 3, pPriceItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 3, (sqlite3_int64) Price);
 
 	bool Found = false;
 	if(sqlite3_step(pStmt) == SQLITE_ROW)
@@ -874,7 +931,7 @@ bool CDatabaseSQLite::GetNpcStock(const Uuid &Npc, const char *pItem, const char
 	return Found;
 }
 
-bool CDatabaseSQLite::SaveNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int Stock, int RestockAt)
+bool CDatabaseSQLite::SaveNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int Stock, int RestockAt)
 {
 	CDatabaseLock Guard(m_Lock);
 	if(!m_pDB)
@@ -885,18 +942,134 @@ bool CDatabaseSQLite::SaveNpcStock(const Uuid &Npc, const char *pItem, const cha
 
 	sqlite3_stmt *pStmt = 0;
 	if(sqlite3_prepare_v2(m_pDB,
-		   "INSERT OR REPLACE INTO npc_stock (npc_id, item, price_item, stock, restock_at) VALUES (?1, ?2, ?3, ?4, ?5);",
+		   "INSERT OR REPLACE INTO npc_stock (npc_id, item, price, stock, restock_at) VALUES (?1, ?2, ?3, ?4, ?5);",
 		   -1, &pStmt, 0) != SQLITE_OK)
 		return false;
 	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
 	sqlite3_bind_text(pStmt, 2, pItem, -1, SQLITE_TRANSIENT);
-	sqlite3_bind_text(pStmt, 3, pPriceItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 3, (sqlite3_int64) Price);
 	sqlite3_bind_int(pStmt, 4, Stock);
 	sqlite3_bind_int(pStmt, 5, RestockAt);
 
 	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
 		dbg_msg("database", "failed to save npc stock '%s': %s", aNpc, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+// currency helpers assume the caller already holds m_Lock
+static bool SqliteReadCurrencyBalance(sqlite3 *pDB, const Uuid &Account, int64 *pOut)
+{
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(pDB,
+		   "SELECT COALESCE(SUM(delta), 0) FROM currency_ledger WHERE account = ?1;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aAccount, -1, SQLITE_TRANSIENT);
+
+	bool Ok = false;
+	if(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		*pOut = (int64) sqlite3_column_int64(pStmt, 0);
+		Ok = true;
+	}
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+static bool SqliteInsertCurrency(sqlite3 *pDB, const Uuid &Account, int64 Delta, const char *pReason, int CreatedAt)
+{
+	char aAccount[UUID_MAXSTRSIZE];
+	format_uuid(Account, aAccount, sizeof(aAccount));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(pDB,
+		   "INSERT INTO currency_ledger (account, delta, reason, created_at) VALUES (?1, ?2, ?3, ?4);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aAccount, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 2, (sqlite3_int64) Delta);
+	sqlite3_bind_text(pStmt, 3, pReason ? pReason : "", -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 4, (sqlite3_int64) CreatedAt);
+
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to append currency ledger row for '%s': %s", aAccount, sqlite3_errmsg(pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::GetCurrencyBalance(const Uuid &Account, int64 *pOut)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || !pOut || Account == UUID_ZEROED)
+		return false;
+	return SqliteReadCurrencyBalance(m_pDB, Account, pOut);
+}
+
+bool CDatabaseSQLite::AddCurrency(const Uuid &Account, int64 Delta, const char *pReason)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || Account == UUID_ZEROED || Delta == 0 || Delta > CURRENCY_MAX_AMOUNT || Delta < -CURRENCY_MAX_AMOUNT)
+		return false;
+	return SqliteInsertCurrency(m_pDB, Account, Delta, pReason, time_timestamp());
+}
+
+bool CDatabaseSQLite::SpendCurrency(const Uuid &Account, int64 Amount, const char *pReason)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || Account == UUID_ZEROED || Amount <= 0 || Amount > CURRENCY_MAX_AMOUNT)
+		return false;
+
+	int64 Balance = 0;
+	if(!SqliteReadCurrencyBalance(m_pDB, Account, &Balance))
+		return false;
+	if(Balance < Amount)
+		return false;
+	return SqliteInsertCurrency(m_pDB, Account, -Amount, pReason, time_timestamp());
+}
+
+bool CDatabaseSQLite::TransferCurrency(const Uuid &From, const Uuid &To, int64 Amount,
+	const char *pFromReason, const char *pToReason)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB || From == UUID_ZEROED || To == UUID_ZEROED || From == To || Amount <= 0 || Amount > CURRENCY_MAX_AMOUNT)
+		return false;
+
+	int64 Balance = 0;
+	if(!SqliteReadCurrencyBalance(m_pDB, From, &Balance))
+		return false;
+	if(Balance < Amount)
+		return false;
+
+	char aFrom[UUID_MAXSTRSIZE];
+	char aTo[UUID_MAXSTRSIZE];
+	format_uuid(From, aFrom, sizeof(aFrom));
+	format_uuid(To, aTo, sizeof(aTo));
+	const int CreatedAt = time_timestamp();
+
+	// one INSERT keeps the debit and the credit together
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT INTO currency_ledger (account, delta, reason, created_at) "
+		   "VALUES (?1, ?2, ?3, ?4), (?5, ?6, ?7, ?4);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aFrom, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 2, (sqlite3_int64) -Amount);
+	sqlite3_bind_text(pStmt, 3, pFromReason ? pFromReason : "", -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 4, (sqlite3_int64) CreatedAt);
+	sqlite3_bind_text(pStmt, 5, aTo, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 6, (sqlite3_int64) Amount);
+	sqlite3_bind_text(pStmt, 7, pToReason ? pToReason : "", -1, SQLITE_TRANSIENT);
+
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to transfer currency '%s' -> '%s': %s", aFrom, aTo, sqlite3_errmsg(m_pDB));
 	sqlite3_finalize(pStmt);
 	return Ok;
 }

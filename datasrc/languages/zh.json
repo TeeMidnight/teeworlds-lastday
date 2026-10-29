@@ -902,8 +902,8 @@
 		},
 		{
 			"context": "Trade",
-			"or": "Listed #{}: {} x{} for {} x{}",
-			"tr": "已上架 #{}：{} x{} 换 {} x{}"
+			"or": "Listed #{}: {} x{} for {} G",
+			"tr": "已上架 #{}：{} x{}，售价 {} G"
 		},
 		{
 			"context": "Trade",
@@ -932,13 +932,23 @@
 		},
 		{
 			"context": "Trade",
-			"or": "Bought #{}: {} x{}",
-			"tr": "已购买 #{}：{} x{}"
+			"or": "The bank is unavailable.",
+			"tr": "银行不可用。"
 		},
 		{
 			"context": "Trade",
-			"or": "Sold #{}: {} x{} for {} x{}",
-			"tr": "已售出 #{}：{} x{} 换 {} x{}"
+			"or": "Payment failed.",
+			"tr": "支付失败。"
+		},
+		{
+			"context": "Trade",
+			"or": "Bought #{}: {} x{} for {} G",
+			"tr": "已购买 #{}：{} x{}，花费 {} G"
+		},
+		{
+			"context": "Trade",
+			"or": "Sold #{}: {} x{} for {} G",
+			"tr": "已售出 #{}：{} x{}，收入 {} G"
 		},
 		{
 			"context": "Trade",
@@ -972,8 +982,13 @@
 		},
 		{
 			"context": "Menu Trade",
-			"or": "   Buy: {} x{}",
-			"tr": "   收购: {} x{}"
+			"or": "Wallet: {} G",
+			"tr": "钱包：{} G"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "   Buy: {} G",
+			"tr": "   收购: {} G"
 		},
 		{
 			"context": "Menu Trade",
@@ -1057,8 +1072,18 @@
 		},
 		{
 			"context": "Menu Trade",
-			"or": "You are selling {} x{}. Click the item you want as payment.",
-			"tr": "你正在出售 {} x{}。点击你想作为报酬的物品。"
+			"or": "You are selling {} x{}.",
+			"tr": "你正在出售 {} x{}。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Type the price in G in the vote reason box, then click Confirm.",
+			"tr": "在投票理由框里输入价格（G），然后点击确认。"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "Enter a positive whole amount of G.",
+			"tr": "请输入一个正整数金额（G）。"
 		},
 		{
 			"context": "Menu Trade",
@@ -1072,8 +1097,8 @@
 		},
 		{
 			"context": "Menu Trade",
-			"or": "#{}: {} x{} for {} x{}",
-			"tr": "#{}：{} x{} 换 {} x{}"
+			"or": "#{}: {} x{} for {} G",
+			"tr": "#{}：{} x{}，售价 {} G"
 		},
 		{
 			"context": "Menu Trade",
@@ -1246,8 +1271,8 @@
 			"context": "Menu Main"
 		},
 		{
-			"or": "Bought {} x{} from {}",
-			"tr": "从 {2} 购买了 {0} x{1}",
+			"or": "Bought {} x{} for {} G from {}",
+			"tr": "从 {3} 以 {2} G 购买了 {0} x{1}",
 			"context": "Trade"
 		},
 		{

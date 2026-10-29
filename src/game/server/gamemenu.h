@@ -155,7 +155,6 @@ private:
 	static bool MenuTradeSell(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuTradeSellCount(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuTradeSellPrice(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
-	static bool MenuTradeSellPriceCount(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	static bool MenuTradeMine(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 
 	// ----- server vote state (implemented in menus/vote_menu.cpp) -----
@@ -195,12 +194,11 @@ private:
 	CItemID m_aItemViewId[MAX_CLIENTS];
 
 	// the in-progress listing of a player, filled step by step by the trade
-	// pages (offer item -> amount -> price item -> price amount)
+	// pages (offer item -> amount -> price in G)
 	struct STradeDraft
 	{
 		CItemID m_OfferItem;
 		int m_OfferCount = 0;
-		CItemID m_PriceItem;
 	};
 	STradeDraft m_aTradeDraft[MAX_CLIENTS];
 

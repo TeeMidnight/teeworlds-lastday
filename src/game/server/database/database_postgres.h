@@ -48,9 +48,14 @@ public:
 	virtual bool SaveShopListing(const SShopListing &Listing) override;
 	virtual bool DeleteShopListing(int Id) override;
 	virtual bool ClearNpcSells(const Uuid &Npc) override;
-	virtual bool SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, const char *pPriceItem, int PriceCount) override;
-	virtual bool GetNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int *pStock, int *pRestockAt) override;
-	virtual bool SaveNpcStock(const Uuid &Npc, const char *pItem, const char *pPriceItem, int Stock, int RestockAt) override;
+	virtual bool SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, int64 Price) override;
+	virtual bool GetNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int *pStock, int *pRestockAt) override;
+	virtual bool SaveNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int Stock, int RestockAt) override;
+	virtual bool GetCurrencyBalance(const Uuid &Account, int64 *pOut) override;
+	virtual bool AddCurrency(const Uuid &Account, int64 Delta, const char *pReason) override;
+	virtual bool SpendCurrency(const Uuid &Account, int64 Amount, const char *pReason) override;
+	virtual bool TransferCurrency(const Uuid &From, const Uuid &To, int64 Amount,
+		const char *pFromReason, const char *pToReason) override;
 	virtual bool SaveWorldSave(const char *pMap, const char *pJsonData) override;
 	virtual bool GetWorldSaveSize(const char *pMap, int *pSize) override;
 	virtual bool GetWorldSaveData(const char *pMap, char *pOut, int Size) override;

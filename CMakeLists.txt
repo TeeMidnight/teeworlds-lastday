@@ -857,6 +857,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   building.h
   container.cpp
   container.h
+  currency.h
   database/account.cpp
   database/account.h
   database/database.cpp

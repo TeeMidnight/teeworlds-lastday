@@ -3,6 +3,8 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 #include <engine/console.h>
 #include <engine/shared/config.h>
+#include <game/server/currency.h>
+#include <game/server/database/database.h>
 #include <game/server/gamecontext.h>
 #include <game/server/item.h>
 #include <game/server/player.h>
@@ -92,6 +94,31 @@ static void ConGiveItem(IConsole::IResult *pResult, void *pUserData)
 	pGameServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "script", aBuf);
 }
 
+static void ConGiveCurrency(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameContext *pGameServer = static_cast<CGameContext *>(pUserData);
+	const int ClientID = pResult->GetInteger(0);
+	const int Amount = pResult->GetInteger(1);
+	CPlayer *pPlayer = ClientID >= 0 && ClientID < MAX_CLIENTS ? pGameServer->m_apPlayers[ClientID] : nullptr;
+	CDatabase *pDB = pGameServer->Database();
+	if(!pPlayer || !pDB || pPlayer->m_AccountUuid == UUID_ZEROED || Amount <= 0)
+	{
+		pGameServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "script", "could not give currency");
+		return;
+	}
+	const int64 Delta = minimum((int64) Amount, CURRENCY_MAX_AMOUNT);
+	char aReason[CURRENCY_REASON_SIZE];
+	str_format(aReason, sizeof(aReason), "admin grant via give_currency");
+	if(!pDB->AddCurrency(pPlayer->m_AccountUuid, Delta, aReason))
+	{
+		pGameServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "script", "could not give currency");
+		return;
+	}
+	char aBuf[128];
+	str_format(aBuf, sizeof(aBuf), "gave %lld G to client %d", (long long) Delta, ClientID);
+	pGameServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "script", aBuf);
+}
+
 void RegisterScriptCommands(CGameContext *pGameServer)
 {
 	pGameServer->Console()->Register("reload_scripts", "", CFGFLAG_SERVER, ConReloadScripts, pGameServer,
@@ -102,4 +129,6 @@ void RegisterScriptCommands(CGameContext *pGameServer)
 		"Apply a buff to a client");
 	pGameServer->Console()->Register("give_item", "i[client] s[item] ?i[count]", CFGFLAG_SERVER, ConGiveItem, pGameServer,
 		"Give an item to a client");
+	pGameServer->Console()->Register("give_currency", "i[client] i[amount]", CFGFLAG_SERVER, ConGiveCurrency, pGameServer,
+		"Give G to a client (written to the currency ledger)");
 }
