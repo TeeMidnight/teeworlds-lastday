@@ -131,11 +131,14 @@ Monsters are content, not C++ classes. One file per creature lives in
 - weighted `drops`; each entry is a normal item id with a count range and a
   chance
 
-Faction rules are deliberately asymmetric. A hostile mob attacks players,
-friendly units, neutral units and hostile mobs of a different `group`
-(`fight_hostile_groups`). A neutral mob does nothing until attacked, then
-retaliates for a while. A friendly unit attacks hostile mobs only and never
-hurts a player. The same rules apply to configured town NPCs: a friendly Medic
+Faction rules are deliberately asymmetric. A hostile mob hunts players but
+does not start a fight with any other bot: other monsters, whatever their
+faction or group, and town NPCs are ignored until one of them damages it.
+Every bot remembers the exact attacker for a while, so a stray hit between two
+otherwise neutral monsters turns into a duel. A neutral mob does nothing until
+attacked, then retaliates for a while. A friendly unit attacks hostile mobs on
+sight and never hurts a player; the hostile mob is then free to fight back. The
+same rules apply to configured town NPCs: a friendly Medic
 never gains aggro or starts a fight, while the neutral Blacksmith gains aggro
 when a player hits it and, because it sets `attack_hostiles`, also defends the
 square against hostile monsters. A neutral NPC without that flag only answers

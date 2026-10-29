@@ -10,7 +10,6 @@
     "aggro_radius": 300,
     "attack_range": 56,
     "jump_chance": 5,
-    "fight_hostile_groups": false,
     "skin": {
         "body":       {"name": "standard", "custom_color": true, "hue": 210, "sat": 30,  "lgt": 70},
         "marking":    {"name": "stripes",  "custom_color": true, "hue": 210, "sat": 60,  "lgt": 54},

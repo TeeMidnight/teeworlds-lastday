@@ -12,7 +12,6 @@
     "attack_range": 64,
     "keep_distance": 180,
     "jump_chance": 18,
-    "fight_hostile_groups": false,
     "skin": {
         "body":       {"name": "standard", "custom_color": true, "hue": 205, "sat": 120, "lgt": 190},
         "marking":    {"name": "twinbelly", "custom_color": true, "hue": 210, "sat": 150, "lgt": 230},

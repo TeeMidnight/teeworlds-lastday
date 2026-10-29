@@ -298,7 +298,6 @@ void CMobSystem::LoadDef(const char *pDefaultId, const char *pFilePath)
 	pDef->m_AttackRange = maximum(16.0f, ReadFloat((*pJson)["attack_range"], pDef->m_AttackRange));
 	pDef->m_KeepDistance = maximum(0.0f, ReadFloat((*pJson)["keep_distance"], pDef->m_KeepDistance));
 	pDef->m_JumpChance = clamp(ReadInt((*pJson)["jump_chance"], pDef->m_JumpChance), 0, 1000);
-	pDef->m_FightHostileGroups = ReadBool((*pJson)["fight_hostile_groups"], pDef->m_FightHostileGroups);
 
 	// type may be "tee" (default) or "worm"; a worm still uses a mob def for
 	// its identity, faction and drops

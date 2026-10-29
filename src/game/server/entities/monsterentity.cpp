@@ -104,20 +104,11 @@ bool CMonsterEntity::IsHostileBot(const IBotEntity *pBot) const
 {
 	if(!pBot)
 		return false;
-	if(m_pDef->m_Faction == BOTFACTION_FRIENDLY)
-		return pBot->GetBotFaction() == BOTFACTION_HOSTILE;
-	if(m_pDef->m_Faction == BOTFACTION_NEUTRAL)
-		return false;
-
-	// hostile: everything not on the same side, plus a different warband
-	if(pBot->GetBotFaction() != BOTFACTION_HOSTILE)
-		return true;
-	if(!m_pDef->m_FightHostileGroups)
-		return false;
-	const SMobDef *pOther = pBot->MobDef();
-	if(!pOther)
-		return false;
-	return str_comp(m_pDef->m_aGroup, pOther->m_aGroup) != 0;
+	// Only friendly units start bot-vs-bot fights: they defend players from
+	// hostile monsters. Hostile and neutral monsters are neutral to every
+	// other bot until one hits them; that retaliation is resolved separately
+	// in IsValidTarget() so an accidental hit still turns into a fight.
+	return m_pDef->m_Faction == BOTFACTION_FRIENDLY && pBot->GetBotFaction() == BOTFACTION_HOSTILE;
 }
 
 bool CMonsterEntity::IsHostilePlayer(const CCharacter *pChr) const
@@ -162,17 +153,14 @@ bool CMonsterEntity::IsValidTarget(CEntity *pTarget, bool RequireLineOfSight)
 		IBotEntity *pBot = static_cast<IBotEntity *>(pTarget);
 		if(!pBot->IsAlive())
 			return false;
-		if(m_pDef->m_Faction == BOTFACTION_FRIENDLY)
-		{
-			if(pBot->GetBotFaction() != BOTFACTION_HOSTILE)
-				return false;
-		}
-		else if(m_pDef->m_Faction == BOTFACTION_NEUTRAL)
-		{
-			if(m_RetaliateUntil <= Server()->Tick() || m_LastAttackerBot == UUID_ZEROED || pBot->GetBotID() != m_LastAttackerBot)
-				return false;
-		}
-		else if(!IsHostileBot(pBot))
+
+		// Every non-friendly faction answers the exact bot that hit it. This
+		// is what turns an accidental hit between two otherwise neutral
+		// monsters into a duel without making them hunt each other on sight.
+		const bool Retaliating = m_pDef->m_Faction != BOTFACTION_FRIENDLY &&
+			m_RetaliateUntil > Server()->Tick() &&
+			m_LastAttackerBot != UUID_ZEROED && pBot->GetBotID() == m_LastAttackerBot;
+		if(!Retaliating && !IsHostileBot(pBot))
 			return false;
 	}
 	else
@@ -531,7 +519,6 @@ bool CMonsterEntity::FireRanged(vec2 Target)
 	// A bot has no client owner for the projectile to resolve, so without this
 	// the shot can collide with the monster that fired it on the very next tick.
 	pProjectile->SetIgnoreEntity(GetID());
-
 	GameWorld()->CreateSound(m_Pos, m_pDef->m_Ranged.m_Sound);
 	m_AttackTick = Server()->Tick();
 	m_RangedTimer = m_pDef->m_Ranged.m_Cooldown;
@@ -694,11 +681,16 @@ void CMonsterEntity::RememberAttacker(CEntity *pFrom)
 	if(!pFrom)
 		return;
 
-	// A friendly source (a campfire's embers) must not make a neutral or
-	// friendly monster retaliate: CBotEntity::TakeDamage rejects the damage,
-	// but the aggro bookkeeping happens before it.
-	if((pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD) &&
-		static_cast<CChildEntity *>(pFrom)->GetOwner() == PLAYER_TEAM_FRIENDLY)
+	// A friendly source must not make a neutral or friendly monster retaliate:
+	// CBotEntity::TakeDamage rejects that damage, but the aggro bookkeeping
+	// happens before it. Hostile monsters still record it, because they take
+	// friendly damage as well.
+	int From = -1;
+	if(pFrom->ObjFlag() & CGameWorld::ENTFLAG_CHILD)
+		From = static_cast<CChildEntity *>(pFrom)->GetOwner();
+	else
+		From = pFrom->GetHitAttacker();
+	if(m_pDef->m_Faction != BOTFACTION_HOSTILE && From == PLAYER_TEAM_FRIENDLY)
 		return;
 
 	m_RetaliateUntil = Server()->Tick() + Server()->TickSpeed() * 10;

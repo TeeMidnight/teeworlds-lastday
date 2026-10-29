@@ -172,7 +172,6 @@ struct SMobDef
 	float m_AttackRange;
 	float m_KeepDistance;
 	int m_JumpChance;
-	bool m_FightHostileGroups;
 	bool m_HasSkin;
 	CBotSkin m_Skin;
 	bool m_IsWorm;
@@ -189,7 +188,7 @@ struct SMobDef
 	array<SMobDrop> m_lDrops;
 
 	SMobDef() :
-		m_Faction(BOTFACTION_HOSTILE), m_Health(10), m_Armor(0), m_SpeedScale(1.0f), m_AggroRadius(360.0f), m_AttackRange(48.0f), m_KeepDistance(0.0f), m_JumpChance(12), m_FightHostileGroups(true), m_HasSkin(false), m_IsWorm(false), m_IsBoss(false)
+		m_Faction(BOTFACTION_HOSTILE), m_Health(10), m_Armor(0), m_SpeedScale(1.0f), m_AggroRadius(360.0f), m_AttackRange(48.0f), m_KeepDistance(0.0f), m_JumpChance(12), m_HasSkin(false), m_IsWorm(false), m_IsBoss(false)
 	{
 		m_aId[0] = '\0';
 		m_aName[0] = '\0';

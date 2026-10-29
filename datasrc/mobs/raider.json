@@ -10,7 +10,6 @@
     "aggro_radius": 420,
     "attack_range": 48,
     "jump_chance": 25,
-    "fight_hostile_groups": true,
     "skin": {
         "body":       {"name": "standard", "custom_color": true, "hue": 0,   "sat": 120, "lgt": 96},
         "marking":    {"name": "cammo2",   "custom_color": true, "hue": 12,  "sat": 140, "lgt": 80},
