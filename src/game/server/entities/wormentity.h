@@ -5,6 +5,7 @@
 #define GAME_SERVER_ENTITIES_WORMENTITY_H
 
 #include <base/tl/array.h>
+#include <base/tl/timer.h>
 #include <base/uuid.h>
 #include <base/vmath.h>
 #include <game/server/mobdata.h>
@@ -102,12 +103,12 @@ private:
 	int m_MaxHealth;
 	int m_Armor;
 	bool m_Alive;
-	int m_BiteTimer;
+	tick_timer m_BiteTimer;
 	int m_LastHitTick;
 	int m_WanderTimer;
 	vec2 m_WanderDir;
-	int m_PhaseTimer;
-	int m_RumbleTimer;
+	tick_timer m_PhaseTimer;
+	tick_timer m_RumbleTimer;
 	bool m_Burrowed;
 	Uuid m_HeadID;
 	bool m_Natural;

@@ -37,7 +37,7 @@ CResourceEntity::CResourceEntity(CGameWorld *pGameWorld, vec2 Pos, const char *p
 	m_Hardness = Hardness;
 	m_MaxHardness = Hardness;
 	m_RespawnTime = RespawnTime;
-	m_RespawnTick = 0;
+	m_Respawning = false;
 
 	GameWorld()->InsertEntity(this);
 }
@@ -60,13 +60,12 @@ void CResourceEntity::Snap(int SnappingClient)
 
 void CResourceEntity::Tick()
 {
-	// count down the respawn timer; the resource comes back with full
-	// hardness once it expires (m_RespawnTime == 0 means no respawn)
-	if(IsRespawning())
+	// the timer holds the deadline, not a decremented counter; a world that
+	// was frozen catches up here the first tick it runs again
+	if(m_Respawning && m_RespawnTimer.expired(Server()->Tick()))
 	{
-		m_RespawnTick--;
-		if(m_RespawnTick == 0)
-			m_Hardness = m_MaxHardness;
+		m_Respawning = false;
+		m_Hardness = m_MaxHardness;
 	}
 }
 
@@ -80,7 +79,8 @@ bool CResourceEntity::TakeHit(int Hardness)
 	{
 		if(m_RespawnTime > 0)
 		{
-			m_RespawnTick = m_RespawnTime * Server()->TickSpeed();
+			m_Respawning = true;
+			m_RespawnTimer.start(Server()->Tick(), m_RespawnTime * Server()->TickSpeed());
 			m_Hardness = 0;
 		}
 		else

@@ -4,6 +4,7 @@
 #ifndef GAME_SERVER_ENTITIES_RESOURCE_H
 #define GAME_SERVER_ENTITIES_RESOURCE_H
 
+#include <base/tl/timer.h>
 #include <game/item_id.h>
 #include <game/server/entity.h>
 
@@ -26,7 +27,7 @@ public:
 	const CItemID &Item() const { return m_Id; }
 	int RemainingHardness() const { return m_Hardness; }
 	int MaxHardness() const { return m_MaxHardness; }
-	bool IsRespawning() const { return m_RespawnTick > 0; }
+	bool IsRespawning() const { return m_Respawning; }
 
 private:
 	CItemID m_Id;
@@ -34,7 +35,9 @@ private:
 	int m_Hardness;
 	int m_MaxHardness;
 	int m_RespawnTime;
-	int m_RespawnTick;
+	bool m_Respawning;
+	// the respawn deadline; a frozen world does not leave a stale countdown
+	tick_timer m_RespawnTimer;
 };
 
 #endif

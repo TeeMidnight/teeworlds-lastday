@@ -134,12 +134,10 @@ CWormEntity::CWormEntity(CGameWorld *pWorld, vec2 Pos, const SMobDef *pDef, Uuid
 	m_Health = m_MaxHealth;
 	m_Armor = pDef ? pDef->m_Armor : 0;
 	m_Alive = true;
-	m_BiteTimer = 0;
 	m_LastHitTick = -100;
 	m_WanderTimer = 0;
 	m_WanderDir = vec2(1.0f, 0.0f);
-	m_PhaseTimer = maximum(10, pDef ? pDef->m_Worm.m_SurfaceTicks : 70);
-	m_RumbleTimer = 0;
+	m_PhaseTimer.start(Server()->Tick(), maximum(10, pDef ? pDef->m_Worm.m_SurfaceTicks : 70));
 	m_Burrowed = false;
 	m_HeadID = HeadID;
 
@@ -312,14 +310,12 @@ void CWormEntity::Tick()
 	// Alternate a surface window (visible and hittable) with a burrowed
 	// window (hidden and invulnerable). The timers come from the mob JSON, so
 	// each burrower can be tuned without touching the entity.
-	if(m_PhaseTimer > 0)
-		m_PhaseTimer--;
-	if(m_PhaseTimer <= 0)
+	if(m_PhaseTimer.expired(Server()->Tick()))
 	{
 		if(m_Burrowed)
 		{
 			if(!TrySurface(pTarget))
-				m_PhaseTimer = 15; // no clear floor at this column yet
+				m_PhaseTimer.start(Server()->Tick(), 15); // no clear floor at this column yet
 		}
 		else
 			EnterBurrow();
@@ -417,12 +413,11 @@ void CWormEntity::Tick()
 	if(m_Burrowed)
 		return;
 
-	if(m_BiteTimer > 0)
-		m_BiteTimer--;
-	if(pTarget && pTarget->IsAlive() && distance(pTarget->GetPos(), m_Pos) <= m_pDef->m_Worm.m_BiteRadius && m_BiteTimer <= 0)
+	if(pTarget && pTarget->IsAlive() && distance(pTarget->GetPos(), m_Pos) <= m_pDef->m_Worm.m_BiteRadius &&
+		m_BiteTimer.expired(Server()->Tick()))
 	{
 		Bite(pTarget);
-		m_BiteTimer = WORM_BITE_COOLDOWN;
+		m_BiteTimer.start(Server()->Tick(), WORM_BITE_COOLDOWN);
 	}
 }
 
@@ -432,9 +427,9 @@ void CWormEntity::EnterBurrow()
 		return;
 
 	m_Burrowed = true;
-	m_PhaseTimer = maximum(10, m_pDef->m_Worm.m_BurrowTicks);
-	m_RumbleTimer = 0;
-	m_BiteTimer = 0;
+	m_PhaseTimer.start(Server()->Tick(), maximum(10, m_pDef->m_Worm.m_BurrowTicks));
+	m_RumbleTimer.stop();
+	m_BiteTimer.stop();
 	RemoveObjFlag(CGameWorld::ENTFLAG_HITABLE);
 	SetVisible(false);
 	GameWorld()->CreateHammerHit(m_Pos);
@@ -460,10 +455,10 @@ bool CWormEntity::TrySurface(CCharacter *pTarget)
 
 	m_Pos = NewPos;
 	m_Burrowed = false;
-	m_PhaseTimer = maximum(10, m_pDef->m_Worm.m_SurfaceTicks);
+	m_PhaseTimer.start(Server()->Tick(), maximum(10, m_pDef->m_Worm.m_SurfaceTicks));
 	// A short delay after breaking the surface gives the player time to react
 	// before the first bite lands.
-	m_BiteTimer = 18;
+	m_BiteTimer.start(Server()->Tick(), 18);
 	AddObjFlag(CGameWorld::ENTFLAG_HITABLE);
 	SetVisible(true);
 	GameWorld()->CreateHammerHit(m_Pos);
@@ -473,12 +468,11 @@ bool CWormEntity::TrySurface(CCharacter *pTarget)
 
 void CWormEntity::BurrowRumble()
 {
-	if(m_RumbleTimer > 0)
-	{
-		m_RumbleTimer--;
+	// the original countdown returned on the 18 decrementing ticks and ran the
+	// effect on the 19th, so the deadline is 19 ticks out
+	if(m_RumbleTimer.active(Server()->Tick()))
 		return;
-	}
-	m_RumbleTimer = 18;
+	m_RumbleTimer.start(Server()->Tick(), 19);
 
 	float GroundTop = 0.0f;
 	if(FindWormGround(GameWorld(), m_Pos.x, m_Pos.y - 96.0f, &GroundTop))

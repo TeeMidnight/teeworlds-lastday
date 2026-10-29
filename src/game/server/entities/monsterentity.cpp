@@ -54,10 +54,6 @@ CMonsterEntity::CMonsterEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const S
 		m_aLastEventTick[i] = -1000;
 	m_SaidSight = false;
 	m_SaidLowHealth = false;
-	m_RangedTimer = 0;
-	m_LeapTimer = 0;
-	m_HealTimer = 0;
-	m_ArmorTimer = 0;
 	m_Enraged = false;
 	m_Summoned = false;
 	m_SpawnGroup = 0;
@@ -265,10 +261,6 @@ void CMonsterEntity::OnAction()
 	if(!m_Alive || !m_pDef)
 		return;
 
-	if(m_RangedTimer > 0)
-		m_RangedTimer--;
-	if(m_LeapTimer > 0)
-		m_LeapTimer--;
 	TickAuras();
 	TickEnrage();
 	TrySummon();
@@ -493,7 +485,7 @@ void CMonsterEntity::ThinkSupport(CEntity *)
 
 bool CMonsterEntity::FireRanged(vec2 Target)
 {
-	if(!m_pDef->m_Ranged.m_Enabled || m_RangedTimer > 0)
+	if(!m_pDef->m_Ranged.m_Enabled || m_RangedTimer.active(Server()->Tick()))
 		return false;
 
 	vec2 Dir = Target - m_Pos;
@@ -525,13 +517,13 @@ bool CMonsterEntity::FireRanged(vec2 Target)
 
 	GameWorld()->CreateSound(m_Pos, m_pDef->m_Ranged.m_Sound);
 	m_AttackTick = Server()->Tick();
-	m_RangedTimer = m_pDef->m_Ranged.m_Cooldown;
+	m_RangedTimer.start(Server()->Tick(), m_pDef->m_Ranged.m_Cooldown);
 	return true;
 }
 
 bool CMonsterEntity::TryLeap(vec2 Target)
 {
-	if(!m_pDef->m_Leap.m_Enabled || m_LeapTimer > 0)
+	if(!m_pDef->m_Leap.m_Enabled || m_LeapTimer.active(Server()->Tick()))
 		return false;
 	const float Dist = distance(Target, m_Pos);
 	if(Dist < 48.0f || Dist > m_pDef->m_Leap.m_Range)
@@ -544,7 +536,7 @@ bool CMonsterEntity::TryLeap(vec2 Target)
 	m_Input.m_Jump = 1;
 	m_Core.m_Vel.x = (DX >= 0.0f ? 1.0f : -1.0f) * m_pDef->m_Leap.m_ForceX;
 	m_Core.m_Vel.y = m_pDef->m_Leap.m_ForceY;
-	m_LeapTimer = m_pDef->m_Leap.m_Cooldown;
+	m_LeapTimer.start(Server()->Tick(), m_pDef->m_Leap.m_Cooldown);
 	return true;
 }
 
@@ -553,43 +545,34 @@ void CMonsterEntity::TickAuras()
 	if(!m_pDef)
 		return;
 
-	if(m_pDef->m_HealAura.m_Enabled)
+	if(m_pDef->m_HealAura.m_Enabled && m_HealTimer.expired(Server()->Tick()))
 	{
-		if(m_HealTimer > 0)
-			m_HealTimer--;
-		else
+		// the old "set the interval, then count it down" period was interval+1
+		m_HealTimer.start(Server()->Tick(), m_pDef->m_HealAura.m_Interval + 1);
+		for(int i = 0; i < MAX_CLIENTS; i++)
 		{
-			m_HealTimer = m_pDef->m_HealAura.m_Interval;
-			for(int i = 0; i < MAX_CLIENTS; i++)
-			{
-				CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-				if(!pPlayer || pPlayer->GameWorld() != GameWorld())
-					continue;
-				CCharacter *pChr = pPlayer->GetCharacter();
-				if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_HealAura.m_Radius)
-					continue;
-				pChr->IncreaseHealth(m_pDef->m_HealAura.m_Amount);
-			}
+			CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+			if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+				continue;
+			CCharacter *pChr = pPlayer->GetCharacter();
+			if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_HealAura.m_Radius)
+				continue;
+			pChr->IncreaseHealth(m_pDef->m_HealAura.m_Amount);
 		}
 	}
 
-	if(m_pDef->m_ArmorAura.m_Enabled)
+	if(m_pDef->m_ArmorAura.m_Enabled && m_ArmorTimer.expired(Server()->Tick()))
 	{
-		if(m_ArmorTimer > 0)
-			m_ArmorTimer--;
-		else
+		m_ArmorTimer.start(Server()->Tick(), m_pDef->m_ArmorAura.m_Interval + 1);
+		for(int i = 0; i < MAX_CLIENTS; i++)
 		{
-			m_ArmorTimer = m_pDef->m_ArmorAura.m_Interval;
-			for(int i = 0; i < MAX_CLIENTS; i++)
-			{
-				CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-				if(!pPlayer || pPlayer->GameWorld() != GameWorld())
-					continue;
-				CCharacter *pChr = pPlayer->GetCharacter();
-				if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_ArmorAura.m_Radius)
-					continue;
-				pChr->IncreaseArmor(m_pDef->m_ArmorAura.m_Amount);
-			}
+			CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+			if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+				continue;
+			CCharacter *pChr = pPlayer->GetCharacter();
+			if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_ArmorAura.m_Radius)
+				continue;
+			pChr->IncreaseArmor(m_pDef->m_ArmorAura.m_Amount);
 		}
 	}
 }

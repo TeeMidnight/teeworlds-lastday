@@ -6,6 +6,7 @@
 #define GAME_SERVER_ENTITIES_CHARACTER_H
 
 #include <base/tl/array.h>
+#include <base/tl/timer.h>
 #include <game/gamecore.h>
 #include <game/server/entity.h>
 #include <game/server/player.h>
@@ -181,7 +182,7 @@ private:
 	int m_ActiveWeapon; // slot index of the currently held weapon (0..NUM_WEAPONS-1)
 	int m_QueuedWeapon; // slot index to switch to, or -1
 
-	int m_ReloadTimer;
+	tick_timer m_ReloadTimer;
 	int m_AttackTick;
 
 	int m_EmoteType;
@@ -216,7 +217,10 @@ private:
 	struct
 	{
 		vec2 m_ActivationDir;
-		int m_CurrentMoveTime;
+		// deadline of the current swing; m_Active carries the latch so the
+		// velocity is restored exactly on the tick it expires
+		tick_timer m_MoveTimer;
+		bool m_Active;
 		int m_OldVelAmount;
 	} m_Ninja;
 

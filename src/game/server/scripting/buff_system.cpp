@@ -236,11 +236,19 @@ bool CBuffSystem::Add(int ClientID, const char *pBuffId, int DurationTicks, int 
 		SBuffInstance &Buff = m_aBuffs[ClientID][Index];
 		Buff.m_Stacks = minimum(pDef->m_MaxStacks, Buff.m_Stacks + maximum(1, Stacks));
 		if(Duration < 0)
-			Buff.m_Remaining = -1;
-		else if(pDef->m_StackDuration)
-			Buff.m_Remaining = maximum(Buff.m_Remaining, Duration);
+			Buff.m_Remaining.set_infinite();
 		else
-			Buff.m_Remaining = maximum(Buff.m_Remaining, Duration);
+		{
+			// Stacking only ever extends the deadline; an expired instance is
+			// restarted from now like the old maximum(remaining, duration) was.
+			// A permanent instance keeps the old behaviour: a finite
+			// application turns it back into a timed one.
+			const int Now = m_pGameServer->Server()->Tick();
+			const int Deadline = Now + Duration;
+			if(Buff.m_Remaining.is_infinite() || Buff.m_Remaining.expired(Now) ||
+				Deadline > Buff.m_Remaining.deadline())
+				Buff.m_Remaining.start_at(Deadline);
+		}
 		Buff.m_Source = Source;
 		CallEvent(Buff, ClientID, "on_apply");
 		RefreshCharacter(ClientID);
@@ -250,7 +258,10 @@ bool CBuffSystem::Add(int ClientID, const char *pBuffId, int DurationTicks, int 
 	SBuffInstance Buff;
 	Buff.m_DefIndex = DefIndex;
 	Buff.m_Stacks = maximum(1, Stacks);
-	Buff.m_Remaining = Duration;
+	if(Duration < 0)
+		Buff.m_Remaining.set_infinite();
+	else
+		Buff.m_Remaining.start(m_pGameServer->Server()->Tick(), Duration);
 	Buff.m_Source = Source;
 	Buff.m_State = "{}";
 	m_aBuffs[ClientID].add(Buff);
@@ -331,13 +342,10 @@ void CBuffSystem::TickPlayer(int ClientID)
 
 		CallEvent(Buff, ClientID, "on_tick");
 
-		bool Remove = false;
-		if(Buff.m_Remaining > 0)
-		{
-			Buff.m_Remaining--;
-			if(Buff.m_Remaining == 0)
-				Remove = true;
-		}
+		// a deadline, not a decremented counter: a frozen world cannot leave a
+		// buff counting down forever
+		const bool Remove = !Buff.m_Remaining.is_infinite() &&
+				    Buff.m_Remaining.expired(m_pGameServer->Server()->Tick());
 		if(Remove)
 		{
 			CallEvent(Buff, ClientID, "on_remove");

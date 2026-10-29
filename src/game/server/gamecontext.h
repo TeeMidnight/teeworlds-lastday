@@ -8,6 +8,7 @@
 #include <base/tl/array.h>
 #include <base/tl/hashtable.h>
 #include <base/tl/sorted_array.h>
+#include <base/tl/timer.h>
 #include <base/uuid.h>
 #include <engine/console.h>
 #include <engine/server.h>
@@ -113,7 +114,7 @@ class CGameContext : public IGameServer
 		int m_Priority;
 		char m_aNextMessage[1024];
 
-		int m_LifeSpanTick;
+		tick_timer m_LifeSpanTimer;
 		int m_TimedPriority;
 		char m_aTimedMessage[1024];
 	};
@@ -121,7 +122,7 @@ class CGameContext : public IGameServer
 
 	// loaded from data/tips.json; the strings are localization keys
 	array<std::string> m_lTips;
-	int m_TipTimer;
+	tick_timer m_TipTimer;
 	int m_LastTip;
 
 	void LoadTips();

@@ -689,6 +689,7 @@ set_src(BASE GLOB_RECURSE src/base
   tl/stream.h
   tl/string.h
   tl/threading.h
+  tl/timer.h
   uuid.cpp
   uuid.h
   vmath.h
@@ -1055,6 +1056,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     test.cpp
     test.h
     thread.cpp
+    timer.cpp
     world_ring.cpp
     world_wrap.cpp
     worldpack.cpp

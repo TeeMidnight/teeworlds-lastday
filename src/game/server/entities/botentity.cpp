@@ -73,7 +73,6 @@ CBotEntity::CBotEntity(CGameWorld *pWorld, vec2 Pos, Uuid BotID, const CBotTeeIn
 	m_Emote = EMOTE_NORMAL;
 	m_EmoteStop = -1;
 	m_AttackTick = 0;
-	m_ReloadTimer = 0;
 	m_TriggeredEvents = 0;
 
 	// bots have no item system, so they hold the one weapon that needs
@@ -311,13 +310,15 @@ CEntity *CBotEntity::FindTarget()
 	return pTarget;
 }
 
+int CBotEntity::ReloadTimer()
+{
+	return m_ReloadTimer.remaining(Server()->Tick());
+}
+
 void CBotEntity::DoWeapon()
 {
-	if(m_ReloadTimer > 0)
-	{
-		m_ReloadTimer--;
+	if(m_ReloadTimer.active(Server()->Tick()))
 		return;
-	}
 
 	// edge detection: only fire on a fresh press, like a character does
 	CInputCount Count = CountInput(m_PrevInput.m_Fire, m_Input.m_Fire);
@@ -365,7 +366,9 @@ void CBotEntity::DoWeapon()
 	}
 
 	m_AttackTick = Server()->Tick();
-	m_ReloadTimer = Hits ? m_MeleeCooldown : maximum(1, m_MeleeCooldown / 2);
+	// the old countdown blocked this many further ticks before the next swing
+	const int Cooldown = Hits ? m_MeleeCooldown : maximum(1, m_MeleeCooldown / 2);
+	m_ReloadTimer.start(Server()->Tick(), Cooldown + 1);
 }
 
 void CBotEntity::OnBotHit(CEntity *pTarget, bool Killed)

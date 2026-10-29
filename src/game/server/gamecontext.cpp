@@ -82,7 +82,7 @@ void CGameContext::Construct(int Resetting)
 	m_pScriptedEntities = 0;
 	m_MainWorldID = 0;
 	m_LockTeams = 0;
-	m_TipTimer = 0;
+	m_TipTimer.stop();
 	m_LastTip = -1;
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
@@ -309,7 +309,7 @@ void CGameContext::ResetBroadcastState(int ClientID)
 	State.m_Priority = BROADCAST_PRIORITY_LOWEST;
 	State.m_aPrevMessage[0] = '\0';
 	State.m_aNextMessage[0] = '\0';
-	State.m_LifeSpanTick = 0;
+	State.m_LifeSpanTimer.stop();
 	State.m_TimedPriority = BROADCAST_PRIORITY_LOWEST;
 	State.m_aTimedMessage[0] = '\0';
 }
@@ -325,7 +325,7 @@ void CGameContext::AddBroadcast(int ClientID, const char *pText, int Priority, i
 		if(State.m_TimedPriority > Priority)
 			return;
 		str_copy(State.m_aTimedMessage, pText, sizeof(State.m_aTimedMessage));
-		State.m_LifeSpanTick = LifeSpan;
+		State.m_LifeSpanTimer.start(Server()->Tick(), LifeSpan);
 		State.m_TimedPriority = Priority;
 	}
 	else
@@ -380,7 +380,7 @@ void CGameContext::FlushBroadcasts()
 		CBroadcastState &State = m_aBroadcastStates[i];
 
 		// a timed announcement wins over the realtime hint of this tick
-		if(State.m_LifeSpanTick > 0 && State.m_TimedPriority > State.m_Priority)
+		if(State.m_LifeSpanTimer.active(Server()->Tick()) && State.m_TimedPriority > State.m_Priority)
 			str_copy(State.m_aNextMessage, State.m_aTimedMessage, sizeof(State.m_aNextMessage));
 
 		// Send only on change, or once a second to fight the client's auto fade
@@ -397,9 +397,7 @@ void CGameContext::FlushBroadcasts()
 		else
 			State.m_NoChangeTick++;
 
-		if(State.m_LifeSpanTick > 0)
-			State.m_LifeSpanTick--;
-		if(State.m_LifeSpanTick <= 0)
+		if(State.m_LifeSpanTimer.expired(Server()->Tick()))
 		{
 			State.m_aTimedMessage[0] = '\0';
 			State.m_TimedPriority = BROADCAST_PRIORITY_LOWEST;
@@ -452,7 +450,7 @@ void CGameContext::TickTips()
 	const int Interval = maximum(1, Config()->m_SvTipInterval) * Server()->TickSpeed();
 	if(!Config()->m_SvTips || m_lTips.size() == 0)
 	{
-		m_TipTimer = Interval;
+		m_TipTimer.start(Server()->Tick(), Interval);
 		return;
 	}
 
@@ -469,16 +467,12 @@ void CGameContext::TickTips()
 	if(!HasPlayer)
 	{
 		// start the countdown when somebody joins, not while the server is empty
-		m_TipTimer = Interval;
+		m_TipTimer.start(Server()->Tick(), Interval);
 		return;
 	}
 
-	if(m_TipTimer > 0)
-	{
-		m_TipTimer--;
-		if(m_TipTimer > 0)
-			return;
-	}
+	if(m_TipTimer.active(Server()->Tick()))
+		return;
 
 	int TipIndex = random_int() % m_lTips.size();
 	if(m_lTips.size() > 1 && TipIndex == m_LastTip)
@@ -495,7 +489,7 @@ void CGameContext::TickTips()
 		SendChat(-1, CHAT_ALL, i, Localize(Tip.c_str(), "Tip"));
 	}
 
-	m_TipTimer = Interval;
+	m_TipTimer.start(Server()->Tick(), Interval);
 }
 
 void CGameContext::UpdateCursorResourceBroadcast(int ClientID)

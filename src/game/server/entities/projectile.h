@@ -5,6 +5,7 @@
 #ifndef GAME_SERVER_ENTITIES_PROJECTILE_H
 #define GAME_SERVER_ENTITIES_PROJECTILE_H
 
+#include <base/tl/timer.h>
 #include <base/uuid.h>
 #include <game/server/entity.h>
 
@@ -45,7 +46,7 @@ public:
 
 private:
 	vec2 m_Direction;
-	int m_LifeSpan;
+	tick_timer m_LifeSpan;
 	int m_OwnerTeam;
 	int m_Type;
 	int m_Damage;

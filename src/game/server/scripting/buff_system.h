@@ -7,6 +7,7 @@
 #include <base/system.h>
 #include <base/tl/array.h>
 #include <base/tl/hashtable.h>
+#include <base/tl/timer.h>
 #include <engine/shared/protocol.h>
 
 #include <string>
@@ -41,7 +42,7 @@ struct SBuffInstance
 {
 	int m_DefIndex = -1;
 	int m_Stacks = 1;
-	int m_Remaining = 0; // ticks, -1 = permanent
+	tick_timer m_Remaining; // infinite = permanent
 	int m_Source = -1;
 	std::string m_State = "{}";
 };

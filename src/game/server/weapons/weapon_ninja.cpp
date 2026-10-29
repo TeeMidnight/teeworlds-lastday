@@ -27,7 +27,9 @@ public:
 		pChr->m_lpHitObjects.clear();
 		pChr->m_lpHitObjects.hint_size(4);
 		pChr->m_Ninja.m_ActivationDir = Direction;
-		pChr->m_Ninja.m_CurrentMoveTime = g_pData->m_Weapons.m_Ninja.m_Movetime * pChr->Server()->TickSpeed() / 1000;
+		const int MoveTicks = g_pData->m_Weapons.m_Ninja.m_Movetime * pChr->Server()->TickSpeed() / 1000;
+		pChr->m_Ninja.m_MoveTimer.start(pChr->Server()->Tick(), MoveTicks);
+		pChr->m_Ninja.m_Active = MoveTicks > 0;
 		pChr->m_Ninja.m_OldVelAmount = length(pChr->m_Core.m_Vel);
 		pChr->GameWorld()->CreateSound(pChr->GetPos(), SOUND_NINJA_FIRE);
 		return 0;
@@ -36,15 +38,14 @@ public:
 	void OnTick(CCharacter *pChr) override
 	{
 		// nothing to do when we are not swinging
-		if(pChr->m_Ninja.m_CurrentMoveTime <= 0)
+		if(!pChr->m_Ninja.m_Active)
 			return;
 
-		pChr->m_Ninja.m_CurrentMoveTime--;
-
-		if(pChr->m_Ninja.m_CurrentMoveTime == 0)
+		if(pChr->m_Ninja.m_MoveTimer.expired(pChr->Server()->Tick()))
 		{
 			// swing over: restore the velocity the player had before dashing
 			pChr->m_Core.m_Vel = pChr->m_Ninja.m_ActivationDir * pChr->m_Ninja.m_OldVelAmount;
+			pChr->m_Ninja.m_Active = false;
 			return;
 		}
 

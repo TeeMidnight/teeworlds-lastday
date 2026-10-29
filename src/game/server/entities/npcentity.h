@@ -5,6 +5,7 @@
 #ifndef GAME_SERVER_ENTITIES_NPCENTITY_H
 #define GAME_SERVER_ENTITIES_NPCENTITY_H
 
+#include <base/tl/timer.h>
 #include <game/server/mobdata.h>
 
 #include "botentity.h"
@@ -140,8 +141,8 @@ private:
 	// the direction it is currently wandering in (-1, 0 or 1)
 	int m_WanderDir;
 
-	int m_HealTimer = 0;
-	int m_ArmorTimer = 0;
+	tick_timer m_HealTimer;
+	tick_timer m_ArmorTimer;
 	int m_LastSpeakTick = -1000;
 	// > 0 while the spawn line waits for the bot's per-client tee id
 	int m_SpawnAnnounceTick = -1;

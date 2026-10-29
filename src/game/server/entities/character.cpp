@@ -54,6 +54,7 @@ CCharacter::CCharacter(CGameWorld *pWorld) : CHitableEntity(pWorld, CGameWorld::
 	m_SpeedScale = 1.0f;
 	m_DrillControl = false;
 	m_DrillExitRequest = false;
+	m_Ninja.m_Active = false;
 	mem_zero(m_aAccessories, sizeof(m_aAccessories));
 }
 
@@ -140,7 +141,7 @@ bool CCharacter::IsGrounded()
 void CCharacter::DoWeaponSwitch()
 {
 	// make sure we can switch
-	if(m_ReloadTimer != 0 || m_QueuedWeapon == -1)
+	if(!m_ReloadTimer.expired(Server()->Tick()) || m_QueuedWeapon == -1)
 		return;
 
 	// switch Weapon
@@ -188,7 +189,7 @@ void CCharacter::HandleWeaponSwitch()
 
 void CCharacter::FireWeapon()
 {
-	if(m_ReloadTimer != 0)
+	if(!m_ReloadTimer.expired(Server()->Tick()))
 		return;
 
 	DoWeaponSwitch();
@@ -222,7 +223,7 @@ void CCharacter::FireWeapon()
 		GameServer()->Item()->GetAmmoCountForWeapon(GetCID(), pWeaponName) <= 0)
 	{
 		// 125ms is a magical limit of how fast a human can click
-		m_ReloadTimer = 125 * Server()->TickSpeed() / 1000;
+		m_ReloadTimer.start(Server()->Tick(), 125 * Server()->TickSpeed() / 1000 + 1);
 		if(m_LastNoAmmoSound + Server()->TickSpeed() <= Server()->Tick())
 		{
 			GameWorld()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO);
@@ -245,7 +246,10 @@ void CCharacter::FireWeapon()
 	if(NeedsAmmo)
 		GameServer()->Item()->ConsumeAmmoForWeapon(GetCID(), pWeaponName, &Ammo);
 
-	m_ReloadTimer = WeaponManager()->FireWeapon(this, Direction, ActiveWeaponID, Ammo);
+	const int ReloadTicks = WeaponManager()->FireWeapon(this, Direction, ActiveWeaponID, Ammo);
+	// the old countdown blocked the next ReloadTicks ticks; the deadline makes
+	// the same wait survive a world that was frozen in between
+	m_ReloadTimer.start(Server()->Tick(), ReloadTicks + 1);
 }
 
 void CCharacter::HandleWeapons()
@@ -253,11 +257,8 @@ void CCharacter::HandleWeapons()
 	WeaponManager()->TickWeapon(this);
 
 	// check reload timer
-	if(m_ReloadTimer)
-	{
-		m_ReloadTimer--;
+	if(!m_ReloadTimer.expired(Server()->Tick()))
 		return;
-	}
 
 	// fire Weapon, if wanted
 	FireWeapon();
@@ -697,7 +698,7 @@ void CCharacter::TickDefered()
 
 	// apply drag velocity when the player is not firing ninja
 	// and set it back to 0 for the next tick
-	if(GetUsableWeapon() != WeaponID("ninja") || m_Ninja.m_CurrentMoveTime <= 0)
+	if(GetUsableWeapon() != WeaponID("ninja") || !m_Ninja.m_Active)
 		m_Core.AddDragVelocity();
 	m_Core.ResetDragVelocity();
 

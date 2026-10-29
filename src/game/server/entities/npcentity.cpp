@@ -560,43 +560,34 @@ void CNpcEntity::TickAuras()
 	if(!m_pDef || !m_Alive)
 		return;
 
-	if(m_pDef->m_HealAura.m_Enabled)
+	if(m_pDef->m_HealAura.m_Enabled && m_HealTimer.expired(Server()->Tick()))
 	{
-		if(m_HealTimer > 0)
-			m_HealTimer--;
-		else
+		// the old "set the interval, then count it down" period was interval+1
+		m_HealTimer.start(Server()->Tick(), m_pDef->m_HealAura.m_Interval + 1);
+		for(int i = 0; i < MAX_CLIENTS; i++)
 		{
-			m_HealTimer = m_pDef->m_HealAura.m_Interval;
-			for(int i = 0; i < MAX_CLIENTS; i++)
-			{
-				CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-				if(!pPlayer || pPlayer->GameWorld() != GameWorld())
-					continue;
-				CCharacter *pChr = pPlayer->GetCharacter();
-				if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_HealAura.m_Radius)
-					continue;
-				pChr->IncreaseHealth(m_pDef->m_HealAura.m_Amount);
-			}
+			CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+			if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+				continue;
+			CCharacter *pChr = pPlayer->GetCharacter();
+			if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_HealAura.m_Radius)
+				continue;
+			pChr->IncreaseHealth(m_pDef->m_HealAura.m_Amount);
 		}
 	}
 
-	if(m_pDef->m_ArmorAura.m_Enabled)
+	if(m_pDef->m_ArmorAura.m_Enabled && m_ArmorTimer.expired(Server()->Tick()))
 	{
-		if(m_ArmorTimer > 0)
-			m_ArmorTimer--;
-		else
+		m_ArmorTimer.start(Server()->Tick(), m_pDef->m_ArmorAura.m_Interval + 1);
+		for(int i = 0; i < MAX_CLIENTS; i++)
 		{
-			m_ArmorTimer = m_pDef->m_ArmorAura.m_Interval;
-			for(int i = 0; i < MAX_CLIENTS; i++)
-			{
-				CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-				if(!pPlayer || pPlayer->GameWorld() != GameWorld())
-					continue;
-				CCharacter *pChr = pPlayer->GetCharacter();
-				if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_ArmorAura.m_Radius)
-					continue;
-				pChr->IncreaseArmor(m_pDef->m_ArmorAura.m_Amount);
-			}
+			CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+			if(!pPlayer || pPlayer->GameWorld() != GameWorld())
+				continue;
+			CCharacter *pChr = pPlayer->GetCharacter();
+			if(!pChr || !pChr->IsAlive() || distance(pChr->GetPos(), m_Pos) > m_pDef->m_ArmorAura.m_Radius)
+				continue;
+			pChr->IncreaseArmor(m_pDef->m_ArmorAura.m_Amount);
 		}
 	}
 }

@@ -14,7 +14,10 @@ CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, 
 	m_Type = Type;
 	m_Direction.x = round_to_int(Dir.x * 100.0f) / 100.0f;
 	m_Direction.y = round_to_int(Dir.y * 100.0f) / 100.0f;
-	m_LifeSpan = Span;
+	// The old countdown lived Span+1 ticks from creation (it decremented on
+	// the ticks after the shot and died at -1); the deadline keeps that window
+	// without a per-tick counter, even across a frozen world.
+	m_LifeSpan.start(Server()->Tick(), Span + 1);
 	m_Owner = Owner;
 	// A bot has no client slot: its projectile carries the team sentinel
 	// (PLAYER_TEAM_BLUE / PLAYER_TEAM_RED) so the victim's friendly-fire check
@@ -86,11 +89,11 @@ void CProjectile::Tick()
 	CEntity *pIgnore = m_IgnoreEntityID >= 0 ? GameWorld()->FindEntityByID(m_IgnoreEntityID) : nullptr;
 	CHitableEntity *pTargetEnt = (CHitableEntity *) GameWorld()->IntersectFlagEntity(PrevPos, CurPos, 6.0f, CurPos, CGameWorld::ENTFLAG_HITABLE, pOwnerChar, pIgnore);
 
-	m_LifeSpan--;
+	const bool TimedOut = m_LifeSpan.expired(Server()->Tick());
 
-	if(pTargetEnt || Collide || m_LifeSpan < 0 || GameLayerClipped(CurPos))
+	if(pTargetEnt || Collide || TimedOut || GameLayerClipped(CurPos))
 	{
-		if(m_LifeSpan >= 0 || m_Weapon == WEAPON_GRENADE)
+		if(!TimedOut || m_Weapon == WEAPON_GRENADE)
 			GameWorld()->CreateSound(CurPos, m_SoundImpact);
 
 		if(m_Explosive)

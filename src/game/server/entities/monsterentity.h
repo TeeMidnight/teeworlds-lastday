@@ -4,6 +4,7 @@
 #ifndef GAME_SERVER_ENTITIES_MONSTERENTITY_H
 #define GAME_SERVER_ENTITIES_MONSTERENTITY_H
 
+#include <base/tl/timer.h>
 #include <game/server/mobdata.h>
 
 #include "botentity.h"
@@ -92,10 +93,10 @@ protected:
 	bool m_SaidSight;
 	bool m_SaidLowHealth;
 
-	int m_RangedTimer;
-	int m_LeapTimer;
-	int m_HealTimer;
-	int m_ArmorTimer;
+	tick_timer m_RangedTimer;
+	tick_timer m_LeapTimer;
+	tick_timer m_HealTimer;
+	tick_timer m_ArmorTimer;
 	bool m_Enraged;
 	bool m_Summoned;
 	int m_SpawnGroup;

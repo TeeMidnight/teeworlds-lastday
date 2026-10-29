@@ -5,6 +5,7 @@
 #ifndef GAME_SERVER_ENTITIES_BOTENTITY_H
 #define GAME_SERVER_ENTITIES_BOTENTITY_H
 
+#include <base/tl/timer.h>
 #include <base/uuid.h>
 #include <game/gamecore.h>
 #include <game/server/bot.h>
@@ -177,7 +178,7 @@ public:
 	void SetFire(bool Fire) { m_Input.m_Fire = Fire ? 1 : 0; }
 	void SetAimTarget(vec2 Target) { m_CursorTarget = Target; }
 	vec2 CursorTarget() const { return m_CursorTarget; }
-	int ReloadTimer() const { return m_ReloadTimer; }
+	int ReloadTimer();
 
 	/*
 		Function: PickTeeID
@@ -227,7 +228,7 @@ protected:
 	int m_Emote;
 	int m_EmoteStop;
 	int m_AttackTick;
-	int m_ReloadTimer;
+	tick_timer m_ReloadTimer;
 
 	int m_TriggeredEvents;
 
