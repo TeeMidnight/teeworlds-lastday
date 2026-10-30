@@ -140,6 +140,29 @@ Monsters are content, not C++ classes. One file per creature lives in
   low health), with `{player}` substitution and per-event cooldowns
 - weighted `drops`; each entry is a normal item id with a count range and a
   chance
+- `money`: a G bundle (`min`, `max`, `piles`, `chance`) that scatters into
+  physical piles. Money is not an item; each pile is rendered as a weapon
+  projectile and credited to the picking player's account ledger
+
+Money, shops and buy orders
+---------------------------
+Currency is an account ledger, not an inventory stack. It is credited from
+monster money drops and from NPC buy orders, and debited by player listings and
+NPC shelves.
+
+- A configured NPC may list `buys` next to `sells` in
+  `datasrc/bots/npc/<npc_id>.json`. Each entry names the `item`, the package
+  `count`, the `price` in G, how many packages the merchant will take
+  (`limit`) and `restock_seconds`. The runtime demand is persisted in
+  `npc_buy_stock`, so restarting the server does not refill a satisfied
+  merchant.
+- In the Shop page, expanding a merchant shows its sell shelf and its buy
+  orders. Clicking the price row of a buy order removes the package from the
+  player's inventory and credits the G in one step; if either side fails, the
+  items are put back.
+- Money pickups are batched per player over half a second, so a scattered pile
+  produces one `+N G` chat notice instead of a line per coin.
+
 
 Faction rules are deliberately asymmetric. A hostile mob hunts players but
 does not start a fight with any other bot: other monsters, whatever their

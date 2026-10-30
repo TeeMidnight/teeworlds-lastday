@@ -952,6 +952,21 @@
 		},
 		{
 			"context": "Trade",
+			"or": "Sold {} x{} to {} for {} G",
+			"tr": "已向 {} 出售 {} x{}，获得 {} G"
+		},
+		{
+			"context": "Trade",
+			"or": "The merchant does not want that right now.",
+			"tr": "商人现在不收购这个。"
+		},
+		{
+			"context": "Money",
+			"or": "Picked up +{} G",
+			"tr": "拾取 +{} G"
+		},
+		{
+			"context": "Trade",
 			"or": "The seller has no inventory space.",
 			"tr": "卖家背包空间不足。"
 		},
@@ -1004,6 +1019,21 @@
 			"context": "Menu Trade",
 			"or": "      stock {}, restock {}s",
 			"tr": "      库存 {}，{}秒后补货"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "   Wants: {} x{}",
+			"tr": "   收购: {} x{}"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "   Pays: {} G",
+			"tr": "   支付: {} G"
+		},
+		{
+			"context": "Menu Trade",
+			"or": "      demand {}, restock {}s",
+			"tr": "      需求 {}，{}秒后补货"
 		},
 		{
 			"context": "Menu Main",
