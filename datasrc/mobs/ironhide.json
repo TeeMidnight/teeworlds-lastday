@@ -35,5 +35,6 @@
         {"item": "iron_ingot", "count_min": 2, "count_max": 4, "chance": 0.80},
         {"item": "stone_bricks", "count_min": 1, "count_max": 3, "chance": 0.45},
         {"item": "steel_ingot", "count_min": 1, "count_max": 1, "chance": 0.08}
-    ]
+    ],
+    "money": {"min": 6, "max": 15, "piles": 3, "chance": 0.85}
 }

@@ -4,6 +4,7 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 
 #include <game/localization.h>
+#include <game/localization_format.h>
 
 #include "entities/character.h"
 #include "entities/drill.h"
@@ -52,6 +53,8 @@ CPlayer::CPlayer(CGameWorld *pWorld, int ClientID, bool Dummy, bool AsSpec)
 	m_MapLoading = false;
 	m_HasPendingArrival = false;
 	m_PendingArrivalPos = vec2(0.0f, 0.0f);
+	m_CurrencyPickupPending = 0;
+	m_CurrencyPickupFlushTick = 0;
 	mem_zero(&m_Latency, sizeof(m_Latency));
 
 	m_Status.m_HideTip = false;
@@ -104,10 +107,35 @@ bool CPlayer::SetLanguage(const char *pCode)
 	return true;
 }
 
+void CPlayer::AddCurrencyPickup(int64 Amount)
+{
+	if(Amount <= 0)
+		return;
+	// the first coin of a window arms the half-second timer; later coins in
+	// the same window only add to the sum
+	if(m_CurrencyPickupPending == 0)
+		m_CurrencyPickupFlushTick = Server()->Tick() + maximum(1, Server()->TickSpeed() / 2);
+	m_CurrencyPickupPending += Amount;
+}
+
+void CPlayer::FlushCurrencyPickup()
+{
+	if(m_CurrencyPickupPending <= 0 || Server()->Tick() < m_CurrencyPickupFlushTick)
+		return;
+
+	CLanguageScope LanguageScope(Language());
+	const std::string Msg = LocalizeFormat("Money", "Picked up +{} G", m_CurrencyPickupPending);
+	GameServer()->SendChat(-1, CHAT_WHISPER, m_ClientID, Msg.c_str());
+	m_CurrencyPickupPending = 0;
+}
+
 void CPlayer::Tick()
 {
 	if(!IsDummy() && !Server()->ClientIngame(m_ClientID))
 		return;
+
+	// flush the money pickup notice once its half-second window has passed
+	FlushCurrencyPickup();
 
 	// active buffs tick every game tick (their scripts decide what to do)
 	if(GameServer()->Buffs())

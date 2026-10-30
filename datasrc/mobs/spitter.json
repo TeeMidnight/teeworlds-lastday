@@ -35,5 +35,6 @@
     "drops": [
         {"item": "venom_gland", "count_min": 1, "count_max": 2, "chance": 0.70},
         {"item": "grass", "count_min": 1, "count_max": 3, "chance": 0.35}
-    ]
+    ],
+    "money": {"min": 2, "max": 6, "piles": 2, "chance": 0.50}
 }

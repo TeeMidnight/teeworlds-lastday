@@ -41,5 +41,6 @@
         {"item": "venom_gland", "count_min": 2, "count_max": 4, "chance": 0.90},
         {"item": "ancient_core", "count_min": 1, "count_max": 1, "chance": 0.25},
         {"item": "amber", "count_min": 1, "count_max": 2, "chance": 0.30}
-    ]
+    ],
+    "money": {"min": 3, "max": 9, "piles": 3, "chance": 0.60}
 }

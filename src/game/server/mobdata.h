@@ -69,6 +69,18 @@ struct SMobDrop
 	SMobDrop() : m_CountMin(1), m_CountMax(1), m_Chance(1.0f) { m_aItem[0] = '\0'; }
 };
 
+// A money drop is not an item: it is a bundle of G split over one or more
+// physical piles, each rendered as a projectile sprite.
+struct SMobMoneyDrop
+{
+	int m_Min;
+	int m_Max;
+	int m_Piles;
+	float m_Chance;
+
+	SMobMoneyDrop() : m_Min(1), m_Max(1), m_Piles(1), m_Chance(1.0f) {}
+};
+
 struct SMobMelee
 {
 	int m_Damage;
@@ -186,6 +198,7 @@ struct SMobDef
 	SMobEnrage m_Enrage;
 	SMobDialogue m_Dialogue;
 	array<SMobDrop> m_lDrops;
+	array<SMobMoneyDrop> m_lMoneyDrops;
 
 	SMobDef() :
 		m_Faction(BOTFACTION_HOSTILE), m_Health(10), m_Armor(0), m_SpeedScale(1.0f), m_AggroRadius(360.0f), m_AttackRange(48.0f), m_KeepDistance(0.0f), m_JumpChance(12), m_HasSkin(false), m_IsWorm(false), m_IsBoss(false)

@@ -422,6 +422,27 @@ void CMobSystem::LoadDef(const char *pDefaultId, const char *pFilePath)
 		}
 	}
 
+	// money drops: a bundle of G split over physical piles. Accept one object
+	// or an array of objects, so a mob can have several independent rolls.
+	{
+		const json_value &rMoney = (*pJson)["money"];
+		auto LoadMoneyDrop = [pDef](const json_value &rDrop)
+		{
+			if(rDrop.type != json_object)
+				return;
+			SMobMoneyDrop &Drop = pDef->m_lMoneyDrops.emplace();
+			Drop.m_Min = maximum(0, ReadInt(rDrop["min"], ReadInt(rDrop["count_min"], 1)));
+			Drop.m_Max = maximum(Drop.m_Min, ReadInt(rDrop["max"], ReadInt(rDrop["count_max"], Drop.m_Min)));
+			Drop.m_Piles = clamp(ReadInt(rDrop["piles"], 1), 1, 16);
+			Drop.m_Chance = clamp(ReadFloat(rDrop["chance"], 1.0f), 0.0f, 1.0f);
+		};
+		if(rMoney.type == json_object)
+			LoadMoneyDrop(rMoney);
+		else if(rMoney.type == json_array)
+			for(unsigned i = 0; i < rMoney.u.array.length; i++)
+				LoadMoneyDrop(rMoney[i]);
+	}
+
 	m_lDefs.add(pDef);
 	m_Defs.set(str_quickhash(pDef->m_aId), pDef);
 

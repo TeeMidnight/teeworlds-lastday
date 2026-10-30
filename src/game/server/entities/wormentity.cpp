@@ -596,6 +596,33 @@ void CWormEntity::DropLoot()
 		const vec2 Dir((float) (random_int() % 200 - 100) / 100.0f, -1.0f);
 		new CDroppedPickup(GameWorld(), m_Pos + vec2(0.0f, -24.0f), Dir, Drop.m_Id, Count);
 	}
+
+	// same money pile rule as the monster entity: a bundle of G split over
+	// several physical drops, each drawn as a weapon projectile
+	for(int i = 0; i < m_pDef->m_lMoneyDrops.size(); i++)
+	{
+		const SMobMoneyDrop &Drop = m_pDef->m_lMoneyDrops[i];
+		if(Drop.m_Chance <= 0.0f)
+			continue;
+		if(Drop.m_Chance < 1.0f && (float) (random_int() % 10000) / 10000.0f >= Drop.m_Chance)
+			continue;
+
+		const int Total = Drop.m_Min + (Drop.m_Max > Drop.m_Min ? random_int() % (Drop.m_Max - Drop.m_Min + 1) : 0);
+		if(Total <= 0)
+			continue;
+
+		int Remaining = Total;
+		for(int P = 0; P < Drop.m_Piles && Remaining > 0; P++)
+		{
+			const int PileAmount = Remaining / (Drop.m_Piles - P);
+			if(PileAmount <= 0)
+				continue;
+			Remaining -= PileAmount;
+			const vec2 Dir((float) (random_int() % 240 - 120) / 100.0f, -1.2f - (float) (random_int() % 120) / 100.0f);
+			const vec2 Offset((float) (random_int() % 24 - 12), -24.0f);
+			new CDroppedPickup(GameWorld(), m_Pos + Offset, Dir, (int64) PileAmount, CDroppedPickup::KIND_CURRENCY);
+		}
+	}
 }
 
 void CWormEntity::WormDie()

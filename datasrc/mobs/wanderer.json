@@ -33,5 +33,6 @@
     "drops": [
         {"item": "grass", "count_min": 1, "count_max": 3, "chance": 0.50},
         {"item": "bandage", "count_min": 1, "count_max": 1, "chance": 0.20}
-    ]
+    ],
+    "money": {"min": 1, "max": 4, "piles": 2, "chance": 0.40}
 }

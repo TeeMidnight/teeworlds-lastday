@@ -48,5 +48,6 @@
         {"item": "steel_ingot", "count_min": 3, "count_max": 5, "chance": 0.80},
         {"item": "guardian_heart", "count_min": 1, "count_max": 1, "chance": 0.15},
         {"item": "laser", "count_min": 1, "count_max": 1, "chance": 0.25}
-    ]
+    ],
+    "money": {"min": 60, "max": 120, "piles": 6, "chance": 1.00}
 }

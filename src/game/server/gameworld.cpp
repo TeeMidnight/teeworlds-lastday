@@ -1563,12 +1563,22 @@ void CGameWorld::SaveToDatabase()
 	{
 		const CDroppedPickup *pPickup = lDrops[i];
 		JsonWriter.BeginObject();
-		char aUuid[UUID_MAXSTRSIZE];
-		pPickup->ItemId().FormatUuid(aUuid, sizeof(aUuid));
-		JsonWriter.WriteAttribute("item");
-		JsonWriter.WriteStrValue(aUuid);
-		JsonWriter.WriteAttribute("count");
-		JsonWriter.WriteIntValue(pPickup->Count());
+		// A money drop stores its G amount instead of an item id; both kinds
+		// share the position fields and the same restore path.
+		if(pPickup->IsCurrencyDrop())
+		{
+			JsonWriter.WriteAttribute("money");
+			JsonWriter.WriteInt64Value(pPickup->Amount());
+		}
+		else
+		{
+			char aUuid[UUID_MAXSTRSIZE];
+			pPickup->ItemId().FormatUuid(aUuid, sizeof(aUuid));
+			JsonWriter.WriteAttribute("item");
+			JsonWriter.WriteStrValue(aUuid);
+			JsonWriter.WriteAttribute("count");
+			JsonWriter.WriteIntValue(pPickup->Count());
+		}
 		JsonWriter.WriteAttribute("x");
 		JsonWriter.WriteIntValue(round_to_int(pPickup->GetPos().x));
 		JsonWriter.WriteAttribute("y");
@@ -1718,17 +1728,51 @@ void CGameWorld::RestoreFromDatabase()
 		MarkBossDefeated((int) (json_int_t) rBossDead[i]);
 
 	CItemSystem *pItems = GameServer()->Item();
+	// Nudge the saved position upward when it is stuck inside a solid tile
+	// (e.g. the map was regenerated); false when no free spot can be found.
+	auto FindDropSpawn = [this](float X, float Y, vec2 *pOut) -> bool
+	{
+		vec2 SpawnPos(X, Y);
+		for(int Step = 0; Step < 64; Step++)
+		{
+			if(!Collision()->TestBox(SpawnPos, vec2(CDroppedPickup::DROP_BOX, CDroppedPickup::DROP_BOX)))
+			{
+				*pOut = SpawnPos;
+				return true;
+			}
+			SpawnPos.y -= 32.0f;
+		}
+		return false;
+	};
+
 	const json_value &rDrops = (*pJson)["drop"];
 	for(unsigned i = 0; rDrops.type == json_array && i < rDrops.u.array.length; i++)
 	{
 		const json_value &rDrop = rDrops[i];
 		if(rDrop.type != json_object)
 			continue;
-		const json_value &rItem = rDrop["item"];
-		const json_value &rCount = rDrop["count"];
 		const json_value &rX = rDrop["x"];
 		const json_value &rY = rDrop["y"];
-		if(rItem.type != json_string || rCount.type != json_integer || rX.type != json_integer || rY.type != json_integer)
+		if(rX.type != json_integer || rY.type != json_integer)
+			continue;
+		const float X = (float) (json_int_t) rX;
+		const float Y = (float) (json_int_t) rY;
+		vec2 SpawnPos;
+		if(!FindDropSpawn(X, Y, &SpawnPos))
+			continue;
+
+		// money drops store the G amount; anything else is an item stack
+		const json_value &rMoney = rDrop["money"];
+		if(rMoney.type == json_integer && (int64) (json_int_t) rMoney > 0)
+		{
+			new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f),
+				(int64) (json_int_t) rMoney, CDroppedPickup::KIND_CURRENCY);
+			continue;
+		}
+
+		const json_value &rItem = rDrop["item"];
+		const json_value &rCount = rDrop["count"];
+		if(rItem.type != json_string || rCount.type != json_integer)
 			continue;
 		// the item definitions may have changed while the world was unloaded.
 		// The stored value is the canonical uuid; old saves stored the res_id.
@@ -1739,26 +1783,6 @@ void CGameWorld::RestoreFromDatabase()
 			continue;
 
 		const int Count = maximum(1, (int) (json_int_t) rCount);
-		const float X = (float) (json_int_t) rX;
-		const float Y = (float) (json_int_t) rY;
-
-		// nudge the spawn position upward when the stored position is stuck
-		// inside a solid tile (e.g. the map was regenerated); skip the entry
-		// when no free spot can be found
-		vec2 SpawnPos(X, Y);
-		bool Stuck = true;
-		for(int Step = 0; Step < 64; Step++)
-		{
-			if(!Collision()->TestBox(SpawnPos, vec2(CDroppedPickup::DROP_BOX, CDroppedPickup::DROP_BOX)))
-			{
-				Stuck = false;
-				break;
-			}
-			SpawnPos.y -= 32.0f;
-		}
-		if(Stuck)
-			continue;
-
 		new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f), DropId, Count);
 	}
 

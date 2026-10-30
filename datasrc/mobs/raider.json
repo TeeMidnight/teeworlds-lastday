@@ -37,5 +37,6 @@
         {"item": "iron_ingot", "count_min": 1, "count_max": 2, "chance": 0.45},
         {"item": "stone", "count_min": 2, "count_max": 5, "chance": 0.30},
         {"item": "silver_ore", "count_min": 1, "count_max": 1, "chance": 0.08}
-    ]
+    ],
+    "money": {"min": 4, "max": 10, "piles": 3, "chance": 0.70}
 }

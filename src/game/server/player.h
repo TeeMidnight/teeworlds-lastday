@@ -177,6 +177,10 @@ public:
 		CItemID m_aAccessories[NUM_ACCESSORY_SLOTS];
 	} m_Status;
 
+	// Add G picked up from a world drop to this player's short pickup window.
+	// The ledger is already credited by the caller; this only aggregates the
+	// chat notice over half a second so a pile of coins is one message.
+	void AddCurrencyPickup(int64 Amount);
 	// account (bound on login / register)
 	Uuid m_AccountUuid;
 	bool m_LoggedIn;
@@ -248,6 +252,12 @@ private:
 	int m_SpecMode;
 	int m_SpectatorID;
 	bool m_ActiveSpecSwitch;
+
+	// money pickup notice: the sum collected in the current half-second window
+	// and the tick at which it is shown
+	int64 m_CurrencyPickupPending;
+	int m_CurrencyPickupFlushTick;
+	void FlushCurrencyPickup();
 };
 
 #endif
