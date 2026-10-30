@@ -363,6 +363,7 @@ void CMapGen::LoadStructDefinition(const char *pDefaultId, const char *pFilePath
 	Entry.m_SurfaceOffset = JsonInt((*pJson)["surface_offset"], 0);
 	Entry.m_Collision = JsonBool((*pJson)["collision"], true);
 	Entry.m_Unique = JsonBool((*pJson)["unique"], false);
+	Entry.m_Instance = maximum(0, JsonInt((*pJson)["instance"], 0));
 
 	const json_value &rVariants = (*pJson)["variants"];
 	for(unsigned v = 0; v < rVariants.u.array.length; v++)
@@ -549,6 +550,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 		Struct.m_SurfaceOffset = 0;
 		Struct.m_Collision = true;
 		Struct.m_Unique = false;
+		Struct.m_Instance = 0;
 
 		const json_value &rId = rStruct["id"];
 		const json_value &rBaseValue = rStruct["base"];
@@ -575,6 +577,7 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 				Struct.m_SurfaceOffset = pCatalogEntry->m_SurfaceOffset;
 				Struct.m_Collision = pCatalogEntry->m_Collision;
 				Struct.m_Unique = pCatalogEntry->m_Unique;
+				Struct.m_Instance = pCatalogEntry->m_Instance;
 				for(int v = 0; v < pCatalogEntry->m_lVariants.size(); v++)
 					Struct.m_lVariants.add(pCatalogEntry->m_lVariants[v]);
 				if(Struct.m_lVariants.size())
@@ -636,6 +639,8 @@ void CMapGen::LoadFloor(const char *pFloorName, const char *pFilePath)
 		const json_value &rUnique = rStruct["unique"];
 		if(rUnique.type == json_boolean)
 			Struct.m_Unique = (bool) rUnique;
+		if(HasNumber(rStruct["instance"]))
+			Struct.m_Instance = maximum(0, JsonInt(rStruct["instance"], Struct.m_Instance));
 
 		// A floor can name the container kinds itself. This wins over the
 		// catalog list, and is the only way an inline "base" structure (which
@@ -740,9 +745,9 @@ int CMapGen::TrainDestinationRingSize(int Index) const
 	if(Index < 0 || Index >= m_lTrainFloors.size())
 		return 0;
 	const CInstruction *pFloor = m_lTrainFloors[Index];
-	// The train can stop at any instance of the target floor. A ring names its
-	// instances explicitly; a floor without a ring keeps the historic 1024
-	// instance range that DeriveTargetSeed also uses.
+	// The number of instances of the target floor. A ring names its instances
+	// explicitly; a floor without a ring keeps the historic 1024 instance range
+	// that DeriveTargetSeed also uses.
 	if(pFloor->m_Generation.m_Ring.m_Enabled)
 		return maximum(1, pFloor->m_Generation.m_Ring.m_Size);
 	return 1024;
@@ -800,11 +805,12 @@ int CMapGen::FindTrainFloor(const char *pFloorName) const
 	return -1;
 }
 
-int CMapGen::RollTrainSeed(int Index)
+int CMapGen::TrainDestinationSeed(int Index)
 {
 	const int Chunks = maximum(1, TrainDestinationRingSize(Index));
-	// Match the old menu roll: the chunk numbers are 1..Chunks.
-	return 1 + (int) ((unsigned) random_int() % (unsigned) Chunks);
+	// Boarding always lands in the middle of the destination's ring (512 for
+	// 1024 instances) instead of a random chunk.
+	return RingCenterSeed(Chunks);
 }
 
 // ---------------------------------------------------------------------------
@@ -1541,7 +1547,7 @@ void CMapGen::StartPreGeneration(IEngine *pEngine)
 
 	scope_lock Lock(&m_GenLock);
 	for(int i = 0; i < m_lTrainFloors.size(); i++)
-		QueueChunkLocked(i, RollTrainSeed(i));
+		QueueChunkLocked(i, TrainDestinationSeed(i));
 }
 
 void CMapGen::UpdateBackgroundGeneration()
@@ -1581,14 +1587,14 @@ bool CMapGen::TakeTrainChunk(const char *pFloorName, char *pOutMapName, int OutS
 		{
 			// Pre-generation never ran or its job failed. Queue a chunk now;
 			// the click is refused once and the next one finds it ready.
-			QueueChunkLocked(Index, RollTrainSeed(Index));
+			QueueChunkLocked(Index, TrainDestinationSeed(Index));
 			return false;
 		}
 
 		// Roll the following trip immediately: its map is built while the
 		// player travels through the one just consumed.
 		if(Seed && !Chunk.m_PendingSeed)
-			QueueChunkLocked(Index, RollTrainSeed(Index));
+			QueueChunkLocked(Index, TrainDestinationSeed(Index));
 	}
 
 	if(!Seed)

@@ -3,9 +3,10 @@
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
 // mapgentool - generate mapgen floors without starting the server.
 //
-// The server prepares one random train chunk per destination in the background
-// at startup, and any other floor lazily the first time something asks for a
-// "<floor>_<seed>" map; it writes the result into the storage save path.
+// The server prepares the central train chunk of every destination in the
+// background at startup, and any other floor lazily the first time something
+// asks for a "<floor>_<seed>" map; it writes the result into the storage save
+// path.
 // That makes the terrain awkward to inspect: it needs a running server, and the
 // file lands somewhere the caller has to look up. This tool drives the same
 // CMapGen the server uses, against the same data directory and the same

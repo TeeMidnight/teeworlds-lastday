@@ -512,15 +512,18 @@ static void PasteEuclidStructQuads(const SEuclidStructMap &rMap, int OffsetX, in
 	}
 }
 
-// A unique structure is pasted on exactly one instance of a floor. The seed is
-// derived from the floor name and the structure id, so two different unique
-// structures naturally land on different instances.
+// A unique structure is pasted on exactly one instance of a floor. An explicit
+// "instance" pins it to that ring chunk (the boss sanctum uses instance 1);
+// otherwise the seed is derived from the floor name and the structure id, so
+// two different unique structures naturally land on different instances.
 static int UniqueStructureSeed(const CInstruction::CStruct &Struct, const CInstruction::CGeneration &Gen, const char *pFloorName, int Seed)
 {
 	if(!Struct.m_Unique)
 		return -1;
 	if(!Gen.m_Ring.m_Enabled || Gen.m_Ring.m_Size <= 1)
 		return Seed;
+	if(Struct.m_Instance > 0)
+		return clamp(Struct.m_Instance, 1, Gen.m_Ring.m_Size);
 	const unsigned Hash = str_quickhash(pFloorName) ^ (str_quickhash(Struct.m_aId) * 2654435761u);
 	return 1 + (int) (Hash % (unsigned) Gen.m_Ring.m_Size);
 }

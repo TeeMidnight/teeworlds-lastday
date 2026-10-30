@@ -2,6 +2,7 @@
     "id": "frost_sanctum",
     "collision": false,
     "unique": true,
+    "instance": 1,
     "count": 1,
     "margin": 48,
     "min_separation": 120,

@@ -26,6 +26,8 @@ and the 1024 instances close into one world that can be walked around.
 - Resources: a node is only spawned past the shared margin, so each physical
   node has a single owner and is never mined twice.
 - The neighbours of an occupied ring instance are kept loaded.
+- The train always arrives in the middle of a destination ring: 512 for a
+  1024-instance floor. Boarding no longer rolls a random chunk.
 
 Enable it in `datasrc/maps/worlds/<Floor>.json`:
 
@@ -262,9 +264,8 @@ proximity.
 Boss sanctums
 -------------
 Each generated euclidean floor carries exactly one `frost_sanctum` structure.
-Its seed is derived from the floor name and the structure id, so the encounter
-exists on one deterministic instance per floor rather than on every instance.
-The catalog structure is `datasrc/maps/struct/frost_sanctum.json`; it pins a
+The catalog structure pins `"instance": 1`, so the encounter always exists on
+ring chunk 1 of the floor rather than on a hash-derived instance. It also pins a
 theme variant per floor (frost, jungle, desert or grass) and places a vault plus
 a boss and its guards. The world metadata now carries a `mobs` array, and the
 server spawns it as non-natural content: neither the boss nor its summons take a

@@ -89,6 +89,10 @@ struct CStructCatalogEntry
 	// Unique floor content: only the one deterministic seed of a floor pastes
 	// this structure, so a ring floor holds exactly one instance of it.
 	bool m_Unique;
+	// Ring instance (1..ring size) a unique structure is pinned to. 0 keeps
+	// the seed derived from the floor name and structure id, so several unique
+	// structures land on different instances unless they ask otherwise.
+	int m_Instance;
 };
 
 // Maps a deterministic 32-bit hash onto [0,1). Probabilities in the floor
@@ -479,6 +483,9 @@ struct CInstruction
 		bool m_Collision;
 		// only the deterministic unique seed of the floor pastes this entry
 		bool m_Unique;
+		// ring instance (1..ring size) a unique entry is pinned to; 0 derives
+		// it from the floor name and the structure id
+		int m_Instance;
 	};
 
 	char m_aFloorName[64]; // unique floor/map name (the file name)
@@ -642,7 +649,7 @@ private:
 
 	static int GenWorker(void *pUser);
 	int FindTrainFloor(const char *pFloorName) const;
-	int RollTrainSeed(int Index);
+	int TrainDestinationSeed(int Index);
 	bool GeneratedMapExists(const char *pFloorName, int Seed) const;
 	void QueueChunkLocked(int Index, int Seed);
 	void QueuePrefetchLocked(const char *pFloorName, int Seed);
@@ -751,10 +758,10 @@ public:
 	// The pack file of a floor (for tooling and tests).
 	void PackPath(const char *pFloorName, char *pBuf, int Size) const;
 
-	// Starts using the engine's thread pool and queues one random chunk per
-	// train destination, so the first travel to a world normally finds its map
-	// already generated. Without an engine no job is submitted; only a chunk
-	// that already exists on disk can be taken.
+	// Starts using the engine's thread pool and queues the central chunk of
+	// every train destination, so the first travel to a world normally finds
+	// its map already generated. Without an engine no job is submitted; only a
+	// chunk that already exists on disk can be taken.
 	void StartPreGeneration(class IEngine *pEngine);
 
 	// Reaps finished pool jobs and schedules the queue when work is waiting.
@@ -773,7 +780,7 @@ public:
 	bool GetFloorKind(const char *pFloorName, EWorldKind *pKind) const;
 
 	// The train destinations, in floor-name order. The game menu lists exactly
-	// these and asks for the instance count to pick a random chunk on arrival.
+	// these; every trip arrives in the central instance of the destination.
 	int NumTrainDestinations() const { return m_lTrainFloors.size(); }
 	const char *TrainDestinationName(int Index) const;
 	int TrainDestinationRingSize(int Index) const;

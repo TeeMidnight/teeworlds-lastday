@@ -205,6 +205,16 @@ inline int RingNeighbourSeed(int Seed, int Direction, int Size)
 	return Target;
 }
 
+// The instance at the middle of a ring of Size instances. Seeds are 1..Size,
+// so 1024 lands on 512 and an odd size lands on its exact centre. The train
+// uses it to always arrive in the middle of a floor instead of a random chunk.
+inline int RingCenterSeed(int Size)
+{
+	if(Size <= 1)
+		return 1;
+	return (Size + 1) / 2;
+}
+
 // The shortest horizontal shift (in tiles) that brings an entity of the
 // instance at OffsetTo into the frame of the instance at OffsetFrom. Taking the
 // short way round the ring is what makes the last instance line up with the

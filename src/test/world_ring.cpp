@@ -318,6 +318,17 @@ TEST(WorldRing, NeighbourSeedWrapsAroundTheRing)
 	EXPECT_EQ(RingNeighbourSeed(1024, -1, 1024), 1023);
 }
 
+TEST(WorldRing, CenterSeedIsTheMiddleInstance)
+{
+	// the train uses this: 1..1024 boards at 512, an odd size lands exactly
+	// in the middle, and a degenerate ring stays at its first instance
+	EXPECT_EQ(RingCenterSeed(1024), 512);
+	EXPECT_EQ(RingCenterSeed(1023), 512);
+	EXPECT_EQ(RingCenterSeed(2), 1);
+	EXPECT_EQ(RingCenterSeed(1), 1);
+	EXPECT_EQ(RingCenterSeed(0), 1);
+}
+
 // A hook flying at a core bound at a translated column grabs it: this is the
 // mechanism the ring proxy relies on to reach a player in the next instance.
 TEST(RingProxy, HookGrabsACoreBoundAtATranslatedColumn)
