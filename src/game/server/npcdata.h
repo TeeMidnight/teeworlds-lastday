@@ -34,6 +34,23 @@ struct SNpcSell
 	int m_RestockAt; // unix time of the next restock
 };
 
+// One buy order on an NPC: the merchant wants Count units of Item and pays
+// Price G for the package. Limit is how many packages it will take before the
+// order rests, and RestockSeconds re-arms the order (0 = never). Runtime
+// demand is persisted in npc_buy_stock.
+struct SNpcBuy
+{
+	CItemID m_Item;
+	int m_Count; // units the player hands over per sale
+	int64 m_Price; // G paid to the player
+	int m_Limit; // packages available per restock period
+	int m_RestockSeconds; // 0 disables restocking
+
+	// runtime demand state
+	int m_Demand;
+	int m_RestockAt; // unix time of the next restock
+};
+
 // How an NPC's aggro level moves. The level itself is a database ledger; these
 // values only describe the deltas.
 struct SNpcAggroDef
@@ -62,6 +79,7 @@ struct SNpcDef
 	CBotSkin m_Skin;
 	SNpcAggroDef m_Aggro;
 	array<SNpcSell> m_lSells;
+	array<SNpcBuy> m_lBuys;
 	SMobDialogue m_Dialogue;
 	SMobHealAura m_HealAura;
 	SMobArmorAura m_ArmorAura;
@@ -90,6 +108,10 @@ class CNpcSystem
 	// read an entry's stock from npc_stock, or roll and store a fresh one
 	void LoadOrInitStock(SNpcDef *pDef, SNpcSell &Sell);
 	void PersistStock(const SNpcDef *pDef, const SNpcSell &Sell);
+	// buy orders: initial demand comes from the json limit, then the persisted
+	// runtime demand wins so a restart cannot refill a satisfied merchant
+	void LoadOrInitBuyDemand(SNpcDef *pDef, SNpcBuy &Buy);
+	void PersistBuyDemand(const SNpcDef *pDef, const SNpcBuy &Buy);
 	static int ListCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	void Load(const char *pDefaultId, const char *pFilePath);
 
@@ -106,6 +128,9 @@ public:
 	// Take Count units out of a shelf entry, persisting the result. Returns
 	// false when the entry does not have that much stock.
 	bool ConsumeStock(int DefIndex, int SellIndex, int Count);
+	// Take one package out of a buy order's demand, persisting the result.
+	// Returns false when the merchant no longer wants that order.
+	bool ConsumeBuyDemand(int DefIndex, int BuyIndex);
 
 	const SNpcDef *Find(const CNpcID &Id) const;
 	const SNpcDef *DefAt(int Index) const { return Index >= 0 && Index < m_lDefs.size() ? m_lDefs[Index] : 0; }

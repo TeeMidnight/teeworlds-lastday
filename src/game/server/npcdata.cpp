@@ -229,6 +229,44 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 		}
 	}
 
+	// buy orders: goods the NPC takes from players for G. The package size is
+	// fixed per entry, so the menu can show exactly what one click gives and
+	// takes. "limit" is the number of packages per restock period.
+	{
+		const json_value &rBuys = (*pJson)["buys"];
+		if(rBuys.type == json_array)
+		{
+			for(unsigned i = 0; i < rBuys.u.array.length; i++)
+			{
+				const json_value &rBuy = rBuys[i];
+				if(rBuy.type != json_object)
+					continue;
+				const char *pItem = rBuy["item"];
+				if(!pItem[0])
+					continue;
+
+				int64 Price = 0;
+				const json_value &rPrice = rBuy["price"];
+				if(rPrice.type == json_integer || rPrice.type == json_double)
+					Price = ReadInt64(rPrice, 0);
+				if(Price <= 0 || Price > CURRENCY_MAX_AMOUNT)
+				{
+					dbg_msg("npc", "buy order '%s' needs a positive price in G", pItem);
+					continue;
+				}
+
+				SNpcBuy &Buy = pDef->m_lBuys.emplace();
+				Buy.m_Item = CItemID::FromName(pItem);
+				Buy.m_Count = maximum(1, ReadInt(rBuy["count"], 1));
+				Buy.m_Price = Price;
+				Buy.m_Limit = maximum(1, ReadInt(rBuy["limit"], 1));
+				Buy.m_RestockSeconds = maximum(0, ReadInt(rBuy["restock_seconds"], 0));
+				Buy.m_Demand = 0;
+				Buy.m_RestockAt = 0;
+			}
+		}
+	}
+
 	// aggro tuning
 	{
 		const json_value &rAggro = (*pJson)["aggro"];
@@ -277,9 +315,10 @@ void CNpcSystem::Load(const char *pDefaultId, const char *pFilePath)
 	}
 
 	m_lDefs.add(pDef);
-	dbg_msg("npc", "loaded npc '%s' ('%s') world '%s' pos %d,%d hp %d regen %d faction %s sells %d",
+	dbg_msg("npc", "loaded npc '%s' ('%s') world '%s' pos %d,%d hp %d regen %d faction %s sells %d buys %d",
 		Id.SourceName(), NpcIDDisplayName(Id), pDef->m_aWorld,
-		TileX, TileY, pDef->m_Health, pDef->m_HealthRegen, BotFactionName(pDef->m_Faction), pDef->m_lSells.size());
+		TileX, TileY, pDef->m_Health, pDef->m_HealthRegen, BotFactionName(pDef->m_Faction),
+		pDef->m_lSells.size(), pDef->m_lBuys.size());
 }
 
 void CNpcSystem::Init(CGameContext *pGameServer, IStorage *pStorage)
@@ -304,6 +343,7 @@ void CNpcSystem::PersistShelves()
 	{
 		SNpcDef *pDef = m_lDefs[i];
 		pDB->ClearNpcSells(pDef->m_Id.Value());
+		pDB->ClearNpcBuys(pDef->m_Id.Value());
 		for(int s = 0; s < pDef->m_lSells.size(); s++)
 		{
 			SNpcSell &Sell = pDef->m_lSells[s];
@@ -311,6 +351,14 @@ void CNpcSystem::PersistShelves()
 			ItemSourceName(Sell.m_Item, aItem, sizeof(aItem));
 			pDB->SaveNpcSell(pDef->m_Id.Value(), aItem, Sell.m_Count, Sell.m_Price);
 			LoadOrInitStock(m_lDefs[i], Sell);
+		}
+		for(int b = 0; b < pDef->m_lBuys.size(); b++)
+		{
+			SNpcBuy &Buy = pDef->m_lBuys[b];
+			char aItem[64];
+			ItemSourceName(Buy.m_Item, aItem, sizeof(aItem));
+			pDB->SaveNpcBuy(pDef->m_Id.Value(), aItem, Buy.m_Count, Buy.m_Price, Buy.m_Limit, Buy.m_RestockSeconds);
+			LoadOrInitBuyDemand(m_lDefs[i], Buy);
 		}
 	}
 }
@@ -354,6 +402,38 @@ void CNpcSystem::LoadOrInitStock(SNpcDef *pDef, SNpcSell &Sell)
 	PersistStock(pDef, Sell);
 }
 
+void CNpcSystem::PersistBuyDemand(const SNpcDef *pDef, const SNpcBuy &Buy)
+{
+	CDatabase *pDB = m_pGameServer ? m_pGameServer->Database() : nullptr;
+	if(!pDB)
+		return;
+	char aItem[64];
+	ItemSourceName(Buy.m_Item, aItem, sizeof(aItem));
+	pDB->SaveNpcBuyDemand(pDef->m_Id.Value(), aItem, Buy.m_Price, Buy.m_Demand, Buy.m_RestockAt);
+}
+
+void CNpcSystem::LoadOrInitBuyDemand(SNpcDef *pDef, SNpcBuy &Buy)
+{
+	CDatabase *pDB = m_pGameServer ? m_pGameServer->Database() : nullptr;
+	char aItem[64];
+	ItemSourceName(Buy.m_Item, aItem, sizeof(aItem));
+
+	int Demand = 0;
+	int RestockAt = 0;
+	if(pDB && pDB->GetNpcBuyDemand(pDef->m_Id.Value(), aItem, Buy.m_Price, &Demand, &RestockAt))
+	{
+		Buy.m_Demand = Demand;
+		Buy.m_RestockAt = RestockAt;
+		return;
+	}
+
+	// first sight of this order: the full configured limit is available now
+	Buy.m_Demand = Buy.m_Limit;
+	if(Buy.m_RestockSeconds > 0)
+		Buy.m_RestockAt = time_timestamp() + Buy.m_RestockSeconds;
+	PersistBuyDemand(pDef, Buy);
+}
+
 bool CNpcSystem::RestockDue()
 {
 	if(!m_pGameServer || !m_pGameServer->Database())
@@ -378,6 +458,19 @@ bool CNpcSystem::RestockDue()
 			PersistStock(pDef, Sell);
 			Changed = true;
 		}
+		for(int b = 0; b < pDef->m_lBuys.size(); b++)
+		{
+			SNpcBuy &Buy = pDef->m_lBuys[b];
+			if(Buy.m_RestockSeconds <= 0 || Now < Buy.m_RestockAt)
+				continue;
+
+			// a new restock period means the merchant accepts its full limit
+			// again; the persisted demand keeps it honest across restarts too
+			Buy.m_Demand = Buy.m_Limit;
+			Buy.m_RestockAt = Now + Buy.m_RestockSeconds;
+			PersistBuyDemand(pDef, Buy);
+			Changed = true;
+		}
 	}
 	return Changed;
 }
@@ -395,6 +488,22 @@ bool CNpcSystem::ConsumeStock(int DefIndex, int SellIndex, int Count)
 		return false;
 	Sell.m_Stock -= Count;
 	PersistStock(pDef, Sell);
+	return true;
+}
+
+bool CNpcSystem::ConsumeBuyDemand(int DefIndex, int BuyIndex)
+{
+	if(DefIndex < 0 || DefIndex >= m_lDefs.size())
+		return false;
+	SNpcDef *pDef = m_lDefs[DefIndex];
+	if(BuyIndex < 0 || BuyIndex >= pDef->m_lBuys.size())
+		return false;
+
+	SNpcBuy &Buy = pDef->m_lBuys[BuyIndex];
+	if(Buy.m_Demand <= 0)
+		return false;
+	Buy.m_Demand--;
+	PersistBuyDemand(pDef, Buy);
 	return true;
 }
 

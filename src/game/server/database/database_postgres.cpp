@@ -246,9 +246,43 @@ bool CDatabasePostgres::Init()
 		dbg_msg("database", "failed to create npc_stock schema: %s", PQresultErrorMessage(pRes));
 	PQclear(pRes);
 
-	if(Ok && SavesOk && AggroOk && CurrencyOk && ShopOk && NpcShopOk && NpcStockOk)
+	// NPC buy orders (what the merchant wants from players), mirrored from
+	// the NPC json. "limit" is the number of packages per restock period.
+	const char *pCreateNpcBuys =
+		"CREATE TABLE IF NOT EXISTS npc_buy_orders ("
+		" npc_id UUID NOT NULL,"
+		" item TEXT NOT NULL,"
+		" \"count\" INTEGER NOT NULL,"
+		" price BIGINT NOT NULL,"
+		" \"limit\" INTEGER NOT NULL,"
+		" restock_seconds BIGINT NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price));";
+
+	pRes = PQexec(m_pConn, pCreateNpcBuys);
+	const bool NpcBuysOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!NpcBuysOk)
+		dbg_msg("database", "failed to create npc_buy_orders schema: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+
+	// runtime demand of each buy order, persisted like npc_stock
+	const char *pCreateNpcBuyStock =
+		"CREATE TABLE IF NOT EXISTS npc_buy_stock ("
+		" npc_id UUID NOT NULL,"
+		" item TEXT NOT NULL,"
+		" price BIGINT NOT NULL,"
+		" demand INTEGER NOT NULL,"
+		" restock_at BIGINT NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price));";
+
+	pRes = PQexec(m_pConn, pCreateNpcBuyStock);
+	const bool NpcBuyStockOk = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!NpcBuyStockOk)
+		dbg_msg("database", "failed to create npc_buy_stock schema: %s", PQresultErrorMessage(pRes));
+	PQclear(pRes);
+
+	if(Ok && SavesOk && AggroOk && CurrencyOk && ShopOk && NpcShopOk && NpcStockOk && NpcBuysOk && NpcBuyStockOk)
 		dbg_msg("database", "postgres database ready");
-	return Ok && SavesOk && AggroOk && CurrencyOk && ShopOk && NpcShopOk && NpcStockOk;
+	return Ok && SavesOk && AggroOk && CurrencyOk && ShopOk && NpcShopOk && NpcStockOk && NpcBuysOk && NpcBuyStockOk;
 }
 
 bool CDatabasePostgres::FindByName(const char *pUsername, SPlayerData &out)
@@ -942,6 +976,111 @@ bool CDatabasePostgres::SaveNpcStock(const Uuid &Npc, const char *pItem, int64 P
 	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
 	if(!Ok)
 		dbg_msg("database", "failed to save npc stock '%s': %s", aNpc, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::ClearNpcBuys(const Uuid &Npc)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	const char *apParams[1] = {aNpc};
+	PGresult *pRes = PQexecParams(m_pConn, "DELETE FROM npc_buy_orders WHERE npc_id = $1::uuid;", 1, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::SaveNpcBuy(const Uuid &Npc, const char *pItem, int Count, int64 Price, int Limit, int RestockSeconds)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aCount[32];
+	char aPrice[32];
+	char aLimit[32];
+	char aRestock[32];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	str_format(aCount, sizeof(aCount), "%d", Count);
+	str_format(aPrice, sizeof(aPrice), "%lld", (long long) Price);
+	str_format(aLimit, sizeof(aLimit), "%d", Limit);
+	str_format(aRestock, sizeof(aRestock), "%d", RestockSeconds);
+
+	const char *apParams[6] = {aNpc, pItem, aCount, aPrice, aLimit, aRestock};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO npc_buy_orders (npc_id, item, \"count\", price, \"limit\", restock_seconds) "
+		"VALUES ($1::uuid, $2::text, $3::int, $4::bigint, $5::int, $6::bigint) "
+		"ON CONFLICT (npc_id, item, price) DO UPDATE SET \"count\" = EXCLUDED.\"count\", "
+		"\"limit\" = EXCLUDED.\"limit\", restock_seconds = EXCLUDED.restock_seconds;",
+		6, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to save npc buy '%s': %s", aNpc, PQresultErrorMessage(pRes));
+	PQclear(pRes);
+	return Ok;
+}
+
+bool CDatabasePostgres::GetNpcBuyDemand(const Uuid &Npc, const char *pItem, int64 Price, int *pDemand, int *pRestockAt)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aPrice[32];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	str_format(aPrice, sizeof(aPrice), "%lld", (long long) Price);
+
+	const char *apParams[3] = {aNpc, pItem, aPrice};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"SELECT demand, restock_at FROM npc_buy_stock WHERE npc_id = $1::uuid AND item = $2::text AND price = $3::bigint;",
+		3, 0, apParams, 0, 0, 0);
+	if(PQresultStatus(pRes) != PGRES_TUPLES_OK)
+	{
+		PQclear(pRes);
+		return false;
+	}
+
+	bool Found = false;
+	if(PQntuples(pRes) > 0 && !PQgetisnull(pRes, 0, 0))
+	{
+		*pDemand = str_toint(PQgetvalue(pRes, 0, 0));
+		*pRestockAt = str_toint(PQgetvalue(pRes, 0, 1));
+		Found = true;
+	}
+	PQclear(pRes);
+	return Found;
+}
+
+bool CDatabasePostgres::SaveNpcBuyDemand(const Uuid &Npc, const char *pItem, int64 Price, int Demand, int RestockAt)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!EnsureConnected())
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	char aPrice[32];
+	char aDemand[32];
+	char aRestock[32];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+	str_format(aPrice, sizeof(aPrice), "%lld", (long long) Price);
+	str_format(aDemand, sizeof(aDemand), "%d", Demand);
+	str_format(aRestock, sizeof(aRestock), "%d", RestockAt);
+
+	const char *apParams[5] = {aNpc, pItem, aPrice, aDemand, aRestock};
+	PGresult *pRes = PQexecParams(m_pConn,
+		"INSERT INTO npc_buy_stock (npc_id, item, price, demand, restock_at) VALUES ($1::uuid, $2::text, $3::bigint, $4::int, $5::bigint) "
+		"ON CONFLICT (npc_id, item, price) DO UPDATE SET demand = EXCLUDED.demand, restock_at = EXCLUDED.restock_at;",
+		5, 0, apParams, 0, 0, 0);
+	const bool Ok = PQresultStatus(pRes) == PGRES_COMMAND_OK;
+	if(!Ok)
+		dbg_msg("database", "failed to save npc buy demand '%s': %s", aNpc, PQresultErrorMessage(pRes));
 	PQclear(pRes);
 	return Ok;
 }

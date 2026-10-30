@@ -176,6 +176,17 @@ public:
 	virtual bool GetNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int *pStock, int *pRestockAt) = 0;
 	virtual bool SaveNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int Stock, int RestockAt) = 0;
 
+	// -------- npc buy orders --------
+	// NPCs also want goods from players. A buy order mirrors one configured
+	// entry (item, package size, G price, how many packages the NPC will take
+	// and how long until it asks again); its runtime demand is kept in
+	// npc_buy_stock so a restart does not refill a merchant that already
+	// bought everything it wanted.
+	virtual bool ClearNpcBuys(const Uuid &Npc) = 0;
+	virtual bool SaveNpcBuy(const Uuid &Npc, const char *pItem, int Count, int64 Price, int Limit, int RestockSeconds) = 0;
+	virtual bool GetNpcBuyDemand(const Uuid &Npc, const char *pItem, int64 Price, int *pDemand, int *pRestockAt) = 0;
+	virtual bool SaveNpcBuyDemand(const Uuid &Npc, const char *pItem, int64 Price, int Demand, int RestockAt) = 0;
+
 	// -------- currency ledger ("G") --------
 	// Currency is account scoped and is never stored as an item or a mutable
 	// balance: every operation appends a ledger row with a signed int64 delta

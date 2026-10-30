@@ -23,6 +23,11 @@
         {"item": "lastday:stone", "count": 5, "price": 10, "stock_min": 10, "stock_max": 30, "restock_seconds": 300},
         {"item": "lastday:hammer", "count": 1, "price": 45, "stock_min": 2, "stock_max": 6, "restock_seconds": 600}
     ],
+    "buys": [
+        {"item": "iron_ore", "count": 4, "price": 16, "limit": 3, "restock_seconds": 600},
+        {"item": "silver_ore", "count": 2, "price": 24, "limit": 2, "restock_seconds": 900},
+        {"item": "stone", "count": 8, "price": 10, "limit": 4, "restock_seconds": 300}
+    ],
     "aggro": {
         "threshold": 3,
         "per_kill": 5,

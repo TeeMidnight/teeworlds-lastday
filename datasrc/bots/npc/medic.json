@@ -24,6 +24,10 @@
         {"item": "herb_tonic", "count": 1, "price": 15, "stock_min": 3, "stock_max": 6,  "restock_seconds": 360},
         {"item": "medkit",     "count": 1, "price": 60, "stock_min": 1, "stock_max": 3,  "restock_seconds": 600}
     ],
+    "buys": [
+        {"item": "grass", "count": 5, "price": 10, "limit": 4, "restock_seconds": 300},
+        {"item": "venom_gland", "count": 2, "price": 12, "limit": 2, "restock_seconds": 600}
+    ],
     "aggro": {
         "threshold": 0,
         "per_kill": 0,

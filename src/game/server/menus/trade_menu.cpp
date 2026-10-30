@@ -71,6 +71,16 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			pMenu->SetPlayerPage(ClientID, "TRADE");
 			return false;
 		}
+		// clicking an NPC buy order sells to it: "SELLNPC <def> <buy>".
+		else if(str_startswith(VoteStatus.m_aCmd, "SELLNPC "))
+		{
+			int DefIndex = 0;
+			int BuyIndex = 0;
+			if(sscanf(VoteStatus.m_aCmd + 8, "%d %d", &DefIndex, &BuyIndex) == 2)
+				pMenu->GameServer()->SellToNpc(ClientID, DefIndex, BuyIndex);
+			pMenu->SetPlayerPage(ClientID, "TRADE");
+			return false;
+		}
 	}
 
 	pMenu->ClearOptions(ClientID);
@@ -166,14 +176,14 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 		for(int d = 0; d < pNpcs->NumDefs(); d++)
 		{
 			const SNpcDef *pDef = pNpcs->DefAt(d);
-			// only a nearby NPC's shelf can be traded with
-			if(!pDef || !pMenu->GameServer()->NpcInRange(ClientID, d) || pDef->m_lSells.size() == 0)
+			// only a nearby NPC with a shelf or a buy order can be traded with
+			if(!pDef || !pMenu->GameServer()->NpcInRange(ClientID, d) || (pDef->m_lSells.size() == 0 && pDef->m_lBuys.size() == 0))
 				continue;
 
 			char aKey[16];
 			str_format(aKey, sizeof(aKey), "N%d", d);
 			const bool Open = str_comp(pOpen, aKey) == 0;
-			const std::string Head = LocalizeFormat("Menu Trade", "{}. {} ({})", ++ProviderIndex, NpcIDDisplayName(pDef->m_Id), pDef->m_lSells.size());
+			const std::string Head = LocalizeFormat("Menu Trade", "{}. {} ({})", ++ProviderIndex, NpcIDDisplayName(pDef->m_Id), pDef->m_lSells.size() + pDef->m_lBuys.size());
 			OpenFound = OpenFound || Open;
 			char aCmd[32];
 			str_format(aCmd, sizeof(aCmd), "TRADEOPEN %s", aKey);
@@ -200,6 +210,22 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 				// long item ids cannot push the countdown out of the option text
 				const int RestockIn = Sell.m_RestockSeconds > 0 ? maximum(0, Sell.m_RestockAt - time_timestamp()) : 0;
 				pMenu->AddOption(LocalizeFormat("Menu Trade", "      stock {}, restock {}s", Sell.m_Stock, RestockIn).c_str(), "DISPLAY", "-");
+			}
+
+			// buy orders: the merchant takes the package from the player and
+			// pays G. Both rows are separate so a long item id cannot push the
+			// price out of the clickable text.
+			for(int b = 0; b < pDef->m_lBuys.size(); b++)
+			{
+				const SNpcBuy &Buy = pDef->m_lBuys[b];
+				const std::string Wants = LocalizeFormat("Menu Trade", "   Wants: {} x{}", Buy.m_Item, Buy.m_Count);
+				const std::string Pays = LocalizeFormat("Menu Trade", "   Pays: {} G", Buy.m_Price);
+				char aSell[32];
+				str_format(aSell, sizeof(aSell), "SELLNPC %d %d", d, b);
+				pMenu->AddOption(Wants.c_str(), "DISPLAY", "");
+				pMenu->AddOption(Pays.c_str(), aSell, "$");
+				const int RestockIn = Buy.m_RestockSeconds > 0 ? maximum(0, Buy.m_RestockAt - time_timestamp()) : 0;
+				pMenu->AddOption(LocalizeFormat("Menu Trade", "      demand {}, restock {}s", Buy.m_Demand, RestockIn).c_str(), "DISPLAY", "-");
 			}
 		}
 	}

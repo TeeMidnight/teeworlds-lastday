@@ -2085,6 +2085,88 @@ bool CGameContext::BuyFromNpc(int ClientID, int DefIndex, int SellIndex)
 	return true;
 }
 
+bool CGameContext::SellToNpc(int ClientID, int DefIndex, int BuyIndex)
+{
+	if(!m_pNpcSystem || ClientID < 0 || ClientID >= MAX_CLIENTS || !m_apPlayers[ClientID])
+		return false;
+	CLanguageScope LanguageScope(LanguageOf(ClientID));
+	const SNpcDef *pDef = m_pNpcSystem->DefAt(DefIndex);
+	if(!pDef || BuyIndex < 0 || BuyIndex >= pDef->m_lBuys.size())
+		return false;
+	if(!NpcInRange(ClientID, DefIndex))
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You must be near the merchant.", "Trade"));
+		return false;
+	}
+
+	const SNpcBuy &Buy = pDef->m_lBuys[BuyIndex];
+	CItemSystem *pItems = Item();
+	if(!pItems->IsKnownItem(Buy.m_Item))
+		return false;
+	if(Buy.m_Demand <= 0)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("The merchant does not want that right now.", "Trade"));
+		return false;
+	}
+	if(pItems->GetItemCount(ClientID, Buy.m_Item) < Buy.m_Count)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You do not have that many.", "Trade"));
+		return false;
+	}
+
+	// The merchant pays through the account ledger, so an identity is needed
+	// before the items leave the inventory.
+	CPlayer *pSeller = m_apPlayers[ClientID];
+	const Uuid SellerAccount = pSeller ? pSeller->m_AccountUuid : UUID_ZEROED;
+	if(!m_pDatabase || SellerAccount == UUID_ZEROED)
+	{
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("The bank is unavailable.", "Trade"));
+		return false;
+	}
+
+	// hand over the goods first and pay after; on a failed payment the stack is
+	// put back, so the player never loses items without the G
+	if(!pItems->RemoveItem(ClientID, Buy.m_Item, Buy.m_Count))
+		return false;
+
+	char aItem[UUID_MAXSTRSIZE];
+	const char *pItem = Buy.m_Item.SourceName();
+	if(!pItem[0])
+	{
+		Buy.m_Item.FormatUuid(aItem, sizeof(aItem));
+		pItem = aItem;
+	}
+	char aReason[CURRENCY_REASON_SIZE];
+	str_format(aReason, sizeof(aReason), "sell to %s: %s x%d",
+		NpcIDDisplayName(pDef->m_Id), pItem, Buy.m_Count);
+	if(!m_pDatabase->AddCurrency(SellerAccount, Buy.m_Price, aReason))
+	{
+		pItems->AddItem(ClientID, Buy.m_Item, Buy.m_Count, true);
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("Payment failed.", "Trade"));
+		return false;
+	}
+
+	// demand was checked above; it can only fail if the order changed under
+	// this tick, so reverse the ledger row as well as the items
+	if(!m_pNpcSystem->ConsumeBuyDemand(DefIndex, BuyIndex))
+	{
+		char aRefund[CURRENCY_REASON_SIZE];
+		str_format(aRefund, sizeof(aRefund), "refund: %s", aReason);
+		m_pDatabase->AddCurrency(SellerAccount, -Buy.m_Price, aRefund);
+		pItems->AddItem(ClientID, Buy.m_Item, Buy.m_Count, true);
+		SendChat(-1, CHAT_WHISPER, ClientID, Localize("The merchant does not want that right now.", "Trade"));
+		return false;
+	}
+
+	const std::string Msg = LocalizeFormat("Trade", "Sold {} x{} to {} for {} G",
+		pItems->GetName(Buy.m_Item), Buy.m_Count, NpcIDDisplayName(pDef->m_Id), Buy.m_Price);
+	SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
+
+	// keep other open shop pages in step with the new demand
+	GameMenu()->RefreshShop(ClientID);
+	return true;
+}
+
 bool CGameContext::NpcInRange(int ClientID, int DefIndex)
 {
 	if(!m_pNpcSystem || ClientID < 0 || ClientID >= MAX_CLIENTS || !m_apPlayers[ClientID])

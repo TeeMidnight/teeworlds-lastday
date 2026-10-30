@@ -47,6 +47,10 @@ public:
 	virtual bool SaveNpcSell(const Uuid &Npc, const char *pItem, int Count, int64 Price) override;
 	virtual bool GetNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int *pStock, int *pRestockAt) override;
 	virtual bool SaveNpcStock(const Uuid &Npc, const char *pItem, int64 Price, int Stock, int RestockAt) override;
+	virtual bool ClearNpcBuys(const Uuid &Npc) override;
+	virtual bool SaveNpcBuy(const Uuid &Npc, const char *pItem, int Count, int64 Price, int Limit, int RestockSeconds) override;
+	virtual bool GetNpcBuyDemand(const Uuid &Npc, const char *pItem, int64 Price, int *pDemand, int *pRestockAt) override;
+	virtual bool SaveNpcBuyDemand(const Uuid &Npc, const char *pItem, int64 Price, int Demand, int RestockAt) override;
 	virtual bool GetCurrencyBalance(const Uuid &Account, int64 *pOut) override;
 	virtual bool AddCurrency(const Uuid &Account, int64 Delta, const char *pReason) override;
 	virtual bool SpendCurrency(const Uuid &Account, int64 Amount, const char *pReason) override;

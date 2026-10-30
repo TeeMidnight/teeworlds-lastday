@@ -205,6 +205,25 @@ bool CDatabaseSQLite::Init()
 		" price INTEGER NOT NULL,"
 		" stock INTEGER NOT NULL,"
 		" restock_at INTEGER NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price));"
+		// NPC buy orders (what the merchant wants from players), mirrored
+		// from the NPC json just like npc_shop. "limit" is the number of
+		// packages the merchant will take per restock period.
+		"CREATE TABLE IF NOT EXISTS npc_buy_orders ("
+		" npc_id TEXT NOT NULL,"
+		" item TEXT NOT NULL,"
+		" \"count\" INTEGER NOT NULL,"
+		" price INTEGER NOT NULL,"
+		" \"limit\" INTEGER NOT NULL,"
+		" restock_seconds INTEGER NOT NULL,"
+		" PRIMARY KEY (npc_id, item, price));"
+		// runtime demand of one buy order, persisted like npc_stock
+		"CREATE TABLE IF NOT EXISTS npc_buy_stock ("
+		" npc_id TEXT NOT NULL,"
+		" item TEXT NOT NULL,"
+		" price INTEGER NOT NULL,"
+		" demand INTEGER NOT NULL,"
+		" restock_at INTEGER NOT NULL,"
 		" PRIMARY KEY (npc_id, item, price));";
 
 	char *pErr = 0;
@@ -954,6 +973,109 @@ bool CDatabaseSQLite::SaveNpcStock(const Uuid &Npc, const char *pItem, int64 Pri
 	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
 	if(!Ok)
 		dbg_msg("database", "failed to save npc stock '%s': %s", aNpc, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::ClearNpcBuys(const Uuid &Npc)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB, "DELETE FROM npc_buy_orders WHERE npc_id = ?1;", -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::SaveNpcBuy(const Uuid &Npc, const char *pItem, int Count, int64 Price, int Limit, int RestockSeconds)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT OR REPLACE INTO npc_buy_orders (npc_id, item, \"count\", price, \"limit\", restock_seconds) "
+		   "VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, pItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int(pStmt, 3, Count);
+	sqlite3_bind_int64(pStmt, 4, (sqlite3_int64) Price);
+	sqlite3_bind_int(pStmt, 5, Limit);
+	sqlite3_bind_int(pStmt, 6, RestockSeconds);
+
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to save npc buy '%s': %s", aNpc, sqlite3_errmsg(m_pDB));
+	sqlite3_finalize(pStmt);
+	return Ok;
+}
+
+bool CDatabaseSQLite::GetNpcBuyDemand(const Uuid &Npc, const char *pItem, int64 Price, int *pDemand, int *pRestockAt)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "SELECT demand, restock_at FROM npc_buy_stock WHERE npc_id = ?1 AND item = ?2 AND price = ?3;",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, pItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 3, (sqlite3_int64) Price);
+
+	bool Found = false;
+	if(sqlite3_step(pStmt) == SQLITE_ROW)
+	{
+		*pDemand = sqlite3_column_int(pStmt, 0);
+		*pRestockAt = sqlite3_column_int(pStmt, 1);
+		Found = true;
+	}
+	sqlite3_finalize(pStmt);
+	return Found;
+}
+
+bool CDatabaseSQLite::SaveNpcBuyDemand(const Uuid &Npc, const char *pItem, int64 Price, int Demand, int RestockAt)
+{
+	CDatabaseLock Guard(m_Lock);
+	if(!m_pDB)
+		return false;
+
+	char aNpc[UUID_MAXSTRSIZE];
+	format_uuid(Npc, aNpc, sizeof(aNpc));
+
+	sqlite3_stmt *pStmt = 0;
+	if(sqlite3_prepare_v2(m_pDB,
+		   "INSERT OR REPLACE INTO npc_buy_stock (npc_id, item, price, demand, restock_at) VALUES (?1, ?2, ?3, ?4, ?5);",
+		   -1, &pStmt, 0) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(pStmt, 1, aNpc, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(pStmt, 2, pItem, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_int64(pStmt, 3, (sqlite3_int64) Price);
+	sqlite3_bind_int(pStmt, 4, Demand);
+	sqlite3_bind_int(pStmt, 5, RestockAt);
+
+	const bool Ok = sqlite3_step(pStmt) == SQLITE_DONE;
+	if(!Ok)
+		dbg_msg("database", "failed to save npc buy demand '%s': %s", aNpc, sqlite3_errmsg(m_pDB));
 	sqlite3_finalize(pStmt);
 	return Ok;
 }

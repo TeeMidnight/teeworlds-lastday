@@ -236,6 +236,9 @@ public:
 	// buy one entry of a configured NPC's shelf for a client (the NPC shop is
 	// part of the same menu as the player listings)
 	bool BuyFromNpc(int ClientID, int DefIndex, int SellIndex);
+	// sell one package of an NPC's buy order: the player hands over the items
+	// and the G price is credited to their account ledger
+	bool SellToNpc(int ClientID, int DefIndex, int BuyIndex);
 	// whether the configured NPC (by definition index) and its entity are close
 	// enough to the client to trade with
 	bool NpcInRange(int ClientID, int DefIndex);
