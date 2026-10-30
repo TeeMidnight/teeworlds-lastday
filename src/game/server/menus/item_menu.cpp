@@ -26,6 +26,21 @@ const char *ItemCommand(const CItemID &Id, char *pBuf, int Size)
 	return pBuf;
 }
 
+// appends an item's localized description as wrapped rows. The localization
+// context is keyed by the untranslated display name, so the same text is found
+// on every page that describes an item.
+static void AddItemDescription(CGameMenu *pMenu, CItemSystem *pItem, const CItemID &Id)
+{
+	const char *pDesc = pItem->GetDesc(Id);
+	if(!pDesc || !pDesc[0])
+		return;
+
+	const char *pRawName = pItem->GetRawName(Id);
+	char aCtx[128];
+	str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pRawName[0] ? pRawName : pItem->GetName(Id));
+	pMenu->AddWrappedLinesOption(Localize(pDesc, aCtx));
+}
+
 // mercury chapter amnesia: whether an item/recipe is forgotten at a given
 // forgetting level is decided by CItemSystem (IsItemForgotten /
 // IsRecipeForgotten), so any system can ask the same question. here the menus
@@ -292,22 +307,9 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 	// description (localized), wrapped over several rows. a forgotten item
 	// (high forgetting) shows no description: the player can't recall it
 	if(Forgotten)
-	{
 		pMenu->AddWrappedLinesOption(Localize("You can't remember what this is.", "Menu Inventory"));
-	}
 	else
-	{
-		const char *pDesc = pItem->GetDesc(Id);
-		if(pDesc && pDesc[0])
-		{
-			// the context is keyed by the untranslated display name, even when
-			// the player sees the localized one
-			const char *pRawName = pItem->GetRawName(Id);
-			char aCtx[128];
-			str_format(aCtx, sizeof(aCtx), "Item Desc: %s", pRawName[0] ? pRawName : pName);
-			pMenu->AddWrappedLinesOption(Localize(pDesc, aCtx));
-		}
-	}
+		AddItemDescription(pMenu, pItem, Id);
 
 	// the item's category folder (weapon, tool, survival, misc...), localized
 	const char *pCategory = pItem->GetCategory(Id);
@@ -451,6 +453,11 @@ static void CraftListCallback(CItemSystem::SCraftDef &Craft, void *pUser)
 
 	if(!Open)
 		return;
+
+	// the main output's description is only unfolded with the recipe, so the
+	// collapsed list stays a compact index of what can be crafted
+	if(Craft.m_NumGives > 0)
+		AddItemDescription(pMenu, pData->m_pItem, Craft.m_aGives[0].m_Id);
 
 	// byproducts: the first output is the header, the rest are listed here
 	for(int g = 1; g < Craft.m_NumGives; g++)
