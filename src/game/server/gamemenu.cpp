@@ -76,6 +76,7 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	{
 		m_aLoadoutSlot[i] = -1;
 		m_aItemViewId[i] = CItemID();
+		m_aItemViewSlot[i] = -1;
 		m_aTradeDraft[i] = STradeDraft();
 		m_aTradeOpen[i][0] = '\0';
 		m_aCraftOpen[i][0] = '\0';
@@ -87,9 +88,8 @@ void CGameMenu::Init(CGameContext *pGameServer)
 	Register("ITEMVIEW", "Item", MenuItemView, nullptr, "INVENTORY"); // Localize("Item", "ITEMVIEW")
 	Register("CRAFT", "Craft", MenuCraft, nullptr); // Localize("Craft", "CRAFT")
 	Register("CONTAINER", "Container", MenuContainer, nullptr); // Localize("Container", "CONTAINER")
-	Register("LOADOUT", "Loadout", MenuLoadout, nullptr); // Localize("Loadout", "LOADOUT")
-	Register("WEAPONPICK", "Choose Weapon", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Weapon", "WEAPONPICK")
-	Register("ACCESSORYPICK", "Choose Accessory", MenuWeaponPick, nullptr, "LOADOUT"); // Localize("Choose Accessory", "ACCESSORYPICK")
+	Register("WEAPONPICK", "Choose Weapon", MenuWeaponPick, nullptr, "INVENTORY"); // Localize("Choose Weapon", "WEAPONPICK")
+	Register("ACCESSORYPICK", "Choose Accessory", MenuWeaponPick, nullptr, "INVENTORY"); // Localize("Choose Accessory", "ACCESSORYPICK")
 	Register("TRADE", "Shop", MenuTrade, nullptr); // Localize("Shop", "TRADE")
 	Register("TRADE_SELL", "Sell Goods", MenuTradeSell, nullptr, "TRADE"); // Localize("Sell Goods", "TRADE_SELL")
 	Register("TRADE_SELL_COUNT", "Amount", MenuTradeSellCount, nullptr, "TRADE_SELL"); // Localize("Amount", "TRADE_SELL_COUNT")
@@ -128,6 +128,9 @@ void CGameMenu::OnClientEntered(int ClientID)
 	m_aTradeDraft[ClientID] = STradeDraft();
 	m_aTradeOpen[ClientID][0] = '\0';
 	m_aCraftOpen[ClientID][0] = '\0';
+	m_aLoadoutSlot[ClientID] = -1;
+	m_aItemViewId[ClientID] = CItemID();
+	m_aItemViewSlot[ClientID] = -1;
 	SetPlayerPage(ClientID, "MAIN");
 	// the voter set changed
 	m_VoteUpdate = true;
@@ -388,11 +391,6 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 			pMenu->SetPlayerPage(ClientID, "CONTAINER");
 			return false;
 		}
-		else if(str_comp(VoteStatus.m_aCmd, "PAGE LOADOUT") == 0)
-		{
-			pMenu->SetPlayerPage(ClientID, "LOADOUT");
-			return false;
-		}
 		else if(str_comp(VoteStatus.m_aCmd, "PAGE TRADE") == 0)
 		{
 			pMenu->SetPlayerPage(ClientID, "TRADE");
@@ -462,7 +460,6 @@ bool CGameMenu::MenuMain(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 		pMenu->AddOption(Localize("New Player Guide", "Menu Main"), "PAGE HELP", "?");
 		pMenu->AddOption(Localize("Inventory", "Menu Main"), "PAGE INVENTORY", "★");
 		pMenu->AddOption(Localize("Craft", "Menu Main"), "PAGE CRAFT", "★");
-		pMenu->AddOption(Localize("Loadout", "Menu Main"), "PAGE LOADOUT", "★");
 		pMenu->AddOption(Localize("Shop", "Menu Main"), "PAGE TRADE", "★");
 		pMenu->AddOption(Localize("Team", "Menu Main"), "PAGE TEAM", "★");
 		pMenu->AddOption(Localize("Server Vote", "Menu Main"), "PAGE VOTE", "★");
@@ -544,13 +541,13 @@ bool CGameMenu::MenuHelp(int ClientID, CCallVoteStatus &VoteStatus, class CGameM
 	pMenu->AddWrappedLinesOption(Localize("Type /register <username> <password> in chat. Use /login <username> <password> to restore the same account on another day.", "Menu Help"));
 
 	pMenu->AddOption(Localize("2. Learn the menu", "Menu Help"), "DISPLAY", "-");
-	pMenu->AddWrappedLinesOption(Localize("Open the vote menu to reach Inventory, Craft, Loadout, Shop, Team, Language and this guide.", "Menu Help"));
+	pMenu->AddWrappedLinesOption(Localize("Open the vote menu to reach Inventory (equipment is inside it), Craft, Shop, Team, Language and this guide.", "Menu Help"));
 
 	pMenu->AddOption(Localize("3. Gather and build", "Menu Help"), "DISPLAY", "-");
 	pMenu->AddWrappedLinesOption(Localize("Aim at a resource and hold the scoreboard key to drill. Craft tools and weapons from the Craft page.", "Menu Help"));
 
-	pMenu->AddOption(Localize("4. Containers", "Menu Help"), "DISPLAY", "-");
-	pMenu->AddWrappedLinesOption(Localize("Stand near a crate, chest or vault, aim at it and open Container. Click a slot to take items, or an inventory item to store it.", "Menu Help"));
+	pMenu->AddOption(Localize("4. Containers and backpacks", "Menu Help"), "DISPLAY", "-");
+	pMenu->AddWrappedLinesOption(Localize("Stand near a container, aim at it and open Container. Click a slot to take items, or an inventory item to store it. Craft a crate, chest or vault to place your own. A backpack's slots are shown under it on the Inventory page.", "Menu Help"));
 
 	pMenu->AddOption(Localize("5. Travel", "Menu Help"), "DISPLAY", "-");
 	pMenu->AddWrappedLinesOption(Localize("Stand on a train platform and open the menu. Pick a destination under Travel. You stay invincible for ten seconds after arrival.", "Menu Help"));

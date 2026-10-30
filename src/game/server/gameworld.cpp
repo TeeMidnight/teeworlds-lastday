@@ -1298,6 +1298,16 @@ CContainerEntity *CGameWorld::FindContainerByStorageID(int StorageID)
 	return nullptr;
 }
 
+int CGameWorld::NextPlacedContainerStorageID()
+{
+	// Map structures own 0..N; placed containers count down so the two naming
+	// spaces can never collide and a saved id survives a reload unchanged.
+	int StorageID = -1;
+	while(FindContainerByStorageID(StorageID))
+		StorageID--;
+	return StorageID;
+}
+
 CResourceEntity *CGameWorld::ClosestResource(vec2 Pos, float Radius)
 {
 	float ClosestDist = Radius * 100.0f;
@@ -1578,6 +1588,36 @@ void CGameWorld::SaveToDatabase()
 			JsonWriter.WriteStrValue(aUuid);
 			JsonWriter.WriteAttribute("count");
 			JsonWriter.WriteIntValue(pPickup->Count());
+			// a dropped backpack keeps its grid, so picking it up after a
+			// reload restores the same contents
+			if(pPickup->Data().m_HasData)
+			{
+				JsonWriter.WriteAttribute("data");
+				JsonWriter.BeginObject();
+				JsonWriter.WriteAttribute("slots");
+				JsonWriter.WriteIntValue(GameServer()->Item()->GetBackpackSlots(pPickup->ItemId()));
+				JsonWriter.WriteAttribute("items");
+				JsonWriter.BeginArray();
+				const int Slots = minimum((int) CItemSystem::MAX_ITEM_DATA_SLOTS, GameServer()->Item()->GetBackpackSlots(pPickup->ItemId()));
+				for(int s = 0; s < Slots; s++)
+				{
+					const CItemSystem::SItemStack &Stack = pPickup->Data().m_aSlots[s];
+					if(Stack.m_Id.IsZero() || Stack.m_Count <= 0)
+						continue;
+					char aNestedUuid[UUID_MAXSTRSIZE];
+					Stack.m_Id.FormatUuid(aNestedUuid, sizeof(aNestedUuid));
+					JsonWriter.BeginObject();
+					JsonWriter.WriteAttribute("slot");
+					JsonWriter.WriteIntValue(s);
+					JsonWriter.WriteAttribute("item");
+					JsonWriter.WriteStrValue(aNestedUuid);
+					JsonWriter.WriteAttribute("count");
+					JsonWriter.WriteIntValue(Stack.m_Count);
+					JsonWriter.EndObject();
+				}
+				JsonWriter.EndArray();
+				JsonWriter.EndObject();
+			}
 		}
 		JsonWriter.WriteAttribute("x");
 		JsonWriter.WriteIntValue(round_to_int(pPickup->GetPos().x));
@@ -1587,9 +1627,10 @@ void CGameWorld::SaveToDatabase()
 	}
 	JsonWriter.EndArray();
 
-	// container contents: the stable map-instance id and one entry per used
-	// slot. The position and the kind are not stored: both are map structure
-	// content and are recreated from the generated world metadata.
+	// container contents: the stable id, kind, position and one entry per used
+	// slot. A map structure recreates its own containers from the generated
+	// metadata; the position is what lets a player-placed container (negative
+	// id) come back after a reload.
 	JsonWriter.WriteAttribute("container");
 	JsonWriter.BeginArray();
 	for(int i = 0; i < lContainers.size(); i++)
@@ -1600,6 +1641,10 @@ void CGameWorld::SaveToDatabase()
 		JsonWriter.WriteIntValue(pContainer->StorageID());
 		JsonWriter.WriteAttribute("kind");
 		JsonWriter.WriteStrValue(pContainer->Kind());
+		JsonWriter.WriteAttribute("x");
+		JsonWriter.WriteIntValue(round_to_int(pContainer->GetPos().x));
+		JsonWriter.WriteAttribute("y");
+		JsonWriter.WriteIntValue(round_to_int(pContainer->GetPos().y));
 		JsonWriter.WriteAttribute("items");
 		JsonWriter.BeginArray();
 		for(int s = 0; s < pContainer->Capacity(); s++)
@@ -1783,7 +1828,35 @@ void CGameWorld::RestoreFromDatabase()
 			continue;
 
 		const int Count = maximum(1, (int) (json_int_t) rCount);
-		new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f), DropId, Count);
+
+		// restore a dropped backpack's grid before handing the stack to the
+		// pickup, so its contents survive the world reload
+		CItemSystem::SItemData DropData;
+		const json_value &rData = rDrop["data"];
+		if(rData.type == json_object)
+		{
+			DropData.m_HasData = true;
+			const json_value &rNested = rData["items"];
+			for(unsigned s = 0; rNested.type == json_array && s < rNested.u.array.length; s++)
+			{
+				const json_value &rStack = rNested[s];
+				if(rStack.type != json_object)
+					continue;
+				const json_value &rNestedItem = rStack["item"];
+				const json_value &rNestedCount = rStack["count"];
+				if(rNestedItem.type != json_string || rNestedCount.type != json_integer)
+					continue;
+				CItemID NestedId;
+				if(!CItemID::Parse(rNestedItem.u.string.ptr, &NestedId) || NestedId.IsZero() || !pItems->IsKnownItem(NestedId))
+					continue;
+				const json_value &rSlot = rStack["slot"];
+				const int Slot = clamp(rSlot.type == json_integer ? (int) (json_int_t) rSlot : (int) s,
+					0, (int) CItemSystem::MAX_ITEM_DATA_SLOTS - 1);
+				DropData.m_aSlots[Slot].m_Id = NestedId;
+				DropData.m_aSlots[Slot].m_Count = maximum(1, (int) (json_int_t) rNestedCount);
+			}
+		}
+		new CDroppedPickup(this, SpawnPos, vec2(0.0f, 0.0f), DropId, Count, DropData.m_HasData ? &DropData : nullptr);
 	}
 
 	// container contents: find the container the map structure spawned with the
@@ -1800,8 +1873,22 @@ void CGameWorld::RestoreFromDatabase()
 		CContainerEntity *pContainer = FindContainerByStorageID((int) (json_int_t) rID);
 		if(!pContainer)
 		{
-			dbg_msg("container", "world '%s': saved container %d no longer exists", m_aMapName, (int) (json_int_t) rID);
-			continue;
+			// A player-placed container has no map structure to recreate it;
+			// its saved kind and position are enough to bring it back. The same
+			// path also preserves a map container whose structure changed.
+			const json_value &rSavedKind = rEntry["kind"];
+			const json_value &rSavedX = rEntry["x"];
+			const json_value &rSavedY = rEntry["y"];
+			CContainerSystem *pContainers = GameServer()->Containers();
+			const SContainerDef *pDef = (pContainers && rSavedKind.type == json_string) ? pContainers->Find(rSavedKind.u.string.ptr) : nullptr;
+			if(!pDef || rSavedX.type != json_integer || rSavedY.type != json_integer)
+			{
+				dbg_msg("container", "world '%s': saved container %d no longer exists", m_aMapName, (int) (json_int_t) rID);
+				continue;
+			}
+			pContainer = new CContainerEntity(this, vec2((float) (json_int_t) rSavedX, (float) (json_int_t) rSavedY),
+				pDef->m_aKind, pDef->m_aName, "", pDef->m_Capacity, pDef->m_Pickup, (int) (json_int_t) rID);
+			pContainer->SetInitialized(true);
 		}
 		// The map content may have changed since the save: a different kind at
 		// the same stable id means the stored stacks belong to another prop.

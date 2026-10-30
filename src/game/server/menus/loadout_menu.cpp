@@ -12,7 +12,7 @@
 
 #include "item_menu.h"
 
-// -- loadout (weapon + accessory equipment) menu -------------------------
+// -- equipment rows (folded into the inventory page) ---------------------
 
 // a compact effect summary for an accessory, e.g. "+4 HP +20% range"
 static std::string AccessoryEffectSummary(const CItemSystem::SAccessory &Acc)
@@ -30,28 +30,11 @@ static std::string AccessoryEffectSummary(const CItemSystem::SAccessory &Acc)
 	return Summary;
 }
 
-bool CGameMenu::MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
+// Renders the weapon and accessory rows at the top of the inventory page.
+// Clicking one sends "PICK <slot>", which MenuInventory turns into the picker
+// page; this helper only draws the current layout.
+void CGameMenu::AddEquipmentOptions(class CGameMenu *pMenu, int ClientID)
 {
-	(void) pUserData;
-	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
-	if(!pPlayer)
-		return true;
-
-	// a slot was clicked: remember it and show the matching item picker
-	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "NONE") != 0 && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0)
-	{
-		int Slot = -1;
-		if(sscanf(VoteStatus.m_aCmd, "PICK %d", &Slot) == 1 && Slot >= 0 && Slot < (int) NUM_WEAPONS + (int) NUM_ACCESSORY_SLOTS)
-		{
-			pMenu->m_aLoadoutSlot[ClientID] = Slot;
-			pMenu->SetPlayerPage(ClientID, Slot < NUM_WEAPONS ? "WEAPONPICK" : "ACCESSORYPICK");
-			return false;
-		}
-	}
-
-	pMenu->ClearOptions(ClientID);
-	pMenu->AddPageTitle();
-
 	CCharacter *pChr = pMenu->GameServer()->GetPlayerChar(ClientID);
 	if(pChr)
 	{
@@ -59,6 +42,7 @@ bool CGameMenu::MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGa
 		pChr->UnequipMissingAccessories();
 	}
 
+	pMenu->AddOption(Localize("Equipment", "Menu Inventory"), "DISPLAY", "=");
 	CItemSystem *pItem = pMenu->GameServer()->Item();
 	for(int i = 0; i < NUM_WEAPONS; i++)
 	{
@@ -114,8 +98,6 @@ bool CGameMenu::MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGa
 		str_format(aCmd, sizeof(aCmd), "PICK %d", NUM_WEAPONS + i);
 		pMenu->AddOption(Desc.c_str(), aCmd);
 	}
-
-	return true;
 }
 
 bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
@@ -161,7 +143,7 @@ bool CGameMenu::MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class 
 		}
 		else
 			pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Localize("Failed to place that item.", "Menu Loadout"));
-		pMenu->SetPlayerPage(ClientID, "LOADOUT");
+		pMenu->SetPlayerPage(ClientID, "INVENTORY");
 		return false;
 	}
 

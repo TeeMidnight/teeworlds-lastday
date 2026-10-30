@@ -2,5 +2,6 @@
     "name": "Campfire",
     "desc": "A placeable fire. Its embers burn nearby monsters but never players.",
     "item_type": ["tool"],
-    "script": "scripts/items/campfire.py"
+    "script": "scripts/items/campfire.py",
+    "max_stack": 10
 }

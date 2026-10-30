@@ -1068,7 +1068,7 @@ void CGameController::ComHelp(IConsole::IResult *pResult, void *pContext)
 
 	pSelf->SendSystemChat(ClientID, "Menu Help", "Move with A and D, jump with space, and use the mouse to hook and shoot.");
 	pSelf->SendSystemChat(ClientID, "Menu Help", "Type /register <username> <password> to keep your progress; /login restores it.");
-	pSelf->SendSystemChat(ClientID, "Menu Help", "Open the vote menu for Inventory, Craft, Loadout, Shop, Team and the New Player Guide.");
+	pSelf->SendSystemChat(ClientID, "Menu Help", "Open the vote menu for Inventory (equipment is inside it), Craft, Shop, Team and the New Player Guide.");
 	pSelf->GameServer()->GameMenu()->SetPlayerPage(ClientID, "HELP");
 }
 

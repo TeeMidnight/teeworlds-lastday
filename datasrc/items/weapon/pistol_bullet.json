@@ -3,5 +3,6 @@
     "desc": "Standard pistol ammunition.",
     "item_type": ["ammo"],
     "ammo_for": ["gun"],
-    "damage": 4
+    "damage": 4,
+    "max_stack": 100
 }

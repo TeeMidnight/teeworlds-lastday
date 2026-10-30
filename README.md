@@ -127,6 +127,42 @@ id, so they survive a world reload. Cached instances keep the containers they
 were generated with: after editing a structure file or a world's `structs`,
 remove the floor's pack (or pick unused seeds) to regenerate them.
 
+Players can also craft and place their own container. The `crate`, `chest` and
+`vault` items carry a `container.kind` field; using Place in the item view
+spawns that kind on the floor in front of the player. A placed container gets a
+negative storage id (`-1`, `-2`, ...), so it can never collide with the
+non-negative ids of map structures; its kind, position and contents are stored
+in the same world save and it comes back on reload. Placing a container does not
+roll a loot table: it starts empty. An emptied placed container can be picked up
+again from its Container page and becomes the item once more; map containers are
+world content and cannot be taken.
+
+Stack limits and backpacks
+--------------------------
+Each item definition may declare `"max_stack": N` (0 or omitted means
+unlimited). Weapons, accessories and backpacks are always limited to one copy
+per stack regardless of this field. Adding an item fills existing stacks up to
+their limit first and then uses empty slots; removing counts across every
+matching stack. Rows already saved with a larger count are left alone, so an old
+save is never rewritten or truncated by the new limit.
+
+A backpack is an item with a fixed grid:
+
+    "backpack": { "slots": 8 }
+
+The grid is a per-stack `data` payload. It is saved under the item's own
+`inventory.<n>.data` key (`slots` plus an `items` array with stable slot
+indices), never as ordinary nested inventory. On the Inventory page the grid is
+drawn as indented `    ↳` rows directly below its backpack row; clicking a row
+takes that stack back into the inventory, and an item's detail page offers
+"Store in backpack". Backpacks do not nest.
+
+Dropping a backpack keeps its grid on the ground pickup, and the world save
+writes the same payload under the drop's `data` field, so the contents survive
+both a pickup and a server restart. `data` is also why a backpack cannot be
+stored in a container or listed in the shop: those records only carry an item id
+and a count.
+
 Mobs, factions and dialogue
 --------------------------
 Monsters are content, not C++ classes. One file per creature lives in

@@ -99,9 +99,10 @@ inline bool GetJsonFieldRaw(CDatabase *pDB, const Uuid &uuid, const CJsonPath &p
 struct CDbField
 {
 	CJsonPath m_Path;
-	// room for a JSON string literal: a 64-byte nickname with every byte
-	// escaped still fits, and the existing short values are unaffected
-	char m_aValue[256];
+	// room for a JSON string literal or a whole per-item data object (a
+	// backpack grid with 16 UUID slots). A 64-byte nickname with every byte
+	// escaped still fits comfortably.
+	char m_aValue[4096];
 };
 
 struct CDbJob
@@ -144,6 +145,16 @@ inline void DbSet(CDbJob &Job, const CJsonPath &Path, const T &Value)
 	CDbField Field;
 	Field.m_Path = Path;
 	JsonValueToString(Field.m_aValue, sizeof(Field.m_aValue), Value);
+	Job.m_lSet.add(Field);
+}
+
+// store an already-serialized JSON value (an object or an array). Unlike
+// DbSet, the text is not quoted, so it becomes a real JSON object at the path.
+inline void DbSetRaw(CDbJob &Job, const CJsonPath &Path, const char *pJson)
+{
+	CDbField Field;
+	Field.m_Path = Path;
+	str_copy(Field.m_aValue, pJson, sizeof(Field.m_aValue));
 	Job.m_lSet.add(Field);
 }
 

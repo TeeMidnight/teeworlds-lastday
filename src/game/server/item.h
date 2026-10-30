@@ -23,6 +23,28 @@ public:
 	// below, but the private craft helpers need to name it
 	struct CInventory;
 
+	// A fixed-size grid attached to one inventory stack (a backpack). The
+	// effective number of slots comes from the item definition, so the struct
+	// can hold the largest backpack without changing its layout.
+	enum
+	{
+		MAX_ITEM_DATA_SLOTS = 16,
+	};
+
+	struct SItemStack
+	{
+		CItemID m_Id;
+		int m_Count = 0;
+	};
+
+	// Per-stack payload. Ordinary items leave m_HasData false; a backpack sets
+	// it even while empty so the saved row always carries its "data" field.
+	struct SItemData
+	{
+		bool m_HasData = false;
+		SItemStack m_aSlots[MAX_ITEM_DATA_SLOTS];
+	};
+
 	// use effects applied when the player "uses" the item from the inventory
 	// menu (consumes one). defined through the optional "use" json object.
 	struct SUse
@@ -135,6 +157,14 @@ private:
 		SAccessory m_Accessory;
 		SDrill m_Drill;
 		SHealthJar m_Jar;
+		// maximum copies in one inventory stack; 0 = unlimited. weapons,
+		// accessories and backpacks are forced to 1 by the accessors below.
+		int m_MaxStack;
+		// fixed slot count of a backpack item; 0 = not a backpack
+		int m_BackpackSlots;
+		// container kind this item places ("crate", "chest", ...); "" when
+		// the item does not place a container
+		char m_aContainerKind[32];
 	};
 	hash_table<Uuid, SItemDef, 16, uuid_table_function> m_Items;
 
@@ -164,7 +194,14 @@ private:
 	static void ReloadScriptCallback(SItemDef &Item, void *pUser);
 
 	// add to an inventory without any chat / logging, used by craft simulation
-	static bool AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef);
+	static bool AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef, const SItemData *pData = nullptr);
+	// maximum stack for a definition; enforces the weapon/accessory/backpack
+	// rules in one place (the loader stores the content-authored value)
+	static int MaxStackFor(const SItemDef *pDef);
+	// native placement of a container item (no Python script needed)
+	bool PlaceContainer(int ClientID, const CItemID &Id);
+	// add Count copies into a backpack grid without chat/logging
+	static bool AddToNested(SItemData &Data, int Slots, const CItemID &Id, int Count, const SItemDef *pDef);
 
 	static int ListCraftDirsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	static int ListCraftFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
@@ -226,8 +263,9 @@ public:
 
 	// a player's inventory: a fixed number of slots. an empty slot has a
 	// zeroed item id. slots never move: removing an item that reaches zero
-	// simply clears the slot, and adding a new item goes into the first
-	// empty slot.
+	// simply clears the slot. Adding a capped item first tops up its existing
+	// stacks and then takes empty slots, so one item kind may span several
+	// slots while the rest of the inventory is full.
 	struct CInventory
 	{
 		enum
@@ -239,6 +277,8 @@ public:
 		{
 			CItemID m_Id;
 			int m_Count;
+			// backpack grid; m_HasData is false for ordinary items
+			SItemData m_Data;
 		};
 
 		SItem m_aItems[MAX_ITEMS];
@@ -247,14 +287,14 @@ public:
 		// drop everything: used when a client slot is recycled so the new
 		// occupant never sees the previous player's inventory
 		void Reset() { mem_zero(m_aItems, sizeof(m_aItems)); }
-		// index of the item with the given id, or -1
+		// index of the first stack with the given id, or -1
 		int Find(const CItemID &Id) const;
 		// index of the first empty slot, or -1 when the inventory is full
 		int FindEmpty() const;
-		// current count of the item, or 0
+		// total count of the item across every stack, or 0
 		int Get(const CItemID &Id) const;
 		// whether the slot is empty
-		bool IsEmpty(int Index) const { return Index < 0 || Index >= MAX_ITEMS || m_aItems[Index].m_Id.IsZero(); }
+		bool IsEmpty(int Index) const { return Index < 0 || Index >= MAX_ITEMS || m_aItems[Index].m_Id.IsZero() || m_aItems[Index].m_Count <= 0; }
 		// clear the slot (used when its count reaches zero)
 		void ClearSlot(int Index);
 	};
@@ -268,10 +308,17 @@ public:
 	bool ReloadScripts();
 
 	CInventory &GetInventory(int ClientID) { return m_aInventories[ClientID]; }
+	const CInventory &GetInventory(int ClientID) const { return m_aInventories[ClientID]; }
 
 	// add an item to a player's inventory and broadcast the pickup in chat.
 	// returns false (and does not insert) when the inventory is full.
 	bool AddItem(int ClientID, const CItemID &Id, int Count, bool SilentFail = false);
+	// add a stack that carries its own data (a dropped backpack). The data is
+	// copied into the new slot; a stack with data never merges with another.
+	bool AddItemWithData(int ClientID, const CItemID &Id, int Count, const SItemData &Data, bool SilentFail = false);
+	// remove up to Count items from one concrete inventory slot. Used when the
+	// caller has to keep the stack identity (a backpack's contents).
+	bool RemoveItemFromSlot(int ClientID, int Slot, int Count);
 	// convenience overload for content / map data that carries a name
 	bool AddItem(int ClientID, const char *pId, int Count, bool SilentFail = false);
 
@@ -304,6 +351,27 @@ public:
 	bool IsHealthJar(const CItemID &Id) const;
 	// the item's health jar data; m_HasJar false when it is not one
 	SHealthJar GetHealthJar(const CItemID &Id) const;
+
+	// maximum copies allowed in one stack; 0 = unlimited. Weapons,
+	// accessories and backpacks always return 1.
+	int GetMaxStack(const CItemID &Id) const;
+	// whether the item carries a fixed backpack grid
+	bool IsBackpack(const CItemID &Id) const;
+	// the backpack's fixed slot count, or 0 when it is not a backpack
+	int GetBackpackSlots(const CItemID &Id) const;
+	// container kind this item places into the world, or "" when it places
+	// no container
+	const char *GetContainerKind(const CItemID &Id) const;
+
+	// move up to Count copies from one inventory slot into one of the
+	// backpacks the player owns. Returns false without changing anything when
+	// the item does not fit. Backpacks cannot contain another backpack.
+	bool StoreInBackpack(int ClientID, int BackpackSlot, int ItemSlot, int Count, bool SilentFail = false);
+	// move up to Count copies from a backpack's nested slot back into the main
+	// inventory. Returns false without changing anything when it does not fit.
+	bool TakeFromBackpack(int ClientID, int BackpackSlot, int NestedSlot, int Count, bool SilentFail = false);
+	// first backpack slot with room for the given item, or -1
+	int FindBackpackWithRoom(int ClientID, const CItemID &Id, int Count = 1) const;
 
 	// consume up to Count items and apply their "use" effects to the player
 	int UseItem(int ClientID, const CItemID &Id, int Count = 1);

@@ -1,6 +1,7 @@
 /* (c) Teeworlds Archive Project Contributors.                                               */
 /* (c) Teeworlds LastDay - Bamcane.                                                          */
 /* This is a modified version of Teeworlds - see license.txt for details.                    */
+#include <engine/shared/jsonparser.h>
 #include <game/server/database/database.h>
 #include <game/server/database/database_util.h>
 
@@ -42,6 +43,38 @@ void CPlayer::CaptureStatus(CDbJob &Job)
 		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("id"), aUuid);
 		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("name"), Item.m_Id.SourceName());
 		DbSet(Job, CJsonPath().Key("inventory").Index(i).Key("count"), Item.m_Count);
+		// A backpack owns its grid under the item's own "data" field. Write it
+		// as one JSON object: nested json_set paths would need every intermediate
+		// key to exist already (and PostgreSQL's jsonb_set refuses to create
+		// them), while the parent inventory slot always exists.
+		if(Item.m_Data.m_HasData)
+		{
+			const int Slots = minimum((int) CItemSystem::MAX_ITEM_DATA_SLOTS, GameServer()->Item()->GetBackpackSlots(Item.m_Id));
+			char aData[4096];
+			str_format(aData, sizeof(aData), "{\"slots\":%d,\"items\":[", Slots);
+			int Len = str_length(aData);
+			bool First = true;
+			for(int Nested = 0; Nested < Slots; Nested++)
+			{
+				const CItemSystem::SItemStack &Stack = Item.m_Data.m_aSlots[Nested];
+				if(Stack.m_Id.IsZero() || Stack.m_Count <= 0)
+					continue;
+				char aNestedUuid[UUID_MAXSTRSIZE];
+				Stack.m_Id.FormatUuid(aNestedUuid, sizeof(aNestedUuid));
+				if(Len + 1 >= (int) sizeof(aData))
+					break;
+				str_format(aData + Len, sizeof(aData) - Len, "%s{\"slot\":%d,\"id\":\"%s\",\"count\":%d}",
+					First ? "" : ",", Nested, aNestedUuid, Stack.m_Count);
+				const int Added = str_length(aData + Len);
+				if(Added <= 0 || Len + Added + 3 >= (int) sizeof(aData))
+					break;
+				Len += Added;
+				First = false;
+			}
+			if(Len + 3 < (int) sizeof(aData))
+				str_format(aData + Len, sizeof(aData) - Len, "]}");
+			DbSetRaw(Job, CJsonPath().Key("inventory").Index(i).Key("data"), aData);
+		}
 		i++;
 	}
 
@@ -240,21 +273,57 @@ void CPlayer::LoadStatus(CDatabase *pDB, bool RefreshMenu)
 			GetJsonField(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("count"), &Count);
 			if(Count <= 0 || !GameServer()->Item()->IsKnownItem(Id))
 				continue;
-			// merge into an existing stack first: a legacy or hand-edited row can
-			// list the same id twice, and a second slot would be invisible to
-			// Find/AddItem and could never be used up
-			const int Existing = Inventory.Find(Id);
-			if(Existing >= 0)
+
+			// Each row is one stack: restoring it into its own slot preserves
+			// stack limits and any per-stack data instead of merging it away.
+			CItemSystem::SItemData Data;
+			const int BackpackSlots = GameServer()->Item()->GetBackpackSlots(Id);
+			Data.m_HasData = BackpackSlots > 0;
+			// "data" is one JSON object ({"slots":N,"items":[...]}); parse it
+			// directly instead of walking many database paths.
+			char aData[4096] = "";
+			if(GetJsonFieldRaw(pDB, m_AccountUuid, CJsonPath().Key("inventory").Index(i).Key("data"), aData, sizeof(aData)))
 			{
-				Inventory.m_aItems[Existing].m_Count += Count;
-				continue;
+				CJsonParser Parser;
+				json_value *pData = Parser.ParseString(aData, "inventory data");
+				if(pData && pData->type == json_object)
+				{
+					const json_value &rItems = (*pData)["items"];
+					for(unsigned n = 0; rItems.type == json_array && n < rItems.u.array.length; n++)
+					{
+						const json_value &rStack = rItems[n];
+						if(rStack.type != json_object)
+							continue;
+						const json_value &rNestedId = rStack["id"];
+						const json_value &rNestedCount = rStack["count"];
+						if(rNestedId.type != json_string || rNestedCount.type != json_integer)
+							continue;
+						CItemID NestedId;
+						if(!CItemID::Parse(rNestedId.u.string.ptr, &NestedId) || NestedId.IsZero() || !GameServer()->Item()->IsKnownItem(NestedId))
+							continue;
+						const int NestedCount = (int) (json_int_t) rNestedCount;
+						if(NestedCount <= 0)
+							continue;
+						// the slot index keeps the backpack's grid stable across saves
+						const json_value &rSlot = rStack["slot"];
+						int NestedSlot = rSlot.type == json_integer ? (int) (json_int_t) rSlot : (int) n;
+						NestedSlot = clamp(NestedSlot, 0, (int) CItemSystem::MAX_ITEM_DATA_SLOTS - 1);
+						if(BackpackSlots > 0 && NestedSlot >= BackpackSlots)
+							continue;
+						Data.m_HasData = true;
+						Data.m_aSlots[NestedSlot].m_Id = NestedId;
+						Data.m_aSlots[NestedSlot].m_Count = NestedCount;
+					}
+				}
 			}
+
 			const int Slot = Inventory.FindEmpty();
 			if(Slot < 0)
 				break; // inventory full
 			CItemSystem::CInventory::SItem &Item = Inventory.m_aItems[Slot];
 			Item.m_Id = Id;
 			Item.m_Count = Count;
+			Item.m_Data = Data;
 		}
 	}
 

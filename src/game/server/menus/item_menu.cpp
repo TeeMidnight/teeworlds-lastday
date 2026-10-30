@@ -12,6 +12,8 @@
 
 #include "item_menu.h"
 
+#include <climits>
+
 const char *ItemCommand(const CItemID &Id, char *pBuf, int Size)
 {
 	const char *pSource = Id.SourceName();
@@ -32,21 +34,45 @@ const char *ItemCommand(const CItemID &Id, char *pBuf, int Size)
 
 bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
 {
+	(void) pUserData;
 	CPlayer *pPlayer = pMenu->GameServer()->m_apPlayers[ClientID];
 	if(!pPlayer)
 		return true;
 
-	// the player clicked an item row: open its detail view instead of
-	// printing a one-line hint
+	CItemSystem *pItem = pMenu->GameServer()->Item();
+	CItemSystem::CInventory &Inventory = pItem->GetInventory(ClientID);
+
 	if(VoteStatus.m_aCmd[0] && str_comp(VoteStatus.m_aCmd, "DISPLAY") != 0 && str_comp(VoteStatus.m_aCmd, "NONE") != 0)
 	{
-		CItemSystem *pItem = pMenu->GameServer()->Item();
-		CItemID Clicked;
-		if(CItemID::Parse(VoteStatus.m_aCmd, &Clicked) && !Clicked.IsZero() &&
-			pItem->GetItemCount(ClientID, Clicked) > 0)
+		int Slot = -1;
+		// equipment slot: the picker stays a sub-page of the inventory
+		if(sscanf(VoteStatus.m_aCmd, "PICK %d", &Slot) == 1 && Slot >= 0 && Slot < (int) NUM_WEAPONS + (int) NUM_ACCESSORY_SLOTS)
 		{
-			pMenu->m_aItemViewId[ClientID] = Clicked;
+			pMenu->m_aLoadoutSlot[ClientID] = Slot;
+			pMenu->SetPlayerPage(ClientID, Slot < NUM_WEAPONS ? "WEAPONPICK" : "ACCESSORYPICK");
+			return false;
+		}
+		// an item row: open its detail view. The slot is tracked so a backpack
+		// keeps the exact stack (and therefore its contents) that was clicked.
+		if(sscanf(VoteStatus.m_aCmd, "VIEW %d", &Slot) == 1 && Slot >= 0 && Slot < CItemSystem::CInventory::MAX_ITEMS && !Inventory.IsEmpty(Slot))
+		{
+			pMenu->m_aItemViewId[ClientID] = Inventory.m_aItems[Slot].m_Id;
+			pMenu->m_aItemViewSlot[ClientID] = Slot;
 			pMenu->SetPlayerPage(ClientID, "ITEMVIEW");
+			return false;
+		}
+		// an indented backpack slot: move that nested stack into the inventory
+		int BagSlot = -1, NestedSlot = -1;
+		if(sscanf(VoteStatus.m_aCmd, "BPTAKE %d %d", &BagSlot, &NestedSlot) == 2)
+		{
+			int Requested = 0;
+			if(VoteStatus.m_aReason[0])
+				Requested = str_toint(VoteStatus.m_aReason);
+			if(Requested <= 0)
+				Requested = INT_MAX;
+			if(pItem->TakeFromBackpack(ClientID, BagSlot, NestedSlot, Requested))
+				pMenu->GameServer()->SavePlayerData(pPlayer);
+			pMenu->SetPlayerPage(ClientID, "INVENTORY");
 			return false;
 		}
 	}
@@ -54,27 +80,63 @@ bool CGameMenu::MenuInventory(int ClientID, CCallVoteStatus &VoteStatus, class C
 	pMenu->ClearOptions(ClientID);
 	pMenu->AddPageTitle();
 
-	CItemSystem *pItem = pMenu->GameServer()->Item();
-	const CItemSystem::CInventory &Inventory = pItem->GetInventory(ClientID);
+	// the equipment page has been folded into the inventory: slots first, then
+	// the item list
+	AddEquipmentOptions(pMenu, ClientID);
+	pMenu->AddHorizontalRule();
+
 	for(int i = 0; i < CItemSystem::CInventory::MAX_ITEMS; i++)
 	{
-		if(!Inventory.IsEmpty(i))
-		{
-			const CItemID &Id = Inventory.m_aItems[i].m_Id;
-			// amnesia: with high forgetting the player no longer remembers
-			// what this item is (name hidden, count still shown)
-			const char *pName = pItem->GetName(Id);
-			if(pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, Id))
-				pName = "???";
-			char aCmd[UUID_MAXSTRSIZE];
-			ItemCommand(Id, aCmd, sizeof(aCmd));
-			const std::string Desc = LocalizeFormat("Menu Inventory", "{}. {}: {}",
-				i + 1, pName, Inventory.m_aItems[i].m_Count);
-			pMenu->AddOption(Desc.c_str(), aCmd, "-");
-		}
-		else
+		if(Inventory.IsEmpty(i))
 		{
 			pMenu->AddOption(LocalizeFormat("Menu Inventory", "{}. None", i + 1).c_str(), "DISPLAY", "-");
+			continue;
+		}
+
+		const CItemID &Id = Inventory.m_aItems[i].m_Id;
+		// amnesia: with high forgetting the player no longer remembers what
+		// this item is (name hidden, count still shown)
+		const char *pName = pItem->GetName(Id);
+		if(pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, Id))
+			pName = "???";
+
+		char aCmd[32];
+		str_format(aCmd, sizeof(aCmd), "VIEW %d", i);
+		std::string Desc;
+		if(pItem->IsBackpack(Id))
+		{
+			const int Slots = pItem->GetBackpackSlots(Id);
+			int Used = 0;
+			for(int n = 0; n < Slots && n < (int) CItemSystem::MAX_ITEM_DATA_SLOTS; n++)
+				if(!Inventory.m_aItems[i].m_Data.m_aSlots[n].m_Id.IsZero() && Inventory.m_aItems[i].m_Data.m_aSlots[n].m_Count > 0)
+					Used++;
+			Desc = LocalizeFormat("Menu Inventory", "{}. {}: {} (bag {}/{})", i + 1, pName, Inventory.m_aItems[i].m_Count, Used, Slots);
+		}
+		else
+			Desc = LocalizeFormat("Menu Inventory", "{}. {}: {}", i + 1, pName, Inventory.m_aItems[i].m_Count);
+		pMenu->AddOption(Desc.c_str(), aCmd, "-");
+
+		// A backpack's fixed grid is drawn right below its own row. The four
+		// spaces plus the arrow make the nesting unmistakable in the vote list.
+		if(pItem->IsBackpack(Id))
+		{
+			const int Slots = pItem->GetBackpackSlots(Id);
+			for(int n = 0; n < Slots && n < (int) CItemSystem::MAX_ITEM_DATA_SLOTS; n++)
+			{
+				const CItemSystem::SItemStack &Stack = Inventory.m_aItems[i].m_Data.m_aSlots[n];
+				if(Stack.m_Id.IsZero() || Stack.m_Count <= 0)
+				{
+					pMenu->AddOption(LocalizeFormat("Menu Inventory", "    ↳ {}. (empty)", n + 1).c_str(), "DISPLAY", "-");
+					continue;
+				}
+				const char *pNestedName = pItem->GetName(Stack.m_Id);
+				if(pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, Stack.m_Id))
+					pNestedName = "???";
+				char aNestedCmd[32];
+				str_format(aNestedCmd, sizeof(aNestedCmd), "BPTAKE %d %d", i, n);
+				const std::string Nested = LocalizeFormat("Menu Inventory", "    ↳ {}. {} x{}", n + 1, pNestedName, Stack.m_Count);
+				pMenu->AddOption(Nested.c_str(), aNestedCmd, "-");
+			}
 		}
 	}
 
@@ -117,19 +179,47 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 		return true;
 
 	CItemSystem *pItem = pMenu->GameServer()->Item();
+	CItemSystem::CInventory &Inventory = pItem->GetInventory(ClientID);
 	const CItemID Id = pMenu->m_aItemViewId[ClientID];
-	if(Id.IsZero() || pItem->GetItemCount(ClientID, Id) <= 0)
+	const int Slot = pMenu->m_aItemViewSlot[ClientID];
+	if(Id.IsZero() || Slot < 0 || Slot >= CItemSystem::CInventory::MAX_ITEMS ||
+		Inventory.IsEmpty(Slot) || Inventory.m_aItems[Slot].m_Id != Id)
 	{
 		// the item is gone (used up / removed): go back to the inventory
 		pMenu->SetPlayerPage(ClientID, "INVENTORY");
 		return false;
 	}
 
-	const int Count = pItem->GetItemCount(ClientID, Id);
+	const int Count = Inventory.m_aItems[Slot].m_Count;
 	// amnesia: a forgotten item is only shown as "???"
 	const bool Forgotten = pItem->IsItemForgotten(pPlayer->m_Status.m_Forgetting, Id);
 	const char *pName = Forgotten ? "???" : pItem->GetName(Id);
 	const char *pLocalizedName = Localize(pName, "Item Name");
+
+	// move this stack into a backpack. The reason box can carry how many, like
+	// the use/drop actions.
+	if(VoteStatus.m_aCmd[0] && str_startswith(VoteStatus.m_aCmd, "BPSTORE "))
+	{
+		int ItemSlot = -1, BagSlot = -1;
+		if(sscanf(VoteStatus.m_aCmd, "BPSTORE %d %d", &ItemSlot, &BagSlot) == 2 && ItemSlot == Slot)
+		{
+			int StoreCount = Count;
+			if(VoteStatus.m_aReason[0])
+			{
+				const int Requested = str_toint(VoteStatus.m_aReason);
+				if(Requested > 0)
+					StoreCount = minimum(Requested, Count);
+			}
+			if(pItem->StoreInBackpack(ClientID, BagSlot, Slot, StoreCount))
+			{
+				pMenu->GameServer()->SavePlayerData(pPlayer);
+				const std::string Msg = LocalizeFormat("Menu Inventory", "Stored in backpack: {} x{}", pLocalizedName, StoreCount);
+				pMenu->GameServer()->SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
+			}
+		}
+		pMenu->SetPlayerPage(ClientID, "INVENTORY");
+		return false;
+	}
 
 	// place a building through the item's on_place script; the script builds
 	// the object and C++ consumes one copy on a True return
@@ -185,7 +275,8 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 			Direction = pChr->AimDirection() * 12.0f;
 		char aCmd[UUID_MAXSTRSIZE];
 		ItemCommand(Id, aCmd, sizeof(aCmd));
-		pMenu->GameServer()->DropItem(ClientID, aCmd, DropCount, Direction);
+		// the concrete slot carries a backpack's contents into the pickup
+		pMenu->GameServer()->DropItem(ClientID, aCmd, DropCount, Direction, Slot);
 
 		// refresh: back to the list, or keep viewing if still owned
 		pMenu->SetPlayerPage(ClientID, "INVENTORY");
@@ -234,6 +325,22 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 			pMenu->AddWrappedLinesOption(LocalizeFormat("Menu Inventory", "Types: {}", (const char *) TypeLine.m_aTypes).c_str());
 	}
 
+	const int MaxStack = pItem->GetMaxStack(Id);
+	if(MaxStack > 0)
+		pMenu->AddWrappedLinesOption(LocalizeFormat("Menu Inventory", "Stack limit: {}", MaxStack).c_str());
+
+	// a backpack's fixed grid is shown under its row on the inventory page;
+	// the detail view repeats the capacity and explains how to empty it
+	if(pItem->IsBackpack(Id))
+	{
+		const int Slots = pItem->GetBackpackSlots(Id);
+		int Used = 0;
+		for(int n = 0; n < Slots && n < (int) CItemSystem::MAX_ITEM_DATA_SLOTS; n++)
+			if(!Inventory.m_aItems[Slot].m_Data.m_aSlots[n].m_Id.IsZero() && Inventory.m_aItems[Slot].m_Data.m_aSlots[n].m_Count > 0)
+				Used++;
+		pMenu->AddWrappedLinesOption(LocalizeFormat("Menu Inventory", "Backpack slots: {}/{}", Used, Slots).c_str());
+	}
+
 	pMenu->AddHorizontalRule();
 
 	// actions
@@ -254,13 +361,31 @@ bool CGameMenu::MenuItemView(int ClientID, CCallVoteStatus &VoteStatus, class CG
 			pMenu->AddOption(Localize("Place drill", "Menu Inventory"), "PLACE", "★");
 			pMenu->AddOption(Localize("Hold the scoreboard next to it to control the drill. Jump to exit.", "Menu Inventory"), "DISPLAY", "-");
 		}
+		else if(pItem->GetContainerKind(Id)[0])
+		{
+			pMenu->AddOption(Localize("Place container", "Menu Inventory"), "PLACE", "★");
+			pMenu->AddOption(Localize("The container is placed on the floor in front of you.", "Menu Inventory"), "DISPLAY", "-");
+		}
 		else
 		{
 			pMenu->AddOption(Localize("Place", "Menu Inventory"), "PLACE", "★");
 		}
 	}
+	if(!pItem->IsBackpack(Id))
+	{
+		const int BagSlot = pItem->FindBackpackWithRoom(ClientID, Id, Count);
+		if(BagSlot >= 0)
+		{
+			char aStore[32];
+			str_format(aStore, sizeof(aStore), "BPSTORE %d %d", Slot, BagSlot);
+			pMenu->AddOption(Localize("Store in backpack", "Menu Inventory"), aStore, "★");
+			pMenu->AddOption(Localize("Use a number as the vote reason to store that many.", "Menu Inventory"), "DISPLAY", "-");
+		}
+	}
 	pMenu->AddOption(Localize("Drop", "Menu Inventory"), "DROP", "★");
 	pMenu->AddOption(Localize("Use a number as the vote reason to drop that many.", "Menu Inventory"), "DISPLAY", "-");
+	if(pItem->IsBackpack(Id))
+		pMenu->AddOption(Localize("Dropping a backpack keeps everything inside it.", "Menu Inventory"), "DISPLAY", "-");
 
 	return true;
 }

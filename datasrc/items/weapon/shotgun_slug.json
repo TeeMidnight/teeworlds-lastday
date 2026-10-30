@@ -5,5 +5,6 @@
     "ammo_for": ["shotgun"],
     "damage": 5,
     "projectiles": 1,
-    "speed": 1.2
+    "speed": 1.2,
+    "max_stack": 40
 }

@@ -5,5 +5,6 @@
     "script": "scripts/items/medkit.py",
     "use": {
         "health": 10
-    }
+    },
+    "max_stack": 5
 }

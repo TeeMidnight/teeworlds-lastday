@@ -145,8 +145,9 @@ private:
 	static bool MenuTeam(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// the "Language" page (implemented in gamemenu.cpp)
 	static bool MenuLanguage(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
-	// loadout (weapon equipment) menu (implemented in menus/loadout_menu.cpp)
-	static bool MenuLoadout(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
+	// equipment rows are part of the inventory page; the picker stays its own
+	// sub-page (implemented in menus/loadout_menu.cpp)
+	static void AddEquipmentOptions(class CGameMenu *pMenu, int ClientID);
 	static bool MenuWeaponPick(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData);
 	// player owned shops (listing / buying goods). The whole flow is driven
 	// from the vote menu so no chat command is needed.
@@ -187,11 +188,14 @@ private:
 	void SendVoteSet(int Type, int ToClientID);
 	void SendVoteStatus(int ClientID, int Total, int Yes, int No);
 
-	// slot the player picked in MenuLoadout, before picking the weapon in
-	// MenuWeaponPick; -1 = none
+	// equipment slot the player picked in the inventory page, before picking
+	// the item in MenuWeaponPick; -1 = none
 	int m_aLoadoutSlot[MAX_CLIENTS];
-	// item the player is currently inspecting in MenuItemView
+	// item and inventory slot the player is currently inspecting in
+	// MenuItemView. The slot keeps a backpack's contents attached to the
+	// concrete stack that was clicked.
 	CItemID m_aItemViewId[MAX_CLIENTS];
+	int m_aItemViewSlot[MAX_CLIENTS];
 
 	// the in-progress listing of a player, filled step by step by the trade
 	// pages (offer item -> amount -> price in G)

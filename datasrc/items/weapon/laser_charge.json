@@ -3,5 +3,6 @@
     "desc": "A charged cell that powers the laser.",
     "item_type": ["ammo"],
     "ammo_for": ["laser"],
-    "damage": 10
+    "damage": 10,
+    "max_stack": 60
 }

@@ -1,0 +1,21 @@
+{
+    "craft_id": "chest",
+    "needed": [
+        {
+            "item_id": "stone_bricks",
+            "count": 4
+        },
+        {
+            "item_id": "iron_ingot",
+            "count": 4
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 2
+        }
+    ],
+    "result": {
+        "item_id": "chest",
+        "count": 1
+    }
+}

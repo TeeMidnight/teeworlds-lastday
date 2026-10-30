@@ -1,0 +1,8 @@
+{
+    "name": "Large Backpack",
+    "desc": "A reinforced sixteen-slot bag. Its contents stay inside when you drop it.",
+    "item_type": ["tool", "backpack"],
+    "backpack": {
+        "slots": 16
+    }
+}

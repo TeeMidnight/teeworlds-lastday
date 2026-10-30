@@ -1,0 +1,17 @@
+{
+    "craft_id": "backpack",
+    "needed": [
+        {
+            "item_id": "straw_rope",
+            "count": 6
+        },
+        {
+            "item_id": "grass",
+            "count": 4
+        }
+    ],
+    "result": {
+        "item_id": "backpack",
+        "count": 1
+    }
+}

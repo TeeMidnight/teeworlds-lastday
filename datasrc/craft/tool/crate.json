@@ -1,0 +1,17 @@
+{
+    "craft_id": "crate",
+    "needed": [
+        {
+            "item_id": "stone_bricks",
+            "count": 4
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 2
+        }
+    ],
+    "result": {
+        "item_id": "crate",
+        "count": 1
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "name": "Crate",
+    "desc": "A sturdy wooden crate. Place it on the floor to store one kind of item.",
+    "item_type": ["tool", "container"],
+    "max_stack": 5,
+    "container": {
+        "kind": "crate"
+    }
+}

@@ -295,6 +295,10 @@ public:
 	// The container whose map-instance storage id matches, or null. Used by the
 	// world save restoration to put a stored stack back where it came from.
 	CContainerEntity *FindContainerByStorageID(int StorageID);
+	// A free storage id for a player-placed container. Map structures use
+	// non-negative ids, so placed ones count downward from -1; this keeps the
+	// world-save key stable across a reload.
+	int NextPlacedContainerStorageID();
 
 	/*
 		Function: interserct_CEntity

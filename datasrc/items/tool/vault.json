@@ -1,0 +1,9 @@
+{
+    "name": "Vault",
+    "desc": "A heavy three-slot vault. Place it on the floor to keep several kinds of goods.",
+    "item_type": ["tool", "container"],
+    "max_stack": 5,
+    "container": {
+        "kind": "vault"
+    }
+}

@@ -272,6 +272,9 @@ bool CGameMenu::MenuTradeSell(int ClientID, CCallVoteStatus &VoteStatus, class C
 		if(Inventory.IsEmpty(i))
 			continue;
 		const CItemID &Id = Inventory.m_aItems[i].m_Id;
+		// listings cannot carry a backpack's grid, so do not offer them
+		if(pItem->IsBackpack(Id))
+			continue;
 		char aCmd[UUID_MAXSTRSIZE];
 		ItemCommand(Id, aCmd, sizeof(aCmd));
 		const std::string Desc = LocalizeFormat("Menu Trade", "{} x{}", Id, Inventory.m_aItems[i].m_Count);

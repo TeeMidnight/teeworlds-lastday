@@ -6,5 +6,6 @@
     "use": {
         "health": 3,
         "forgetting": -15
-    }
+    },
+    "max_stack": 10
 }

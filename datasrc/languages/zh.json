@@ -2574,6 +2574,211 @@
 			"context": "Tip",
 			"or": "New here? Type /help for a short guide, or open the New Player Guide in the menu.",
 			"tr": "新来的？输入 /help 查看简短指引，或在菜单中打开新手指引。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Open the vote menu to reach Inventory (equipment is inside it), Craft, Shop, Team, Language and this guide.",
+			"tr": "打开投票菜单可使用背包（装备栏已合并其中）、制作、商店、队伍、语言和本指引。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Open the vote menu for Inventory (equipment is inside it), Craft, Shop, Team and the New Player Guide.",
+			"tr": "打开投票菜单可使用背包（装备栏已合并其中）、制作、商店、队伍和新手指引。"
+		},
+		{
+			"context": "Menu Help",
+			"or": "4. Containers and backpacks",
+			"tr": "4. 容器与背包"
+		},
+		{
+			"context": "Menu Help",
+			"or": "Stand near a container, aim at it and open Container. Click a slot to take items, or an inventory item to store it. Craft a crate, chest or vault to place your own. A backpack's slots are shown under it on the Inventory page.",
+			"tr": "靠近容器并瞄准它，打开容器菜单。点击格子取出物品，或点击物品栏物品存入。制作木箱、宝箱或保险库即可放置自己的容器。背包的格位会缩进显示在背包物品下方。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Equipment",
+			"tr": "装备"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "{}. {}: {} (bag {}/{})",
+			"tr": "{}. {}: {}（背包 {}/{}）"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "    ↳ {}. (empty)",
+			"tr": "    ↳ {}.（空）"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "    ↳ {}. {} x{}",
+			"tr": "    ↳ {}. {} x{}"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Stored in backpack: {} x{}",
+			"tr": "已存入背包：{} x{}"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Backpack slots: {}/{}",
+			"tr": "背包格位：{}/{}"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Store in backpack",
+			"tr": "存入背包"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Use a number as the vote reason to store that many.",
+			"tr": "在投票理由中输入数量，即可存入相应数量。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Place container",
+			"tr": "放置容器"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "The container is placed on the floor in front of you.",
+			"tr": "容器会放在你前方的地面上。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Dropping a backpack keeps everything inside it.",
+			"tr": "丢弃背包时，里面的物品会一并保留。"
+		},
+		{
+			"context": "Backpack",
+			"or": "The backpack is full.",
+			"tr": "背包已满。"
+		},
+		{
+			"context": "Container",
+			"or": "You have to be alive to place a container.",
+			"tr": "你必须活着才能放置容器。"
+		},
+		{
+			"context": "Container",
+			"or": "Stand on the ground to place a container.",
+			"tr": "站在地面上才能放置容器。"
+		},
+		{
+			"context": "Container",
+			"or": "Containers are unavailable.",
+			"tr": "容器功能当前不可用。"
+		},
+		{
+			"context": "Container",
+			"or": "There is no room for a container here.",
+			"tr": "这里没有空间放置容器。"
+		},
+		{
+			"context": "Container",
+			"or": "Container placed.",
+			"tr": "容器已放置。"
+		},
+		{
+			"context": "Container",
+			"or": "Backpacks stay in your inventory.",
+			"tr": "背包只能留在你的物品栏中。"
+		},
+		{
+			"context": "Trade",
+			"or": "Backpacks cannot be listed with their contents.",
+			"tr": "背包无法连同内容物上架出售。"
+		},
+		{
+			"context": "Item Type",
+			"or": "backpack",
+			"tr": "背包"
+		},
+		{
+			"context": "Item Name",
+			"or": "Crate",
+			"tr": "木箱"
+		},
+		{
+			"context": "Item Name",
+			"or": "Chest",
+			"tr": "宝箱"
+		},
+		{
+			"context": "Item Name",
+			"or": "Vault",
+			"tr": "保险库"
+		},
+		{
+			"context": "Item Name",
+			"or": "Backpack",
+			"tr": "背包"
+		},
+		{
+			"context": "Item Name",
+			"or": "Large Backpack",
+			"tr": "大背包"
+		},
+		{
+			"context": "Item Desc: Crate",
+			"or": "A sturdy wooden crate. Place it on the floor to store one kind of item.",
+			"tr": "结实的木箱。放在地上可存放一种物品。"
+		},
+		{
+			"context": "Item Desc: Chest",
+			"or": "A banded chest with room for two different item kinds. Place it on the floor.",
+			"tr": "带铁箍的宝箱，可存放两种不同物品。放在地上即可使用。"
+		},
+		{
+			"context": "Item Desc: Vault",
+			"or": "A heavy three-slot vault. Place it on the floor to keep several kinds of goods.",
+			"tr": "沉重的三格保险库。放在地上可保存多种货物。"
+		},
+		{
+			"context": "Item Desc: Backpack",
+			"or": "A portable eight-slot bag. Its contents stay inside when you drop it.",
+			"tr": "便携的八格背包。丢弃时里面的物品会保留。"
+		},
+		{
+			"context": "Item Desc: Large Backpack",
+			"or": "A reinforced sixteen-slot bag. Its contents stay inside when you drop it.",
+			"tr": "加固的十六格大背包。丢弃时里面的物品会保留。"
+		},
+		{
+			"context": "Menu Inventory",
+			"or": "Stack limit: {}",
+			"tr": "堆叠上限：{}"
+		},
+		{
+			"context": "Container",
+			"or": "This container belongs to the world.",
+			"tr": "这个容器属于世界。"
+		},
+		{
+			"context": "Container",
+			"or": "Empty the container first.",
+			"tr": "请先清空容器。"
+		},
+		{
+			"context": "Container",
+			"or": "This container cannot be picked up.",
+			"tr": "这个容器无法被拾起。"
+		},
+		{
+			"context": "Container",
+			"or": "Container picked up.",
+			"tr": "容器已拾起。"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Pick up container",
+			"tr": "拾起容器"
+		},
+		{
+			"context": "Menu Container",
+			"or": "Empty the container before picking it up.",
+			"tr": "拾起前请先清空容器。"
 		}
 	]
 }

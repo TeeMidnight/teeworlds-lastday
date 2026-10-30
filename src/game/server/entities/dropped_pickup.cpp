@@ -19,12 +19,13 @@ static const float s_DropGroundFriction = 0.9f; // sliding friction (low)
 static const float s_DropAirDrag = 0.97f; // air drag (very low)
 static const float s_DropMaxSpeed = 40.0f; // terminal velocity guard
 
-CDroppedPickup::CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const CItemID &ItemId, int Count) :
+CDroppedPickup::CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const CItemID &ItemId, int Count, const CItemSystem::SItemData *pData) :
 	CEntity(pGameWorld, CGameWorld::ENTTYPE_DROPPEDPICKUP, 0, Pos, DROP_PHYS_SIZE)
 {
 	m_Kind = KIND_ITEM;
 	m_ItemId = ItemId;
 	m_Count = Count;
+	m_Data = pData ? *pData : CItemSystem::SItemData();
 	m_Health = 0;
 	m_Amount = 0;
 	m_VisualType = 0;
@@ -117,8 +118,12 @@ void CDroppedPickup::Tick()
 			else
 			{
 				// only collected when the player has inventory space;
-				// otherwise it stays on the ground for someone else
-				Picked = GameServer()->Item()->AddItem(pChr->GetCID(), m_ItemId, m_Count);
+				// otherwise it stays on the ground for someone else. A backpack
+				// carries its grid with it, so restore that exact stack.
+				if(m_Data.m_HasData)
+					Picked = GameServer()->Item()->AddItemWithData(pChr->GetCID(), m_ItemId, m_Count, m_Data);
+				else
+					Picked = GameServer()->Item()->AddItem(pChr->GetCID(), m_ItemId, m_Count);
 			}
 
 			if(Picked)

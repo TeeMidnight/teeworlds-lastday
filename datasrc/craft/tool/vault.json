@@ -1,0 +1,21 @@
+{
+    "craft_id": "vault",
+    "needed": [
+        {
+            "item_id": "steel_ingot",
+            "count": 6
+        },
+        {
+            "item_id": "silver_ingot",
+            "count": 2
+        },
+        {
+            "item_id": "straw_rope",
+            "count": 3
+        }
+    ],
+    "result": {
+        "item_id": "vault",
+        "count": 1
+    }
+}

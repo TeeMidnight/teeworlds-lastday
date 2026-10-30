@@ -6,6 +6,7 @@
 
 #include <game/item_id.h>
 #include <game/server/entity.h>
+#include <game/server/item.h>
 
 // A small physics pickup in a world. One class covers every payload:
 //
@@ -28,8 +29,9 @@ public:
 		KIND_CURRENCY,
 	};
 
-	// item stack
-	CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const CItemID &ItemId, int Count);
+	// item stack; pData carries a backpack's grid when the dropped stack has one
+	CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, const CItemID &ItemId, int Count,
+		const CItemSystem::SItemData *pData = nullptr);
 	// health pickup (Health is normally 1)
 	CDroppedPickup(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, int Health);
 	// money drop; the tag keeps this overload distinct from the health one
@@ -51,6 +53,8 @@ public:
 	// the dropped item's id / stack size (zero for a health or money pickup)
 	const CItemID &ItemId() const { return m_ItemId; }
 	int Count() const { return m_Count; }
+	// per-stack payload of a dropped backpack (m_HasData false otherwise)
+	const CItemSystem::SItemData &Data() const { return m_Data; }
 	int Health() const { return m_Health; }
 	// the amount of G carried by a money pickup (0 otherwise)
 	int64 Amount() const { return m_Amount; }
@@ -69,6 +73,7 @@ private:
 	EKind m_Kind;
 	CItemID m_ItemId;
 	int m_Count;
+	CItemSystem::SItemData m_Data;
 	int m_Health;
 	int64 m_Amount;
 	// money drops use one of the projectile sprites of the game's weapons

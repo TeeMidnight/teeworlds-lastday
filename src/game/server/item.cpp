@@ -9,6 +9,8 @@
 #include <game/server/item.h>
 #include <game/server/scripting/script_runtime.h>
 
+#include <climits>
+
 // ---------------------------------------------------------------
 // CItemSystem::CInventory (inventory / item loading lives here; use effects
 // and crafting live in item_use.cpp / item_craft.cpp)
@@ -21,7 +23,7 @@ CItemSystem::CInventory::CInventory()
 int CItemSystem::CInventory::Find(const CItemID &Id) const
 {
 	for(int i = 0; i < MAX_ITEMS; i++)
-		if(m_aItems[i].m_Id == Id)
+		if(m_aItems[i].m_Id == Id && m_aItems[i].m_Count > 0)
 			return i;
 	return -1;
 }
@@ -29,15 +31,20 @@ int CItemSystem::CInventory::Find(const CItemID &Id) const
 int CItemSystem::CInventory::FindEmpty() const
 {
 	for(int i = 0; i < MAX_ITEMS; i++)
-		if(m_aItems[i].m_Id.IsZero())
+		if(IsEmpty(i))
 			return i;
 	return -1;
 }
 
 int CItemSystem::CInventory::Get(const CItemID &Id) const
 {
-	const int Index = Find(Id);
-	return Index >= 0 ? m_aItems[Index].m_Count : 0;
+	// a capped item can live in several stacks; every caller asking "how many"
+	// must see their sum, not just the first stack
+	int Total = 0;
+	for(int i = 0; i < MAX_ITEMS; i++)
+		if(m_aItems[i].m_Id == Id && m_aItems[i].m_Count > 0)
+			Total += m_aItems[i].m_Count;
+	return Total;
 }
 
 void CItemSystem::CInventory::ClearSlot(int Index)
@@ -46,6 +53,7 @@ void CItemSystem::CInventory::ClearSlot(int Index)
 	{
 		m_aItems[Index].m_Id = CItemID();
 		m_aItems[Index].m_Count = 0;
+		m_aItems[Index].m_Data = SItemData();
 	}
 }
 
@@ -319,6 +327,31 @@ void CItemSystem::LoadItem(const char *pDefaultId, const char *pFilePath, const 
 		Item.m_Jar.m_Health = ReadJarInt("health", 10, 1, 1000);
 	}
 
+	// stack limit: 0 (the default) means unlimited; weapons, accessories and
+	// backpacks are forced to 1 by MaxStackFor regardless of this value
+	Item.m_MaxStack = maximum(0, ReadInt("max_stack", 0));
+
+	// optional backpack grid: "backpack": { "slots": 8 }
+	const json_value &Backpack = (*pJson)["backpack"];
+	if(Backpack.type == json_object)
+	{
+		int Slots = 0;
+		const json_value &Value = Backpack["slots"];
+		if(Value.type == json_integer || Value.type == json_double)
+			Slots = (int) (json_int_t) Value;
+		Item.m_BackpackSlots = clamp(Slots, 1, (int) MAX_ITEM_DATA_SLOTS);
+	}
+
+	// optional container placement: "container": { "kind": "crate" }
+	const json_value &Container = (*pJson)["container"];
+	const char *pContainerKind = nullptr;
+	if(Container.type == json_object)
+		pContainerKind = Container["kind"];
+	else if(Container.type == json_string)
+		pContainerKind = Container;
+	if(pContainerKind && pContainerKind[0])
+		str_copy(Item.m_aContainerKind, pContainerKind, sizeof(Item.m_aContainerKind));
+
 	// a UUID collision is astronomically unlikely, but a duplicated id must not
 	// silently replace an unrelated item
 	const SItemDef *pExisting = m_Items.get(Item.m_Id.Value());
@@ -363,22 +396,73 @@ bool CItemSystem::ReloadScripts()
 	return true;
 }
 
-bool CItemSystem::AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef)
+int CItemSystem::MaxStackFor(const SItemDef *pDef)
 {
-	(void) pDef;
+	if(!pDef)
+		return 0;
+	// an equippable item must stay a single object: two swords cannot share a
+	// slot, and a backpack carries its own data so it can never merge either
+	if(pDef->m_BackpackSlots > 0 || pDef->m_Accessory.m_HasAccessory || pDef->m_aWeapon[0])
+		return 1;
+	return pDef->m_MaxStack > 0 ? pDef->m_MaxStack : 0;
+}
+
+bool CItemSystem::AddToInventory(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef, const SItemData *pData)
+{
 	if(Id.IsZero() || Count <= 0)
 		return false;
 
-	int Index = Inventory.Find(Id);
-	if(Index < 0)
+	const int MaxStack = MaxStackFor(pDef);
+	// a stack with data has to stay alone in its slot; only a single object can
+	// be added at a time (a backpack is always count 1)
+	if(pData && (Count != 1 || MaxStack != 1))
+		return false;
+
+	// build the result on a copy so a stack that only partially fits never
+	// leaves a half-added inventory behind
+	CInventory Result = Inventory;
+	int Remaining = Count;
+
+	if(!pData)
 	{
-		Index = Inventory.FindEmpty();
-		if(Index < 0)
-			return false;
-		Inventory.m_aItems[Index].m_Id = Id;
-		Inventory.m_aItems[Index].m_Count = 0;
+		for(int i = 0; i < CInventory::MAX_ITEMS && Remaining > 0; i++)
+		{
+			CInventory::SItem &Item = Result.m_aItems[i];
+			if(Item.m_Id != Id || Item.m_Count <= 0 || Item.m_Data.m_HasData)
+				continue;
+			const int Room = MaxStack > 0 ? maximum(0, MaxStack - Item.m_Count) : INT_MAX;
+			const int Add = minimum(Remaining, Room);
+			if(Add <= 0)
+				continue;
+			if(Item.m_Count > INT_MAX - Add)
+				return false;
+			Item.m_Count += Add;
+			Remaining -= Add;
+		}
 	}
-	Inventory.m_aItems[Index].m_Count += Count;
+
+	for(int i = 0; i < CInventory::MAX_ITEMS && Remaining > 0; i++)
+	{
+		if(!Result.IsEmpty(i))
+			continue;
+		const int Put = MaxStack > 0 ? minimum(Remaining, MaxStack) : Remaining;
+		Result.ClearSlot(i);
+		CInventory::SItem &Item = Result.m_aItems[i];
+		Item.m_Id = Id;
+		Item.m_Count = Put;
+		if(pData)
+		{
+			Item.m_Data = *pData;
+			Item.m_Data.m_HasData = true;
+		}
+		else if(pDef && pDef->m_BackpackSlots > 0)
+			Item.m_Data.m_HasData = true;
+		Remaining -= Put;
+	}
+
+	if(Remaining > 0)
+		return false;
+	Inventory = Result;
 	return true;
 }
 
@@ -408,6 +492,49 @@ bool CItemSystem::AddItem(int ClientID, const CItemID &Id, int Count, bool Silen
 	const std::string Msg = LocalizeFormat("Item Pickup", "You got: {} x{} ({})",
 		Localize(pName, "Item Name"), Count, Now);
 	m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
+	return true;
+}
+
+bool CItemSystem::AddItemWithData(int ClientID, const CItemID &Id, int Count, const SItemData &Data, bool SilentFail)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return false;
+
+	CLanguageScope LanguageScope(m_pGameServer->LanguageOf(ClientID));
+
+	if(Id.IsZero() || Count <= 0 || !IsKnownItem(Id))
+		return false;
+
+	CInventory &Inventory = m_aInventories[ClientID];
+	const SItemDef *pDef = m_Items.get(Id.Value());
+	if(!AddToInventory(Inventory, Id, Count, pDef, &Data))
+	{
+		if(!SilentFail)
+			m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("No inventory space!", "Item Pickup"));
+		return false;
+	}
+	const int Now = Inventory.Get(Id);
+
+	const char *pName = GetName(Id);
+	const std::string Msg = LocalizeFormat("Item Pickup", "You got: {} x{} ({})",
+		Localize(pName, "Item Name"), Count, Now);
+	m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Msg.c_str());
+	return true;
+}
+
+bool CItemSystem::RemoveItemFromSlot(int ClientID, int Slot, int Count)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || Count <= 0)
+		return false;
+	CInventory &Inventory = m_aInventories[ClientID];
+	if(Slot < 0 || Slot >= CInventory::MAX_ITEMS || Inventory.IsEmpty(Slot))
+		return false;
+	CInventory::SItem &Item = Inventory.m_aItems[Slot];
+	if(Item.m_Count < Count)
+		return false;
+	Item.m_Count -= Count;
+	if(Item.m_Count <= 0)
+		Inventory.ClearSlot(Slot);
 	return true;
 }
 
@@ -479,6 +606,168 @@ CItemSystem::SHealthJar CItemSystem::GetHealthJar(const CItemID &Id) const
 {
 	const SItemDef *pItem = m_Items.get(Id.Value());
 	return pItem ? pItem->m_Jar : SHealthJar();
+}
+
+int CItemSystem::GetMaxStack(const CItemID &Id) const
+{
+	return MaxStackFor(m_Items.get(Id.Value()));
+}
+
+bool CItemSystem::IsBackpack(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem && pItem->m_BackpackSlots > 0;
+}
+
+int CItemSystem::GetBackpackSlots(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem ? pItem->m_BackpackSlots : 0;
+}
+
+const char *CItemSystem::GetContainerKind(const CItemID &Id) const
+{
+	const SItemDef *pItem = m_Items.get(Id.Value());
+	return pItem ? pItem->m_aContainerKind : "";
+}
+
+bool CItemSystem::AddToNested(SItemData &Data, int Slots, const CItemID &Id, int Count, const SItemDef *pDef)
+{
+	if(Id.IsZero() || Count <= 0 || Slots <= 0)
+		return false;
+	// a backpack inside a backpack would need recursive data; content should
+	// use the main inventory for that instead
+	if(pDef && pDef->m_BackpackSlots > 0)
+		return false;
+	Slots = minimum(Slots, (int) MAX_ITEM_DATA_SLOTS);
+	const int MaxStack = MaxStackFor(pDef);
+
+	SItemData Result = Data;
+	int Remaining = Count;
+	for(int i = 0; i < Slots && Remaining > 0; i++)
+	{
+		SItemStack &Slot = Result.m_aSlots[i];
+		if(Slot.m_Id != Id || Slot.m_Count <= 0)
+			continue;
+		const int Room = MaxStack > 0 ? maximum(0, MaxStack - Slot.m_Count) : INT_MAX;
+		const int Add = minimum(Remaining, Room);
+		if(Add <= 0)
+			continue;
+		if(Slot.m_Count > INT_MAX - Add)
+			return false;
+		Slot.m_Count += Add;
+		Remaining -= Add;
+	}
+	for(int i = 0; i < Slots && Remaining > 0; i++)
+	{
+		SItemStack &Slot = Result.m_aSlots[i];
+		if(!Slot.m_Id.IsZero() && Slot.m_Count > 0)
+			continue;
+		const int Put = MaxStack > 0 ? minimum(Remaining, MaxStack) : Remaining;
+		Slot.m_Id = Id;
+		Slot.m_Count = Put;
+		Remaining -= Put;
+	}
+	if(Remaining > 0)
+		return false;
+	Result.m_HasData = true;
+	Data = Result;
+	return true;
+}
+
+bool CItemSystem::StoreInBackpack(int ClientID, int BackpackSlot, int ItemSlot, int Count, bool SilentFail)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || Count <= 0)
+		return false;
+	CInventory &Inventory = m_aInventories[ClientID];
+	if(BackpackSlot < 0 || BackpackSlot >= CInventory::MAX_ITEMS || ItemSlot < 0 || ItemSlot >= CInventory::MAX_ITEMS)
+		return false;
+	if(BackpackSlot == ItemSlot || Inventory.IsEmpty(BackpackSlot) || Inventory.IsEmpty(ItemSlot))
+		return false;
+
+	CInventory::SItem &Bag = Inventory.m_aItems[BackpackSlot];
+	CInventory::SItem &Item = Inventory.m_aItems[ItemSlot];
+	if(!IsBackpack(Bag.m_Id) || !IsKnownItem(Item.m_Id))
+		return false;
+	const int Slots = GetBackpackSlots(Bag.m_Id);
+	const SItemDef *pDef = m_Items.get(Item.m_Id.Value());
+	if(!pDef || pDef->m_BackpackSlots > 0)
+		return false; // backpacks do not nest
+
+	Count = minimum(Count, Item.m_Count);
+	SItemData NewData = Bag.m_Data;
+	NewData.m_HasData = true;
+	if(!AddToNested(NewData, Slots, Item.m_Id, Count, pDef))
+	{
+		if(!SilentFail)
+			m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("The backpack is full.", "Backpack"));
+		return false;
+	}
+	if(!RemoveItemFromSlot(ClientID, ItemSlot, Count))
+		return false;
+	Bag.m_Data = NewData;
+	return true;
+}
+
+bool CItemSystem::TakeFromBackpack(int ClientID, int BackpackSlot, int NestedSlot, int Count, bool SilentFail)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || Count <= 0)
+		return false;
+	CInventory &Inventory = m_aInventories[ClientID];
+	if(BackpackSlot < 0 || BackpackSlot >= CInventory::MAX_ITEMS || Inventory.IsEmpty(BackpackSlot))
+		return false;
+	CInventory::SItem &Bag = Inventory.m_aItems[BackpackSlot];
+	if(!IsBackpack(Bag.m_Id))
+		return false;
+	const int Slots = GetBackpackSlots(Bag.m_Id);
+	if(NestedSlot < 0 || NestedSlot >= Slots || NestedSlot >= (int) MAX_ITEM_DATA_SLOTS)
+		return false;
+	const SItemStack &Nested = Bag.m_Data.m_aSlots[NestedSlot];
+	if(Nested.m_Id.IsZero() || Nested.m_Count <= 0)
+		return false;
+	const SItemDef *pDef = m_Items.get(Nested.m_Id.Value());
+	if(!pDef)
+		return false;
+
+	Count = minimum(Count, Nested.m_Count);
+	// simulate the whole move so a full inventory cannot eat the nested stack
+	CInventory Result = Inventory;
+	SItemStack &ResultNested = Result.m_aItems[BackpackSlot].m_Data.m_aSlots[NestedSlot];
+	ResultNested.m_Count -= Count;
+	if(ResultNested.m_Count <= 0)
+	{
+		ResultNested.m_Id = CItemID();
+		ResultNested.m_Count = 0;
+	}
+	if(!AddToInventory(Result, Nested.m_Id, Count, pDef))
+	{
+		if(!SilentFail)
+			m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("No inventory space!", "Item Pickup"));
+		return false;
+	}
+	Inventory = Result;
+	return true;
+}
+
+int CItemSystem::FindBackpackWithRoom(int ClientID, const CItemID &Id, int Count) const
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || Count <= 0)
+		return -1;
+	const CInventory &Inventory = m_aInventories[ClientID];
+	const SItemDef *pDef = m_Items.get(Id.Value());
+	if(!pDef || pDef->m_BackpackSlots > 0)
+		return -1;
+	for(int i = 0; i < CInventory::MAX_ITEMS; i++)
+	{
+		if(Inventory.IsEmpty(i) || !IsBackpack(Inventory.m_aItems[i].m_Id))
+			continue;
+		const int Slots = GetBackpackSlots(Inventory.m_aItems[i].m_Id);
+		// check the whole stack, not merely the first free slot
+		SItemData Test = Inventory.m_aItems[i].m_Data;
+		if(AddToNested(Test, Slots, Id, Count, pDef))
+			return i;
+	}
+	return -1;
 }
 
 bool CItemSystem::HasItemType(const CItemID &Id, const char *pType) const
@@ -555,14 +844,24 @@ bool CItemSystem::RemoveItem(int ClientID, const CItemID &Id, int Count)
 		return false;
 
 	CInventory &Inventory = m_aInventories[ClientID];
-	const int Index = Inventory.Find(Id);
-	if(Index < 0 || Inventory.m_aItems[Index].m_Count < Count)
+	// a capped item may be split over several stacks; check the total first so
+	// a request that cannot be met removes nothing
+	if(Inventory.Get(Id) < Count)
 		return false;
 
-	Inventory.m_aItems[Index].m_Count -= Count;
-	if(Inventory.m_aItems[Index].m_Count <= 0)
-		Inventory.ClearSlot(Index);
-	return true;
+	int Remaining = Count;
+	for(int i = 0; i < CInventory::MAX_ITEMS && Remaining > 0; i++)
+	{
+		CInventory::SItem &Item = Inventory.m_aItems[i];
+		if(Item.m_Id != Id || Item.m_Count <= 0)
+			continue;
+		const int Take = minimum(Remaining, Item.m_Count);
+		Item.m_Count -= Take;
+		Remaining -= Take;
+		if(Item.m_Count <= 0)
+			Inventory.ClearSlot(i);
+	}
+	return Remaining == 0;
 }
 
 // callback used by WeaponNeedsAmmo to scan every item definition

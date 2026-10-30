@@ -73,7 +73,13 @@ bool CGameMenu::MenuContainer(int ClientID, CCallVoteStatus &VoteStatus, class C
 			{
 				const int Requested = ContainerRequestedCount(VoteStatus);
 				const int Count = Requested > 0 ? minimum(Requested, Owned) : Owned;
-				if(!pContainer->CanStore(Id))
+				// a container slot has no room for a backpack's payload; keep the
+				// bag in the inventory instead of silently emptying it
+				if(pItems->IsBackpack(Id))
+				{
+					pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("Backpacks stay in your inventory.", "Container"));
+				}
+				else if(!pContainer->CanStore(Id))
 				{
 					pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("The container is full.", "Container"));
 				}
@@ -139,6 +145,9 @@ bool CGameMenu::MenuContainer(int ClientID, CCallVoteStatus &VoteStatus, class C
 			const int Count = Inventory.m_aItems[i].m_Count;
 			if(Count <= 0)
 				continue;
+			// backpacks carry data the container slot cannot represent
+			if(pItems->IsBackpack(Id))
+				continue;
 			if(!pContainer->CanStore(Id))
 			{
 				Full = true;
@@ -163,6 +172,32 @@ bool CGameMenu::MenuContainer(int ClientID, CCallVoteStatus &VoteStatus, class C
 			pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("The container is full.", "Container"));
 		else
 			pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("You have nothing to store.", "Container"));
+	}
+
+	// A player-placed container can be folded back into its item, which is how
+	// it is moved. Map containers are world content and stay where they are.
+	else if(str_comp(VoteStatus.m_aCmd, "CPICKUP") == 0)
+	{
+		if(pContainer->StorageID() >= 0)
+			pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("This container belongs to the world.", "Container"));
+		else if(pContainer->TotalCount() > 0)
+			pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("Empty the container first.", "Container"));
+		else
+		{
+			const CItemID ItemId = CItemID::FromName(pContainer->Kind());
+			if(!pItems->IsKnownItem(ItemId) || str_comp(pItems->GetContainerKind(ItemId), pContainer->Kind()) != 0)
+				pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("This container cannot be picked up.", "Container"));
+			else if(!pItems->AddItem(ClientID, ItemId, 1, true))
+				pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("No inventory space!", "Item Pickup"));
+			else
+			{
+				pContainer->MarkForDestroy();
+				pGameServer->SavePlayerData(pPlayer);
+				pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("Container picked up.", "Container"));
+			}
+		}
+		pMenu->SetPlayerPage(ClientID, "MAIN");
+		return false;
 	}
 
 	// ----- page -----
@@ -193,6 +228,11 @@ bool CGameMenu::MenuContainer(int ClientID, CCallVoteStatus &VoteStatus, class C
 	}
 	pMenu->AddOption(Localize("Take everything", "Menu Container"), "CTAKEALL", "★");
 	pMenu->AddOption(Localize("Click a container slot to take its stack back.", "Menu Container"), "DISPLAY", "-");
+	if(pContainer->StorageID() < 0)
+	{
+		pMenu->AddOption(Localize("Pick up container", "Menu Container"), "CPICKUP", "★");
+		pMenu->AddOption(Localize("Empty the container before picking it up.", "Menu Container"), "DISPLAY", "-");
+	}
 	pMenu->AddHorizontalRule();
 
 	pMenu->AddOption(Localize("Click one of your items to store it.", "Menu Container"), "DISPLAY", "-");

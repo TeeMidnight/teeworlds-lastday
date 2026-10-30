@@ -1,0 +1,21 @@
+{
+    "craft_id": "large_backpack",
+    "needed": [
+        {
+            "item_id": "straw_rope",
+            "count": 10
+        },
+        {
+            "item_id": "iron_ingot",
+            "count": 4
+        },
+        {
+            "item_id": "silver_ingot",
+            "count": 4
+        }
+    ],
+    "result": {
+        "item_id": "large_backpack",
+        "count": 1
+    }
+}

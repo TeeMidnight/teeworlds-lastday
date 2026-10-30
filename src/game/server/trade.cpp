@@ -61,6 +61,13 @@ int CTradeSystem::AddListing(int Seller, const CItemID &OfferItem, int OfferCoun
 		m_pGameServer->SendChat(-1, CHAT_WHISPER, Seller, Localize("Unknown item.", "Trade"));
 		return -1;
 	}
+	// a shop listing only stores an id and a count, so it cannot carry a
+	// backpack's grid; keep the bag in the inventory
+	if(pItems->IsBackpack(OfferItem))
+	{
+		m_pGameServer->SendChat(-1, CHAT_WHISPER, Seller, Localize("Backpacks cannot be listed with their contents.", "Trade"));
+		return -1;
+	}
 	if(pItems->GetItemCount(Seller, OfferItem) < OfferCount)
 	{
 		m_pGameServer->SendChat(-1, CHAT_WHISPER, Seller, Localize("You do not have that many.", "Trade"));

@@ -1,0 +1,9 @@
+{
+    "name": "Chest",
+    "desc": "A banded chest with room for two different item kinds. Place it on the floor.",
+    "item_type": ["tool", "container"],
+    "max_stack": 5,
+    "container": {
+        "kind": "chest"
+    }
+}

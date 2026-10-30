@@ -941,7 +941,7 @@ bool CGameContext::IsOnTrainEntrance(CPlayer *pPlayer) const
 	       pCollision->CheckPoint(Pos + vec2(0.0f, CCharacterCore::PHYS_SIZE * 0.5f - 2.0f), CCollision::COLFLAG_TRAIN_ENTRANCE);
 }
 
-bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction)
+bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction, int InventorySlot)
 {
 	CLanguageScope LanguageScope(LanguageOf(ClientID));
 	CPlayer *pPlayer = m_apPlayers[ClientID];
@@ -964,22 +964,51 @@ bool CGameContext::DropItem(int ClientID, const char *pItemId, int Count, vec2 D
 		SendChat(-1, CHAT_WHISPER, ClientID, Localize("Unknown item.", "Item Drop"));
 		return false;
 	}
-	const int Owned = pItems->GetItemCount(ClientID, Id);
-	if(Owned <= 0)
-	{
-		SendChat(-1, CHAT_WHISPER, ClientID, Localize("You do not have this item.", "Item Drop"));
-		return false;
-	}
-	if(Owned < Count)
-		Count = Owned;
 
-	if(!pItems->RemoveItem(ClientID, Id, Count))
-		return false;
+	// Keep the dropped stack's payload (a backpack grid) before the inventory
+	// slot is cleared; the pickup copies it below.
+	CItemSystem::SItemData Data;
+	bool HasData = false;
+	CItemSystem::CInventory &Inventory = pItems->GetInventory(ClientID);
+	if(InventorySlot >= 0)
+	{
+		if(InventorySlot >= CItemSystem::CInventory::MAX_ITEMS || Inventory.IsEmpty(InventorySlot) || Inventory.m_aItems[InventorySlot].m_Id != Id)
+			return false;
+		const CItemSystem::CInventory::SItem &Stack = Inventory.m_aItems[InventorySlot];
+		Count = minimum(Count, Stack.m_Count);
+		Data = Stack.m_Data;
+		HasData = Data.m_HasData;
+		if(!pItems->RemoveItemFromSlot(ClientID, InventorySlot, Count))
+			return false;
+	}
+	else
+	{
+		const int Owned = pItems->GetItemCount(ClientID, Id);
+		if(Owned <= 0)
+		{
+			SendChat(-1, CHAT_WHISPER, ClientID, Localize("You do not have this item.", "Item Drop"));
+			return false;
+		}
+		if(Owned < Count)
+			Count = Owned;
+		// preserve the payload of the first matching stack as well
+		for(int i = 0; i < CItemSystem::CInventory::MAX_ITEMS; i++)
+		{
+			const CItemSystem::CInventory::SItem &Stack = Inventory.m_aItems[i];
+			if(Stack.m_Id != Id || Stack.m_Count <= 0)
+				continue;
+			Data = Stack.m_Data;
+			HasData = Data.m_HasData && Count >= Stack.m_Count;
+			break;
+		}
+		if(!pItems->RemoveItem(ClientID, Id, Count))
+			return false;
+	}
 
 	CGameWorld *pWorld = pChr->GameWorld();
 	// no database write here: the world's drops are persisted when the
 	// world is unloaded or the server shuts down
-	new CDroppedPickup(pWorld, pChr->GetPos(), Direction, Id, Count);
+	new CDroppedPickup(pWorld, pChr->GetPos(), Direction, Id, Count, HasData ? &Data : nullptr);
 
 	const char *pName = pItems->GetName(Id);
 	const std::string Msg = LocalizeFormat("Item Drop", "You dropped: {} x{}", Localize(pName, "Item Name"), Count);
@@ -1957,7 +1986,7 @@ void CGameContext::SetupGuestPlayer(int ClientID)
 		// is always available from the New Player Guide page and /help.
 		SendChat(-1, CHAT_ALL, ClientID, Localize("Welcome to LastDay! This is a survival world: explore, gather, craft and keep moving.", "Account"));
 		SendChat(-1, CHAT_ALL, ClientID, Localize("Move with A and D, jump with space, and use the mouse to hook and shoot.", "Menu Help"));
-		SendChat(-1, CHAT_ALL, ClientID, Localize("Open the vote menu for Inventory, Craft, Loadout, Shop, Team and the New Player Guide.", "Menu Help"));
+		SendChat(-1, CHAT_ALL, ClientID, Localize("Open the vote menu for Inventory (equipment is inside it), Craft, Shop, Team and the New Player Guide.", "Menu Help"));
 	}
 	SendChat(-1, CHAT_ALL, ClientID, Localize("Playing as a guest. Use /register <username> <password> to keep your progress on an account.", "Account"));
 }

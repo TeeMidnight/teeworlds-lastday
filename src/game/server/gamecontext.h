@@ -254,8 +254,10 @@ public:
 
 	// remove Count copies of pItemId from the player's inventory and spawn
 	// a CDroppedPickup at the player, thrown with the given initial velocity
-	// (units per tick). Returns false (with a chat message) on failure.
-	bool DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction);
+	// (units per tick). InventorySlot >= 0 drops exactly that stack, which is
+	// how a backpack keeps its contents; -1 uses the first matching stack.
+	// Returns false (with a chat message) on failure.
+	bool DropItem(int ClientID, const char *pItemId, int Count, vec2 Direction, int InventorySlot = -1);
 
 	CCommandManager m_CommandManager;
 
