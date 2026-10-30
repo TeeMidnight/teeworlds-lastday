@@ -1,10 +1,13 @@
 """Sword: hammer-style swing rendered as the ninja weapon.
 
-Mirrors CWeaponSword: hammer damage + 2, no resource harvesting.
+Mirrors CWeaponSword: hammer damage + 2, no resource harvesting and a longer
+reach than the hammer.
 """
 
 
 MELEE_RELOAD_DIVISOR = 3
+# same as CWeaponSword::ReachScale(): the sword reaches 35% further
+SWORD_REACH_SCALE = 1.35
 
 
 def on_fire(ctx):
@@ -14,7 +17,7 @@ def on_fire(ctx):
         ctx.pos,
         ctx.dir,
         extra.default_damage,  # hammer damage + 2
-        ctx.range_scale,
+        ctx.range_scale * SWORD_REACH_SCALE,  # longer than the hammer
         False,  # a sword cannot harvest
         extra.snap_style,  # ninja hit style
         True,  # show the melee hit spark
