@@ -1,12 +1,11 @@
 """Sword: hammer-style swing rendered as the ninja weapon.
 
-Mirrors CWeaponSword: hammer damage + 2, no resource harvesting and a longer
-reach than the hammer.
+Hammer damage + 2, no resource harvesting and a longer reach than the hammer.
 """
 
 
 MELEE_RELOAD_DIVISOR = 3
-# same as CWeaponSword::ReachScale(): the sword reaches 35% further
+# the sword reaches 35% further than the hammer
 SWORD_REACH_SCALE = 1.35
 
 

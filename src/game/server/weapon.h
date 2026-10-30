@@ -18,9 +18,11 @@ inline unsigned WeaponID(const char *pName)
 	return str_quickhash(pName);
 }
 
-// Weapon interface: every weapon lives in its own .cpp, inherits this class and
-// is registered automatically through a static global variable (REGISTER_WEAPON
-// at the bottom of the file) - no explicit include/registration elsewhere.
+// Weapon interface: a native weapon lives in its own .cpp, inherits this class
+// and is registered automatically through a static global variable
+// (REGISTER_WEAPON at the bottom of the file). Most weapons are instead defined
+// by a Python script in data/scripts/weapons and loaded through CScriptedWeapon
+// from data/weapons/*.json.
 class IWeaponInterface
 {
 public:

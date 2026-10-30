@@ -1,4 +1,4 @@
-"""Shotgun: spread burst of pellets, full auto. Mirrors CWeaponShotgun."""
+"""Shotgun: spread burst of pellets, full auto."""
 
 import math
 

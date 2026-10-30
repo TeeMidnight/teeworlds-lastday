@@ -12,8 +12,8 @@ class CCharacter;
 // A weapon whose fire/tick/switch behaviour lives in a PocketPy module under
 // data/scripts/weapons. The class only carries the metadata the rest of the
 // game needs (name, snap style, ammo defaults) and translates the engine calls
-// into SScriptContext callbacks. It is owned by CWeaponManager; the native
-// weapon of the same name stays registered as a fallback.
+// into SScriptContext callbacks. It is owned by CWeaponManager and is the only
+// implementation of the weapon, unless a native class of the same name exists.
 class CScriptedWeapon : public IWeaponInterface
 {
 public:
@@ -36,7 +36,7 @@ public:
 
 	// Loads/reloads the Python module and verifies that it implements on_fire.
 	// Returns false when the script is missing or failed to compile; the caller
-	// then leaves the native weapon in place.
+	// then discards the scripted weapon.
 	bool LoadScript();
 	void ReloadScript();
 

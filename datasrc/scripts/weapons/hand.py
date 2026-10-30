@@ -1,4 +1,4 @@
-"""Hand: the unarmed fallback punch. Mirrors CWeaponHand."""
+"""Hand: the unarmed fallback punch."""
 
 
 MELEE_RELOAD_DIVISOR = 3

@@ -1,4 +1,4 @@
-"""Gun: one projectile per shot. Mirrors the native CWeaponGun."""
+"""Gun: one projectile per shot."""
 
 import lastday
 

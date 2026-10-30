@@ -188,9 +188,10 @@ void CGameController::OnCharacterSpawn(CCharacter *pChr)
 				if(pWeapon && GameServer()->Item()->HasItem(pChr->GetCID(), pWeapon->Name()))
 					pChr->EquipWeaponSlot(Slot++, CItemID::FromName(pWeapon->Name()));
 			}
-			// Scripted-only weapons (flamethrower, flame cannon, ...) are not in
-			// the native registry. A scripted entry that overrides a native name
-			// is already equipped above, so only add the missing names.
+			// Scripted weapons (everything but ninja, and future native
+			// weapons) are not in the native registry. A scripted entry that
+			// overrides a native name is already equipped above, so only add
+			// the missing names.
 			for(int i = 0; i < WeaponManager()->NumScriptedWeapons() && Slot < NUM_WEAPONS; i++)
 			{
 				IWeaponInterface *pWeapon = WeaponManager()->GetScriptedWeaponByIndex(i);

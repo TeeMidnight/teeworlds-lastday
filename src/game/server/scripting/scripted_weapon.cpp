@@ -19,9 +19,8 @@
 
 namespace py = pybind11;
 
-// Server-data damage of the weapon this scripted definition replaces. The
-// Python scripts use it as the fallback for ctx["ammo"]["damage"] == 0 (the
-// native weapon classes do the same with g_pData). Sword and hand have no
+// Server-data damage for this scripted weapon, used by the scripts as the
+// fallback when the consumed ammo carries no damage. Sword and hand have no
 // meaningful entry of their own: the sword renders as ninja but hits like the
 // hammer (hammer damage + 2) and the bare hand always deals 1.
 static int ScriptedWeaponBaseDamage(const char *pName, int SnapStyle)
@@ -103,10 +102,10 @@ bool CScriptedWeapon::LoadScript()
 		return false;
 
 	// A weapon module without on_fire would silently do nothing on every shot;
-	// treat it like a failed load so the native weapon remains in service.
+	// treat it like a failed load so the weapon is not registered.
 	if(!pRuntime->HasFunction(m_Module, "on_fire"))
 	{
-		dbg_msg("weapon", "scripted weapon '%s': '%s' has no on_fire(), falling back to native", m_aName, m_aScript);
+		dbg_msg("weapon", "scripted weapon '%s': '%s' has no on_fire(), weapon disabled", m_aName, m_aScript);
 		m_Module = -1;
 		return false;
 	}
@@ -174,9 +173,8 @@ void CScriptedWeapon::OnWeaponSwitch(CCharacter *pChr)
 
 // ---------------------------------------------------------------------------
 // lastday_weapon: the small engine helper surface the melee weapon scripts
-// need. Keeping the swing in C++ guarantees the Python hammer/hand/sword use
-// exactly the same hit tests, damage attribution and resource rules as the
-// native CWeaponMelee implementation.
+// need. Keeping the swing in C++ guarantees the Python hammer/hand/sword share
+// one implementation of the hit tests, damage attribution and resource rules.
 // ---------------------------------------------------------------------------
 PYBIND11_EMBEDDED_MODULE(lastday_weapon, m)
 {

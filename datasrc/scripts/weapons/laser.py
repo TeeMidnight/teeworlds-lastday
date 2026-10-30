@@ -1,4 +1,4 @@
-"""Laser: hitscan beam, full auto. Mirrors CWeaponLaser."""
+"""Laser: hitscan beam, full auto."""
 
 import lastday
 

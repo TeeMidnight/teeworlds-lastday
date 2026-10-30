@@ -125,7 +125,7 @@ void CWeaponManager::Init()
 IWeaponInterface *CWeaponManager::GetWeapon(unsigned WeaponID)
 {
 	Init();
-	// scripted definitions override the native class of the same name
+	// a scripted definition takes precedence over a native class of the same name
 	CScriptedWeapon **ppScripted = m_ScriptedWeapons.get(WeaponID);
 	if(ppScripted && *ppScripted)
 		return *ppScripted;
@@ -157,7 +157,7 @@ void CWeaponManager::LoadScriptedWeapons(IStorage *pStorage)
 	ClearScriptedWeapons();
 	if(!pStorage)
 	{
-		dbg_msg("weapon", "no storage, keeping native weapons only");
+		dbg_msg("weapon", "no storage, scripted weapons unavailable");
 		return;
 	}
 
@@ -224,7 +224,7 @@ void CWeaponManager::LoadScriptedWeapon(IStorage *pStorage, const char *pDefault
 	const char *pScript = (*pJson)["script"];
 	if(!pName[0] || !pScript[0])
 	{
-		dbg_msg("weapon", "scripted weapon '%s': missing name or script, using native", pPath);
+		dbg_msg("weapon", "scripted weapon '%s': missing name or script, ignored", pPath);
 		return;
 	}
 
@@ -237,7 +237,7 @@ void CWeaponManager::LoadScriptedWeapon(IStorage *pStorage, const char *pDefault
 	CScriptedWeapon *pWeapon = new CScriptedWeapon(pName, pScript, SnapStyle, FullAuto, FireDelay, DefaultAmmo, MaxAmmo);
 	if(!pWeapon->LoadScript())
 	{
-		dbg_msg("weapon", "scripted weapon '%s' disabled, using native: script '%s' failed", pName, pScript);
+		dbg_msg("weapon", "scripted weapon '%s' disabled: script '%s' failed", pName, pScript);
 		delete pWeapon;
 		return;
 	}

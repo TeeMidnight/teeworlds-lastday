@@ -1,4 +1,4 @@
-"""Grenade: explosive projectile, full auto. Mirrors CWeaponGrenade."""
+"""Grenade: explosive projectile, full auto."""
 
 import lastday
 

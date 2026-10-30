@@ -219,9 +219,9 @@ Weapon (`datasrc/weapons/<name>.json`):
 }
 ```
 
-A scripted weapon overrides the native class of the same name and implements
-`on_fire`; `on_tick` and `on_switch` are optional. The native class remains
-as fallback if the script is missing or broken.
+A scripted weapon implements `on_fire`; `on_tick` and `on_switch` are
+optional. Except for the ninja (still native), the script is the weapon's only
+implementation, so a missing or broken script disables that weapon.
 
 Entity (`datasrc/entities/<kind>.json`):
 

@@ -1,6 +1,6 @@
 """Hammer: melee hit and resource harvesting.
 
-The native MeleeSwing performs the same hit test as CWeaponMelee.
+The native MeleeSwing helper performs the hit test.
 """
 
 

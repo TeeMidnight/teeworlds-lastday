@@ -15,10 +15,11 @@ class CScriptedWeapon;
 class IStorage;
 class IWeaponInterface;
 
-// Manages all weapons. Weapons are collected automatically through the static
-// global registrar (REGISTER_WEAPON in weapon.h), keyed by str_quickhash(weapon
-// name); any number of weapons is supported (not limited to the 6 protocol
-// weapons, the visual style is decided by SnapStyle).
+// Manages all weapons. Native weapons are collected automatically through the
+// static global registrar (REGISTER_WEAPON in weapon.h); scripted weapons are
+// loaded from data/weapons/*.json. Both are keyed by str_quickhash(weapon name);
+// any number of weapons is supported (not limited to the 6 protocol weapons,
+// the visual style is decided by SnapStyle).
 // Lookup by weapon id is O(1) through a hash table; a parallel array keeps the
 // registration order for iteration.
 // Global singleton access: WeaponManager().
@@ -30,9 +31,10 @@ class CWeaponManager
 	// registration order, used for iteration (GetWeaponByIndex / NumWeapons)
 	array<IWeaponInterface *> m_apWeaponList;
 
-	// scripted overrides (data/weapons/*.json + data/scripts/weapons/*.py).
-	// They are owned here and consulted before the native static registry, so a
-	// failed script simply leaves the native weapon in service.
+	// scripted weapons (data/weapons/*.json + data/scripts/weapons/*.py).
+	// They are owned here and consulted before the native static registry.
+	// Except for ninja (and any future native weapon) the script is the only
+	// implementation: a missing/broken script disables that weapon.
 	hash_table<unsigned, CScriptedWeapon *, 8> m_ScriptedWeapons;
 	array<CScriptedWeapon *> m_apScriptedWeaponList;
 
@@ -54,9 +56,9 @@ public:
 	int NumWeapons() const { return m_apWeaponList.size(); }
 	void OutputRegisteredWeapons();
 
-	// Loads every data/weapons/*.json, compiles its script and registers the
-	// override. A missing/broken script is logged and skipped, keeping the
-	// native weapon of that name active. Call after CScriptRuntime::Init().
+	// Loads every data/weapons/*.json and compiles its script. A missing/broken
+	// script is logged and skipped (the weapon is then unavailable unless a
+	// native class of that name exists). Call after CScriptRuntime::Init().
 	void LoadScriptedWeapons(IStorage *pStorage);
 	// Re-reads the JSON definitions and re-executes the Python modules.
 	void ReloadScripts();
