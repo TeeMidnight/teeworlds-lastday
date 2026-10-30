@@ -23,12 +23,15 @@ def on_selftest(ctx):
     ctx.result["extra_missing"] = ctx.extra.missing
 
     projectile = ctx.Projectile(None, origin, right, 10, 1, False, -1, 0)
+    fire = ctx.FireParticle(None, origin, right, 10, 1, 0, None, 0.2)
     laser = ctx.Laser(None, origin, right, 100.0, 1)
     health = ctx.HealthDrop(origin, down)
     pickup = ctx.DroppedPickup(origin, origin, "lastday:bandage", 1)
     swing = ctx.MeleeSwing(None, origin, right, 1, 1.0, False, 0, True)
 
     ctx.result["ctor"] = [projectile.id, laser.id, health.id, pickup.id, swing.hits]
+    # no world in the console test: the fire particle must fail cleanly with -1
+    ctx.result["fire_id"] = fire.id
     ctx.result["player_id"] = ctx.Player(3).id
     ctx.result["drop_near"] = ctx.HealthDrop.near(origin, 96.0)
 

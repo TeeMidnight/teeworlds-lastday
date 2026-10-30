@@ -6,6 +6,7 @@
 #include <game/localization.h>
 #include <game/server/entities/character.h>
 #include <game/server/entities/drill.h>
+#include <game/server/entities/fire_particle.h>
 #include <game/server/entities/laser.h>
 #include <game/server/entities/projectile.h>
 #include <game/server/gamecontext.h>
@@ -109,6 +110,34 @@ static int CreateProjectileScript(int Owner, float x, float y, float vx, float v
 {
 	CProjectile *pProjectile = CreateProjectileScriptPtr(Owner, x, y, vx, vy, Span, Damage, Explosive, SoundImpact, Weapon, -1);
 	return pProjectile ? pProjectile->GetID() : -1;
+}
+
+// A fire puff is a world-owned entity, so it resolves its world the same way a
+// scripted projectile does: a real client uses that client's world, a negative
+// owner (a campfire) uses the callback's world.
+static int CreateFireParticleScript(int Owner, float x, float y, float vx, float vy, int Span, int Damage, int Weapon, int IgnoreEntityID, float Gravity)
+{
+	CGameWorld *pWorld = nullptr;
+	if(Owner >= 0)
+	{
+		CCharacter *pChr = Character(Owner);
+		if(!pChr)
+			return -1;
+		pWorld = pChr->GameWorld();
+	}
+	else
+	{
+		if(Owner != PLAYER_TEAM_HOSTILE && Owner != PLAYER_TEAM_FRIENDLY &&
+			Owner != PLAYER_TEAM_RED && Owner != PLAYER_TEAM_BLUE)
+			return -1;
+		pWorld = ActiveWorld();
+	}
+	if(!pWorld || !ValidPos(x, y))
+		return -1;
+
+	const int Ignore = IgnoreEntityID >= 0 && pWorld->FindEntityByID(IgnoreEntityID) ? IgnoreEntityID : -1;
+	CFireParticle *pParticle = new CFireParticle(pWorld, vec2(x, y), vec2(vx, vy), Owner, Span, Damage, Weapon, Ignore, Gravity);
+	return pParticle->GetID();
 }
 
 static int CreateLaserScript(int Owner, float x, float y, float dx, float dy, float Reach, int Damage)
@@ -390,6 +419,14 @@ PYBIND11_EMBEDDED_MODULE(lastday, m)
 	{
 		CProjectile *pProjectile = CreateProjectileScriptPtr(Owner, x, y, vx, vy, Span, Damage, Explosive, SoundImpact, Weapon, IgnoreEntityID);
 		return pProjectile ? pProjectile->GetID() : -1;
+	});
+
+	// A fire puff with its own velocity, gravity and hit test. It snaps as a
+	// hammer projectile so the stock client still draws the bullet-trail
+	// particle while the server moves the point.
+	m.def("create_fire_particle", [](int Owner, float x, float y, float vx, float vy, int Span, int Damage, int Weapon, int IgnoreEntityID, float Gravity)
+	{
+		return CreateFireParticleScript(Owner, x, y, vx, vy, Span, Damage, Weapon, IgnoreEntityID, Gravity);
 	});
 
 	m.def("create_laser", [](int Owner, float x, float y, float dx, float dy, float Reach, int Damage)

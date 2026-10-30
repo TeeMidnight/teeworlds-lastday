@@ -2,14 +2,14 @@
 #
 # The stock 0.7 client draws a WEAPON_HAMMER projectile without a projectile
 # sprite, but it still emits a bullet-trail particle for every live projectile.
-# A handful of short-lived stationary hammer projectiles therefore reads as a
-# puff of embers. CProjectile::GetPos has no speed for WEAPON_HAMMER in both the
-# client and the server, so the particles are placed along the cone instead of
-# being given a velocity.
+# The fire jet is a cloud of those hammer-type particles: every puff gets its
+# own angle and speed, gravity bends it into an arc, and a puff that hits the
+# ground lands and fades out instead of floating forever.
 #
 # Wall clipping: lastday.world_test_line sweeps a projectile-sized box along
-# the aim ray, so the cone is shortened to the first solid tile and a puff is
-# only spawned when its own line from the muzzle is clear.
+# the aim ray, so the muzzle clearance is known before the jet starts. The
+# server-side CFireParticle then sweeps its own movement against walls and
+# stops on the first solid tile.
 
 import math
 
@@ -20,31 +20,37 @@ WEAPON_HAMMER = 0
 MUZZLE_OFFSET = 0.75
 LINE_RADIUS = 5.0
 CLEAR_BISECTIONS = 8
+MUZZLE_START = 4.0
+MIN_START = 1.0
 
 SOUND_HAMMER_FIRE = 3
 SOUND_SHOTGUN_FIRE = 1
 
-# Per-weapon shape. The ammo item supplies the base pellet count and damage;
-# these values add the weapon's own character on top.
+# Per-weapon shape. The ammo item supplies the base pellet count, damage and
+# lifetime; these values add the weapon's own character on top. "range" is the
+# ray length used to find the first wall (and the base for range_scale); the
+# actual reach comes from "speed" and "gravity".
 PROFILES = {
     "flamethrower": {
         "range": 240.0,
-        "min_range": 36.0,
         "half_angle": 0.20,
         "extra_pellets": 0,
         "damage_bonus": 0,
-        "span_min": 8,
-        "span_max": 12,
+        "speed": 14.0,
+        "gravity": 0.16,
+        "span_min": 24,
+        "span_max": 36,
         "sound": SOUND_HAMMER_FIRE,
     },
     "flame_cannon": {
         "range": 340.0,
-        "min_range": 48.0,
         "half_angle": 0.30,
         "extra_pellets": 8,
         "damage_bonus": 1,
-        "span_min": 10,
-        "span_max": 16,
+        "speed": 17.0,
+        "gravity": 0.13,
+        "span_min": 30,
+        "span_max": 44,
         "sound": SOUND_SHOTGUN_FIRE,
     },
 }
@@ -86,18 +92,19 @@ def _clear_range(ctx, start, direction, maximum):
     return max(0.0, low - LINE_RADIUS)
 
 
-def _spawn_puff(ctx, pos, damage, span):
-    # The third argument is the velocity. A hammer projectile ignores it on
-    # both sides, so (0, 0) documents that the puff is a stationary particle.
-    ctx.Projectile(
+def _spawn_puff(ctx, pos, velocity, damage, span, gravity):
+    # A dedicated server-side entity: it snaps as a hammer projectile (the
+    # client draws its ember trail), but owns the swept hit test and the
+    # velocity/gravity simulation.
+    ctx.FireParticle(
         ctx.player,
         pos,
-        ctx.Vec2(0.0, 0.0),
+        velocity,
         span,
         damage,
-        False,
-        -1,
         WEAPON_HAMMER,
+        None,
+        gravity,
     )
 
 
@@ -124,29 +131,26 @@ def on_fire(ctx):
         lastday.sound(ctx.pos.x, ctx.pos.y, profile["sound"])
         return 0
 
-    # If the wall is closer than the nominal minimum range, pull the cone in so
-    # the flame still appears at the wall instead of leaving a gap.
-    minimum = min(profile["min_range"], max(8.0, clear * 0.5))
-
     pellets = max(1, ammo.projectiles + profile["extra_pellets"])
     damage = max(1, (ammo.damage or extra.default_damage) + profile["damage_bonus"])
     base_angle = math.atan2(direction.y, direction.x)
-    usable = max(0.0, min(clear, maximum) - minimum)
     life_scale = ammo.lifetime if ammo.lifetime > 0.0 else 1.0
+    speed_scale = (ammo.speed if ammo.speed > 0.0 else 1.0) * range_scale
+    # Start the jet just ahead of the muzzle, but never inside the wall the
+    # player is already pressed against.
+    start_distance = min(MUZZLE_START, max(MIN_START, clear * 0.5))
 
-    for index in range(pellets):
-        # The first puff always sits just in front of the muzzle (a muzzle
-        # flash); the rest spread evenly through the cone.
-        if index == 0:
-            distance = minimum
-        else:
-            distance = minimum + usable * _random01()
-        spread = profile["half_angle"] * (0.35 + 0.65 * (distance / maximum))
+    for _ in range(pellets):
+        # A flamethrower is a cone of independent embers, not one rigid stream:
+        # each puff picks its own angle and speed, then gravity drops it.
+        spread = profile["half_angle"] * (0.35 + 0.65 * _random01())
         angle = base_angle + (_random01() * 2.0 - 1.0) * spread
-        px = muzzle.x + math.cos(angle) * distance
-        py = muzzle.y + math.sin(angle) * distance - _random01() * 10.0
-        if _blocked(ctx, muzzle, ctx.Vec2(px, py)):
+        speed = profile["speed"] * speed_scale * (0.75 + 0.5 * _random01())
+        offset = ctx.Vec2(math.cos(angle), math.sin(angle)) * start_distance
+        start = ctx.Vec2(muzzle.x + offset.x, muzzle.y + offset.y)
+        if _blocked(ctx, muzzle, start):
             continue
+        velocity = ctx.Vec2(math.cos(angle) * speed, math.sin(angle) * speed)
 
         span = int(
             (
@@ -157,7 +161,7 @@ def on_fire(ctx):
         )
         if span < 2:
             span = 2
-        _spawn_puff(ctx, ctx.Vec2(px, py), damage, span)
+        _spawn_puff(ctx, start, velocity, damage, span, profile["gravity"])
 
     lastday.sound(ctx.pos.x, ctx.pos.y, profile["sound"])
     return 0

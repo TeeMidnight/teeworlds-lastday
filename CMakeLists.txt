@@ -878,6 +878,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/drill.h
   entities/dropped_pickup.cpp
   entities/dropped_pickup.h
+  entities/fire_particle.cpp
+  entities/fire_particle.h
   entities/laser.cpp
   entities/laser.h
   entities/monsterentity.cpp

@@ -91,6 +91,18 @@ def create_projectile_ignoring(
     weapon: int,
     ignore_entity_id: int,
 ) -> int: ...
+def create_fire_particle(
+    owner: int,
+    x: float,
+    y: float,
+    vx: float,
+    vy: float,
+    span: int,
+    damage: int,
+    weapon: int,
+    ignore_entity_id: int,
+    gravity: float,
+) -> int: ...
 def create_laser(
     owner: int,
     x: float,

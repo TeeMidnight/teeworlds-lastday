@@ -46,6 +46,8 @@ public:
 		ENTTYPE_WORM,
 		// generic scripted prop (data/entities/*.json + data/scripts/entities/*.py)
 		ENTTYPE_SCRIPTED,
+		// a stationary fire puff snapped as a WEAPON_HAMMER projectile
+		ENTTYPE_FIREPARTICLE,
 		NUM_ENTTYPES,
 
 		ENTFLAG_HITABLE = 1,

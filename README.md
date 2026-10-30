@@ -321,17 +321,22 @@ directories if they are still present.
 
 Fire content
 ------------
-Flame weapons are built from the one projectile type the stock 0.7 client draws
-without a bullet sprite: `WEAPON_HAMMER`. The client still emits a bullet-trail
-particle for every live projectile of that type, and `CProjectile` gives it no
-velocity on either side, so a short-lived stationary puff reads as an ember. The
-flamethrower spawns a cone of those puffs; the flame cannon is the heavy,
-wider, slower-firing variant. Both eat `fuel_canister` ammo.
+Flame weapons are built from a dedicated fire particle,
+`CFireParticle`, which snaps as the one projectile type the stock 0.7 client
+draws without a bullet sprite: `WEAPON_HAMMER`. The client still emits a
+bullet-trail particle for every live projectile of that type, so a flying puff
+reads as an ember. Each puff keeps its own velocity and is pulled down by
+gravity: the spray arcs, stops on the first solid tile and then lingers there
+for a short fade before it disappears. The flamethrower spawns a cone of those
+puffs; the flame cannon is the heavy, wider, slower-firing variant. Both eat
+`fuel_canister` ammo.
 
 The same particle backs the `campfire` scripted prop. Its base is two
 crossed lasers (the logs); each emission advances a phase from the top ends of
 that cross, so a tall central flame visibly grows from the bottom, widest
-at the base and tapering to the tip. It emits friendly puffs (owner sentinel
+at the base and tapering to the tip. Its puffs stay stationary (zero velocity
+and zero gravity), so the phase wave, not physics, controls the silhouette. It
+emits friendly puffs (owner sentinel
 `-4`) on a short timer, so it burns hostile bots but never players, friendly
 units or neutral units. It is a proper building:
 `spawn_owned` records the placer's account, the lock and the saved owner, and

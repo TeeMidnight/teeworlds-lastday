@@ -67,10 +67,11 @@ Useful fields:
   freeing, because the same numeric id may be live on two different floors.
 - Output flags: `ctx.reload_ticks`, `ctx.destroy`; `ctx.consumed` is still
   honored by the bot fallback and older item scripts.
-- Constructor classes: `ctx.Projectile`, `ctx.Laser`, `ctx.HealthDrop`,
-  `ctx.DroppedPickup`, `ctx.MeleeSwing`. Their constructors call the existing
-  C++ `new CProjectile(...)` / `new CLaser(...)` / etc. The returned object
-  only carries the entity id; the game world owns and deletes the C++ entity.
+- Constructor classes: `ctx.Projectile`, `ctx.FireParticle`, `ctx.Laser`,
+  `ctx.HealthDrop`, `ctx.DroppedPickup`, `ctx.MeleeSwing`. Their constructors
+  call the existing C++ `new CProjectile(...)` / `new CFireParticle(...)` /
+  `new CLaser(...)` / etc. The returned object only carries the entity id; the
+  game world owns and deletes the C++ entity.
 
 ```python
 def on_fire(ctx):
@@ -86,12 +87,21 @@ of the damage sentinels (`-3` hostile, `-4` friendly) as the owner. The
 projectile then spawns into the callback's active world and its hits follow the
 same sentinel rules as a bot's hits: a friendly projectile (used by the
 campfire) damages hostile bots but never players, friendly units or neutral
-units, while a hostile one hurts everyone. The projectile still uses the normal
-projectile type, so `WEAPON_HAMMER` (0) is the stationary ember particle.
-A scripted prop that emits flames can pass its own entity id to
-`create_projectile_ignoring(...)`: the projectile then never hits that prop,
-so a central flame can pass through the fire's own hitbox instead of being
-absorbed at the base.
+units, while a hostile one hurts everyone.
+
+For a flame puff, use
+`ctx.FireParticle(owner, pos, velocity, span, damage, weapon, ignore, gravity)`.
+It snaps as the hammer projectile the client renders as an ember trail.
+`velocity` is in world units per tick and `gravity` in units per tick squared;
+the puff sweeps its movement against hittable entities, stops on the first
+solid tile and then lingers for a short fade before it disappears. A puff with
+zero velocity and zero gravity (the campfire) uses a point hit test instead.
+`ignore` names an entity the puff must never hit (the campfire passes its own
+id), and the `WEAPON_HAMMER` type is what the client understands.
+
+`create_projectile_ignoring(...)` remains available for a moving projectile
+that must pass through one entity; a flame puff should use the `ignore`
+argument of `FireParticle` instead.
 
 `ctx["player"]` etc. still work as a compatibility shim for older scripts and
 return the primitive id/name; new scripts should use the class attributes.

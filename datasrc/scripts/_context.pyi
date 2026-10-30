@@ -172,6 +172,23 @@ class Projectile:
     def __repr__(self) -> str: ...
 
 
+class FireParticle:
+    id: int
+
+    def __init__(
+        self,
+        owner: Union[int, Player, None],
+        pos: Vec2Like,
+        velocity: Vec2Like,
+        span: int,
+        damage: int,
+        weapon: int = -1,
+        ignore: Union[int, "Entity", None] = None,
+        gravity: float = 0.0,
+    ) -> None: ...
+    def __repr__(self) -> str: ...
+
+
 class Laser:
     id: int
 
@@ -254,6 +271,7 @@ class Context:
     Item: type[Item]
     Buff: type[Buff]
     Projectile: type[Projectile]
+    FireParticle: type[FireParticle]
     Laser: type[Laser]
     HealthDrop: type[HealthDrop]
     DroppedPickup: type[DroppedPickup]

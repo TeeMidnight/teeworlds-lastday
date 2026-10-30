@@ -1,17 +1,21 @@
 # Campfire: a persistent fire prop built from the generic scripted entity.
 #
 # The base is drawn with two crossed snapshot lasers (the logs). The flames are
-# intentionally made of WEAPON_HAMMER
+# intentionally made of CFireParticle entities that snap as WEAPON_HAMMER
 # projectiles: the stock client draws no projectile sprite for that type but
 # still emits its bullet trail particle for every live projectile, so a stream
-# of short-lived stationary puffs reads as embers. They are spawned with
-# PLAYER_TEAM_FRIENDLY as the owner, which is the engine sentinel that hurts
+# of short-lived stationary puffs reads as embers. The puffs are spawned with
+# zero velocity and zero gravity: the phase wave below, not physics, shapes the
+# flame, and a stationary puff uses CFireParticle's point hit test. They are
+# spawned with PLAYER_TEAM_FRIENDLY as the owner, which is the engine sentinel
+# that hurts
 # hostile bots but never players, friendly units or neutral units: a base
-# campfire should not cook its own owner.
+# campfire should not cook its own owner. CFireParticle owns the point hit
+# test, so a stationary puff can actually apply its damage.
 #
 # The puffs are emitted as a rising wave: each emission advances one phase from
 # the base outward, so the flames visibly grow from the bottom of the fire. The
-# wave is a single central cone, not two side jets; each projectile names the
+# wave is a single central cone, not two side jets; each puff names the
 # campfire itself as its ignore target so the flame can pass through the prop's
 # own hitbox without being absorbed at the base.
 
@@ -143,7 +147,11 @@ def _spawn_puff(ctx, state, t, wave):
         return
 
     span = PUFF_SPAN_MIN + (lastday.random_int() % (PUFF_SPAN_MAX - PUFF_SPAN_MIN + 1))
-    lastday.create_projectile_ignoring(
+    # A dedicated point entity: it snaps like the stationary hammer projectile
+    # for the ember trail, but does its own point hit test so the flame can
+    # damage. The campfire's wave already animates the flame, so these puffs
+    # stay still: zero velocity and zero gravity keep that silhouette.
+    lastday.create_fire_particle(
         PLAYER_TEAM_FRIENDLY,
         x,
         y,
@@ -151,10 +159,9 @@ def _spawn_puff(ctx, state, t, wave):
         0.0,
         span,
         max(1, int(state["damage"])),
-        False,
-        -1,
         WEAPON_HAMMER,
         int(ctx.entity.id),
+        0.0,
     )
 
 

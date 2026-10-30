@@ -28,6 +28,7 @@
 #include "entities/container.h"
 #include "entities/drill.h"
 #include "entities/dropped_pickup.h"
+#include "entities/fire_particle.h"
 #include "entities/laser.h"
 #include "entities/projectile.h"
 #include "entities/resource.h"
@@ -1384,6 +1385,15 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 	for(CGameWorld::TypeRange r = m_apPlayers[ClientID]->GameWorld()->DoTypeRange(CGameWorld::ENTTYPE_LASER); !r.empty(); r.pop_front())
 	{
 		CLaser *p = static_cast<CLaser *>(r.front());
+		if(p->GetOwner() == ClientID)
+			p->LoseOwner();
+	}
+
+	// the short-lived fire puffs carry the same client id; they must not credit
+	// or damage whoever receives the slot next
+	for(CGameWorld::TypeRange r = m_apPlayers[ClientID]->GameWorld()->DoTypeRange(CGameWorld::ENTTYPE_FIREPARTICLE); !r.empty(); r.pop_front())
+	{
+		CFireParticle *p = static_cast<CFireParticle *>(r.front());
 		if(p->GetOwner() == ClientID)
 			p->LoseOwner();
 	}

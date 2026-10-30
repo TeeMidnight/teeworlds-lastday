@@ -346,6 +346,25 @@ class Projectile:
         return "Projectile(%d)" % self.id
 
 
+class FireParticle:
+    """A fire puff with velocity, gravity and its own hit test.
+
+    The C++ entity snaps as a hammer projectile so the stock client still
+    draws the ember trail. It deals its damage once; when it lands it keeps
+    burning in place for a short fade before it disappears.
+    """
+
+    def __init__(self, owner, pos, velocity, span, damage, weapon=-1, ignore=None, gravity=0.0):
+        p = _as_vec(pos)
+        v = _as_vec(velocity)
+        self.id = lastday.create_fire_particle(
+            _as_id(owner), p.x, p.y, v.x, v.y,
+            int(span), int(damage), int(weapon), _as_id(ignore), float(gravity))
+
+    def __repr__(self):
+        return "FireParticle(%d)" % self.id
+
+
 class Laser:
     """A C++ CLaser created through its constructor."""
 
@@ -437,6 +456,7 @@ class Context:
         self.Item = Item
         self.Buff = Buff
         self.Projectile = Projectile
+        self.FireParticle = FireParticle
         self.Laser = Laser
         self.HealthDrop = HealthDrop
         self.DroppedPickup = DroppedPickup
@@ -512,6 +532,7 @@ try:
 
     _host.Vec2 = Vec2
     _host.Projectile = Projectile
+    _host.FireParticle = FireParticle
     _host.Laser = Laser
     _host.HealthDrop = HealthDrop
     _host.DroppedPickup = DroppedPickup
