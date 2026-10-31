@@ -1176,6 +1176,11 @@
 			"tr": "{}. {}（{}）"
 		},
 		{
+			"context": "Menu Trade",
+			"or": "{}. {} (offline) ({})",
+			"tr": "{}. {}（离线）（{}）"
+		},
+		{
 			"context": "Item Name",
 			"or": "Bandage",
 			"tr": "绷带"

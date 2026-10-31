@@ -289,6 +289,11 @@ public:
 	class CCharacter *GetPlayerChar(int ClientID);
 	// localization language of a client, or the server default
 	int LanguageOf(int ClientID) const;
+	// Name to show for an account: the live server name while the account is
+	// connected, otherwise the nickname saved with its profile (the name it last
+	// played under), then the account name and finally the UUID. Used by teams
+	// and shop listings so an offline owner is still identifiable.
+	const char *AccountName(const Uuid &Account, char *pBuf, int Size) const;
 
 	int m_LockTeams;
 

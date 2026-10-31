@@ -204,6 +204,12 @@ NPC shelves.
   orders. Clicking the price row of a buy order removes the package from the
   player's inventory and credits the G in one step; if either side fails, the
   items are put back.
+- Player listings are grouped by seller account, not by the current client
+  slot, so an offline seller keeps their own section instead of every offline
+  listing collapsing into one `(offline)` bucket. The header names the seller
+  with their live name while connected and with the nickname from their last
+  session otherwise, using the same resolution as offline team members; the
+  `(offline)` marker says which one it is.
 - Money pickups are batched per player over half a second, so a scattered pile
   produces one `+N G` chat notice instead of a line per coin.
 

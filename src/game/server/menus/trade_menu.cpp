@@ -13,14 +13,14 @@
 
 #include "item_menu.h"
 
-// A shop provider's stable key for the "TRADEOPEN" command. Listings of one
-// seller share a key; offline sellers fall into one "(offline)" group.
-static void TradeProviderKey(int Seller, char *pBuf, int Size)
+// A shop provider's stable key for the "TRADEOPEN" command. Listings are
+// grouped by seller account, so an offline seller keeps their own section
+// instead of sharing one "(offline)" bucket with every other seller.
+static void TradeProviderKey(const Uuid &SellerAccount, char *pBuf, int Size)
 {
-	if(Seller >= 0)
-		str_format(pBuf, Size, "P%d", Seller);
-	else
-		str_copy(pBuf, "POFF", Size);
+	char aUuid[UUID_MAXSTRSIZE];
+	format_uuid(SellerAccount, aUuid, sizeof(aUuid));
+	str_format(pBuf, Size, "A%s", aUuid);
 }
 
 bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGameMenu *pMenu, void *pUserData)
@@ -118,13 +118,13 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			for(int k = 0; k < i && !Seen; k++)
 			{
 				const CTradeSystem::SListing *pPrev = pTrade->ListingAt(k);
-				Seen = pPrev && pPrev->m_Seller == pListing->m_Seller;
+				Seen = pPrev && pPrev->m_SellerAccount == pListing->m_SellerAccount;
 			}
 			if(Seen)
 				continue;
 
-			char aKey[16];
-			TradeProviderKey(pListing->m_Seller, aKey, sizeof(aKey));
+			char aKey[UUID_MAXSTRSIZE + 2];
+			TradeProviderKey(pListing->m_SellerAccount, aKey, sizeof(aKey));
 			const bool Open = str_comp(pOpen, aKey) == 0;
 
 			// count the offers so the header can show the merchant's size
@@ -132,16 +132,24 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			for(int k = 0; k < pTrade->NumListings(); k++)
 			{
 				const CTradeSystem::SListing *pOther = pTrade->ListingAt(k);
-				if(pOther && pOther->m_Seller == pListing->m_Seller)
+				if(pOther && pOther->m_SellerAccount == pListing->m_SellerAccount)
 					Offered++;
 			}
 
-			const char *pSeller = pListing->m_Seller >= 0 ? pMenu->Server()->ClientName(pListing->m_Seller) : Localize("(offline)", "Menu Trade");
+			// the seller's live name while connected, otherwise the nickname from
+			// their last session; the account is the identity, never the slot
+			char aSellerName[128];
+			pMenu->GameServer()->AccountName(pListing->m_SellerAccount, aSellerName, sizeof(aSellerName));
+			const bool Online = pListing->m_Seller >= 0;
 			// the ordinal keeps every header unique: the client looks an option
 			// up by its displayed text, so duplicate names must not collide
-			const std::string Head = LocalizeFormat("Menu Trade", "{}. {} ({})", ++ProviderIndex, pSeller, Offered);
+			std::string Head;
+			if(Online)
+				Head = LocalizeFormat("Menu Trade", "{}. {} ({})", ++ProviderIndex, aSellerName, Offered);
+			else
+				Head = LocalizeFormat("Menu Trade", "{}. {} (offline) ({})", ++ProviderIndex, aSellerName, Offered);
 			OpenFound = OpenFound || Open;
-			char aCmd[32];
+			char aCmd[UUID_MAXSTRSIZE + 16];
 			str_format(aCmd, sizeof(aCmd), "TRADEOPEN %s", aKey);
 			pMenu->AddOption(Head.c_str(), aCmd, Open ? "▾" : "▸");
 			Any = true;
@@ -151,7 +159,7 @@ bool CGameMenu::MenuTrade(int ClientID, CCallVoteStatus &VoteStatus, class CGame
 			for(int k = 0; k < pTrade->NumListings(); k++)
 			{
 				const CTradeSystem::SListing *pOther = pTrade->ListingAt(k);
-				if(!pOther || pOther->m_Seller != pListing->m_Seller)
+				if(!pOther || pOther->m_SellerAccount != pListing->m_SellerAccount)
 					continue;
 				// both sides from the merchant's point of view: 收购 ("Buy")
 				// is what the merchant takes from the buyer, 给予 ("Give") is

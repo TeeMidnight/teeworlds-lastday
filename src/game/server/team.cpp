@@ -254,47 +254,13 @@ int CTeamSystem::ClientIDFor(const Uuid &Account) const
 
 const char *CTeamSystem::MemberName(const Uuid &Account, char *pBuf, int Size) const
 {
-	if(!pBuf || Size <= 0)
+	if(!m_pGameServer)
+	{
+		if(pBuf && Size > 0)
+			pBuf[0] = '\0';
 		return "";
-	pBuf[0] = '\0';
-	if(Account == UUID_ZEROED)
-	{
-		str_copy(pBuf, "?", Size);
-		return pBuf;
 	}
-
-	const int ClientID = ClientIDFor(Account);
-	if(ClientID >= 0)
-	{
-		str_copy(pBuf, m_pGameServer->Server()->ClientName(ClientID), Size);
-		return pBuf;
-	}
-
-	if(m_pDatabase)
-	{
-		// The nickname is captured with the rest of the player profile on every
-		// save, so this is the name the account last played under.
-		if(m_pDatabase->GetJson(Account, CJsonPath().Key("nickname"), pBuf, Size) && pBuf[0])
-			return pBuf;
-
-		// Profiles written before the nickname field existed still have the
-		// account name; a guest name is stored as "@guest:<nickname>".
-		CDatabase::SPlayerData Row;
-		if(m_pDatabase->LoadByUuid(Account, Row) && Row.m_aUsername[0])
-		{
-			const char *pName = Row.m_aUsername;
-			if(str_startswith(pName, "@guest:"))
-				pName += str_length("@guest:");
-			if(pName[0])
-			{
-				str_copy(pBuf, pName, Size);
-				return pBuf;
-			}
-		}
-	}
-
-	format_uuid(Account, pBuf, Size);
-	return pBuf;
+	return m_pGameServer->AccountName(Account, pBuf, Size);
 }
 
 int CTeamSystem::OnlineMemberCount(const SGameTeam *pTeam) const
