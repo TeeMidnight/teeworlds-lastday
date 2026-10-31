@@ -466,6 +466,126 @@ bool CItemSystem::AddToInventory(CInventory &Inventory, const CItemID &Id, int C
 	return true;
 }
 
+int CItemSystem::InventoryRoom(const CInventory &Inventory, const CItemID &Id, const SItemDef *pDef, int Limit)
+{
+	if(Id.IsZero() || Limit <= 0)
+		return 0;
+	const int MaxStack = MaxStackFor(pDef);
+	int Room = 0;
+	for(int i = 0; i < CInventory::MAX_ITEMS && Room < Limit; i++)
+	{
+		const CInventory::SItem &Item = Inventory.m_aItems[i];
+		int Add = 0;
+		if(Item.m_Id == Id && Item.m_Count > 0 && !Item.m_Data.m_HasData)
+			Add = MaxStack > 0 ? maximum(0, MaxStack - Item.m_Count) : Limit - Room;
+		else if(Inventory.IsEmpty(i))
+			Add = MaxStack > 0 ? MaxStack : Limit - Room;
+		Room += minimum(Add, Limit - Room);
+	}
+	return Room;
+}
+
+int CItemSystem::NestedRoom(const SItemData &Data, int Slots, const CItemID &Id, const SItemDef *pDef, int Limit)
+{
+	if(Id.IsZero() || Limit <= 0 || Slots <= 0)
+		return 0;
+	// a backpack cannot be stored inside another backpack
+	if(pDef && pDef->m_BackpackSlots > 0)
+		return 0;
+	Slots = minimum(Slots, (int) MAX_ITEM_DATA_SLOTS);
+	const int MaxStack = MaxStackFor(pDef);
+	int Room = 0;
+	for(int i = 0; i < Slots && Room < Limit; i++)
+	{
+		const SItemStack &Slot = Data.m_aSlots[i];
+		if(Slot.m_Id != Id || Slot.m_Count <= 0)
+			continue;
+		const int Add = MaxStack > 0 ? maximum(0, MaxStack - Slot.m_Count) : Limit - Room;
+		Room += minimum(Add, Limit - Room);
+	}
+	for(int i = 0; i < Slots && Room < Limit; i++)
+	{
+		const SItemStack &Slot = Data.m_aSlots[i];
+		if(!Slot.m_Id.IsZero() && Slot.m_Count > 0)
+			continue;
+		const int Add = MaxStack > 0 ? MaxStack : Limit - Room;
+		Room += minimum(Add, Limit - Room);
+	}
+	return Room;
+}
+
+bool CItemSystem::AddToInventoryOrBackpacks(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef, int *pMainAdded, int *pBagAdded)
+{
+	if(pMainAdded)
+		*pMainAdded = 0;
+	if(pBagAdded)
+		*pBagAdded = 0;
+	if(Id.IsZero() || Count <= 0)
+		return false;
+
+	// build the whole result on a copy: a stack that only partly fits must not
+	// leave the inventory half-changed
+	CInventory Result = Inventory;
+	int Remaining = Count;
+
+	// the main inventory is the live one used by use/equip/craft, so keep it
+	// first; only the part that does not fit spills into the bags
+	const int MainAdd = InventoryRoom(Result, Id, pDef, Remaining);
+	if(MainAdd > 0)
+	{
+		if(!AddToInventory(Result, Id, MainAdd, pDef))
+			return false;
+		Remaining -= MainAdd;
+		if(pMainAdded)
+			*pMainAdded = MainAdd;
+	}
+
+	// backpacks do not nest, so a backpack item can only use the main inventory
+	if(Remaining > 0 && (!pDef || pDef->m_BackpackSlots <= 0))
+	{
+		for(int i = 0; i < CInventory::MAX_ITEMS && Remaining > 0; i++)
+		{
+			CInventory::SItem &Bag = Result.m_aItems[i];
+			if(Result.IsEmpty(i) || !IsBackpack(Bag.m_Id))
+				continue;
+			const int Slots = GetBackpackSlots(Bag.m_Id);
+			const int BagAdd = NestedRoom(Bag.m_Data, Slots, Id, pDef, Remaining);
+			if(BagAdd <= 0)
+				continue;
+			SItemData NewData = Bag.m_Data;
+			if(!AddToNested(NewData, Slots, Id, BagAdd, pDef))
+				return false;
+			Bag.m_Data = NewData;
+			Remaining -= BagAdd;
+			if(pBagAdded)
+				*pBagAdded += BagAdd;
+		}
+	}
+
+	if(Remaining > 0)
+		return false;
+	Inventory = Result;
+	return true;
+}
+
+int CItemSystem::CountOwned(const CInventory &Inventory, const CItemID &Id) const
+{
+	if(Id.IsZero())
+		return 0;
+	int Total = Inventory.Get(Id);
+	for(int i = 0; i < CInventory::MAX_ITEMS; i++)
+	{
+		const CInventory::SItem &Bag = Inventory.m_aItems[i];
+		if(Inventory.IsEmpty(i) || !IsBackpack(Bag.m_Id))
+			continue;
+		const int Slots = minimum(GetBackpackSlots(Bag.m_Id), (int) MAX_ITEM_DATA_SLOTS);
+		for(int n = 0; n < Slots; n++)
+			if(Bag.m_Data.m_aSlots[n].m_Id == Id && Bag.m_Data.m_aSlots[n].m_Count > 0)
+				Total += Bag.m_Data.m_aSlots[n].m_Count;
+	}
+	return Total;
+}
+
 bool CItemSystem::AddItem(int ClientID, const CItemID &Id, int Count, bool SilentFail)
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
@@ -480,13 +600,13 @@ bool CItemSystem::AddItem(int ClientID, const CItemID &Id, int Count, bool Silen
 
 	CInventory &Inventory = m_aInventories[ClientID];
 	const SItemDef *pDef = m_Items.get(Id.Value());
-	if(!AddToInventory(Inventory, Id, Count, pDef))
+	if(!AddToInventoryOrBackpacks(Inventory, Id, Count, pDef))
 	{
 		if(!SilentFail)
 			m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("No inventory space!", "Item Pickup"));
 		return false;
 	}
-	const int Now = Inventory.Get(Id);
+	const int Now = CountOwned(Inventory, Id);
 
 	const char *pName = GetName(Id);
 	const std::string Msg = LocalizeFormat("Item Pickup", "You got: {} x{} ({})",
@@ -513,7 +633,7 @@ bool CItemSystem::AddItemWithData(int ClientID, const CItemID &Id, int Count, co
 			m_pGameServer->SendChat(-1, CHAT_WHISPER, ClientID, Localize("No inventory space!", "Item Pickup"));
 		return false;
 	}
-	const int Now = Inventory.Get(Id);
+	const int Now = CountOwned(Inventory, Id);
 
 	const char *pName = GetName(Id);
 	const std::string Msg = LocalizeFormat("Item Pickup", "You got: {} x{} ({})",

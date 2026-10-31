@@ -163,6 +163,12 @@ both a pickup and a server restart. `data` is also why a backpack cannot be
 stored in a container or listed in the shop: those records only carry an item id
 and a count.
 
+Picking something up fills the main inventory first, because that is what use,
+equip, craft and trade read. When the main inventory cannot take the whole
+stack, the rest automatically goes into the first owned backpack with room, so
+a full inventory does not leave loot on the ground while a bag is empty. The
+pickup notice reports the total owned count across the inventory and its bags.
+
 Mobs, factions and dialogue
 --------------------------
 Monsters are content, not C++ classes. One file per creature lives in

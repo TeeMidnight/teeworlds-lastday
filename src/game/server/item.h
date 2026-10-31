@@ -202,6 +202,16 @@ private:
 	bool PlaceContainer(int ClientID, const CItemID &Id);
 	// add Count copies into a backpack grid without chat/logging
 	static bool AddToNested(SItemData &Data, int Slots, const CItemID &Id, int Count, const SItemDef *pDef);
+	// how many more copies of Id fit in the main inventory, capped at Limit
+	static int InventoryRoom(const CInventory &Inventory, const CItemID &Id, const SItemDef *pDef, int Limit);
+	// how many more copies fit in one backpack grid, capped at Limit
+	static int NestedRoom(const SItemData &Data, int Slots, const CItemID &Id, const SItemDef *pDef, int Limit);
+	// Add Count copies, filling the main inventory first and overflowing into
+	// owned backpack grids. Nothing is committed unless every copy fits.
+	bool AddToInventoryOrBackpacks(CInventory &Inventory, const CItemID &Id, int Count, const SItemDef *pDef, int *pMainAdded = nullptr, int *pBagAdded = nullptr);
+	// total copies in the main inventory plus every backpack grid (display only;
+	// gameplay lookups still use the main inventory unless they move the stack)
+	int CountOwned(const CInventory &Inventory, const CItemID &Id) const;
 
 	static int ListCraftDirsCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
 	static int ListCraftFilesCallback(const char *pFilename, int IsDir, int StorageType, void *pUser);
